@@ -29,7 +29,7 @@
   "search.section_channels": "Canais",
   "filter.prompt": "Filtro: %s",
   "filter.empty": "Nenhum item corresponde ao filtro atual.",
-  "filter.search_hint": "Ctrl+F busca na Twitch: %s",
+  "filter.search_hint": "Enter ou Ctrl+F busca na Twitch: %s",
   "error.network": "Erro de rede: verifique sua conexão com a internet.",
   "error.rate_limit": "Limite de requisições atingido: aguarde antes de tentar novamente.",
   "error.server": "Erro no servidor da Twitch: o serviço falhou ao responder.",

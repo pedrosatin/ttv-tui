@@ -104,6 +104,11 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Select):
+		// No local match: Enter runs the same global search as Ctrl+F.
+		// With matches, Enter still opens the highlighted item.
+		if m.filterHasNoMatches() {
+			return m.startSearch(m.filter)
+		}
 		m.filtering = false
 		return m.selectHighlighted()
 

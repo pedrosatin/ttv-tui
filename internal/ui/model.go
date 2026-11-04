@@ -11,7 +11,10 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
-const defaultCategoryPageSize = 50
+// defaultCategoryPageSize is the initial categories page size. Twitch's
+// games(first:) accepts at most 100; pagination after the first page is
+// blocked by integrity, so the first request uses the API maximum.
+const defaultCategoryPageSize = 100
 
 // Mode identifies the active navigation screen in the left list panel.
 type Mode string

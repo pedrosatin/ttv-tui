@@ -29,7 +29,7 @@
   "search.section_channels": "Channels",
   "filter.prompt": "Filter: %s",
   "filter.empty": "No items match the current filter.",
-  "filter.search_hint": "Ctrl+F searches Twitch: %s",
+  "filter.search_hint": "Enter or Ctrl+F searches Twitch: %s",
   "error.network": "Network error: check your internet connection.",
   "error.rate_limit": "Rate limit reached: wait a moment before trying again.",
   "error.server": "Twitch service error: Twitch failed to respond.",

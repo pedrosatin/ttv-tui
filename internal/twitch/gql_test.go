@@ -85,6 +85,40 @@ func TestCategoriesSuccessSortedAndOptionalViewers(t *testing.T) {
 	}
 }
 
+func TestCategoriesClampsLimitToMaxGamesFirst(t *testing.T) {
+	var gotN int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req gqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		switch n := req.Variables["n"].(type) {
+		case float64:
+			gotN = int(n)
+		case int:
+			gotN = n
+		default:
+			t.Errorf("variables[n] type %T = %v", req.Variables["n"], req.Variables["n"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"games":{"edges":[{"cursor":"c1","node":{"id":"1","name":"Just Chatting","viewersCount":1}}],"pageInfo":{"hasNextPage":false}}}}`))
+	}))
+	defer srv.Close()
+
+	src := NewGQLSource(GQLConfig{
+		Endpoint:   srv.URL,
+		HTTPClient: srv.Client(),
+	})
+	if _, err := src.Categories(context.Background(), PageRequest{Limit: 120}); err != nil {
+		t.Fatalf("Categories: %v", err)
+	}
+	if gotN != MaxGamesFirst {
+		t.Fatalf("games(first:) n = %d, want clamped %d", gotN, MaxGamesFirst)
+	}
+}
+
 func TestCategoriesPaginationPassesCursor(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

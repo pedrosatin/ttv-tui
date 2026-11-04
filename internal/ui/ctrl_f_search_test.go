@@ -117,8 +117,8 @@ func TestFilterEmptyHintAndHelpCiteCtrlF(t *testing.T) {
 			m = typeRunes(m, "gaules")
 
 			hint := fmt.Sprintf(m.t("filter.search_hint"), "gaules")
-			if !strings.Contains(hint, "Ctrl+F") {
-				t.Fatalf("filter.search_hint must cite Ctrl+F: %q", hint)
+			if !strings.Contains(hint, "Ctrl+F") || !strings.Contains(hint, "Enter") {
+				t.Fatalf("filter.search_hint must cite Enter and Ctrl+F: %q", hint)
 			}
 			view := ansi.Strip(m.View())
 			if !strings.Contains(view, hint) {

@@ -23,6 +23,11 @@ const (
 	DefaultClientID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 	// DefaultPageLimit is the default number of items requested per page.
 	DefaultPageLimit = 50
+	// MaxGamesFirst is Twitch's validated ceiling for games(first:). Values
+	// above 100 return "value must be between 1 and 100". Cursor pagination
+	// after the first page is blocked by IntegrityCheckFailed without a
+	// browser integrity token, so the UI loads this many on the first request.
+	MaxGamesFirst = 100
 	// DefaultRequestTimeout is the per-attempt HTTP timeout.
 	DefaultRequestTimeout = 10 * time.Second
 	// DefaultRetryBackoff is the delay before the single retry on network or 5xx errors.
@@ -402,6 +407,9 @@ func (s *GQLSource) Categories(ctx context.Context, page PageRequest) (Page[Cate
 	limit := page.Limit
 	if limit <= 0 {
 		limit = DefaultPageLimit
+	}
+	if limit > MaxGamesFirst {
+		limit = MaxGamesFirst
 	}
 
 	cacheKey := fmt.Sprintf("%s|%d", page.Cursor, limit)

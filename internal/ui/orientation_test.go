@@ -63,50 +63,39 @@ func pressKeyMsg(m Model, msg tea.Msg) (Model, tea.Cmd) {
 
 func TestFilterWithoutMatchesSuggestsSearchAndCtrlFRunsIt(t *testing.T) {
 	for _, lang := range orientationLangs {
-		for _, leaveFilter := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/leaveFilter=%v", lang, leaveFilter), func(t *testing.T) {
-				var searched []string
-				m := newCategoriesModel(t, lang, 80, &searched)
-				m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
-				m = typeRunes(m, "gaules")
-				if leaveFilter {
-					// Enter on an empty list leaves the filter prompt but keeps the text.
-					m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-					if m.Filtering() || m.Filter() != "gaules" {
-						t.Fatalf("after Enter: filtering=%v filter=%q", m.Filtering(), m.Filter())
-					}
-				}
+		t.Run(lang, func(t *testing.T) {
+			var searched []string
+			m := newCategoriesModel(t, lang, 80, &searched)
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+			m = typeRunes(m, "gaules")
 
-				hint := fmt.Sprintf(m.t("filter.search_hint"), "gaules")
-				if !strings.Contains(hint, "Ctrl+F") {
-					t.Fatalf("filter.search_hint must cite Ctrl+F: %q", hint)
-				}
-				view := ansi.Strip(m.View())
-				if !strings.Contains(view, m.t("filter.empty")) || !strings.Contains(view, hint) {
-					t.Fatalf("empty filter must suggest %q:\n%s", hint, view)
-				}
-				if !leaveFilter {
-					if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, hint) {
-						t.Fatalf("status bar must lead with the search hint at 80 cols:\n%q", bar)
-					}
-				}
+			hint := fmt.Sprintf(m.t("filter.search_hint"), "gaules")
+			if !strings.Contains(hint, "Ctrl+F") || !strings.Contains(hint, "Enter") {
+				t.Fatalf("filter.search_hint must cite Enter and Ctrl+F: %q", hint)
+			}
+			view := ansi.Strip(m.View())
+			if !strings.Contains(view, m.t("filter.empty")) || !strings.Contains(view, hint) {
+				t.Fatalf("empty filter must suggest %q:\n%s", hint, view)
+			}
+			if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, hint) {
+				t.Fatalf("status bar must lead with the search hint at 80 cols:\n%q", bar)
+			}
 
-				m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
-				if m.Mode() != ModeSearch || m.SearchQuery() != "gaules" || cmd == nil {
-					t.Fatalf("Ctrl+F must search the filter text: mode=%q query=%q cmd=%v", m.Mode(), m.SearchQuery(), cmd != nil)
-				}
-				m, _ = pressKeyMsg(m, cmd())
-				if len(searched) != 1 || searched[0] != "gaules" {
-					t.Fatalf("searched = %v, want [gaules]", searched)
-				}
-				if !strings.Contains(ansi.Strip(m.View()), "Gaules (gaules)") {
-					t.Fatalf("search results not shown:\n%s", ansi.Strip(m.View()))
-				}
-				if m.Filter() != "" || m.Filtering() {
-					t.Fatalf("filter must be consumed by the search: %q", m.Filter())
-				}
-			})
-		}
+			m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
+			if m.Mode() != ModeSearch || m.SearchQuery() != "gaules" || cmd == nil {
+				t.Fatalf("Ctrl+F must search the filter text: mode=%q query=%q cmd=%v", m.Mode(), m.SearchQuery(), cmd != nil)
+			}
+			m, _ = pressKeyMsg(m, cmd())
+			if len(searched) != 1 || searched[0] != "gaules" {
+				t.Fatalf("searched = %v, want [gaules]", searched)
+			}
+			if !strings.Contains(ansi.Strip(m.View()), "Gaules (gaules)") {
+				t.Fatalf("search results not shown:\n%s", ansi.Strip(m.View()))
+			}
+			if m.Filter() != "" || m.Filtering() {
+				t.Fatalf("filter must be consumed by the search: %q", m.Filter())
+			}
+		})
 	}
 }
 

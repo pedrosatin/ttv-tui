@@ -207,8 +207,11 @@ func TestLocalFilterWithoutMatchSuggestsCtrlF(t *testing.T) {
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 	view := ansi.Strip(m.View())
-	hint := "Ctrl+F busca na Twitch: teamfight"
+	hint := "Enter ou Ctrl+F busca na Twitch: teamfight"
 	if !strings.Contains(view, hint) {
 		t.Fatalf("expected hint %q in view:\n%s", hint, view)
+	}
+	if !strings.Contains(view, m.t("filter.empty")) {
+		t.Fatalf("expected filter.empty in view:\n%s", view)
 	}
 }
