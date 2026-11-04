@@ -32,6 +32,11 @@ arquitetura.
    direita, foco alternando com `Tab`, entrada de mensagem fixa embaixo. O
    desenho precisa funcionar em 80 colunas.
 
+7. **Nunca leia o config real do operador.** Testes e subagents usam
+   `XDG_CONFIG_HOME`/`XDG_STATE_HOME` isolados. `~/.config/ttv-tui/config.toml`
+   guarda um `access_token` de sessão em texto puro: imprimir, colar em relatório ou
+   deixar em log expõe a conta.
+
 ## Convenções de código
 
 - Go 1.27, módulo `github.com/pedrosatin/ttv-tui`.

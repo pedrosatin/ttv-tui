@@ -598,7 +598,12 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		}
 		selected := *it.Channel
 		m.selectedChannel = &selected
+		// Opening a channel drops the local filter so favorites and the rest of
+		// the list are visible again; the user did not ask to stay filtered.
+		m.filter = ""
+		m.filtering = false
 		m.recordRecent(selected)
+		m.reconcileHighlight()
 		return m, func() tea.Msg {
 			return ChannelSelectedMsg{Channel: selected}
 		}
