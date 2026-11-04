@@ -64,8 +64,8 @@ func TestEscFromSearchReturnsToOrigin_PTY(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	// Search from the open category.
-	p.sendAndWait([]byte{0x13}, "Search:") // Ctrl+S
+	// Search from the open category (Ctrl+F; 0x06).
+	p.sendAndWait([]byte{0x06}, "Search:")
 	p.sendAndWait([]byte("hit\r"), "Search Results — hit")
 	deadline = time.Now().Add(10 * time.Second)
 	for !strings.Contains(p.screenSince(0), "SearchHit") {
@@ -103,7 +103,7 @@ func TestEscFromSearchReturnsToOrigin_PTY(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	p.sendAndWait([]byte{0x13}, "Search:")
+	p.sendAndWait([]byte{0x06}, "Search:") // Ctrl+F
 	p.sendAndWait([]byte("hit\r"), "Search Results — hit")
 	deadline = time.Now().Add(10 * time.Second)
 	for !strings.Contains(p.screenSince(0), "SearchHit") {

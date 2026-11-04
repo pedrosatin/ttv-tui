@@ -95,6 +95,7 @@ var allowedExceptions = map[string]bool{
 	"tab":    true,
 	"esc":    true,
 	"ctrl+q": true,
+	"ctrl+f": true,
 	"ctrl+s": true,
 	"ctrl+r": true,
 	"ctrl+t": true,

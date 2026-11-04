@@ -174,13 +174,13 @@ func TestRefreshKeepsFilter(t *testing.T) {
 	}
 }
 
-func TestCtrlSUsesFilterTextExplicitly(t *testing.T) {
+func TestCtrlFUsesFilterTextExplicitly(t *testing.T) {
 	m := filterClearFixture(t)
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = typeRunes(m, "peere")
-	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
 	if m.Mode() != ModeSearch || m.SearchQuery() != "peere" || cmd == nil {
-		t.Fatalf("Ctrl+S: mode=%q query=%q cmd=%v", m.Mode(), m.SearchQuery(), cmd != nil)
+		t.Fatalf("Ctrl+F: mode=%q query=%q cmd=%v", m.Mode(), m.SearchQuery(), cmd != nil)
 	}
 	if m.Filter() != "" || m.Filtering() {
 		t.Fatalf("search must consume the filter: filter=%q filtering=%v", m.Filter(), m.Filtering())
@@ -205,13 +205,13 @@ func TestOpenChannelPreventsSilentFilterReuseOnNextSearch(t *testing.T) {
 		t.Fatalf("filter still set after open: %q", m.Filter())
 	}
 
-	// Next Ctrl+S must open a blank search prompt, not reuse "peere".
-	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	// Next Ctrl+F must open a blank search prompt, not reuse "peere".
+	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
 	if !m.Searching() || m.searchInput != "" || cmd != nil {
-		t.Fatalf("after open, Ctrl+S must prompt empty: searching=%v input=%q cmd=%v", m.Searching(), m.searchInput, cmd != nil)
+		t.Fatalf("after open, Ctrl+F must prompt empty: searching=%v input=%q cmd=%v", m.Searching(), m.searchInput, cmd != nil)
 	}
 	if m.Mode() == ModeSearch {
-		t.Fatal("Ctrl+S must not auto-submit a stale filter after opening a channel")
+		t.Fatal("Ctrl+F must not auto-submit a stale filter after opening a channel")
 	}
 }
 

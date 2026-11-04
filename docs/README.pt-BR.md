@@ -122,7 +122,8 @@ Pressione `?` ou `F1` para abrir ou fechar o quadro de atalhos no aplicativo. As
 | `Enter` | Abrir a categoria destacada ou iniciar a reprodução do canal destacado |
 | `f` | Adicionar ou remover o canal destacado dos Favoritos |
 | `/` | Filtrar a lista atual localmente (`Enter` mantém o filtro, `Esc` limpa) |
-| `Ctrl+S` | Buscar canais em toda a Twitch, reaproveitando o texto ativo de `/` se houver |
+| `Ctrl+F` | Buscar canais em toda a Twitch, reaproveitando o texto ativo de `/` se houver |
+| `Ctrl+S` | Igual a `Ctrl+F` (atalho alternativo). Muitos terminais ligam o controle de fluxo por software (`ixon`), então Ctrl+S vira XOFF e não chega ao app — use `stty -ixon` se quiser esse atalho |
 | `r` | Tentar carregar a lista novamente ou repetir a reprodução após falha no player |
 | `Esc` | Limpar o filtro ativo ou voltar de canais e resultados de busca para as categorias |
 | `Ctrl+R` | Voltar para Categorias ao vivo de qualquer tela, mesmo durante a digitação |
@@ -155,6 +156,8 @@ Pressione `?` ou `F1` para abrir ou fechar o quadro de atalhos no aplicativo. As
 | --- | --- |
 | `?` ou `F1` | Mostrar ou ocultar o quadro de atalhos (`F1` funciona mesmo durante a digitação) |
 | `Ctrl+Q` | Encerrar o vídeo ativo, desconectar do chat e sair |
+
+Com o controle de fluxo por software (`ixon`) ligado, o terminal pode tratar Ctrl+S como XOFF e Ctrl+Q como XON antes do app receber as teclas. Prefira `Ctrl+F` para buscar. A TUI roda em raw mode, então `Ctrl+Q` normalmente ainda sai; se o terminal engolir a tecla, desligue o `ixon` com `stty -ixon`.
 
 ## Layout
 

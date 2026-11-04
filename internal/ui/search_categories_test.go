@@ -192,7 +192,7 @@ func TestSearchWithNoCategoriesStillShowsChannels(t *testing.T) {
 	}
 }
 
-func TestLocalFilterWithoutMatchSuggestsCtrlS(t *testing.T) {
+func TestLocalFilterWithoutMatchSuggestsCtrlF(t *testing.T) {
 	src := &fakeSource{
 		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
 			return twitch.Page[twitch.Category]{Items: []twitch.Category{
@@ -207,7 +207,7 @@ func TestLocalFilterWithoutMatchSuggestsCtrlS(t *testing.T) {
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 	view := ansi.Strip(m.View())
-	hint := "Ctrl+S busca na Twitch: teamfight"
+	hint := "Ctrl+F busca na Twitch: teamfight"
 	if !strings.Contains(view, hint) {
 		t.Fatalf("expected hint %q in view:\n%s", hint, view)
 	}

@@ -51,7 +51,7 @@ func TestPlayerOfflineErrorClearsOnFilterAndSearch(t *testing.T) {
 	t.Run("search_prompt", func(t *testing.T) {
 		m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
 		m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
-		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
+		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
 		if !m.Searching() {
 			t.Fatal("expected searching prompt")
 		}

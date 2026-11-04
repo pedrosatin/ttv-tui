@@ -380,7 +380,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		lines := []string{header}
 		lines = m.appendPromptLines(lines, maxWidth)
 		if m.filterHasNoMatches() {
-			// Ctrl+S takes the filter text as the query; nothing to retype.
+			// Ctrl+F (or Ctrl+S) takes the filter text as the query; nothing to retype.
 			lines = append(lines,
 				TruncateVisual(m.t("filter.empty"), maxWidth),
 				TruncateVisual(fmt.Sprintf(m.t("filter.search_hint"), sanitizeChatText(strings.TrimSpace(m.filter))), maxWidth),

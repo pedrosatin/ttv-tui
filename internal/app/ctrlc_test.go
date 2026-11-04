@@ -127,7 +127,7 @@ func TestCtrlCByteDoesNotQuitFromEveryMode(t *testing.T) {
 			p.sendAndWait([]byte("pty"), "Filter: pty")
 		}},
 		{"search", func(p *ptyTUI) {
-			p.sendAndWait([]byte{0x13}, "Search:") // Ctrl+S
+			p.sendAndWait([]byte{0x06}, "Search:") // Ctrl+F
 			p.sendAndWait([]byte("ptyc"), "Search: ptyc")
 		}},
 		{"chat", func(p *ptyTUI) {

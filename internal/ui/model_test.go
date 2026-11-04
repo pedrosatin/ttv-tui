@@ -597,7 +597,7 @@ func TestLocalFilterSlashAndEscPreservesSelectionByIDWithoutNetworkRequest(t *te
 	}
 }
 
-func TestCtrlSSearchAndCtrlRReturnsToCategories(t *testing.T) {
+func TestCtrlFSearchAndCtrlRReturnsToCategories(t *testing.T) {
 	catPT, err := i18n.New(i18n.LangPTBR)
 	if err != nil {
 		t.Fatalf("i18n.New(pt-BR): %v", err)
@@ -630,11 +630,11 @@ func TestCtrlSSearchAndCtrlRReturnsToCategories(t *testing.T) {
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 
-	// Press Ctrl+S to open search prompt, type "gaules", and press Enter.
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	// Press Ctrl+F to open search prompt, type "gaules", and press Enter.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
 	m = updated.(Model)
 	if !m.Searching() {
-		t.Fatal("expected Searching()=true after Ctrl+S")
+		t.Fatal("expected Searching()=true after Ctrl+F")
 	}
 	for _, r := range "gaules" {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
@@ -736,7 +736,7 @@ func TestEmptyAndErrorStatesInChannelsAndSearch(t *testing.T) {
 
 	// Run global search with no results -> shows explicit empty search message.
 	m = m.SetFilter("ninguem_online_xyz")
-	updated, searchCmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, searchCmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
 	m = updated.(Model)
 	updated, _ = m.Update(searchCmd())
 	m = updated.(Model)

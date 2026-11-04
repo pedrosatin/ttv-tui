@@ -61,7 +61,7 @@ func pressKeyMsg(m Model, msg tea.Msg) (Model, tea.Cmd) {
 	return updated.(Model), cmd
 }
 
-func TestFilterWithoutMatchesSuggestsSearchAndCtrlSRunsIt(t *testing.T) {
+func TestFilterWithoutMatchesSuggestsSearchAndCtrlFRunsIt(t *testing.T) {
 	for _, lang := range orientationLangs {
 		for _, leaveFilter := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/leaveFilter=%v", lang, leaveFilter), func(t *testing.T) {
@@ -78,6 +78,9 @@ func TestFilterWithoutMatchesSuggestsSearchAndCtrlSRunsIt(t *testing.T) {
 				}
 
 				hint := fmt.Sprintf(m.t("filter.search_hint"), "gaules")
+				if !strings.Contains(hint, "Ctrl+F") {
+					t.Fatalf("filter.search_hint must cite Ctrl+F: %q", hint)
+				}
 				view := ansi.Strip(m.View())
 				if !strings.Contains(view, m.t("filter.empty")) || !strings.Contains(view, hint) {
 					t.Fatalf("empty filter must suggest %q:\n%s", hint, view)
@@ -88,9 +91,9 @@ func TestFilterWithoutMatchesSuggestsSearchAndCtrlSRunsIt(t *testing.T) {
 					}
 				}
 
-				m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
+				m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
 				if m.Mode() != ModeSearch || m.SearchQuery() != "gaules" || cmd == nil {
-					t.Fatalf("Ctrl+S must search the filter text: mode=%q query=%q cmd=%v", m.Mode(), m.SearchQuery(), cmd != nil)
+					t.Fatalf("Ctrl+F must search the filter text: mode=%q query=%q cmd=%v", m.Mode(), m.SearchQuery(), cmd != nil)
 				}
 				m, _ = pressKeyMsg(m, cmd())
 				if len(searched) != 1 || searched[0] != "gaules" {
@@ -112,7 +115,7 @@ func TestFilterWithMatchesDoesNotSuggestSearch(t *testing.T) {
 	m := newCategoriesModel(t, i18n.LangPTBR, 80, &searched)
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = typeRunes(m, "counter")
-	if strings.Contains(ansi.Strip(m.View()), "Ctrl+S busca na Twitch") {
+	if strings.Contains(ansi.Strip(m.View()), "Ctrl+F busca na Twitch") {
 		t.Fatalf("hint shown although the filter matches:\n%s", ansi.Strip(m.View()))
 	}
 }

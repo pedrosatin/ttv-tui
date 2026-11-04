@@ -122,7 +122,8 @@ Press `?` or `F1` to toggle the in-app shortcuts overlay. The tables below list 
 | `Enter` | Open the highlighted category or start watching the highlighted channel |
 | `f` | Toggle the highlighted channel in Favorites |
 | `/` | Filter the current list locally (`Enter` keeps filter, `Esc` clears) |
-| `Ctrl+S` | Search channels across Twitch, reusing active `/` filter text if present |
+| `Ctrl+F` | Search channels across Twitch, reusing active `/` filter text if present |
+| `Ctrl+S` | Same as `Ctrl+F` (alias). Many terminals enable software flow control (`ixon`), so Ctrl+S is XOFF and never reaches the app unless you run `stty -ixon` |
 | `r` | Retry loading the current list or retry a failed video playback |
 | `Esc` | Clear active filter, or step back from channels / search results to categories |
 | `Ctrl+R` | Return to Live Categories from anywhere, even while typing |
@@ -155,6 +156,8 @@ Press `?` or `F1` to toggle the in-app shortcuts overlay. The tables below list 
 | --- | --- |
 | `?` or `F1` | Toggle the keyboard shortcuts overlay (`F1` works even while typing) |
 | `Ctrl+Q` | Stop active playback, disconnect chat, and quit |
+
+With software flow control (`ixon`) enabled, the terminal may treat Ctrl+S as XOFF and Ctrl+Q as XON before the app sees them. Prefer `Ctrl+F` for search. The TUI runs in raw mode, so `Ctrl+Q` normally still quits; if a terminal still swallows it, disable `ixon` with `stty -ixon`.
 
 ## Layout
 

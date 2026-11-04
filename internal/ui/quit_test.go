@@ -63,7 +63,7 @@ func everyModeEnter(t *testing.T) []struct {
 			return m
 		}},
 		{"search", func(t *testing.T, m Model) Model {
-			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
 			m = typeRunes(m, "gau")
 			if !m.Searching() {
 				t.Fatal("not searching")
