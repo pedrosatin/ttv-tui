@@ -202,8 +202,13 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 	if !m.helpVisible {
 		return nil
 	}
+	focusPanel := m.t("help.panel_list")
+	if m.Focus() == FocusChat {
+		focusPanel = m.t("help.panel_chat")
+	}
 	raw := []string{
 		"=== " + m.t("help.title") + " ===",
+		"  " + fmt.Sprintf(m.t("help.focus_now"), focusPanel),
 		"  " + m.t("help.nav"),
 		"  " + m.t("help.esc"),
 		"  " + m.t("help.categories"),

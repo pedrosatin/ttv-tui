@@ -131,6 +131,13 @@ func TestHelpExplainsEscAndCtrlRWithoutTruncation(t *testing.T) {
 				if !strings.Contains(view, title) {
 					t.Fatalf("help title truncated or missing:\n%s", view)
 				}
+				focusNow := fmt.Sprintf(m.t("help.focus_now"), m.t("help.panel_list"))
+				if w := ansi.StringWidth("  " + focusNow); w > 80 {
+					t.Errorf("help.focus_now is %d cells, must fit 80 columns", w)
+				}
+				if !strings.Contains(view, focusNow) {
+					t.Errorf("help focus line missing: %q\n%s", focusNow, view)
+				}
 				for _, k := range keys {
 					line := m.t(k)
 					if w := ansi.StringWidth("  " + line); w > 80 {
@@ -305,6 +312,7 @@ func TestStatusBarAt120KeepsTitleAndContext(t *testing.T) {
 				m.t("app.title") + " | [" + lang + "]",
 				fmt.Sprintf(m.t("player.playing"), "gaules"),
 				"Counter-Strike",
+				m.t("status.focus_list"),
 				m.t("status.help_hint"),
 				m.t("status.quit_hint"),
 			} {

@@ -76,6 +76,7 @@ var allowedExceptions = map[string]bool{
 	" %s | [%s] ":       true,
 	" [%s] ":            true,
 	" | %s · %s ":       true,
+	" | %s · %s · %s ":  true,
 	"%s\n":              true,
 	"%v\n":              true,
 	"%q":                true,

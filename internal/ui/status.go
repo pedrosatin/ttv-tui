@@ -178,6 +178,17 @@ func (m Model) statusParts() (string, []string) {
 	return primary, secondary
 }
 
+// focusStatusText names the focused panel when the chat column is visible.
+func (m Model) focusStatusText() string {
+	if !m.hasChatPanel() || m.chatHiddenByWidth() {
+		return ""
+	}
+	if m.Focus() == FocusChat {
+		return m.t("status.focus_chat")
+	}
+	return m.t("status.focus_list")
+}
+
 // StatusBar renders the status bar containing the active language, channel/category/viewers,
 // player state (with volume), chat state, and key hints.
 //
@@ -192,14 +203,25 @@ func (m Model) StatusBar() string {
 	title := m.t("app.title")
 	helpHint := m.t("status.help_hint")
 	quitHint := m.t("status.quit_hint")
+	// Focus lives in the chrome (with help/quit), not in the state message, so
+	// Tab always has a stable place to announce the active panel. Skip it while
+	// an error detail needs the columns.
+	focusHint := ""
+	if m.err == nil {
+		focusHint = m.focusStatusText()
+	}
+	rightHints := fmt.Sprintf(" | %s · %s ", helpHint, quitHint)
+	if focusHint != "" {
+		rightHints = fmt.Sprintf(" | %s · %s · %s ", focusHint, helpHint, quitHint)
+	}
 
 	primary, secondary := m.statusParts()
 	sep := " · "
 
 	layouts := []struct{ left, right string }{
-		{fmt.Sprintf(" %s | [%s] ", title, lang), fmt.Sprintf(" | %s · %s ", helpHint, quitHint)},
-		{fmt.Sprintf(" [%s] ", lang), fmt.Sprintf(" | %s · %s ", helpHint, quitHint)},
-		{" ", fmt.Sprintf(" | %s · %s ", helpHint, quitHint)},
+		{fmt.Sprintf(" %s | [%s] ", title, lang), rightHints},
+		{fmt.Sprintf(" [%s] ", lang), rightHints},
+		{" ", rightHints},
 		{" ", " | " + quitHint + " "},
 	}
 	chosen := layouts[0]

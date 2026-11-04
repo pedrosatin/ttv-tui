@@ -206,13 +206,15 @@ func TestLayoutWidths_120_100_80_79_AndRestoreFocusAndDraft(t *testing.T) {
 		t.Fatalf("expected draft visible in chat input after widening to 120 cols:\n%s", plain120)
 	}
 
-	// Status bar at 120 cols must show channel, category, viewers, player state (with volume), and chat state.
+	// Status bar at 120 cols must show channel, category, viewers, player state
+	// (with volume), and which panel is focused in the chrome next to help/quit.
 	statusLine := strings.Split(plain120, "\n")[13]
 	for _, want := range []string{
 		"98.5k",
 		"Counter-Strike",
-		"Playing gaules · vol 85",
-		"Connected to #gaules",
+		"Playing gaules",
+		"vol 85",
+		"Focus: chat",
 	} {
 		if !strings.Contains(statusLine, want) {
 			t.Fatalf("status bar at 120 cols missing %q:\n%s", want, statusLine)

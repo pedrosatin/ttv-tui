@@ -122,12 +122,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// When help overlay is visible, ? or Esc closes it.
-	if m.helpVisible {
-		if key.Matches(msg, m.keys.Help) || key.Matches(msg, m.keys.Clear) {
-			m.helpVisible = false
-			return m, nil
-		}
+	// Ctrl+R returns to categories from anywhere, including compose and help.
+	if key.Matches(msg, m.keys.Categories) {
+		return m.returnToCategories()
 	}
 
 	// Ctrl+X ends video without leaving the app (works while composing).
@@ -150,16 +147,28 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.chat.Reconnect()
 	}
 
-	if key.Matches(msg, m.keys.Categories) {
-		return m.returnToCategories()
-	}
-
 	if m.searching {
 		return m.updateSearchingKey(msg)
 	}
 
 	if m.filtering {
 		return m.updateFilteringKey(msg)
+	}
+
+	// Tab switches list ↔ chat in every panel state: list focus, chat focus,
+	// composing, and with help open. It never sends or clears the draft. When
+	// help is open, Tab closes it so the new focus marker is visible (Esc and
+	// ? still only dismiss help, without switching panels).
+	if isSwitchFocusKey(msg, m.keys) {
+		return m.switchPanelFocus(), nil
+	}
+
+	// When help overlay is visible, ? or Esc closes it without changing focus.
+	if m.helpVisible {
+		if key.Matches(msg, m.keys.Help) || key.Matches(msg, m.keys.Clear) {
+			m.helpVisible = false
+			return m, nil
+		}
 	}
 
 	if m.composing && !m.chatHiddenByWidth() {
@@ -175,18 +184,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Help):
 		m.helpVisible = !m.helpVisible
-		return m, nil
-
-	case key.Matches(msg, m.keys.SwitchFocus):
-		if !m.hasChatPanel() || m.chatHiddenByWidth() {
-			return m, nil
-		}
-		if m.Focus() == FocusChat {
-			m.focus = FocusList
-			m.composing = false
-		} else {
-			m.focus = FocusChat
-		}
 		return m, nil
 
 	case key.Matches(msg, m.keys.Clear):
@@ -208,18 +205,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Compose):
-		if m.chatHiddenByWidth() {
-			return m, nil
-		}
-		if !m.chatHasToken() && (m.chat != nil || m.chatPanel.channel != "") {
-			m.chatPanel.sendWarning = m.t("chat.warn.no_token")
-			return m, nil
-		}
-		if m.hasChatPanel() || m.chat != nil {
-			m.focus = FocusChat
-		}
-		m.composing = true
-		return m, nil
+		return m.enterCompose()
 
 	case key.Matches(msg, m.keys.Filter):
 		m.focus = FocusList
@@ -282,11 +268,56 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Select):
+		// Enter on the chat panel starts composition (same as i), so Tab then
+		// Enter is a natural path into the draft. Enter while composing still
+		// sends, via updateComposingKey.
 		if m.Focus() == FocusChat {
-			return m, nil
+			return m.enterCompose()
 		}
 		return m.selectHighlighted()
 	}
+	return m, nil
+}
+
+// isSwitchFocusKey reports whether msg is Tab, including a lone '\t' rune some
+// terminals deliver instead of tea.KeyTab.
+func isSwitchFocusKey(msg tea.KeyMsg, keys keyMap) bool {
+	if key.Matches(msg, keys.SwitchFocus) || msg.Type == tea.KeyTab {
+		return true
+	}
+	return msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == '\t'
+}
+
+// switchPanelFocus toggles list ↔ chat. It leaves composition without clearing
+// the draft, and closes help so the new focus marker is visible.
+func (m Model) switchPanelFocus() Model {
+	if !m.hasChatPanel() || m.chatHiddenByWidth() {
+		return m
+	}
+	m.helpVisible = false
+	m.composing = false
+	if m.focus == FocusChat {
+		m.focus = FocusList
+	} else {
+		m.focus = FocusChat
+	}
+	return m
+}
+
+// enterCompose focuses the chat panel and opens the message input when sending
+// is available. The existing draft, if any, stays in the input.
+func (m Model) enterCompose() (tea.Model, tea.Cmd) {
+	if m.chatHiddenByWidth() {
+		return m, nil
+	}
+	if !m.chatHasToken() && (m.chat != nil || m.chatPanel.channel != "") {
+		m.chatPanel.sendWarning = m.t("chat.warn.no_token")
+		return m, nil
+	}
+	if m.hasChatPanel() || m.chat != nil {
+		m.focus = FocusChat
+	}
+	m.composing = true
 	return m, nil
 }
 
@@ -302,12 +333,8 @@ func (m Model) playerControllable() bool {
 func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Clear):
+		// Esc leaves composition and stays on the chat panel; draft is kept.
 		m.composing = false
-		return m, nil
-
-	case msg.Type == tea.KeyTab, key.Matches(msg, m.keys.SwitchFocus):
-		m.composing = false
-		m.focus = FocusList
 		return m, nil
 
 	case key.Matches(msg, m.keys.Select):
