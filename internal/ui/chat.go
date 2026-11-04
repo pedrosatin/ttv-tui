@@ -46,6 +46,9 @@ type ChatEventMsg struct {
 	ClearChat   bool
 	ClearUser   string
 	ClearMsgID  string
+	// BanDuration is set for CLEARCHAT timeouts (seconds). Nil with ClearUser
+	// and ClearChat means a permanent ban.
+	BanDuration *int
 	ErrText     string
 	FromJoin    bool
 }
@@ -243,9 +246,11 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.ClearChat {
 		m.chatPanel.buf.ClearChat(msg.Generation, msg.ClearUser)
+		m.chatPanel.buf.Append(m.moderationClearChatMessage(msg))
 	}
 	if msg.ClearMsgID != "" {
 		m.chatPanel.buf.ClearMsg(msg.Generation, msg.ClearMsgID)
+		m.chatPanel.buf.Append(m.moderationClearMsgMessage(msg))
 	}
 	for _, upd := range msg.SendUpdates {
 		m.applySendUpdate(upd)
@@ -257,6 +262,70 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		m.chatPanel.buf.Append(item)
 	}
 	return m, nil
+}
+
+func (m Model) moderationClearChatMessage(msg ChatEventMsg) ChatMessage {
+	gen := msg.Generation
+	if gen == 0 {
+		gen = m.chatPanel.gen
+	}
+	user := strings.TrimSpace(msg.ClearUser)
+	var body string
+	switch {
+	case user == "":
+		body = m.t("chat.mod.clear_all")
+	case msg.BanDuration != nil:
+		body = fmt.Sprintf(m.t("chat.mod.timeout"), user, m.formatBanDuration(*msg.BanDuration))
+	default:
+		body = fmt.Sprintf(m.t("chat.mod.ban"), user)
+	}
+	return ChatMessage{
+		Generation: gen,
+		Kind:       chat.MessageSystem,
+		Body:       body,
+	}
+}
+
+func (m Model) moderationClearMsgMessage(msg ChatEventMsg) ChatMessage {
+	gen := msg.Generation
+	if gen == 0 {
+		gen = m.chatPanel.gen
+	}
+	user := strings.TrimSpace(msg.ClearUser)
+	var body string
+	if user == "" {
+		body = m.t("chat.mod.msg_deleted_unknown")
+	} else {
+		body = fmt.Sprintf(m.t("chat.mod.msg_deleted"), user)
+	}
+	return ChatMessage{
+		Generation: gen,
+		Kind:       chat.MessageSystem,
+		Body:       body,
+	}
+}
+
+func (m Model) formatBanDuration(secs int) string {
+	if secs < 0 {
+		secs = 0
+	}
+	if secs < 60 {
+		return fmt.Sprintf(m.t("chat.mod.dur_s"), secs)
+	}
+	if secs < 3600 {
+		mins := secs / 60
+		rem := secs % 60
+		if rem == 0 {
+			return fmt.Sprintf(m.t("chat.mod.dur_m"), mins)
+		}
+		return fmt.Sprintf(m.t("chat.mod.dur_m_s"), mins, rem)
+	}
+	hours := secs / 3600
+	mins := (secs % 3600) / 60
+	if mins == 0 {
+		return fmt.Sprintf(m.t("chat.mod.dur_h"), hours)
+	}
+	return fmt.Sprintf(m.t("chat.mod.dur_h_m"), hours, mins)
 }
 
 func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {

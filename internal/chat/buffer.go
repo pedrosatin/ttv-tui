@@ -16,6 +16,7 @@ type MessageKind string
 const (
 	MessageChat   MessageKind = "chat"
 	MessageNotice MessageKind = "notice"
+	MessageSystem MessageKind = "system"
 )
 
 // Message is a single displayable item in the chat buffer.

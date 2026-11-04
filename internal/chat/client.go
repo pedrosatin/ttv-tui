@@ -83,6 +83,9 @@ type SessionEvent struct {
 	ClearChat   bool
 	ClearUser   string
 	ClearMsgID  string
+	// BanDuration is set for CLEARCHAT timeouts (seconds). Nil with ClearUser
+	// set and ClearChat true means a permanent ban.
+	BanDuration *int
 	Err         error
 	Attempt     int
 	NextBackoff time.Duration
@@ -895,13 +898,19 @@ func (m *Manager) connectAndServe(
 			case EventClearChat:
 				connectedOnce = true
 				flush()
+				var banDur *int
+				if ev.BanDuration != nil {
+					d := *ev.BanDuration
+					banDur = &d
+				}
 				m.emit(ctx, SessionEvent{
-					Generation: gen,
-					Channel:    channel,
-					State:      StateConnected,
-					Anonymous:  anon,
-					ClearChat:  true,
-					ClearUser:  ev.TargetUser,
+					Generation:  gen,
+					Channel:     channel,
+					State:       StateConnected,
+					Anonymous:   anon,
+					ClearChat:   true,
+					ClearUser:   ev.TargetUser,
+					BanDuration: banDur,
 				})
 
 			case EventClearMsg:
@@ -912,6 +921,7 @@ func (m *Manager) connectAndServe(
 					Channel:    channel,
 					State:      StateConnected,
 					Anonymous:  anon,
+					ClearUser:  ev.TargetUser,
 					ClearMsgID: ev.TargetMsgID,
 				})
 

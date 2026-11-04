@@ -440,3 +440,261 @@ func TestChatCompose_NoTokenBlocksSendWithLoginInstruction(t *testing.T) {
 		t.Fatalf("expected login instruction in ChatSendWarning(), got %q", m.ChatSendWarning())
 	}
 }
+
+func joinChatFixture(t *testing.T, lang string) Model {
+	t.Helper()
+	cat, err := i18n.New(lang)
+	if err != nil {
+		t.Fatalf("i18n.New(%s): %v", lang, err)
+	}
+	fc := &fakeChat{}
+	m := New(cat, WithChat(fc))
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
+	m = updated.(Model)
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
+	m = updated.(Model)
+	updated, _ = m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		State:      ChatStateConnected,
+		Anonymous:  true,
+	})
+	return updated.(Model)
+}
+
+func TestChatModeration_ClearChatTimeoutBanAndClearMsg(t *testing.T) {
+	m := joinChatFixture(t, i18n.LangEN)
+
+	updated, _ := m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		Messages: []ChatMessage{
+			{Generation: 1, Kind: chat.MessageChat, ID: "msg-keep", User: "alice", DisplayName: "Alice", Body: "hello"},
+			{Generation: 1, Kind: chat.MessageChat, ID: "msg-gone", User: "baduser", DisplayName: "BadUser", Body: "spam"},
+			{Generation: 1, Kind: chat.MessageChat, ID: "msg-other", User: "bob", DisplayName: "Bob", Body: "noise"},
+		},
+	})
+	m = updated.(Model)
+
+	timeout := 600
+	updated, _ = m.Update(ChatEventMsg{
+		Generation:  1,
+		Channel:     "gaules",
+		ClearChat:   true,
+		ClearUser:   "baduser",
+		BanDuration: &timeout,
+	})
+	m = updated.(Model)
+
+	msgs := m.ChatMessages()
+	for _, msg := range msgs {
+		if strings.EqualFold(msg.User, "baduser") && msg.Kind == chat.MessageChat {
+			t.Fatalf("baduser chat message still in buffer: %+v", msg)
+		}
+	}
+	foundTimeout := false
+	for _, msg := range msgs {
+		if msg.Kind == chat.MessageSystem && strings.Contains(msg.Body, "baduser timed out for 10m") {
+			foundTimeout = true
+			break
+		}
+	}
+	if !foundTimeout {
+		t.Fatalf("missing timeout system line in %+v", msgs)
+	}
+	if !strings.Contains(m.View(), "baduser timed out for 10m") {
+		t.Fatalf("timeout system line missing from View():\n%s", m.View())
+	}
+
+	updated, _ = m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		ClearChat:  true,
+		ClearUser:  "bob",
+	})
+	m = updated.(Model)
+	foundBan := false
+	for _, msg := range m.ChatMessages() {
+		if msg.Kind == chat.MessageSystem && strings.Contains(msg.Body, "bob was permanently banned") {
+			foundBan = true
+			break
+		}
+	}
+	if !foundBan {
+		t.Fatalf("missing permanent ban system line in %+v", m.ChatMessages())
+	}
+
+	updated, _ = m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		Messages: []ChatMessage{
+			{Generation: 1, Kind: chat.MessageChat, ID: "to-delete", User: "carol", DisplayName: "Carol", Body: "bye"},
+		},
+	})
+	m = updated.(Model)
+	updated, _ = m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		ClearUser:  "carol",
+		ClearMsgID: "to-delete",
+	})
+	m = updated.(Model)
+	for _, msg := range m.ChatMessages() {
+		if msg.ID == "to-delete" {
+			t.Fatalf("deleted message still present: %+v", msg)
+		}
+	}
+	foundDeleted := false
+	for _, msg := range m.ChatMessages() {
+		if msg.Kind == chat.MessageSystem && strings.Contains(msg.Body, "Message from carol deleted") {
+			foundDeleted = true
+			break
+		}
+	}
+	if !foundDeleted {
+		t.Fatalf("missing clearmsg system line in %+v", m.ChatMessages())
+	}
+
+	// Message already outside the buffer must not break; still leave a system line.
+	before := len(m.ChatMessages())
+	updated, _ = m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		ClearUser:  "ghost",
+		ClearMsgID: "already-gone",
+	})
+	m = updated.(Model)
+	if len(m.ChatMessages()) != before+1 {
+		t.Fatalf("expected one system line after missing ClearMsg, Len %d -> %d", before, len(m.ChatMessages()))
+	}
+	last := m.ChatMessages()[len(m.ChatMessages())-1]
+	if last.Kind != chat.MessageSystem || !strings.Contains(last.Body, "Message from ghost deleted") {
+		t.Fatalf("unexpected last message after missing ClearMsg: %+v", last)
+	}
+}
+
+func TestChatModeration_I18nENAndPTBR(t *testing.T) {
+	cases := []struct {
+		lang         string
+		timeoutBody  string
+		banBody      string
+		deletedBody  string
+		systemPrefix string
+	}{
+		{
+			lang:         i18n.LangEN,
+			timeoutBody:  "spammer timed out for 30s",
+			banBody:      "spammer was permanently banned",
+			deletedBody:  "Message from spammer deleted",
+			systemPrefix: "[mod]",
+		},
+		{
+			lang:         i18n.LangPTBR,
+			timeoutBody:  "spammer silenciado por 30s",
+			banBody:      "spammer foi banido permanentemente",
+			deletedBody:  "Mensagem de spammer apagada",
+			systemPrefix: "[mod]",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.lang, func(t *testing.T) {
+			m := joinChatFixture(t, tc.lang)
+			secs := 30
+			updated, _ := m.Update(ChatEventMsg{
+				Generation:  1,
+				Channel:     "gaules",
+				ClearChat:   true,
+				ClearUser:   "spammer",
+				BanDuration: &secs,
+			})
+			m = updated.(Model)
+			updated, _ = m.Update(ChatEventMsg{
+				Generation: 1,
+				Channel:    "gaules",
+				ClearChat:  true,
+				ClearUser:  "spammer",
+			})
+			m = updated.(Model)
+			updated, _ = m.Update(ChatEventMsg{
+				Generation: 1,
+				Channel:    "gaules",
+				ClearUser:  "spammer",
+				ClearMsgID: "x",
+			})
+			m = updated.(Model)
+
+			view := m.View()
+			for _, want := range []string{tc.timeoutBody, tc.banBody, tc.deletedBody, tc.systemPrefix} {
+				if !strings.Contains(view, want) {
+					t.Fatalf("View() missing %q:\n%s", want, view)
+				}
+			}
+			bodies := map[string]bool{}
+			for _, msg := range m.ChatMessages() {
+				if msg.Kind == chat.MessageSystem {
+					bodies[msg.Body] = true
+				}
+			}
+			for _, want := range []string{tc.timeoutBody, tc.banBody, tc.deletedBody} {
+				if !bodies[want] {
+					t.Fatalf("system bodies=%v missing %q", bodies, want)
+				}
+			}
+		})
+	}
+}
+
+// TestChatModeration_PTYEvidence logs the rendered chat panel with timeout and
+// delete system lines so a PTY/script capture can show both markers.
+func TestChatModeration_PTYEvidence(t *testing.T) {
+	m := joinChatFixture(t, i18n.LangPTBR)
+	updated, _ := m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		Messages: []ChatMessage{
+			{Generation: 1, Kind: chat.MessageChat, ID: "m1", User: "alice", DisplayName: "Alice", Body: "oi"},
+			{Generation: 1, Kind: chat.MessageChat, ID: "m2", User: "troll", DisplayName: "Troll", Body: "spam"},
+		},
+	})
+	m = updated.(Model)
+
+	secs := 120
+	updated, _ = m.Update(ChatEventMsg{
+		Generation:  1,
+		Channel:     "gaules",
+		ClearChat:   true,
+		ClearUser:   "troll",
+		BanDuration: &secs,
+	})
+	m = updated.(Model)
+	updated, _ = m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		Messages: []ChatMessage{
+			{Generation: 1, Kind: chat.MessageChat, ID: "m3", User: "bob", DisplayName: "Bob", Body: "depois"},
+		},
+	})
+	m = updated.(Model)
+	updated, _ = m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		ClearUser:  "bob",
+		ClearMsgID: "m3",
+	})
+	m = updated.(Model)
+
+	view := m.View()
+	t.Logf("\n================================================================================\nCAPTURA PTY: linhas de sistema CLEARCHAT/CLEARMSG\n--------------------------------------------------------------------------------\n%s\n================================================================================", view)
+
+	if !strings.Contains(view, "troll silenciado por 2m") {
+		t.Fatalf("PTY capture missing timeout line:\n%s", view)
+	}
+	if !strings.Contains(view, "Mensagem de bob apagada") {
+		t.Fatalf("PTY capture missing delete line:\n%s", view)
+	}
+	if !strings.Contains(view, "[mod]") {
+		t.Fatalf("PTY capture missing [mod] prefix:\n%s", view)
+	}
+}

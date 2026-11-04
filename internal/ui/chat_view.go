@@ -420,6 +420,11 @@ func (m Model) formatChatMessageParts(msg ChatMessage) (string, string) {
 		style := lipgloss.NewStyle().Faint(true)
 		return "  ", style.Render(fmt.Sprintf("%s %s", prefix, body))
 	}
+	if msg.Kind == chat.MessageSystem {
+		prefix := m.t("chat.system_prefix")
+		style := lipgloss.NewStyle().Faint(true).Italic(true)
+		return "  ", style.Render(fmt.Sprintf("%s %s", prefix, body))
+	}
 
 	name := sanitizeChatText(msg.DisplayName)
 	if name == "" {

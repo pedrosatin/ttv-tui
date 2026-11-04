@@ -125,6 +125,7 @@ func mapChatEvent(ev chat.SessionEvent) ui.ChatEventMsg {
 		ClearChat:   ev.ClearChat,
 		ClearUser:   ev.ClearUser,
 		ClearMsgID:  ev.ClearMsgID,
+		BanDuration: ev.BanDuration,
 		ErrText:     errText,
 	}
 }

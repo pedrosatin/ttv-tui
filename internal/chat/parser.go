@@ -81,6 +81,9 @@ type Event struct {
 	PingPayload string // exact raw suffix after "PING" to echo back in "PONG"
 	TargetUser  string // CLEARCHAT target login (empty = full chat clear) or CLEARMSG login
 	TargetMsgID string // CLEARMSG target-msg-id
+	// BanDuration is set when CLEARCHAT carries ban-duration (timeout seconds).
+	// Nil with a TargetUser means a permanent ban; nil without a target is a full clear.
+	BanDuration *int
 	RoomState   RoomState
 	RoomDelta   RoomStateDelta
 }
@@ -223,6 +226,13 @@ func ParseLine(rawLine string) Event {
 		ev.Channel = strings.TrimPrefix(params[0], "#")
 		if hasTrailing {
 			ev.TargetUser = strings.TrimSpace(trailing)
+		}
+		if ev.Tags != nil {
+			if raw, ok := ev.Tags["ban-duration"]; ok {
+				if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+					ev.BanDuration = &n
+				}
+			}
 		}
 		return ev
 

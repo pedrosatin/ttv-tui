@@ -149,12 +149,38 @@ func TestParseLine_Table(t *testing.T) {
 			},
 		},
 		{
-			name:     "CLEARCHAT user timeout and full room clear",
+			name:     "CLEARCHAT user timeout with ban-duration",
 			line:     "@ban-duration=600;room-id=181077473;target-user-id=999 :tmi.twitch.tv CLEARCHAT #gaules :baduser",
 			wantKind: EventClearChat,
 			check: func(t *testing.T, ev Event) {
 				if ev.Channel != "gaules" || ev.TargetUser != "baduser" {
 					t.Fatalf("Channel=%q TargetUser=%q", ev.Channel, ev.TargetUser)
+				}
+				if ev.BanDuration == nil || *ev.BanDuration != 600 {
+					t.Fatalf("BanDuration=%v, want 600", ev.BanDuration)
+				}
+			},
+		},
+		{
+			name:     "CLEARCHAT permanent ban without ban-duration",
+			line:     "@room-id=181077473;target-user-id=999;tmi-sent-ts=1700000000 :tmi.twitch.tv CLEARCHAT #gaules :spammer",
+			wantKind: EventClearChat,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "gaules" || ev.TargetUser != "spammer" {
+					t.Fatalf("Channel=%q TargetUser=%q", ev.Channel, ev.TargetUser)
+				}
+				if ev.BanDuration != nil {
+					t.Fatalf("BanDuration=%v, want nil for permanent ban", ev.BanDuration)
+				}
+			},
+		},
+		{
+			name:     "CLEARCHAT full room clear without target user",
+			line:     "@room-id=181077473;tmi-sent-ts=1700000000 :tmi.twitch.tv CLEARCHAT #gaules",
+			wantKind: EventClearChat,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "gaules" || ev.TargetUser != "" || ev.BanDuration != nil {
+					t.Fatalf("Channel=%q TargetUser=%q BanDuration=%v", ev.Channel, ev.TargetUser, ev.BanDuration)
 				}
 			},
 		},
@@ -290,6 +316,29 @@ func TestBuffer_LimitsAndGenerationIsolation(t *testing.T) {
 	buf.ClearMsg(2, "m2")
 	if buf.Len() != 0 {
 		t.Fatalf("expected empty buffer after ClearMsg(m2), got %d", buf.Len())
+	}
+
+	// CLEARMSG for an ID already outside the buffer is a no-op (does not panic).
+	buf.Append(Message{Generation: 2, Kind: MessageChat, ID: "keep", User: "carol", DisplayName: "Carol", Body: "hi"})
+	before := buf.Len()
+	buf.ClearMsg(2, "already-gone")
+	if buf.Len() != before {
+		t.Fatalf("ClearMsg on missing ID changed Len %d -> %d", before, buf.Len())
+	}
+}
+
+func TestBuffer_ClearMsgMissingIDIsSafe(t *testing.T) {
+	buf := NewBuffer(10, 1024)
+	buf.SetGeneration(1)
+	buf.Append(Message{Generation: 1, Kind: MessageChat, ID: "a", User: "u", DisplayName: "U", Body: "one"})
+	buf.ClearMsg(1, "missing-id")
+	msgs := buf.Messages()
+	if len(msgs) != 1 || msgs[0].ID != "a" {
+		t.Fatalf("buffer mutated by missing ClearMsg: %+v", msgs)
+	}
+	buf.ClearMsg(1, "")
+	if buf.Len() != 1 {
+		t.Fatalf("empty ClearMsgID should be ignored, Len=%d", buf.Len())
 	}
 }
 
