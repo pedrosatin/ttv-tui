@@ -383,25 +383,44 @@ func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
 		m.composeDraft = trimLastRune(m.composeDraft)
+		m.clearComposeTooLongWarning()
 		return m, nil
 
 	case msg.Type == tea.KeySpace, key.Matches(msg, m.keys.Pause):
 		m.composeDraft += " "
+		m.clearComposeTooLongWarning()
 		return m, nil
 
 	case key.Matches(msg, m.keys.VolUp):
 		m.composeDraft += "+"
+		m.clearComposeTooLongWarning()
 		return m, nil
 
 	case key.Matches(msg, m.keys.VolDown):
 		m.composeDraft += "-"
+		m.clearComposeTooLongWarning()
 		return m, nil
 
 	case msg.Type == tea.KeyRunes:
 		m.composeDraft += string(msg.Runes)
+		m.clearComposeTooLongWarning()
 		return m, nil
 	}
 	return m, nil
+}
+
+// clearComposeTooLongWarning drops the length warning once the draft fits again,
+// so the footer stops claiming the message is too long while the user edits.
+func (m *Model) clearComposeTooLongWarning() {
+	if m.chatPanel.sendWarning == "" {
+		return
+	}
+	if m.chatPanel.sendWarning != m.t("chat.warn.too_long") {
+		return
+	}
+	if !m.composeDraftOverLimit() {
+		m.chatPanel.sendWarning = ""
+	}
 }
 
 func trimLastRune(s string) string {

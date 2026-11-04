@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
@@ -159,6 +160,12 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 
 	if !m.chatHasToken() {
 		m.chatPanel.sendWarning = m.t("chat.warn.no_token")
+		return m, nil
+	}
+
+	if utf8.RuneCountInString(body) > twitchMessageRuneLimit {
+		// Keep the draft and stay in compose mode; never truncate on send.
+		m.chatPanel.sendWarning = m.t("chat.warn.too_long")
 		return m, nil
 	}
 

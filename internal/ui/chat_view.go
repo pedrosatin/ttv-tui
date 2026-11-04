@@ -3,13 +3,18 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 )
 
-const defaultChatPreviewLines = 10
+const (
+	defaultChatPreviewLines = 10
+	// twitchMessageRuneLimit is Twitch's PRIVMSG body limit in Unicode code points.
+	twitchMessageRuneLimit = 500
+)
 
 func (m Model) hasChatPanel() bool {
 	return m.chatPanel.channel != "" || m.chatPanel.state != ChatStateNone || m.composing
@@ -160,8 +165,12 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 		}
 	}
 	if m.composing && m.chatHasToken() {
-		hint := TruncateVisual("  "+m.t("chat.input.compose_hint"), maxWidth)
-		footer = append(footer, lipgloss.NewStyle().Faint(true).Render(hint))
+		hint := m.renderComposeHintLine(maxWidth)
+		style := lipgloss.NewStyle().Faint(true)
+		if m.composeDraftOverLimit() {
+			style = lipgloss.NewStyle().Bold(true)
+		}
+		footer = append(footer, style.Render(hint))
 	}
 	footer = append(footer, TruncateVisual(m.renderChatInputLine(maxWidth), maxWidth))
 
@@ -204,6 +213,44 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 // composeCursor marks the insertion point; it is drawn only while composing.
 const composeCursor = "█"
 
+func (m Model) composeDraftRuneCount() int {
+	return utf8.RuneCountInString(m.composeDraft)
+}
+
+func (m Model) composeDraftOverLimit() bool {
+	return utf8.RuneCountInString(strings.TrimSpace(m.composeDraft)) > twitchMessageRuneLimit
+}
+
+func (m Model) composeCounterLabel() string {
+	return fmt.Sprintf(m.t("chat.input.counter"), m.composeDraftRuneCount(), twitchMessageRuneLimit)
+}
+
+// renderComposeHintLine shows the compose hint and the live N/500 counter on one
+// row above the input. The counter stays visible; the hint truncates first when
+// the chat column is narrow (80-column layout).
+func (m Model) renderComposeHintLine(maxWidth int) string {
+	hint := m.t("chat.input.compose_hint")
+	counter := m.composeCounterLabel()
+	return formatComposeHintWithCounter(hint, counter, maxWidth)
+}
+
+func formatComposeHintWithCounter(hint, counter string, maxWidth int) string {
+	prefix := "  "
+	sep := " "
+	if maxWidth <= 0 {
+		return prefix + hint + sep + counter
+	}
+	reserved := ansi.StringWidth(prefix) + ansi.StringWidth(sep) + ansi.StringWidth(counter)
+	room := maxWidth - reserved
+	if room < 1 {
+		return TruncateVisual(prefix+counter, maxWidth)
+	}
+	if ansi.StringWidth(hint) > room {
+		hint = TruncateVisual(hint, room)
+	}
+	return prefix + hint + sep + counter
+}
+
 func (m Model) renderChatInputLine(maxWidth int) string {
 	ch := m.chatPanel.channel
 	if !m.chatHasToken() {
@@ -227,12 +274,13 @@ func (m Model) renderChatInputLine(maxWidth int) string {
 			}
 		}
 		draft := sanitizeChatText(m.composeDraft)
-		line := prefix + draftTail(draft, prefix, maxWidth) + composeCursor
+		line := prefix + draftWindow(draft, prefix, maxWidth, ansi.StringWidth(composeCursor)) + composeCursor
 		return lipgloss.NewStyle().Bold(true).Render(line)
 	}
 	if m.composeDraft != "" {
 		draft := sanitizeChatText(m.composeDraft)
-		line := TruncateVisual("  > "+fmt.Sprintf(m.t("chat.input.draft"), draft), maxWidth)
+		prefix := "  > " + fmt.Sprintf(m.t("chat.input.draft"), "")
+		line := prefix + draftWindow(draft, prefix, maxWidth, 0)
 		return lipgloss.NewStyle().Faint(true).Render(line)
 	}
 	ready := fmt.Sprintf(m.t("chat.input.ready"), ch)
@@ -243,20 +291,29 @@ func (m Model) renderChatInputLine(maxWidth int) string {
 	return lipgloss.NewStyle().Faint(true).Render(line)
 }
 
-// draftTail returns the end of draft that fits after prefix and the cursor in
-// maxWidth cells, so the text being typed and the cursor stay visible. Older
-// text is replaced by a leading ellipsis. maxWidth <= 0 means no limit.
+// draftTail keeps the end of draft (and room for the compose cursor) visible.
+// Older text is replaced by a leading ellipsis. maxWidth <= 0 means no limit.
 func draftTail(draft, prefix string, maxWidth int) string {
+	return draftWindow(draft, prefix, maxWidth, ansi.StringWidth(composeCursor))
+}
+
+// draftWindow returns the end of draft that fits after prefix, leaving cursorWidth
+// cells free at the end. Older text is replaced by a leading ellipsis.
+// maxWidth <= 0 means no limit.
+func draftWindow(draft, prefix string, maxWidth, cursorWidth int) string {
 	if maxWidth <= 0 {
 		return draft
 	}
-	room := maxWidth - ansi.StringWidth(prefix) - ansi.StringWidth(composeCursor)
+	room := maxWidth - ansi.StringWidth(prefix) - cursorWidth
+	if room <= 0 {
+		return ""
+	}
 	if ansi.StringWidth(draft) <= room {
 		return draft
 	}
 	room -= ansi.StringWidth("…")
 	if room <= 0 {
-		return ""
+		return "…"
 	}
 	runes := []rune(draft)
 	start := len(runes)

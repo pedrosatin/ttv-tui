@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -221,17 +222,29 @@ func TestComposeHintAndCursorFitAt80Columns(t *testing.T) {
 			m.catalog = cat
 			m = resize(m, 80, 14)
 			m = sendKeys(m, keyTab, keyI)
-			m = sendKeys(m, runes("uma mensagem bem comprida que passa da largura do painel")...)
+			draft := "uma mensagem bem comprida que passa da largura do painel"
+			m = sendKeys(m, runes(draft)...)
 
 			hint := cat.T("chat.input.compose_hint")
 			draftLabel := strings.TrimSuffix(cat.T("chat.input.draft"), "%s")
 			if hint == "chat.input.compose_hint" || draftLabel == "chat.input.draft" {
 				t.Fatalf("missing catalog keys for %s", lang)
 			}
+			counter := fmt.Sprintf(cat.T("chat.input.counter"), utf8.RuneCountInString(draft), twitchMessageRuneLimit)
 
 			col := chatColumn(t, m)
-			if got := col[len(col)-2]; strings.TrimSpace(got) != hint {
-				t.Fatalf("hint row = %q, want full %q", got, hint)
+			gotHint := col[len(col)-2]
+			if !strings.Contains(gotHint, hint) {
+				t.Fatalf("hint row = %q, want to contain %q", gotHint, hint)
+			}
+			if !strings.HasSuffix(strings.TrimRight(gotHint, " "), counter) {
+				t.Fatalf("hint row = %q, want counter suffix %q", gotHint, counter)
+			}
+			if w := ansi.StringWidth(gotHint); w > 34 {
+				// chat column at 80 terminal cols is 34 cells; padOrTruncate may pad, so strip.
+				if w = ansi.StringWidth(strings.TrimRight(gotHint, " ")); w > 34 {
+					t.Fatalf("hint+counter width %d exceeds chat column 34: %q", w, gotHint)
+				}
 			}
 			last := col[len(col)-1]
 			if !strings.HasSuffix(last, "do painel"+composeCursor) {
