@@ -134,7 +134,7 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	m.searchQuery = q
 	m.mode = ModeSearch
 	m.channels = nil
-	m.highlightedID = ""
+	m.clearHighlight()
 	m.focusResults = true
 	m.nextCursor = ""
 	m.hasMore = false

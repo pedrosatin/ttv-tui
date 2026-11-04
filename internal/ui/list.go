@@ -452,6 +452,7 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.focusResults = false
 	if m.selectedCategory != nil && m.selectedCategory.ID != "" {
 		m.highlightedID = m.selectedCategory.ID
+		m.highlightedLogin = ""
 	}
 	m.reconcileHighlight()
 	if m.source == nil {
@@ -581,7 +582,7 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		m.filter = ""
 		m.filtering = false
 		m.searching = false
-		m.highlightedID = ""
+		m.clearHighlight()
 		m.focusResults = true
 		m.nextCursor = ""
 		m.hasMore = false
@@ -605,48 +606,92 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 func (m *Model) moveHighlight(delta int) {
 	// A manual move is the user's choice; a pending load must not override it.
 	m.focusResults = false
-	ids := m.visibleItemIDs()
-	if len(ids) == 0 {
-		m.highlightedID = ""
+	items := m.VisibleItems()
+	if len(items) == 0 {
+		m.clearHighlight()
 		return
 	}
-	idx := 0
-	found := false
-	for i, id := range ids {
-		if id == m.highlightedID {
-			idx = i
-			found = true
-			break
-		}
-	}
-	if !found {
-		m.highlightedID = ids[0]
+	idx := m.indexOfHighlighted(items)
+	if idx < 0 {
+		m.setHighlightToItem(items, 0)
 		return
 	}
 	next := idx + delta
 	if next < 0 {
 		next = 0
 	}
-	if next >= len(ids) {
-		next = len(ids) - 1
+	if next >= len(items) {
+		next = len(items) - 1
 	}
-	m.highlightedID = ids[next]
+	m.setHighlightToItem(items, next)
 }
 
+// clearHighlight drops the highlight identity and its cached position.
+func (m *Model) clearHighlight() {
+	m.highlightedID = ""
+	m.highlightedLogin = ""
+	m.highlightIndex = 0
+}
+
+// setHighlightToItem points the highlight at items[idx] and refreshes the
+// cached index and channel login used after a later list reload.
+func (m *Model) setHighlightToItem(items []ListItem, idx int) {
+	if len(items) == 0 {
+		m.clearHighlight()
+		return
+	}
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(items) {
+		idx = len(items) - 1
+	}
+	it := items[idx]
+	m.highlightedID = it.ID()
+	m.highlightIndex = idx
+	m.highlightedLogin = ""
+	if it.Channel != nil {
+		m.highlightedLogin = it.Channel.Login
+	}
+}
+
+// indexOfHighlighted finds the highlighted row by stable ID, then by channel
+// login. Returns -1 when neither identity is present in items.
+func (m Model) indexOfHighlighted(items []ListItem) int {
+	if m.highlightedID != "" {
+		for i, it := range items {
+			if it.ID() == m.highlightedID {
+				return i
+			}
+		}
+	}
+	if m.highlightedLogin != "" {
+		for i, it := range items {
+			if it.Channel != nil && strings.EqualFold(it.Channel.Login, m.highlightedLogin) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// reconcileHighlight keeps the highlight on the same identity after the
+// visible list changes. When that identity is gone (refresh dropped a channel,
+// filter hid a row), the highlight lands on the nearest remaining row at the
+// previous index — never forced back to the top.
 func (m *Model) reconcileHighlight() {
-	ids := m.visibleItemIDs()
-	if len(ids) == 0 {
+	items := m.VisibleItems()
+	if len(items) == 0 {
 		if m.totalItemCount() == 0 {
-			m.highlightedID = ""
+			m.clearHighlight()
 		}
 		return
 	}
-	for _, id := range ids {
-		if id == m.highlightedID {
-			return
-		}
+	if idx := m.indexOfHighlighted(items); idx >= 0 {
+		m.setHighlightToItem(items, idx)
+		return
 	}
-	m.highlightedID = ids[0]
+	m.setHighlightToItem(items, m.highlightIndex)
 }
 
 // settleHighlightAfterLoad places the highlight after a channel or search page
@@ -655,7 +700,8 @@ func (m *Model) reconcileHighlight() {
 // and not a favorite or recent rendered above it. Search results are preferred
 // by twitch.PreferSearchChannels before this runs (exact login first), so the
 // first row is the intended Enter target. Otherwise (refresh, next page) the
-// highlighted item keeps its place by identity.
+// highlighted item keeps its place by identity, or the nearest neighbor when
+// that identity left the list.
 func (m *Model) settleHighlightAfterLoad() {
 	if !m.focusResults {
 		m.reconcileHighlight()
@@ -663,7 +709,16 @@ func (m *Model) settleHighlightAfterLoad() {
 	}
 	m.focusResults = false
 	if id, ok := m.firstResultID(); ok {
+		items := m.VisibleItems()
+		for i, it := range items {
+			if it.ID() == id {
+				m.setHighlightToItem(items, i)
+				return
+			}
+		}
 		m.highlightedID = id
+		m.highlightedLogin = ""
+		m.highlightIndex = 0
 		return
 	}
 	m.reconcileHighlight()

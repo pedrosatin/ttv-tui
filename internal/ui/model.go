@@ -197,7 +197,9 @@ type Model struct {
 	searchInput        string
 	searchQuery        string
 	highlightedID      string
-	focusResults       bool // next channel/search load highlights its first result; see settleHighlightAfterLoad
+	highlightedLogin   string // secondary channel identity when upstream IDs churn between loads
+	highlightIndex     int    // VisibleItems index; nearest-neighbor fallback after refresh
+	focusResults       bool   // next channel/search load highlights its first result; see settleHighlightAfterLoad
 	selectedCategory   *twitch.Category
 	selectedChannel    *twitch.Channel
 	tokenCheck         TokenCheckFunc
