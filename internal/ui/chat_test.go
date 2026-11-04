@@ -698,3 +698,185 @@ func TestChatModeration_PTYEvidence(t *testing.T) {
 		t.Fatalf("PTY capture missing [mod] prefix:\n%s", view)
 	}
 }
+
+func TestChatUserNotice_ResubWithAndWithoutText(t *testing.T) {
+	m := joinChatFixture(t, i18n.LangEN)
+
+	updated, _ := m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		Messages: []ChatMessage{
+			{Generation: 1, Kind: chat.MessageChat, ID: "m1", User: "alice", DisplayName: "Alice", Body: "hello"},
+			{
+				Generation:  1,
+				Kind:        chat.MessageSystem,
+				ID:          "resub-1",
+				User:        "coolsub",
+				DisplayName: "CoolSub",
+				MsgID:       "resub",
+				Months:      15,
+				Body:        "Great stream -- keep it up!",
+			},
+			{
+				Generation:  1,
+				Kind:        chat.MessageSystem,
+				ID:          "resub-2",
+				User:        "tww2",
+				DisplayName: "TWW2",
+				MsgID:       "resub",
+				Months:      6,
+				Body:        "",
+			},
+			{
+				Generation:  1,
+				Kind:        chat.MessageSystem,
+				ID:          "raid-1",
+				User:        "raider",
+				DisplayName: "Raider",
+				MsgID:       "raid",
+				Body:        "should stay raw if somehow injected",
+			},
+		},
+	})
+	m = updated.(Model)
+
+	msgs := m.ChatMessages()
+	if len(msgs) != 4 {
+		t.Fatalf("Len=%d, want 4 (chat + 2 localized resub + untouched raid): %+v", len(msgs), msgs)
+	}
+	if msgs[1].Kind != chat.MessageSystem || msgs[1].Body != "CoolSub resubscribed (15 months): Great stream -- keep it up!" {
+		t.Fatalf("resub with text = %+v", msgs[1])
+	}
+	if msgs[2].Kind != chat.MessageSystem || msgs[2].Body != "TWW2 resubscribed (6 months)" {
+		t.Fatalf("resub without text = %+v", msgs[2])
+	}
+	if msgs[3].Body != "should stay raw if somehow injected" {
+		t.Fatalf("unknown USERNOTICE kind should not be rewritten: %+v", msgs[3])
+	}
+
+	view := m.View()
+	if !strings.Contains(view, "CoolSub resubscribed (15 months): Great stream -- keep it up!") {
+		t.Fatalf("View missing resub with text:\n%s", view)
+	}
+	if !strings.Contains(view, "TWW2 resubscribed (6 months)") {
+		t.Fatalf("View missing resub without text:\n%s", view)
+	}
+	if !strings.Contains(view, "[mod]") {
+		t.Fatalf("View missing system prefix:\n%s", view)
+	}
+}
+
+func TestChatUserNotice_I18nENAndPTBR(t *testing.T) {
+	cases := []struct {
+		lang         string
+		withText     string
+		withoutText  string
+		systemPrefix string
+	}{
+		{
+			lang:         i18n.LangEN,
+			withText:     "CoolSub resubscribed (15 months): Great stream!",
+			withoutText:  "TWW2 resubscribed (6 months)",
+			systemPrefix: "[mod]",
+		},
+		{
+			lang:         i18n.LangPTBR,
+			withText:     "CoolSub renovou a inscrição (15 meses): Great stream!",
+			withoutText:  "TWW2 renovou a inscrição (6 meses)",
+			systemPrefix: "[mod]",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.lang, func(t *testing.T) {
+			m := joinChatFixture(t, tc.lang)
+			updated, _ := m.Update(ChatEventMsg{
+				Generation: 1,
+				Channel:    "gaules",
+				Messages: []ChatMessage{
+					{
+						Generation:  1,
+						Kind:        chat.MessageSystem,
+						MsgID:       "resub",
+						User:        "coolsub",
+						DisplayName: "CoolSub",
+						Months:      15,
+						Body:        "Great stream!",
+					},
+					{
+						Generation:  1,
+						Kind:        chat.MessageSystem,
+						MsgID:       "resub",
+						User:        "tww2",
+						DisplayName: "TWW2",
+						Months:      6,
+					},
+				},
+			})
+			m = updated.(Model)
+
+			view := m.View()
+			for _, want := range []string{tc.withText, tc.withoutText, tc.systemPrefix} {
+				if !strings.Contains(view, want) {
+					t.Fatalf("View() missing %q:\n%s", want, view)
+				}
+			}
+			bodies := map[string]bool{}
+			for _, msg := range m.ChatMessages() {
+				if msg.Kind == chat.MessageSystem {
+					bodies[msg.Body] = true
+				}
+			}
+			for _, want := range []string{tc.withText, tc.withoutText} {
+				if !bodies[want] {
+					t.Fatalf("system bodies=%v missing %q", bodies, want)
+				}
+			}
+		})
+	}
+}
+
+// TestChatUserNotice_PTYEvidence logs the rendered chat panel with resub system
+// lines so a PTY/script capture can show the markers.
+func TestChatUserNotice_PTYEvidence(t *testing.T) {
+	m := joinChatFixture(t, i18n.LangPTBR)
+	updated, _ := m.Update(ChatEventMsg{
+		Generation: 1,
+		Channel:    "gaules",
+		Messages: []ChatMessage{
+			{Generation: 1, Kind: chat.MessageChat, ID: "m1", User: "alice", DisplayName: "Alice", Body: "oi"},
+			{
+				Generation:  1,
+				Kind:        chat.MessageSystem,
+				ID:          "resub-1",
+				User:        "coolsub",
+				DisplayName: "CoolSub",
+				MsgID:       "resub",
+				Months:      15,
+				Body:        "Valeu pela live!",
+			},
+			{
+				Generation:  1,
+				Kind:        chat.MessageSystem,
+				ID:          "resub-2",
+				User:        "tww2",
+				DisplayName: "TWW2",
+				MsgID:       "resub",
+				Months:      6,
+			},
+		},
+	})
+	m = updated.(Model)
+
+	view := m.View()
+	t.Logf("\n================================================================================\nCAPTURA PTY: linhas de sistema USERNOTICE resub\n--------------------------------------------------------------------------------\n%s\n================================================================================", view)
+
+	if !strings.Contains(view, "CoolSub renovou a inscrição (15 meses): Valeu pela live!") {
+		t.Fatalf("PTY capture missing resub with text:\n%s", view)
+	}
+	if !strings.Contains(view, "TWW2 renovou a inscrição (6 meses)") {
+		t.Fatalf("PTY capture missing resub without text:\n%s", view)
+	}
+	if !strings.Contains(view, "[mod]") {
+		t.Fatalf("PTY capture missing [mod] prefix:\n%s", view)
+	}
+}

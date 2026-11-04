@@ -21,18 +21,21 @@ const (
 
 // Message is a single displayable item in the chat buffer.
 type Message struct {
-	Generation   uint64
-	Kind         MessageKind
-	ID           string
-	Nonce        string
-	User         string
-	DisplayName  string
-	Color        string
-	Badges       []string
-	MsgID        string
-	Highlighted  bool
-	Action       bool
-	Body         string
+	Generation  uint64
+	Kind        MessageKind
+	ID          string
+	Nonce       string
+	User        string
+	DisplayName string
+	Color       string
+	Badges      []string
+	MsgID       string
+	Highlighted bool
+	Action      bool
+	Body        string
+	// Months carries USERNOTICE msg-param-cumulative-months for resub system lines
+	// before the UI localizes the body; 0 when unknown or not applicable.
+	Months       int
 	Deleted      bool
 	Self         bool
 	Delivery     DeliveryStatus

@@ -11,15 +11,16 @@ import (
 type EventKind string
 
 const (
-	EventPrivMsg   EventKind = "privmsg"
-	EventNotice    EventKind = "notice"
-	EventRoomState EventKind = "roomstate"
-	EventReconnect EventKind = "reconnect"
-	EventClearChat EventKind = "clearchat"
-	EventClearMsg  EventKind = "clearmsg"
-	EventPing      EventKind = "ping"
-	EventOther     EventKind = "other"
-	EventMalformed EventKind = "malformed"
+	EventPrivMsg    EventKind = "privmsg"
+	EventNotice     EventKind = "notice"
+	EventUserNotice EventKind = "usernotice"
+	EventRoomState  EventKind = "roomstate"
+	EventReconnect  EventKind = "reconnect"
+	EventClearChat  EventKind = "clearchat"
+	EventClearMsg   EventKind = "clearmsg"
+	EventPing       EventKind = "ping"
+	EventOther      EventKind = "other"
+	EventMalformed  EventKind = "malformed"
 )
 
 // RoomState describes channel moderation modes reported by ROOMSTATE tags.
@@ -84,8 +85,12 @@ type Event struct {
 	// BanDuration is set when CLEARCHAT carries ban-duration (timeout seconds).
 	// Nil with a TargetUser means a permanent ban; nil without a target is a full clear.
 	BanDuration *int
-	RoomState   RoomState
-	RoomDelta   RoomStateDelta
+	// CumulativeMonths is msg-param-cumulative-months on USERNOTICE (0 when absent).
+	CumulativeMonths int
+	// SystemMsg is the Twitch-provided system-msg tag on USERNOTICE (English).
+	SystemMsg string
+	RoomState RoomState
+	RoomDelta RoomStateDelta
 }
 
 // ParseLine parses a single IRC line (with or without trailing \r\n) into a
@@ -250,6 +255,19 @@ func ParseLine(rawLine string) Event {
 		}
 		return ev
 
+	case "USERNOTICE":
+		if len(params) < 1 || !strings.HasPrefix(params[0], "#") {
+			ev.Kind = EventMalformed
+			return ev
+		}
+		ev.Kind = EventUserNotice
+		ev.Channel = strings.TrimPrefix(params[0], "#")
+		if hasTrailing {
+			ev.Body = trailing
+		}
+		populateUserNoticeTags(&ev)
+		return ev
+
 	default:
 		ev.Kind = EventOther
 		if len(params) > 0 && strings.HasPrefix(params[0], "#") {
@@ -333,6 +351,46 @@ func populatePrivMsgTags(ev *Event) {
 		if ev.MsgID == "" {
 			ev.MsgID = "custom-reward"
 		}
+	}
+}
+
+func populateUserNoticeTags(ev *Event) {
+	if ev.Tags == nil {
+		return
+	}
+	ev.MsgID = strings.TrimSpace(ev.Tags["msg-id"])
+	ev.ID = ev.Tags["id"]
+	ev.DisplayName = strings.TrimSpace(ev.Tags["display-name"])
+	ev.Color = normalizeHexColor(ev.Tags["color"])
+	ev.SystemMsg = ev.Tags["system-msg"]
+	if login := strings.TrimSpace(ev.Tags["login"]); login != "" {
+		ev.User = login
+	}
+	if ev.DisplayName == "" {
+		ev.DisplayName = ev.User
+	}
+	if rawBadges := strings.TrimSpace(ev.Tags["badges"]); rawBadges != "" {
+		for _, b := range strings.Split(rawBadges, ",") {
+			b = strings.TrimSpace(b)
+			if b != "" {
+				ev.Badges = append(ev.Badges, b)
+			}
+		}
+	}
+	if raw := strings.TrimSpace(ev.Tags["msg-param-cumulative-months"]); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+			ev.CumulativeMonths = n
+		}
+	}
+}
+
+// IsResubUserNotice reports whether msgID is a resubscribe USERNOTICE kind.
+func IsResubUserNotice(msgID string) bool {
+	switch strings.ToLower(strings.TrimSpace(msgID)) {
+	case "resub", "resubscribe":
+		return true
+	default:
+		return false
 	}
 }
 

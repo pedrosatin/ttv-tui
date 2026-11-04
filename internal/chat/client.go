@@ -925,6 +925,28 @@ func (m *Manager) connectAndServe(
 					ClearMsgID: ev.TargetMsgID,
 				})
 
+			case EventUserNotice:
+				connectedOnce = true
+				if ev.Channel != "" && !strings.EqualFold(ev.Channel, channel) {
+					continue
+				}
+				// Resub (with or without user text) becomes a system line; other
+				// USERNOTICE kinds are acknowledged but not rendered yet.
+				if IsResubUserNotice(ev.MsgID) {
+					batch = append(batch, Message{
+						Generation:  gen,
+						Kind:        MessageSystem,
+						ID:          ev.ID,
+						User:        ev.User,
+						DisplayName: ev.DisplayName,
+						Color:       ev.Color,
+						Badges:      ev.Badges,
+						MsgID:       ev.MsgID,
+						Body:        ev.Body,
+						Months:      ev.CumulativeMonths,
+					})
+				}
+
 			case EventReconnect:
 				flush()
 				return connectedOnce, errors.New("server requested RECONNECT")

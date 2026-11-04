@@ -259,9 +259,46 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		if item.Generation == 0 {
 			item.Generation = msg.Generation
 		}
+		if item.Kind == chat.MessageSystem && chat.IsResubUserNotice(item.MsgID) {
+			item = m.userNoticeMessage(item)
+		}
 		m.chatPanel.buf.Append(item)
 	}
 	return m, nil
+}
+
+func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
+	gen := item.Generation
+	if gen == 0 {
+		gen = m.chatPanel.gen
+	}
+	name := strings.TrimSpace(item.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(item.User)
+	}
+	if name == "" {
+		name = "?"
+	}
+	var head string
+	if item.Months > 0 {
+		head = fmt.Sprintf(m.t("chat.usernotice.resub_months"), name, item.Months)
+	} else {
+		head = fmt.Sprintf(m.t("chat.usernotice.resub"), name)
+	}
+	body := head
+	if text := strings.TrimSpace(item.Body); text != "" {
+		body = fmt.Sprintf(m.t("chat.usernotice.with_text"), head, text)
+	}
+	return ChatMessage{
+		Generation:  gen,
+		Kind:        chat.MessageSystem,
+		ID:          item.ID,
+		User:        item.User,
+		DisplayName: item.DisplayName,
+		MsgID:       item.MsgID,
+		Months:      item.Months,
+		Body:        body,
+	}
 }
 
 func (m Model) moderationClearChatMessage(msg ChatEventMsg) ChatMessage {

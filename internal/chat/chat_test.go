@@ -195,6 +195,63 @@ func TestParseLine_Table(t *testing.T) {
 			},
 		},
 		{
+			name:     "USERNOTICE resub with user text",
+			line:     "@badge-info=subscriber/15;badges=subscriber/12;color=#00FF7F;display-name=CoolSub;id=resub-with-text;login=coolsub;mod=0;msg-id=resub;msg-param-cumulative-months=15;msg-param-months=0;msg-param-sub-plan=1000;room-id=181077473;subscriber=1;system-msg=CoolSub\\ssubscribed\\sfor\\s15\\smonths!;tmi-sent-ts=1700000000000;user-id=42;user-type= :coolsub!coolsub@coolsub.tmi.twitch.tv USERNOTICE #gaules :Great stream -- keep it up!",
+			wantKind: EventUserNotice,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "gaules" {
+					t.Fatalf("Channel=%q", ev.Channel)
+				}
+				if ev.MsgID != "resub" || !IsResubUserNotice(ev.MsgID) {
+					t.Fatalf("MsgID=%q", ev.MsgID)
+				}
+				if ev.User != "coolsub" || ev.DisplayName != "CoolSub" {
+					t.Fatalf("User=%q DisplayName=%q", ev.User, ev.DisplayName)
+				}
+				if ev.ID != "resub-with-text" || ev.CumulativeMonths != 15 {
+					t.Fatalf("ID=%q CumulativeMonths=%d", ev.ID, ev.CumulativeMonths)
+				}
+				if ev.Body != "Great stream -- keep it up!" {
+					t.Fatalf("Body=%q", ev.Body)
+				}
+				if ev.SystemMsg != "CoolSub subscribed for 15 months!" {
+					t.Fatalf("SystemMsg=%q", ev.SystemMsg)
+				}
+			},
+		},
+		{
+			name:     "USERNOTICE resub without user text",
+			line:     "@badge-info=subscriber/6;badges=subscriber/6,premium/1;color=#0000FF;display-name=TWW2;id=resub-no-text;login=tww2;mod=0;msg-id=resub;msg-param-cumulative-months=6;msg-param-months=0;msg-param-sub-plan=Prime;room-id=1337;subscriber=1;system-msg=TWW2\\ssubscribed\\swith\\sPrime.\\sThey've\\ssubscribed\\sfor\\s6\\smonths!;tmi-sent-ts=1507246572675;user-id=1337;user-type= :tmi.twitch.tv USERNOTICE #dallas",
+			wantKind: EventUserNotice,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "dallas" || ev.MsgID != "resub" {
+					t.Fatalf("Channel=%q MsgID=%q", ev.Channel, ev.MsgID)
+				}
+				if ev.User != "tww2" || ev.DisplayName != "TWW2" || ev.CumulativeMonths != 6 {
+					t.Fatalf("User=%q DisplayName=%q Months=%d", ev.User, ev.DisplayName, ev.CumulativeMonths)
+				}
+				if ev.Body != "" {
+					t.Fatalf("Body=%q, want empty for resub without message", ev.Body)
+				}
+			},
+		},
+		{
+			name:     "USERNOTICE unknown msg-id does not break",
+			line:     "@display-name=Raider;login=raider;msg-id=raid;msg-param-viewerCount=5;system-msg=5\\sraiders\\sfrom\\sRaider\\shave\\sjoined! :tmi.twitch.tv USERNOTICE #gaules",
+			wantKind: EventUserNotice,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "gaules" || ev.MsgID != "raid" {
+					t.Fatalf("Channel=%q MsgID=%q", ev.Channel, ev.MsgID)
+				}
+				if IsResubUserNotice(ev.MsgID) {
+					t.Fatal("raid must not be classified as resub")
+				}
+				if ev.User != "raider" || ev.DisplayName != "Raider" {
+					t.Fatalf("User=%q DisplayName=%q", ev.User, ev.DisplayName)
+				}
+			},
+		},
+		{
 			name:     "Unicode display name and body (CJK, accents, emojis)",
 			line:     "@color=#AABBCC;display-name=João_日本語 :joao!joao@joao.tmi.twitch.tv PRIVMSG #gaules :Olá mundo! 🇧🇷🎮 こんにちは :)",
 			wantKind: EventPrivMsg,
@@ -1259,5 +1316,83 @@ gotRS1:
 gotRS2:
 	if rs2.Slow != 0 || rs2.FollowersOnly != 10 || !rs2.SubsOnly {
 		t.Fatalf("merged RoomState = %+v, want Slow=0 FollowersOnly=10 SubsOnly=true", rs2)
+	}
+}
+
+func TestManager_UserNoticeResubWithAndWithoutText(t *testing.T) {
+	srv := newFakeIRCServer(t)
+	var serverConn net.Conn
+	connReady := make(chan struct{})
+
+	srv.handlers <- func(conn net.Conn) {
+		defer func() { _ = conn.Close() }()
+		if _, err := readClientLines(conn, 3, 2*time.Second); err != nil {
+			return
+		}
+		serverConn = conn
+		close(connReady)
+		<-time.After(3 * time.Second)
+	}
+
+	mgr := New(Options{
+		Addr:             srv.Addr(),
+		Dial:             srv.Dial,
+		CoalesceInterval: 10 * time.Millisecond,
+	})
+	defer mgr.Close()
+
+	gen, err := mgr.Join("gaules")
+	if err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	<-connReady
+	waitConnected(t, mgr, gen)
+
+	_, _ = io.WriteString(serverConn, "@color=#123456;display-name=Alice;id=chat-1 :alice!alice@alice.tmi.twitch.tv PRIVMSG #gaules :hello\r\n")
+	_, _ = io.WriteString(serverConn, "@badge-info=subscriber/15;badges=subscriber/12;color=#00FF7F;display-name=CoolSub;id=resub-1;login=coolsub;msg-id=resub;msg-param-cumulative-months=15;system-msg=CoolSub\\ssubscribed\\sfor\\s15\\smonths! :tmi.twitch.tv USERNOTICE #gaules :Great stream!\r\n")
+	_, _ = io.WriteString(serverConn, "@badge-info=subscriber/6;badges=subscriber/6;display-name=TWW2;id=resub-2;login=tww2;msg-id=resub;msg-param-cumulative-months=6;system-msg=TWW2\\ssubscribed! :tmi.twitch.tv USERNOTICE #gaules\r\n")
+	_, _ = io.WriteString(serverConn, "@display-name=Raider;login=raider;msg-id=raid;system-msg=raiders! :tmi.twitch.tv USERNOTICE #gaules\r\n")
+	_, _ = io.WriteString(serverConn, "@color=#ABCDEF;display-name=Bob;id=chat-2 :bob!bob@bob.tmi.twitch.tv PRIVMSG #gaules :after\r\n")
+
+	var got []Message
+	deadline := time.After(3 * time.Second)
+	for len(got) < 4 {
+		select {
+		case ev := <-mgr.Events():
+			if ev.Generation != gen {
+				continue
+			}
+			got = append(got, ev.Messages...)
+		case <-deadline:
+			t.Fatalf("timeout waiting for messages; got %d: %+v", len(got), got)
+		}
+	}
+
+	if len(got) != 4 {
+		t.Fatalf("got %d messages, want 4 (2 chat + 2 resub system; raid ignored): %+v", len(got), got)
+	}
+	if got[0].Kind != MessageChat || got[0].Body != "hello" {
+		t.Fatalf("msg0 = %+v", got[0])
+	}
+	if got[1].Kind != MessageSystem || got[1].MsgID != "resub" || got[1].Body != "Great stream!" || got[1].Months != 15 || got[1].DisplayName != "CoolSub" {
+		t.Fatalf("resub with text = %+v", got[1])
+	}
+	if got[2].Kind != MessageSystem || got[2].MsgID != "resub" || got[2].Body != "" || got[2].Months != 6 || got[2].User != "tww2" {
+		t.Fatalf("resub without text = %+v", got[2])
+	}
+	if got[3].Kind != MessageChat || got[3].Body != "after" {
+		t.Fatalf("msg3 = %+v", got[3])
+	}
+
+	// Buffer accounting: system lines count once each, same as chat lines.
+	buf := NewBuffer(DefaultMaxLines, DefaultMaxBytes)
+	buf.SetGeneration(gen)
+	for _, m := range got {
+		if !buf.Append(m) {
+			t.Fatalf("Append rejected %+v", m)
+		}
+	}
+	if buf.Len() != 4 {
+		t.Fatalf("buffer Len=%d, want 4", buf.Len())
 	}
 }
