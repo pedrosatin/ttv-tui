@@ -10,18 +10,18 @@ Twitch no terminal para Linux. Navegue por categorias e canais ao vivo, assista 
 
 ## Instalação
 
-### Binário da release (v0.1.1, Linux amd64 / arm64)
+### Binário da release (v0.1.2, Linux amd64 / arm64)
 
-Baixe o tarball da sua arquitetura (`linux_amd64` ou `linux_arm64`) e o arquivo `checksums.txt` da [release v0.1.1](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.1), confira o hash SHA-256 e instale o binário em `~/.local/bin`:
+Baixe o tarball da sua arquitetura (`linux_amd64` ou `linux_arm64`) e o arquivo `checksums.txt` da [release v0.1.2](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.2), confira o hash SHA-256 e instale o binário em `~/.local/bin`:
 
 ```bash
 ARCH=amd64 # ou arm64
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.1/ttv-tui_0.1.1_linux_${ARCH}.tar.gz"
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.1/checksums.txt"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.2/ttv-tui_0.1.2_linux_${ARCH}.tar.gz"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.2/checksums.txt"
 sha256sum --ignore-missing -c checksums.txt
 
 mkdir -p ~/.local/bin
-tar -xzf "ttv-tui_0.1.1_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
+tar -xzf "ttv-tui_0.1.2_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
 ```
 
 Confirme que `~/.local/bin` está no seu `PATH`.
@@ -31,7 +31,7 @@ Confirme que `~/.local/bin` está no seu `PATH`.
 Requer Go 1.27 ou superior:
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.1
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.2
 ```
 
 ### Arch Linux (AUR)
@@ -50,7 +50,7 @@ Requer Go 1.27:
 ```bash
 git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.1" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.2" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
 ## Requisitos
@@ -132,6 +132,9 @@ Pressione `?` ou `F1` para abrir ou fechar o quadro de atalhos no aplicativo. As
 
 | Tecla | Ação |
 | --- | --- |
+| `↑` / `k`, `↓` / `j`, `PgUp`, `Home` | Rolar o histórico do chat; a seleção acompanha a mensagem na base visível |
+| `End` / `G` | Voltar a acompanhar o chat ao vivo |
+| `y` | Copiar a mensagem selecionada do chat (ou a mais recente ao vivo) via OSC 52 |
 | `i` | Focar no chat e iniciar a digitação de uma mensagem no canal atual |
 | `Enter` | Enviar a mensagem escrita para o chat |
 | `Esc` | Sair do campo de mensagem preservando o rascunho ou devolver o foco para a lista |
@@ -175,6 +178,7 @@ Adaptação à largura do terminal:
 
 - **Leitura anônima.** A conexão e a leitura do chat de qualquer canal usam login IRC anônimo da Twitch (`justinfan...`) sobre TLS (`irc.chat.twitch.tv:6697`) com tags IRCv3 habilitadas. Nenhuma conta ou token é exigido para ler o chat.
 - **Envio autenticado.** Pressionar `i` para redigir uma mensagem exige um token válido salvo em `config.toml`.
+- **Copiar mensagem (`y`).** Com o foco no painel do chat, `y` copia a mensagem selecionada (a da base visível, ou a mais recente enquanto o chat acompanha o ao vivo) para a área de transferência do sistema via OSC 52. O conteúdo é só `autor: texto` (linhas de sistema copiam só o texto), sem coluna da lista, sem `│` e sem preenchimento. Um aviso curto `Copiado: …` aparece na barra de status e some sozinho. A seleção por mouse não é usada. No tmux, ative `set-clipboard on` (por exemplo em `~/.tmux.conf`) para o OSC 52 chegar à área de transferência do sistema.
 - **Limites de envio.** As mensagens enviadas passam por um limitador local alinhado aos limites da Twitch de 20 mensagens a cada 30 segundos no total e 1 mensagem por segundo por canal. Mensagens com intervalo menor que 1 segundo entram em fila automaticamente; se a janela de 20 mensagens estiver cheia, o excedente é marcado como `[discarded: rate limit exceeded (20/30s or 1/s)]`.
 - **Rastreamento de entrega e restrições da sala.** Cada mensagem enviada recebe um identificador próprio do cliente e aparece como `[sending]` até a confirmação do servidor (`[sent]`). Se a sala recusar a mensagem por modo lento, modo exclusivo para seguidores, modo exclusivo para inscritos, modo apenas emotes, regra contra repetição (R9K) ou banimento/timeout, o `ttv-tui` marca a linha como `[rejected: <motivo>]`.
 
@@ -241,7 +245,7 @@ As decisões de arquitetura (ADRs) estão documentadas em [`docs/adr/`](adr/).
 
 ## Limitações e próximos passos
 
-Limitações atuais na versão `v0.1.1`:
+Limitações atuais na versão `v0.1.2`:
 
 - **Apenas Linux.** A supervisão de grupos de processos (verificações em `/proc`, `Setpgid`), a consulta ao keyring (`secret-tool`) e os caminhos de cookies dos navegadores são voltados para Linux.
 - **Sem comandos de moderação no chat.** Exclusão de mensagens, timeouts e banimentos não estão implementados.

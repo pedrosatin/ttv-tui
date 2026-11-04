@@ -10,18 +10,18 @@ Terminal UI for Twitch on Linux. Browse live categories and channels, watch stre
 
 ## Install
 
-### Release binary (v0.1.1, Linux amd64 / arm64)
+### Release binary (v0.1.2, Linux amd64 / arm64)
 
-Download the archive for your architecture (`linux_amd64` or `linux_arm64`) and `checksums.txt` from the [v0.1.1 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.1), verify the SHA-256 digest, and place the binary in `~/.local/bin`:
+Download the archive for your architecture (`linux_amd64` or `linux_arm64`) and `checksums.txt` from the [v0.1.2 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.2), verify the SHA-256 digest, and place the binary in `~/.local/bin`:
 
 ```bash
 ARCH=amd64 # or arm64
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.1/ttv-tui_0.1.1_linux_${ARCH}.tar.gz"
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.1/checksums.txt"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.2/ttv-tui_0.1.2_linux_${ARCH}.tar.gz"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.2/checksums.txt"
 sha256sum --ignore-missing -c checksums.txt
 
 mkdir -p ~/.local/bin
-tar -xzf "ttv-tui_0.1.1_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
+tar -xzf "ttv-tui_0.1.2_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
 ```
 
 Ensure `~/.local/bin` is in your `PATH`.
@@ -31,7 +31,7 @@ Ensure `~/.local/bin` is in your `PATH`.
 Requires Go 1.27 or newer:
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.1
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.2
 ```
 
 ### Arch Linux (AUR)
@@ -50,7 +50,7 @@ Requires Go 1.27:
 ```bash
 git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.1" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.2" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
 ## Requirements
@@ -132,6 +132,9 @@ Press `?` or `F1` to toggle the in-app shortcuts overlay. The tables below list 
 
 | Key | Action |
 | --- | --- |
+| `↑` / `k`, `↓` / `j`, `PgUp`, `Home` | Scroll chat history; selection follows the bottom-most visible message |
+| `End` / `G` | Resume following live chat |
+| `y` | Copy the selected chat message (or the latest while live) via OSC 52 |
 | `i` | Focus chat and start writing a message in the current channel |
 | `Enter` | Send the composed message to chat |
 | `Esc` | Exit message input while preserving your draft, or return focus to the list |
@@ -175,6 +178,7 @@ Column width adaptation:
 
 - **Anonymous reading.** Connecting to and reading any channel's chat uses an anonymous Twitch IRC login (`justinfan...`) over TLS (`irc.chat.twitch.tv:6697`) with IRCv3 tags enabled. No account or token is required to read chat.
 - **Authenticated sending.** Pressing `i` to compose a message requires a valid token in `config.toml`.
+- **Copy message (`y`).** With focus on the chat panel, `y` copies the selected message (the bottom-most visible row, or the latest message while following live) to the system clipboard using OSC 52. The payload is only `author: text` (system lines copy the text alone), without list columns, `│` separators, or padding. A short `Copied: …` status notice appears and disappears on its own. Mouse selection is not used. In tmux, enable `set-clipboard on` (for example in `~/.tmux.conf`) so OSC 52 reaches the system clipboard.
 - **Rate limits.** Outgoing messages pass through a local rate limiter matching Twitch's limits of 20 messages per 30 seconds globally and 1 message per second per channel. Messages spaced closer than 1 second queue automatically; if the 20-message window is full, excess messages are marked `[discarded: rate limit exceeded (20/30s or 1/s)]`.
 - **Delivery tracking and room restrictions.** Each sent message carries a client nonce and displays `[sending]` until confirmed by the server (`[sent]`). If the room rejects a message due to slow mode, followers-only mode, subscribers-only mode, emote-only mode, duplicate message rules (R9K), or a ban/timeout, `ttv-tui` tags the message as `[rejected: <reason>]` inline.
 
@@ -241,7 +245,7 @@ Architecture Decision Records are documented in [`docs/adr/`](docs/adr/).
 
 ## Limitations and roadmap
 
-Current limitations in `v0.1.1`:
+Current limitations in `v0.1.2`:
 
 - **Linux only.** Process-group supervision (`/proc` checks, `Setpgid`), keyring lookup (`secret-tool`), and browser cookie paths target Linux.
 - **No chat moderation commands.** Deleting messages, timeouts, and bans are not implemented.

@@ -143,6 +143,8 @@ func (m Model) statusParts() (string, []string) {
 		primary = m.authNotice
 	case m.corruptNotice != "":
 		primary = m.corruptNotice
+	case m.copyNotice != "":
+		primary = m.copyNotice
 	case m.statusNotice != "":
 		primary = m.statusNotice
 	case m.playerWindowNoticeShown():
@@ -233,7 +235,7 @@ func (m Model) softStatusPrimary() bool {
 	if m.err != nil || m.searching || m.filtering || m.loading {
 		return false
 	}
-	if m.authNotice != "" || m.corruptNotice != "" || m.statusNotice != "" {
+	if m.authNotice != "" || m.corruptNotice != "" || m.copyNotice != "" || m.statusNotice != "" {
 		return false
 	}
 	if m.playerWindowNoticeShown() || m.playerState == PlayerStateError {

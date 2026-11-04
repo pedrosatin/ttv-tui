@@ -219,9 +219,16 @@ type Model struct {
 	authNotice       string
 	corruptNotice    string
 	statusNotice     string
-	store            Store
-	favorites        []twitch.Channel
-	recents          []twitch.Channel
+	// copyNotice is the transient "Copied: …" status after yanking a chat
+	// message with y. copyNoticeGen invalidates stale clear ticks; copyNoticeUntil
+	// records when the notice should disappear (tests advance nowFunc).
+	copyNotice      string
+	copyNoticeGen   uint64
+	copyNoticeUntil time.Time
+	nowFunc         func() time.Time
+	store           Store
+	favorites       []twitch.Channel
+	recents         []twitch.Channel
 	// pendingRecents is the store-ordered recent list after a channel is opened.
 	// VisibleItems keeps using recents until the next list load (refresh, back
 	// to categories, reopen) applies this slice, so selection does not jump rows.
@@ -423,6 +430,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.authNotice = m.t("auth.token_invalid_notice")
 		}
 		return m, nil
+
+	case copyNoticeClearMsg:
+		return m.clearCopyNoticeIfExpired(msg.gen), nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width

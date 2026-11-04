@@ -28,6 +28,7 @@ type keyMap struct {
 	StopVideo     key.Binding
 	ReconnectChat key.Binding
 	Compose       key.Binding
+	CopyMessage   key.Binding
 	Help          key.Binding
 	HelpGlobal    key.Binding
 	Favorite      key.Binding
@@ -96,6 +97,10 @@ func defaultKeyMap() keyMap {
 		Compose: key.NewBinding(
 			key.WithKeys("i"),
 		),
+		// y yanks the selected chat message (or the latest while live) via OSC 52.
+		CopyMessage: key.NewBinding(
+			key.WithKeys("y"),
+		),
 		Help: key.NewBinding(
 			key.WithKeys("?", "f1"),
 		),
@@ -153,6 +158,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.authNotice = ""
 	m.corruptNotice = ""
 	m.statusNotice = ""
+	m.copyNotice = ""
 	m.playerWindowNotice = false
 	if key.Matches(msg, m.keys.Quit) {
 		m.tracker.cancelActive()
@@ -264,6 +270,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Compose):
 		return m.enterCompose()
+
+	case key.Matches(msg, m.keys.CopyMessage):
+		if m.Focus() != FocusChat {
+			return m, nil
+		}
+		return m.copyChatMessage()
 
 	case key.Matches(msg, m.keys.Filter):
 		m.focus = FocusList
