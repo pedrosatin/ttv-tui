@@ -183,7 +183,7 @@ func TestEscReturnsToCategoriesFromChannelsAndSearch(t *testing.T) {
 		t.Fatalf("highlight after Esc = %q, want the category just left", m.HighlightedID())
 	}
 
-	// From search results.
+	// Search started from categories: Esc returns to categories.
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
 	m = typeRunes(m, "gaules")
 	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -191,15 +191,100 @@ func TestEscReturnsToCategoriesFromChannelsAndSearch(t *testing.T) {
 	if m.Mode() != ModeSearch {
 		t.Fatalf("mode = %q, want search", m.Mode())
 	}
-	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.Mode() != ModeCategories {
-		t.Fatalf("Esc from search: mode=%q, want categories", m.Mode())
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.Mode() != ModeCategories || cmd == nil {
+		t.Fatalf("Esc from search (from categories): mode=%q, want categories with reload", m.Mode())
 	}
+	m, _ = pressKeyMsg(m, cmd())
 
 	// On the categories themselves Esc does nothing.
 	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.Mode() != ModeCategories || cmd != nil {
 		t.Fatalf("Esc on categories: mode=%q cmd=%v", m.Mode(), cmd != nil)
+	}
+}
+
+func TestEscFromSearchReturnsToOrigin(t *testing.T) {
+	var searched []string
+	m := newCategoriesModel(t, i18n.LangEN, 120, &searched)
+
+	// Path 1: search from an open category → Esc reloads that category's channels.
+	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = pressKeyMsg(m, cmd())
+	if m.Mode() != ModeChannels || m.SelectedCategory() == nil || m.SelectedCategory().ID != "cat-cs" {
+		t.Fatalf("precondition channels: mode=%q cat=%+v", m.Mode(), m.SelectedCategory())
+	}
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = typeRunes(m, "gaules")
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = pressKeyMsg(m, cmd())
+	if m.Mode() != ModeSearch || m.searchOrigin != ModeChannels {
+		t.Fatalf("search from category: mode=%q origin=%q", m.Mode(), m.searchOrigin)
+	}
+	fromCategoryView := ansi.Strip(m.View())
+	t.Logf("PTY CAPTURE search from category:\n%s", fromCategoryView)
+
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.Mode() != ModeChannels || cmd == nil {
+		t.Fatalf("Esc from search (from category): mode=%q cmd=%v, want channels reload", m.Mode(), cmd != nil)
+	}
+	if m.SelectedCategory() == nil || m.SelectedCategory().ID != "cat-cs" {
+		t.Fatalf("category lost after Esc: %+v", m.SelectedCategory())
+	}
+	m, _ = pressKeyMsg(m, cmd())
+	if m.Mode() != ModeChannels {
+		t.Fatalf("after reload: mode=%q, want channels", m.Mode())
+	}
+	if len(m.Channels()) != 1 || m.Channels()[0].Login != "alanzoka" {
+		t.Fatalf("channels after Esc = %+v, want alanzoka from cat-cs", m.Channels())
+	}
+	backToChannelsView := ansi.Strip(m.View())
+	t.Logf("PTY CAPTURE Esc back to channels:\n%s", backToChannelsView)
+	if !strings.Contains(backToChannelsView, "Counter-Strike") || !strings.Contains(backToChannelsView, "alanzoka") {
+		t.Fatalf("view after Esc must show category channels:\n%s", backToChannelsView)
+	}
+
+	// Path 2: search from categories → Esc returns to categories.
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.Mode() != ModeCategories || cmd == nil {
+		t.Fatalf("Esc from channels: mode=%q, want categories", m.Mode())
+	}
+	m, _ = pressKeyMsg(m, cmd())
+
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = typeRunes(m, "gaules")
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = pressKeyMsg(m, cmd())
+	if m.Mode() != ModeSearch || m.searchOrigin != ModeCategories {
+		t.Fatalf("search from categories: mode=%q origin=%q", m.Mode(), m.searchOrigin)
+	}
+	fromCategoriesView := ansi.Strip(m.View())
+	t.Logf("PTY CAPTURE search from categories:\n%s", fromCategoriesView)
+
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.Mode() != ModeCategories || cmd == nil {
+		t.Fatalf("Esc from search (from categories): mode=%q, want categories reload", m.Mode())
+	}
+	m, _ = pressKeyMsg(m, cmd())
+	backToCategoriesView := ansi.Strip(m.View())
+	t.Logf("PTY CAPTURE Esc back to categories:\n%s", backToCategoriesView)
+	if !strings.Contains(backToCategoriesView, "Counter-Strike") || !strings.Contains(backToCategoriesView, "Just Chatting") {
+		t.Fatalf("view after Esc must show categories:\n%s", backToCategoriesView)
+	}
+
+	// Ctrl+R from a search started in a category still jumps to categories.
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = pressKeyMsg(m, cmd())
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = typeRunes(m, "gaules")
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = pressKeyMsg(m, cmd())
+	if m.Mode() != ModeSearch || m.searchOrigin != ModeChannels {
+		t.Fatalf("precondition for Ctrl+R: mode=%q origin=%q", m.Mode(), m.searchOrigin)
+	}
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlR})
+	if m.Mode() != ModeCategories || cmd == nil {
+		t.Fatalf("Ctrl+R from search: mode=%q, want categories", m.Mode())
 	}
 }
 

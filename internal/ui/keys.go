@@ -238,18 +238,23 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.reconcileHighlight()
 			return m, nil
 		}
-		// Esc steps back one level: from a category's channels or from search
-		// results it returns to the categories, like Ctrl+R.
-		if m.Mode() != ModeCategories {
+		// Esc steps back one level (vim-style). Search returns to the list it
+		// left; channels return to categories. Ctrl+R still jumps to categories.
+		switch m.Mode() {
+		case ModeSearch:
+			return m.returnFromSearch()
+		case ModeChannels:
 			return m.returnToCategories()
+		default:
+			return m, nil
 		}
-		return m, nil
 
 	case key.Matches(msg, m.keys.Compose):
 		return m.enterCompose()
 
 	case key.Matches(msg, m.keys.Filter):
 		m.focus = FocusList
+		m.clearStaleStatusErrors()
 		m.filtering = true
 		return m, nil
 
@@ -258,6 +263,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if q := strings.TrimSpace(m.filter); q != "" {
 			return m.startSearch(q)
 		}
+		m.clearStaleStatusErrors()
 		m.searching = true
 		m.searchInput = ""
 		return m, nil

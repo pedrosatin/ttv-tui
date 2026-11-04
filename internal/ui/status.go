@@ -26,6 +26,19 @@ func (m Model) errorMessage(err error) string {
 	}
 }
 
+// clearStaleStatusErrors drops list and player errors from the status bar when
+// the user changes screen or mode. The last player error line stays so help (?)
+// can still show the technical detail. Transient notices (favorite added,
+// copied, auth) are left alone — they have their own lifetime.
+func (m *Model) clearStaleStatusErrors() {
+	m.err = nil
+	if m.playerState != PlayerStateError {
+		return
+	}
+	m.playerState = PlayerStateNone
+	m.playerFailure = PlayerFailureNone
+}
+
 func (m Model) listErrorAction() string {
 	switch twitch.KindOf(m.err) {
 	case twitch.Rede:

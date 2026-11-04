@@ -184,27 +184,30 @@ func WithCorruptNotice(notice string) Option {
 
 // Model is the Bubble Tea model for ttv-tui.
 type Model struct {
-	catalog          *i18n.Catalog
-	source           twitch.Source
-	tracker          *requestTracker
-	keys             keyMap
-	pageSize         int
-	mode             Mode
-	focus            Focus
-	helpVisible      bool
-	generation       uint64
-	hydrateGen       uint64
-	loading          bool
-	err              error
-	categories       []twitch.Category
-	channels         []twitch.Channel
-	nextCursor       string
-	hasMore          bool
-	filter           string
-	filtering        bool
-	searching        bool
-	searchInput      string
-	searchQuery      string
+	catalog     *i18n.Catalog
+	source      twitch.Source
+	tracker     *requestTracker
+	keys        keyMap
+	pageSize    int
+	mode        Mode
+	focus       Focus
+	helpVisible bool
+	generation  uint64
+	hydrateGen  uint64
+	loading     bool
+	err         error
+	categories  []twitch.Category
+	channels    []twitch.Channel
+	nextCursor  string
+	hasMore     bool
+	filter      string
+	filtering   bool
+	searching   bool
+	searchInput string
+	searchQuery string
+	// searchOrigin is the list mode active when the current search started
+	// (ModeChannels or ModeCategories). Esc returns there; Ctrl+R ignores it.
+	searchOrigin     Mode
 	highlightedID    string
 	highlightedLogin string // secondary channel identity when upstream IDs churn between loads
 	highlightIndex   int    // VisibleItems index; nearest-neighbor fallback after refresh
@@ -522,6 +525,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ChannelSelectedMsg:
 		selected := msg.Channel
 		m.selectedChannel = &selected
+		m.clearStaleStatusErrors()
 		m.queueRecent(selected)
 		var cmds []tea.Cmd
 		if m.store != nil {

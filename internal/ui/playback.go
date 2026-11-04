@@ -196,12 +196,10 @@ func (m Model) playerFailureText() string {
 	}
 }
 
-// playerErrorLine is the original streamlink/mpv line of the current player
-// error, or "" when there is none.
+// playerErrorLine is the original streamlink/mpv line of the last player
+// error, or "" when there is none. Kept after the status bar dismisses the
+// error so help (?) can still show the technical detail.
 func (m Model) playerErrorLine() string {
-	if m.playerState != PlayerStateError {
-		return ""
-	}
 	return strings.TrimSpace(sanitizeChatText(m.playerLastLine))
 }
 

@@ -79,6 +79,7 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if q := strings.TrimSpace(m.filter); q != "" {
 			return m.startSearch(q)
 		}
+		m.clearStaleStatusErrors()
 		m.filtering = false
 		m.searching = true
 		m.searchInput = ""
@@ -131,6 +132,12 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	if q == "" {
 		return m, nil
 	}
+	// Remember where Esc should land. A fresh search from channels or
+	// categories records that mode; a new query while already in search keeps
+	// the original origin so Esc still steps back one level.
+	if m.mode != ModeSearch {
+		m.searchOrigin = m.Mode()
+	}
 	m.searchQuery = q
 	m.mode = ModeSearch
 	m.channels = nil
@@ -138,7 +145,7 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	m.focusResults = true
 	m.nextCursor = ""
 	m.hasMore = false
-	m.err = nil
+	m.clearStaleStatusErrors()
 	if m.source == nil {
 		m.loading = false
 		return m, nil

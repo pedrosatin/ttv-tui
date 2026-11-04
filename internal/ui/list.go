@@ -450,11 +450,12 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.hydrateGen++
 	m.applyPendingRecents()
 	m.mode = ModeCategories
+	m.searchOrigin = ""
 	m.filtering = false
 	m.searching = false
 	m.filter = ""
 	m.searchInput = ""
-	m.err = nil
+	m.clearStaleStatusErrors()
 	m.nextCursor = ""
 	m.hasMore = false
 	m.focusResults = false
@@ -469,6 +470,46 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	}
 	m.loading = true
 	return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
+}
+
+// returnFromSearch steps back from search results to the list that started the
+// search. A search opened inside a category reloads that category's channels;
+// a search opened from the categories list returns to categories.
+func (m Model) returnFromSearch() (tea.Model, tea.Cmd) {
+	if m.searchOrigin == ModeChannels && m.selectedCategory != nil {
+		return m.returnToChannels()
+	}
+	return m.returnToCategories()
+}
+
+func (m Model) returnToChannels() (tea.Model, tea.Cmd) {
+	if m.selectedCategory == nil {
+		return m.returnToCategories()
+	}
+	cat := *m.selectedCategory
+	m.tracker.cancelActive()
+	m.generation++
+	m.hydrateGen++
+	m.applyPendingRecents()
+	m.mode = ModeChannels
+	m.searchOrigin = ""
+	m.filtering = false
+	m.searching = false
+	m.filter = ""
+	m.searchInput = ""
+	m.searchQuery = ""
+	m.clearStaleStatusErrors()
+	m.nextCursor = ""
+	m.hasMore = false
+	m.channels = nil
+	m.clearHighlight()
+	m.focusResults = true
+	if m.source == nil {
+		m.loading = false
+		return m, nil
+	}
+	m.loading = true
+	return m, m.withHydrate(m.fetchChannelsCmd(m.generation, cat, "", false))
 }
 
 func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
@@ -616,7 +657,7 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		m.focusResults = true
 		m.nextCursor = ""
 		m.hasMore = false
-		m.err = nil
+		m.clearStaleStatusErrors()
 		m.loading = true
 		return m, m.fetchChannelsCmd(m.generation, selected, "", false)
 
