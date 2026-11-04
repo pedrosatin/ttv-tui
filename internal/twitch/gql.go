@@ -490,6 +490,8 @@ func (s *GQLSource) Search(ctx context.Context, query string) (Page[Channel], er
 	if reqErr != nil {
 		return Page[Channel]{}, reqErr
 	}
+	// Prefer exact login, then live among clones; see PreferSearchChannels.
+	res.Items = PreferSearchChannels(q, res.Items)
 	s.setCachedChannels(cacheKey, res)
 	return res, nil
 }

@@ -476,9 +476,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.err = nil
-		m.channels = make([]twitch.Channel, len(msg.Page.Items))
-		copy(m.channels, msg.Page.Items)
-		m.refreshSavedAvailability(msg.Page.Items)
+		// Prefer exact login then live among clones (twitch.PreferSearchChannels).
+		// Lives here so every Source gets the same Enter/highlight target.
+		items := twitch.PreferSearchChannels(msg.Query, msg.Page.Items)
+		m.channels = make([]twitch.Channel, len(items))
+		copy(m.channels, items)
+		m.refreshSavedAvailability(items)
 		m.nextCursor = msg.Page.Cursor
 		m.hasMore = msg.Page.HasMore
 		m.settleHighlightAfterLoad()

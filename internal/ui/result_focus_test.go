@@ -146,6 +146,111 @@ func TestSearchHighlightsFirstResult(t *testing.T) {
 	}
 }
 
+func TestSearchPrefersExactLoginOverOfflineClones(t *testing.T) {
+	// Twitch relevance returns the clone first; PreferSearchChannels must put
+	// the exact login first so Enter opens landonorris, not landonorris0481.
+	src := &fakeSource{
+		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+			return channelsPage(
+				twitch.Channel{ID: "clone-0481", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: twitch.AvailabilityOffline},
+				twitch.Channel{ID: "exact", Login: "landonorris", DisplayName: "LandoNorris", Availability: twitch.AvailabilityOffline},
+				twitch.Channel{ID: "clone-16", Login: "landonorris16", DisplayName: "landonorris16", Availability: twitch.AvailabilityOffline},
+			), nil
+		},
+	}
+	m := focusFixture(t, src)
+
+	updated, cmd := m.startSearch("landonorris")
+	m = run(t, updated.(Model), cmd)
+
+	if len(m.channels) < 1 || m.channels[0].Login != "landonorris" {
+		t.Fatalf("channels[0] = %+v, want exact landonorris first", m.channels)
+	}
+	if got := m.HighlightedID(); got != "exact" {
+		t.Fatalf("highlight = %q, want exact", got)
+	}
+	_, cmd = pressEnter(t, m)
+	if cmd == nil {
+		t.Fatal("expected command from Enter on exact search result")
+	}
+	sel, ok := cmd().(ChannelSelectedMsg)
+	if !ok || sel.Channel.Login != "landonorris" {
+		t.Fatalf("Enter opened %+v, want landonorris", sel)
+	}
+}
+
+func TestSearchExactOfflineStillFirstWhenCloneIsLive(t *testing.T) {
+	// Chosen rule: exact login stays first even if offline while a clone is live.
+	src := &fakeSource{
+		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+			return channelsPage(
+				twitch.Channel{ID: "clone-live", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: twitch.AvailabilityLive, Viewers: twitch.IntPtr(12)},
+				twitch.Channel{ID: "exact-off", Login: "landonorris", DisplayName: "LandoNorris", Availability: twitch.AvailabilityOffline},
+			), nil
+		},
+	}
+	m := focusFixture(t, src)
+
+	updated, cmd := m.startSearch("LandoNorris")
+	m = run(t, updated.(Model), cmd)
+
+	if m.channels[0].Login != "landonorris" {
+		t.Fatalf("channels[0] = %q, want exact first (chosen rule)", m.channels[0].Login)
+	}
+	if got := m.HighlightedID(); got != "exact-off" {
+		t.Fatalf("highlight = %q, want exact-off", got)
+	}
+	_, cmd = pressEnter(t, m)
+	sel, ok := cmd().(ChannelSelectedMsg)
+	if !ok || sel.Channel.Login != "landonorris" {
+		t.Fatalf("Enter opened %+v, want landonorris", sel)
+	}
+}
+
+func TestSearchHighlightsExactEvenWhenFoldedIntoRecents(t *testing.T) {
+	// Real failure mode: landonorris is already a recent, so VisibleItems omits it
+	// from the search section and would otherwise highlight the first clone.
+	src := &fakeSource{
+		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+			return channelsPage(
+				twitch.Channel{ID: "clone-0481", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: twitch.AvailabilityOffline},
+				twitch.Channel{ID: "twitch-exact", Login: "landonorris", DisplayName: "LandoNorris", Availability: twitch.AvailabilityOffline},
+				twitch.Channel{ID: "clone-16", Login: "landonorris16", DisplayName: "landonorris16", Availability: twitch.AvailabilityOffline},
+			), nil
+		},
+	}
+	cat, err := i18n.New(i18n.LangPTBR)
+	if err != nil {
+		t.Fatalf("i18n.New: %v", err)
+	}
+	m := New(cat,
+		WithSource(src),
+		WithRecents([]twitch.Channel{{ID: "recent-exact", Login: "landonorris", DisplayName: "LandoNorris"}}),
+	)
+	m.loading = false
+
+	updated, cmd := m.startSearch("landonorris")
+	m = run(t, updated.(Model), cmd)
+
+	if m.channels[0].Login != "landonorris" {
+		t.Fatalf("channels[0] = %q, want exact", m.channels[0].Login)
+	}
+	// Highlight must be the exact channel row (rendered as recent), not clone-0481.
+	got := m.HighlightedID()
+	if got == "clone-0481" || got == "clone-16" {
+		t.Fatalf("highlight = %q, landed on a clone", got)
+	}
+	ch, ok := m.HighlightedChannel()
+	if !ok || ch.Login != "landonorris" {
+		t.Fatalf("highlighted channel = %+v, want landonorris", ch)
+	}
+	_, cmd = pressEnter(t, m)
+	sel, ok := cmd().(ChannelSelectedMsg)
+	if !ok || sel.Channel.Login != "landonorris" {
+		t.Fatalf("Enter opened %+v, want landonorris", sel)
+	}
+}
+
 func TestRefreshAndNextPageKeepHighlightByIdentity(t *testing.T) {
 	calls := 0
 	src := &fakeSource{

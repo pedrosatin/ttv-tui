@@ -627,8 +627,10 @@ func (m *Model) reconcileHighlight() {
 // settleHighlightAfterLoad places the highlight after a channel or search page
 // arrives. Right after a category or search is opened, the highlight goes to
 // the first result of that screen, so Enter opens what the user just asked for
-// and not a favorite or recent rendered above it. Otherwise (refresh, next
-// page) the highlighted item keeps its place by identity.
+// and not a favorite or recent rendered above it. Search results are preferred
+// by twitch.PreferSearchChannels before this runs (exact login first), so the
+// first row is the intended Enter target. Otherwise (refresh, next page) the
+// highlighted item keeps its place by identity.
 func (m *Model) settleHighlightAfterLoad() {
 	if !m.focusResults {
 		m.reconcileHighlight()
@@ -643,11 +645,22 @@ func (m *Model) settleHighlightAfterLoad() {
 }
 
 // firstResultID returns the ID of the first visible row of the loaded listing.
-// It prefers the listing's own section; when every loaded channel is already
-// shown as a favorite or recent, it falls back to the row of the first loaded
-// channel, wherever it renders. An empty listing reports false.
+// For search, PreferSearchChannels already put the intended Enter target at
+// channels[0] (exact login when present); highlight that row wherever it
+// renders — including when it was folded into Favorites/Recents and omitted
+// from the search section. For category channels, prefer the listing's own
+// section; when every loaded channel is already shown as a favorite or
+// recent, fall back to the first loaded channel wherever it renders.
 func (m Model) firstResultID() (string, bool) {
 	items := m.VisibleItems()
+	if m.Mode() == ModeSearch && len(m.channels) > 0 {
+		target := m.channels[0]
+		for _, it := range items {
+			if it.Channel != nil && channelMatches(*it.Channel, target) {
+				return it.ID(), true
+			}
+		}
+	}
 	for _, it := range items {
 		if it.Type == ItemTypeChannel {
 			return it.ID(), true

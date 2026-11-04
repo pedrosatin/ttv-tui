@@ -1121,3 +1121,28 @@ func TestSearchStreamFieldDrivesAvailability(t *testing.T) {
 		t.Fatalf("absent stream field must stay unknown, got %v", unk.Availability)
 	}
 }
+
+func TestSearchPrefersExactLoginFromTwitchOrder(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Twitch relevance returns the clone first.
+		_, _ = w.Write([]byte(`{"data":{"searchFor":{"channels":{"cursor":"","edges":[
+			{"item":{"id":"c1","login":"landonorris0481","displayName":"landonorris0481","stream":null}},
+			{"item":{"id":"exact","login":"landonorris","displayName":"LandoNorris","stream":null}},
+			{"item":{"id":"c2","login":"landonorris16","displayName":"landonorris16","stream":null}}
+		]}}}}`))
+	}))
+	defer srv.Close()
+
+	src := NewGQLSource(GQLConfig{Endpoint: srv.URL, HTTPClient: srv.Client()})
+	page, err := src.Search(context.Background(), "landonorris")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(page.Items) != 3 {
+		t.Fatalf("len = %d, want 3", len(page.Items))
+	}
+	if page.Items[0].Login != "landonorris" {
+		t.Fatalf("Items[0].Login = %q, want landonorris", page.Items[0].Login)
+	}
+}
