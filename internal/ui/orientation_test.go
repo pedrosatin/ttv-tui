@@ -167,13 +167,12 @@ func TestEscReturnsToCategoriesFromChannelsAndSearch(t *testing.T) {
 		t.Fatalf("mode = %q, want channels", m.Mode())
 	}
 
-	// A filter is one step: the first Esc only clears it.
+	// A filter is one step: the first Esc only clears it (without leaving the category).
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = typeRunes(m, "alan")
-	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.Mode() != ModeChannels || m.Filter() != "" {
-		t.Fatalf("first Esc: mode=%q filter=%q, want channels and no filter", m.Mode(), m.Filter())
+	if m.Mode() != ModeChannels || m.Filter() != "" || m.Filtering() {
+		t.Fatalf("first Esc: mode=%q filter=%q filtering=%v, want channels and no filter", m.Mode(), m.Filter(), m.Filtering())
 	}
 	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.Mode() != ModeCategories || cmd == nil {

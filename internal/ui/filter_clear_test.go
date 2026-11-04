@@ -48,15 +48,10 @@ func filterClearFixture(t *testing.T) Model {
 	)
 	m.mode = ModeChannels
 	m.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
-	updated, cmd := m.Update(tea.Msg(nil))
-	_ = updated
-	_ = cmd
-	// Load channels via the same path as opening a category.
 	m.loading = true
 	m.generation++
-	gen := m.generation
-	loadCmd := m.fetchChannelsCmd(gen, *m.selectedCategory, "", false)
-	updated, _ = m.Update(loadCmd())
+	loadCmd := m.fetchChannelsCmd(m.generation, *m.selectedCategory, "", false)
+	updated, _ := m.Update(loadCmd())
 	m = updated.(Model)
 	if len(m.Channels()) != 3 {
 		t.Fatalf("fixture channels = %d, want 3", len(m.Channels()))
@@ -212,8 +207,8 @@ func TestOpenChannelPreventsSilentFilterReuseOnNextSearch(t *testing.T) {
 
 	// Next Ctrl+S must open a blank search prompt, not reuse "peere".
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlS})
-	if !m.Searching() || m.SearchInput() != "" || cmd != nil {
-		t.Fatalf("after open, Ctrl+S must prompt empty: searching=%v input=%q cmd=%v", m.Searching(), m.SearchInput(), cmd != nil)
+	if !m.Searching() || m.searchInput != "" || cmd != nil {
+		t.Fatalf("after open, Ctrl+S must prompt empty: searching=%v input=%q cmd=%v", m.Searching(), m.searchInput, cmd != nil)
 	}
 	if m.Mode() == ModeSearch {
 		t.Fatal("Ctrl+S must not auto-submit a stale filter after opening a channel")

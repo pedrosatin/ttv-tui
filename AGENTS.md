@@ -37,6 +37,10 @@ arquitetura.
    guarda um `access_token` de sessão em texto puro: imprimir, colar em relatório ou
    deixar em log expõe a conta.
 
+8. **Nunca commite enquanto um subagent escreve na mesma árvore.** O commit captura
+   estado intermediário (teste pela metade, código não compilando). Espere o subagent
+   terminar, revise o diff e só então commite.
+
 ## Convenções de código
 
 - Go 1.27, módulo `github.com/pedrosatin/ttv-tui`.

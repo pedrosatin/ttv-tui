@@ -101,10 +101,16 @@ func runTUIHelper() int {
 		Source:     emptySource{},
 		Player:     mgr,
 	}
-	if os.Getenv("TTV_APP_RICH") == "1" {
-		// One category with one channel and a logged-in chat whose dial never
-		// reaches the network, so every UI mode can be entered from the PTY.
+	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" {
+		// Logged-in chat whose dial never reaches the network, so every UI
+		// mode can be entered from the PTY.
 		opts.Source = oneChannelSource{}
+		if os.Getenv("TTV_APP_FILTER_CLEAR") == "1" {
+			opts.Source = filterClearSource{}
+			if err := seedFilterClearFavorite(opts.StatePath); err != nil {
+				return 3
+			}
+		}
 		chatMgr := chat.New(chat.Options{
 			Token:    "pty-test-token",
 			Username: "tester",
