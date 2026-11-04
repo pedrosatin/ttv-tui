@@ -37,6 +37,9 @@ var allowedExceptions = map[string]bool{
 	"  * ":       true,
 	"▸ ":         true,
 	"★ ":         true,
+	"▌ ":         true,
+	"▌★":         true,
+	"▌* ":        true,
 	"  ":         true,
 	"   ":        true,
 	"── %s ──":   true,
@@ -85,6 +88,9 @@ var allowedExceptions = map[string]bool{
 	// Keyboard shortcut names and keys
 	"up":     true,
 	"down":   true,
+	"pgup":   true,
+	"home":   true,
+	"end":    true,
 	"enter":  true,
 	"tab":    true,
 	"esc":    true,
@@ -104,6 +110,7 @@ var allowedExceptions = map[string]bool{
 	"k":      true,
 	"i":      true,
 	"r":      true,
+	"G":      true,
 	"=":      true,
 	"_":      true,
 

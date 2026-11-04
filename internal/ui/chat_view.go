@@ -148,10 +148,14 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 	}
 	headerLines := m.renderChatHeaderLines(maxWidth)
 
-	// The footer (warning, compose hint, input line) is pinned to the bottom of
-	// the panel: messages fill the space above it and blank rows pad the gap, so
-	// the input line is always the panel's last row whatever the message count.
+	// The footer (pending-new notice, warning, compose hint, input line) is
+	// pinned to the bottom of the panel: messages fill the space above it and
+	// blank rows pad the gap, so the input line is always the panel's last row
+	// whatever the message count.
 	var footer []string
+	if notice := m.renderChatPendingNotice(maxWidth); notice != "" {
+		footer = append(footer, notice)
+	}
 	if m.chatPanel.sendWarning != "" {
 		warnStyle := lipgloss.NewStyle().Bold(true)
 		if maxWidth <= 0 {
@@ -191,7 +195,8 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 			body = append(body, TruncateVisual(emptyLine, maxWidth))
 		}
 	} else {
-		body = m.chatMessageRows(msgs, msgBudget, maxWidth)
+		end := m.chatViewportEnd(len(msgs))
+		body = m.chatMessageRows(msgs[:end], msgBudget, maxWidth, m.chatSelectedIndex(len(msgs)))
 	}
 
 	lines := make([]string, 0, maxLines)
@@ -339,13 +344,14 @@ const chatContinuationIndent = 4
 // fitting pieces — never cut with "…" — so a long URL stays complete in reading
 // order. When the newest messages fill the budget, older ones leave the screen;
 // the oldest visible message may show only its last rows. The buffer is not touched.
-func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth int) []string {
+// selectedIdx is the index within msgs of the scroll highlight (or -1).
+func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth, selectedIdx int) []string {
 	if budget <= 0 {
 		return nil
 	}
 	var rows []string
 	for i := len(msgs) - 1; i >= 0 && len(rows) < budget; i-- {
-		lead, content := m.formatChatMessageParts(msgs[i])
+		lead, content := m.formatChatMessageParts(msgs[i], i == selectedIdx)
 		rows = append(wrapChatRow(lead, content, maxWidth), rows...)
 	}
 	if len(rows) > budget {
@@ -470,17 +476,23 @@ func isSGRReset(seq string) bool {
 
 // formatChatMessageParts returns the row lead ("  ", "  * " or the highlight star) and
 // the styled message text, so wrapping can indent continuation rows.
-func (m Model) formatChatMessageParts(msg ChatMessage) (string, string) {
+// selected marks the scroll highlight (bottom-visible message) when the chat
+// panel holds focus; the lead becomes "▌ " so ticket 05 can point at a row.
+func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, string) {
+	selLead := "  "
+	if selected && m.Focus() == FocusChat {
+		selLead = "▌ "
+	}
 	body := sanitizeChatText(msg.Body)
 	if msg.Kind == chat.MessageNotice {
 		prefix := m.t("chat.notice_prefix")
 		style := lipgloss.NewStyle().Faint(true)
-		return "  ", style.Render(fmt.Sprintf("%s %s", prefix, body))
+		return selLead, style.Render(fmt.Sprintf("%s %s", prefix, body))
 	}
 	if msg.Kind == chat.MessageSystem {
 		prefix := m.t("chat.system_prefix")
 		style := lipgloss.NewStyle().Faint(true).Italic(true)
-		return "  ", style.Render(fmt.Sprintf("%s %s", prefix, body))
+		return selLead, style.Render(fmt.Sprintf("%s %s", prefix, body))
 	}
 
 	name := sanitizeChatText(msg.DisplayName)
@@ -503,13 +515,21 @@ func (m Model) formatChatMessageParts(msg ChatMessage) (string, string) {
 	if msg.Highlighted {
 		tag := m.t("chat.highlight_tag")
 		hlStyle := lipgloss.NewStyle().Bold(true).Reverse(true)
-		return "★ ", fmt.Sprintf("%s: %s%s", hlStyle.Render(tag)+" "+renderedName, body, suffix)
+		lead := "★ "
+		if selected && m.Focus() == FocusChat {
+			lead = "▌★"
+		}
+		return lead, fmt.Sprintf("%s: %s%s", hlStyle.Render(tag)+" "+renderedName, body, suffix)
 	}
 	if msg.Action {
 		// The action marker stays on the first row; its "* " is part of the lead.
-		return "  * ", fmt.Sprintf("%s %s", renderedName, body+suffix)
+		lead := "  * "
+		if selected && m.Focus() == FocusChat {
+			lead = "▌* "
+		}
+		return lead, fmt.Sprintf("%s %s", renderedName, body+suffix)
 	}
-	return "  ", fmt.Sprintf("%s: %s%s", renderedName, body, suffix)
+	return selLead, fmt.Sprintf("%s: %s%s", renderedName, body, suffix)
 }
 
 func (m Model) formatDeliveryBadge(msg ChatMessage) string {

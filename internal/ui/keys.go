@@ -11,6 +11,9 @@ import (
 type keyMap struct {
 	Up            key.Binding
 	Down          key.Binding
+	PageUp        key.Binding
+	Home          key.Binding
+	GoLive        key.Binding
 	Select        key.Binding
 	SwitchFocus   key.Binding
 	Filter        key.Binding
@@ -37,6 +40,16 @@ func defaultKeyMap() keyMap {
 		),
 		Down: key.NewBinding(
 			key.WithKeys("down", "j"),
+		),
+		PageUp: key.NewBinding(
+			key.WithKeys("pgup"),
+		),
+		Home: key.NewBinding(
+			key.WithKeys("home"),
+		),
+		// End and vim-style G pin the viewport back to the live bottom.
+		GoLive: key.NewBinding(
+			key.WithKeys("end", "G"),
 		),
 		Select: key.NewBinding(
 			key.WithKeys("enter"),
@@ -294,14 +307,14 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Up):
 		if m.Focus() == FocusChat {
-			return m, nil
+			return m.scrollChatUp(1), nil
 		}
 		m.moveHighlight(-1)
 		return m, nil
 
 	case key.Matches(msg, m.keys.Down):
 		if m.Focus() == FocusChat {
-			return m, nil
+			return m.scrollChatDown(1), nil
 		}
 		m.moveHighlight(1)
 		if m.shouldLoadNextPage() {
@@ -312,6 +325,25 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.fetchCategoriesCmd(m.generation, m.nextCursor, true)
 		}
+		return m, nil
+
+	case key.Matches(msg, m.keys.PageUp):
+		if m.Focus() != FocusChat {
+			return m, nil
+		}
+		return m.scrollChatUp(m.chatPageSize()), nil
+
+	case key.Matches(msg, m.keys.Home):
+		if m.Focus() != FocusChat {
+			return m, nil
+		}
+		return m.scrollChatHome(), nil
+
+	case key.Matches(msg, m.keys.GoLive):
+		if m.Focus() != FocusChat {
+			return m, nil
+		}
+		m.chatFollowLiveNow()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Select):

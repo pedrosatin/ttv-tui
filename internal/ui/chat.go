@@ -92,6 +92,13 @@ type chatPanel struct {
 	errText     string
 	sendWarning string
 	nextNonce   uint64
+
+	// Scroll state (see chat_scroll.go). followLive pins the viewport to the
+	// newest message; bottomIdx is the buffer index shown at the bottom when
+	// paused; pendingNew counts arrivals while paused.
+	followLive bool
+	bottomIdx  int
+	pendingNew int
 }
 
 func newChatPanel() chatPanel {
@@ -100,6 +107,7 @@ func newChatPanel() chatPanel {
 		roomState: ChatRoomState{
 			FollowersOnly: -1,
 		},
+		followLive: true,
 	}
 }
 
@@ -142,6 +150,7 @@ func (m *Model) startChatChannel(login string) tea.Cmd {
 	}
 	m.chatPanel.roomState = ChatRoomState{FollowersOnly: -1}
 	m.chatPanel.switching = true
+	m.resetChatScroll()
 	if sender, ok := m.chat.(ChatSender); ok {
 		m.chatPanel.anonymous = !sender.HasToken()
 		m.chatPanel.username = sender.Username()
@@ -190,7 +199,8 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 
 	m.composeDraft = ""
 	m.chatPanel.sendWarning = ""
-	m.chatPanel.buf.Append(ChatMessage{
+	beforeLen := m.chatPanel.buf.Len()
+	appended := m.chatPanel.buf.Append(ChatMessage{
 		Generation:  m.chatPanel.gen,
 		Kind:        chat.MessageChat,
 		Nonce:       nonce,
@@ -200,6 +210,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 		Self:        true,
 		Delivery:    chat.DeliverySending,
 	})
+	m.noteChatAppend(beforeLen, appended)
 
 	req := ChatSendRequest{
 		Generation: m.chatPanel.gen,
@@ -222,14 +233,17 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		m.chatPanel.switching = false
 		m.chatPanel.gen = msg.Generation
 		m.chatPanel.buf.SetGeneration(msg.Generation)
+		m.resetChatScroll()
 	} else if msg.Generation != 0 && m.chatPanel.gen != 0 && msg.Generation < m.chatPanel.gen {
 		// Stale generation from a previous channel — discard.
 		return m, nil
 	} else if msg.Generation > m.chatPanel.gen {
 		m.chatPanel.gen = msg.Generation
 		m.chatPanel.buf.SetGeneration(msg.Generation)
+		m.resetChatScroll()
 	} else if m.chatPanel.gen != 0 && m.chatPanel.buf.Generation() != m.chatPanel.gen {
 		m.chatPanel.buf.SetGeneration(m.chatPanel.gen)
+		m.resetChatScroll()
 	}
 
 	if msg.Channel != "" {
@@ -253,11 +267,33 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.ClearChat {
 		m.chatPanel.buf.ClearChat(msg.Generation, msg.ClearUser)
-		m.chatPanel.buf.Append(m.moderationClearChatMessage(msg))
+		if msg.ClearUser == "" {
+			// Full clear empties the buffer; scroll returns to live.
+			m.resetChatScroll()
+		} else if !m.chatPanel.followLive {
+			// Per-user purge may remove the anchored message; clamp.
+			if n := m.chatPanel.buf.Len(); n == 0 {
+				m.resetChatScroll()
+			} else if m.chatPanel.bottomIdx >= n {
+				m.chatPanel.bottomIdx = n - 1
+			}
+		}
+		beforeLen := m.chatPanel.buf.Len()
+		appended := m.chatPanel.buf.Append(m.moderationClearChatMessage(msg))
+		m.noteChatAppend(beforeLen, appended)
 	}
 	if msg.ClearMsgID != "" {
 		m.chatPanel.buf.ClearMsg(msg.Generation, msg.ClearMsgID)
-		m.chatPanel.buf.Append(m.moderationClearMsgMessage(msg))
+		if !m.chatPanel.followLive {
+			if n := m.chatPanel.buf.Len(); n == 0 {
+				m.resetChatScroll()
+			} else if m.chatPanel.bottomIdx >= n {
+				m.chatPanel.bottomIdx = n - 1
+			}
+		}
+		beforeLen := m.chatPanel.buf.Len()
+		appended := m.chatPanel.buf.Append(m.moderationClearMsgMessage(msg))
+		m.noteChatAppend(beforeLen, appended)
 	}
 	for _, upd := range msg.SendUpdates {
 		m.applySendUpdate(upd)
@@ -269,7 +305,9 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		if item.Kind == chat.MessageSystem && chat.IsResubUserNotice(item.MsgID) {
 			item = m.userNoticeMessage(item)
 		}
-		m.chatPanel.buf.Append(item)
+		beforeLen := m.chatPanel.buf.Len()
+		appended := m.chatPanel.buf.Append(item)
+		m.noteChatAppend(beforeLen, appended)
 	}
 	return m, nil
 }
@@ -429,4 +467,12 @@ func (m Model) ComposeDraft() string {
 // ChatSendWarning returns the active rate-limit, channel-switch, or auth warning on the chat panel.
 func (m Model) ChatSendWarning() string {
 	return m.chatPanel.sendWarning
+}
+
+// ChatBufferLimits returns the chat buffer's configured max lines and max bytes.
+func (m Model) ChatBufferLimits() (maxLines, maxBytes int) {
+	if m.chatPanel.buf == nil {
+		return chat.DefaultMaxLines, chat.DefaultMaxBytes
+	}
+	return m.chatPanel.buf.MaxLines(), m.chatPanel.buf.MaxBytes()
 }
