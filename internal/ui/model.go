@@ -228,9 +228,10 @@ type Model struct {
 	// ctrlCNotice is the transient "To quit use Ctrl+Q" status after Ctrl+C.
 	// It outranks filter/search prompts so the hint stays visible in every mode.
 	ctrlCNotice string
-	// copyNotice is the transient "Copied: …" status after yanking a chat
-	// message with y. copyNoticeGen invalidates stale clear ticks; copyNoticeUntil
-	// records when the notice should disappear (tests advance nowFunc).
+	// copyNotice is the transient copy status after yanking a chat message with
+	// y (success names the clipboard path; failure is an explicit error).
+	// copyNoticeGen invalidates stale clear ticks; copyNoticeUntil records when
+	// the notice should disappear (tests advance nowFunc).
 	copyNotice      string
 	copyNoticeGen   uint64
 	copyNoticeUntil time.Time
@@ -444,6 +445,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.authNotice = m.t("auth.token_invalid_notice")
 		}
 		return m, nil
+
+	case copyResultMsg:
+		return m.applyCopyResult(msg)
 
 	case copyNoticeClearMsg:
 		return m.clearCopyNoticeIfExpired(msg.gen), nil

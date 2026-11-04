@@ -2,7 +2,12 @@ package ui
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -33,39 +38,73 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
-// flushCopyCmds runs OSC write cmds from a copy batch and ignores the clear
-// tick (which would sleep for copyNoticeTTL).
-func flushCopyCmds(t *testing.T, cmd tea.Cmd) {
+type errWriter struct{ err error }
+
+func (w errWriter) Write([]byte) (int, error) { return 0, w.err }
+
+// forceOSCClipboardEnv clears display env so writeClipboard skips helpers.
+func forceOSCClipboardEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("DISPLAY", "")
+}
+
+// flushCopy runs the copy cmd, feeds copyResultMsg back into Update, and
+// ignores the clear tick (which would sleep for copyNoticeTTL).
+func flushCopy(t *testing.T, m Model, cmd tea.Cmd) Model {
 	t.Helper()
 	if cmd == nil {
-		return
+		return m
 	}
 	msg := cmd()
-	batch, ok := msg.(tea.BatchMsg)
-	if !ok {
-		runCmdWithTimeout(t, cmd)
-		return
-	}
-	for _, c := range batch {
-		if c == nil {
-			continue
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c == nil {
+				continue
+			}
+			inner := runCmdWithTimeout(t, c)
+			if inner == nil {
+				continue
+			}
+			updated, next := m.Update(inner)
+			m = updated.(Model)
+			_ = next
 		}
-		runCmdWithTimeout(t, c)
+		return m
+	}
+	updated, next := m.Update(msg)
+	m = updated.(Model)
+	_ = next
+	return m
+}
+
+func runCmdWithTimeout(t *testing.T, cmd tea.Cmd) tea.Msg {
+	t.Helper()
+	done := make(chan tea.Msg, 1)
+	go func() {
+		done <- cmd()
+	}()
+	select {
+	case msg := <-done:
+		return msg
+	case <-time.After(30 * time.Millisecond):
+		// tea.Tick blocks until TTL; leave it.
+		return nil
 	}
 }
 
-func runCmdWithTimeout(t *testing.T, cmd tea.Cmd) {
+func writeExecScript(t *testing.T, dir, name, body string) {
 	t.Helper()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_ = cmd()
-	}()
-	select {
-	case <-done:
-	case <-time.After(30 * time.Millisecond):
-		// tea.Tick blocks until TTL; leave it.
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatalf("write %s: %v", name, err)
 	}
+}
+
+// pathWithFakeBins puts dir first so fake wl-copy/xclip win, while keeping
+// /usr/bin:/bin so shell scripts can still resolve cat and friends.
+func pathWithFakeBins(dir string) string {
+	return dir + string(os.PathListSeparator) + "/usr/bin:/bin"
 }
 
 func TestFormatChatCopyText_AuthorAndBody(t *testing.T) {
@@ -153,6 +192,7 @@ func TestCopyDoesNotIncludeLayoutJunk(t *testing.T) {
 }
 
 func TestCopyY_LiveCopiesLastMessageAndWritesOSC(t *testing.T) {
+	forceOSCClipboardEnv(t)
 	var buf bytes.Buffer
 	prev := osc52Out
 	osc52Out = &buf
@@ -165,9 +205,9 @@ func TestCopyY_LiveCopiesLastMessageAndWritesOSC(t *testing.T) {
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
 	if cmd == nil {
-		t.Fatal("expected OSC write + clear tick cmds")
+		t.Fatal("expected copy cmd")
 	}
-	flushCopyCmds(t, cmd)
+	m = flushCopy(t, m, cmd)
 
 	got, err := decodeOSC52Payload(buf.String())
 	if err != nil {
@@ -176,7 +216,7 @@ func TestCopyY_LiveCopiesLastMessageAndWritesOSC(t *testing.T) {
 	if got != "User: msg 2" {
 		t.Fatalf("copied %q, want last live message User: msg 2", got)
 	}
-	wantNotice := "Copied: User — msg 2"
+	wantNotice := "Copied via OSC 52: User — msg 2"
 	if m.CopyNotice() != wantNotice {
 		t.Fatalf("notice = %q, want %q", m.CopyNotice(), wantNotice)
 	}
@@ -186,6 +226,7 @@ func TestCopyY_LiveCopiesLastMessageAndWritesOSC(t *testing.T) {
 }
 
 func TestCopyY_ScrolledCopiesSelection(t *testing.T) {
+	forceOSCClipboardEnv(t)
 	var buf bytes.Buffer
 	prev := osc52Out
 	osc52Out = &buf
@@ -203,7 +244,7 @@ func TestCopyY_ScrolledCopiesSelection(t *testing.T) {
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
-	flushCopyCmds(t, cmd)
+	m = flushCopy(t, m, cmd)
 	got, err := decodeOSC52Payload(buf.String())
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -211,12 +252,13 @@ func TestCopyY_ScrolledCopiesSelection(t *testing.T) {
 	if got != "User: msg 7" {
 		t.Fatalf("copied %q, want selected User: msg 7", got)
 	}
-	if !strings.Contains(m.CopyNotice(), "msg 7") {
+	if !strings.Contains(m.CopyNotice(), "msg 7") || !strings.Contains(m.CopyNotice(), "OSC 52") {
 		t.Fatalf("notice = %q", m.CopyNotice())
 	}
 }
 
 func TestCopyY_SystemMessage(t *testing.T) {
+	forceOSCClipboardEnv(t)
 	var buf bytes.Buffer
 	prev := osc52Out
 	osc52Out = &buf
@@ -238,7 +280,7 @@ func TestCopyY_SystemMessage(t *testing.T) {
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
-	flushCopyCmds(t, cmd)
+	m = flushCopy(t, m, cmd)
 	got, err := decodeOSC52Payload(buf.String())
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -246,7 +288,7 @@ func TestCopyY_SystemMessage(t *testing.T) {
 	if got != "gaules timed out for 10s" {
 		t.Fatalf("system payload = %q", got)
 	}
-	if !strings.HasPrefix(m.CopyNotice(), "Copied: ") {
+	if !strings.HasPrefix(m.CopyNotice(), "Copied via OSC 52: ") {
 		t.Fatalf("notice = %q", m.CopyNotice())
 	}
 	if strings.Contains(got, "[mod]") || strings.Contains(got, "▌") {
@@ -255,6 +297,7 @@ func TestCopyY_SystemMessage(t *testing.T) {
 }
 
 func TestCopyNoticeExpiresWithInjectedClock(t *testing.T) {
+	forceOSCClipboardEnv(t)
 	base := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 	now := base
 	m := scrollFixture(t, i18n.LangPTBR, 2)
@@ -266,11 +309,11 @@ func TestCopyNoticeExpiresWithInjectedClock(t *testing.T) {
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
-	flushCopyCmds(t, cmd)
+	m = flushCopy(t, m, cmd)
 	if m.CopyNotice() == "" {
 		t.Fatal("expected copy notice")
 	}
-	want := "Copiado: User — msg 1"
+	want := "Copiado via OSC 52: User — msg 1"
 	if m.CopyNotice() != want {
 		t.Fatalf("pt-BR notice = %q, want %q", m.CopyNotice(), want)
 	}
@@ -292,6 +335,7 @@ func TestCopyNoticeExpiresWithInjectedClock(t *testing.T) {
 }
 
 func TestCopyY_IgnoredOnListFocus(t *testing.T) {
+	forceOSCClipboardEnv(t)
 	var buf bytes.Buffer
 	prev := osc52Out
 	osc52Out = &buf
@@ -302,7 +346,7 @@ func TestCopyY_IgnoredOnListFocus(t *testing.T) {
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
 	if cmd != nil {
-		flushCopyCmds(t, cmd)
+		m = flushCopy(t, m, cmd)
 	}
 	if buf.Len() != 0 {
 		t.Fatalf("list focus must not copy, wrote %q", buf.String())
@@ -313,12 +357,13 @@ func TestCopyY_IgnoredOnListFocus(t *testing.T) {
 }
 
 func TestCopyI18nBothLanguages(t *testing.T) {
+	forceOSCClipboardEnv(t)
 	cases := []struct {
 		lang string
 		want string
 	}{
-		{i18n.LangEN, "Copied: User — msg 0"},
-		{i18n.LangPTBR, "Copiado: User — msg 0"},
+		{i18n.LangEN, "Copied via OSC 52: User — msg 0"},
+		{i18n.LangPTBR, "Copiado via OSC 52: User — msg 0"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.lang, func(t *testing.T) {
@@ -329,18 +374,22 @@ func TestCopyI18nBothLanguages(t *testing.T) {
 			m := scrollFixture(t, tc.lang, 1)
 			updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 			m = updated.(Model)
-			flushCopyCmds(t, cmd)
+			m = flushCopy(t, m, cmd)
 			if m.CopyNotice() != tc.want {
 				t.Fatalf("notice = %q, want %q", m.CopyNotice(), tc.want)
 			}
-			if m.t("chat.copy.done") == "chat.copy.done" || m.t("chat.copy.done_text") == "chat.copy.done_text" {
+			if m.t("chat.copy.done_via") == "chat.copy.done_via" || m.t("chat.copy.done_text_via") == "chat.copy.done_text_via" {
 				t.Fatal("missing i18n keys")
+			}
+			if m.t("chat.copy.failed") == "chat.copy.failed" {
+				t.Fatal("missing chat.copy.failed")
 			}
 		})
 	}
 }
 
 func TestCopyNoticeVisibleForPTYCapture(t *testing.T) {
+	forceOSCClipboardEnv(t)
 	prev := osc52Out
 	osc52Out = ioDiscard{}
 	t.Cleanup(func() { osc52Out = prev })
@@ -348,15 +397,16 @@ func TestCopyNoticeVisibleForPTYCapture(t *testing.T) {
 	m := scrollFixture(t, i18n.LangPTBR, 1)
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
-	flushCopyCmds(t, cmd)
+	m = flushCopy(t, m, cmd)
 	view := ansi.Strip(m.View())
 	t.Logf("PTY capture (ansi-stripped View after y):\n%s", view)
-	if !strings.Contains(view, "Copiado: User — msg 0") {
+	if !strings.Contains(view, "Copiado via OSC 52: User — msg 0") {
 		t.Fatalf("missing copy notice in view")
 	}
 }
 
 func TestCopyEmptyBufferNoop(t *testing.T) {
+	forceOSCClipboardEnv(t)
 	var buf bytes.Buffer
 	prev := osc52Out
 	osc52Out = &buf
@@ -366,10 +416,225 @@ func TestCopyEmptyBufferNoop(t *testing.T) {
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
 	if cmd != nil {
-		flushCopyCmds(t, cmd)
+		m = flushCopy(t, m, cmd)
 	}
 	if buf.Len() != 0 || m.CopyNotice() != "" {
 		t.Fatalf("empty buffer must not copy: buf=%q notice=%q", buf.String(), m.CopyNotice())
+	}
+}
+
+func TestCopyUsesWlCopyWhenWayland(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "copied.txt")
+	writeExecScript(t, dir, "wl-copy", "#!/bin/sh\n/bin/cat > \""+out+"\"\n")
+	t.Setenv("PATH", pathWithFakeBins(dir))
+	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
+	t.Setenv("DISPLAY", "")
+
+	var buf bytes.Buffer
+	prev := osc52Out
+	osc52Out = &buf
+	t.Cleanup(func() { osc52Out = prev })
+
+	m := scrollFixture(t, i18n.LangEN, 2)
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	m = flushCopy(t, m, cmd)
+
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("wl-copy did not write output: %v", err)
+	}
+	if got := string(raw); got != "User: msg 1" {
+		t.Fatalf("wl-copy payload = %q, want User: msg 1", got)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("OSC 52 must not run when wl-copy works; got %q", buf.String())
+	}
+	if !strings.Contains(m.CopyNotice(), "wl-copy") {
+		t.Fatalf("status should name wl-copy: %q", m.CopyNotice())
+	}
+	if !strings.Contains(m.CopyNotice(), "User") {
+		t.Fatalf("status missing preview: %q", m.CopyNotice())
+	}
+}
+
+func TestCopyUsesXclipWhenNoWayland(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "copied.txt")
+	writeExecScript(t, dir, "xclip", "#!/bin/sh\n/bin/cat > \""+out+"\"\n")
+	// A wl-copy that must not be consulted (no WAYLAND_DISPLAY).
+	writeExecScript(t, dir, "wl-copy", "#!/bin/sh\necho wl-copy-should-not-run >&2\nexit 1\n")
+	t.Setenv("PATH", pathWithFakeBins(dir))
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("DISPLAY", ":0")
+
+	var buf bytes.Buffer
+	prev := osc52Out
+	osc52Out = &buf
+	t.Cleanup(func() { osc52Out = prev })
+
+	m := scrollFixture(t, i18n.LangEN, 2)
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	m = flushCopy(t, m, cmd)
+
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("xclip did not write output: %v", err)
+	}
+	if got := string(raw); got != "User: msg 1" {
+		t.Fatalf("xclip payload = %q, want User: msg 1", got)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("OSC 52 must not run when xclip works; got %q", buf.String())
+	}
+	if !strings.Contains(m.CopyNotice(), "xclip") {
+		t.Fatalf("status should name xclip: %q", m.CopyNotice())
+	}
+}
+
+func TestCopyFallsBackToOSC52WhenHelpersAbsent(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
+	t.Setenv("DISPLAY", ":0")
+
+	var buf bytes.Buffer
+	prev := osc52Out
+	osc52Out = &buf
+	t.Cleanup(func() { osc52Out = prev })
+
+	m := scrollFixture(t, i18n.LangEN, 1)
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	m = flushCopy(t, m, cmd)
+
+	got, err := decodeOSC52Payload(buf.String())
+	if err != nil {
+		t.Fatalf("decode OSC: %v (raw=%q)", err, buf.String())
+	}
+	if got != "User: msg 0" {
+		t.Fatalf("OSC payload = %q", got)
+	}
+	if !strings.Contains(m.CopyNotice(), "OSC 52") {
+		t.Fatalf("status should name OSC 52: %q", m.CopyNotice())
+	}
+}
+
+func TestCopyWlCopyFailureFallsBackToOSC52(t *testing.T) {
+	dir := t.TempDir()
+	writeExecScript(t, dir, "wl-copy", "#!/bin/sh\nexit 1\n")
+	t.Setenv("PATH", pathWithFakeBins(dir))
+	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
+	t.Setenv("DISPLAY", "")
+
+	var buf bytes.Buffer
+	prev := osc52Out
+	osc52Out = &buf
+	t.Cleanup(func() { osc52Out = prev })
+
+	m := scrollFixture(t, i18n.LangEN, 1)
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	m = flushCopy(t, m, cmd)
+
+	got, err := decodeOSC52Payload(buf.String())
+	if err != nil {
+		t.Fatalf("expected OSC fallback, decode: %v (raw=%q)", err, buf.String())
+	}
+	if got != "User: msg 0" {
+		t.Fatalf("OSC payload = %q", got)
+	}
+	if !strings.Contains(m.CopyNotice(), "OSC 52") {
+		t.Fatalf("status should report OSC 52 after wl-copy failure: %q", m.CopyNotice())
+	}
+	if strings.Contains(m.CopyNotice(), "wl-copy") {
+		t.Fatalf("status must name the path that worked, not wl-copy: %q", m.CopyNotice())
+	}
+}
+
+func TestCopyAllPathsFailShowsError(t *testing.T) {
+	dir := t.TempDir()
+	writeExecScript(t, dir, "wl-copy", "#!/bin/sh\nexit 1\n")
+	writeExecScript(t, dir, "xclip", "#!/bin/sh\nexit 1\n")
+	t.Setenv("PATH", pathWithFakeBins(dir))
+	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
+	t.Setenv("DISPLAY", ":0")
+
+	prev := osc52Out
+	osc52Out = errWriter{err: errors.New("osc write failed")}
+	t.Cleanup(func() { osc52Out = prev })
+
+	m := scrollFixture(t, i18n.LangEN, 1)
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	m = flushCopy(t, m, cmd)
+
+	want := m.t("chat.copy.failed")
+	if m.CopyNotice() != want {
+		t.Fatalf("notice = %q, want failure %q", m.CopyNotice(), want)
+	}
+	if strings.HasPrefix(m.CopyNotice(), "Copied") {
+		t.Fatalf("must not pretend success: %q", m.CopyNotice())
+	}
+}
+
+func TestWriteClipboard_PersistsViaRealHelperSmoke(t *testing.T) {
+	// Optional machine smoke: real wl-copy then wl-paste. Skips when the
+	// desktop clipboard tools are unavailable.
+	if testing.Short() {
+		t.Skip("short")
+	}
+	wayland := os.Getenv("WAYLAND_DISPLAY")
+	if wayland == "" {
+		t.Skip("WAYLAND_DISPLAY unset")
+	}
+	wlCopy, err := exec.LookPath("wl-copy")
+	if err != nil {
+		t.Skip("wl-copy not on PATH")
+	}
+	wlPaste, err := exec.LookPath("wl-paste")
+	if err != nil {
+		t.Skip("wl-paste not on PATH")
+	}
+
+	t.Setenv("WAYLAND_DISPLAY", wayland)
+	t.Setenv("DISPLAY", "")
+	// Prefer the resolved directory so a prior test's fake PATH cannot hide the
+	// real helper after Cleanup ordering quirks.
+	t.Setenv("PATH", filepath.Dir(wlCopy)+string(os.PathListSeparator)+"/usr/bin:/bin")
+
+	payload := "ttv-tui ticket08 clipboard probe"
+	type result struct {
+		method string
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		method, werr := writeClipboard(payload)
+		done <- result{method: method, err: werr}
+	}()
+	var got result
+	select {
+	case got = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("writeClipboard timed out using real wl-copy")
+	}
+	if got.err != nil {
+		t.Fatalf("writeClipboard: %v", got.err)
+	}
+	if got.method != clipboardMethodWlCopy {
+		t.Fatalf("method = %q, want wl-copy on this Wayland host", got.method)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, wlPaste, "-n").Output()
+	if err != nil {
+		t.Fatalf("wl-paste: %v", err)
+	}
+	if text := string(out); text != payload {
+		t.Fatalf("wl-paste = %q, want %q", text, payload)
 	}
 }
 

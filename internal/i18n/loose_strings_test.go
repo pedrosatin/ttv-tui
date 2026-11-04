@@ -127,6 +127,13 @@ var allowedExceptions = map[string]bool{
 	"secret-tool":           true,
 	"sqlite3":               true,
 	"twt":                   true,
+	"wl-copy":               true,
+	"xclip":                 true,
+	"OSC 52":                true,
+	"-selection":            true,
+	"clipboard":             true,
+	"WAYLAND_DISPLAY":       true,
+	"DISPLAY":               true,
 
 	// CLI binary, command, and flag names
 	"ttv-tui":             true,

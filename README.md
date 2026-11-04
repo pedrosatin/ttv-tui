@@ -134,7 +134,7 @@ Press `?` or `F1` to toggle the in-app shortcuts overlay. The tables below list 
 | --- | --- |
 | `↑` / `k`, `↓` / `j`, `PgUp`, `Home` | Scroll chat history; selection follows the bottom-most visible message |
 | `End` / `G` | Resume following live chat |
-| `y` | Copy the selected chat message (or the latest while live) via OSC 52 |
+| `y` | Copy the selected chat message (or the latest while live) via `wl-copy`, `xclip`, or OSC 52 |
 | `i` | Focus chat and start writing a message in the current channel |
 | `Enter` | Send the composed message to chat |
 | `Esc` | Exit message input while preserving your draft, or return focus to the list |
@@ -178,7 +178,7 @@ Column width adaptation:
 
 - **Anonymous reading.** Connecting to and reading any channel's chat uses an anonymous Twitch IRC login (`justinfan...`) over TLS (`irc.chat.twitch.tv:6697`) with IRCv3 tags enabled. No account or token is required to read chat.
 - **Authenticated sending.** Pressing `i` to compose a message requires a valid token in `config.toml`.
-- **Copy message (`y`).** With focus on the chat panel, `y` copies the selected message (the bottom-most visible row, or the latest message while following live) to the system clipboard using OSC 52. The payload is only `author: text` (system lines copy the text alone), without list columns, `│` separators, or padding. A short `Copied: …` status notice appears and disappears on its own. Mouse selection is not used. In tmux, enable `set-clipboard on` (for example in `~/.tmux.conf`) so OSC 52 reaches the system clipboard.
+- **Copy message (`y`).** With focus on the chat panel, `y` copies the selected message (the bottom-most visible row, or the latest message while following live) to the system clipboard. The payload is only `author: text` (system lines copy the text alone), without list columns, `│` separators, or padding. Mouse selection is not used. Clipboard paths, in order: (1) `wl-copy` when `WAYLAND_DISPLAY` is set and `wl-copy` is on `PATH` (content persists after the app exits); (2) `xclip -selection clipboard` when `DISPLAY` is set and `xclip` is on `PATH`; (3) OSC 52 written to stderr for SSH/tmux and other hosts without those helpers. If a path fails, the next one is tried. The status bar names the path that worked (`Copied via wl-copy: …` / `xclip` / `OSC 52`), or shows a clear error when every path fails. For the OSC 52 path inside tmux, enable `set-clipboard on` (for example in `~/.tmux.conf`) so the sequence reaches the system clipboard.
 - **Rate limits.** Outgoing messages pass through a local rate limiter matching Twitch's limits of 20 messages per 30 seconds globally and 1 message per second per channel. Messages spaced closer than 1 second queue automatically; if the 20-message window is full, excess messages are marked `[discarded: rate limit exceeded (20/30s or 1/s)]`.
 - **Delivery tracking and room restrictions.** Each sent message carries a client nonce and displays `[sending]` until confirmed by the server (`[sent]`). If the room rejects a message due to slow mode, followers-only mode, subscribers-only mode, emote-only mode, duplicate message rules (R9K), or a ban/timeout, `ttv-tui` tags the message as `[rejected: <reason>]` inline.
 

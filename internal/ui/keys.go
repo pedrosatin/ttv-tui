@@ -96,7 +96,8 @@ func defaultKeyMap() keyMap {
 		Compose: key.NewBinding(
 			key.WithKeys("i"),
 		),
-		// y yanks the selected chat message (or the latest while live) via OSC 52.
+		// y yanks the selected chat message (or the latest while live) via
+		// wl-copy, xclip, or OSC 52 (see writeClipboard).
 		CopyMessage: key.NewBinding(
 			key.WithKeys("y"),
 		),
