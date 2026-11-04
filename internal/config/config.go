@@ -132,9 +132,8 @@ func Save(cfg Config) error {
 }
 
 // SaveTo writes cfg atomically to path using a temporary file in the same
-// directory followed by os.Rename. When cfg contains a token, the file
-// permissions are enforced as 0600 even when overwriting an existing file
-// with looser permissions.
+// directory followed by os.Rename. File permissions are enforced as 0600
+// even when overwriting an existing file with looser permissions.
 func SaveTo(path string, cfg Config) error {
 	cfg.AccessToken = NormalizeToken(cfg.AccessToken)
 
@@ -155,11 +154,7 @@ func SaveTo(path string, cfg Config) error {
 		}
 	}()
 
-	perm := os.FileMode(0o644)
-	if cfg.HasToken() {
-		perm = 0o600
-	}
-	if err := tmp.Chmod(perm); err != nil {
+	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("chmod temp config: %w", err)
 	}
@@ -182,10 +177,8 @@ func SaveTo(path string, cfg Config) error {
 	}
 	cleanup = false
 
-	if cfg.HasToken() {
-		if err := os.Chmod(path, 0o600); err != nil {
-			return fmt.Errorf("chmod config %s: %w", path, err)
-		}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return fmt.Errorf("chmod config %s: %w", path, err)
 	}
 	return nil
 }

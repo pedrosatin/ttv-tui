@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,6 +47,111 @@ func TestLoadDoesNotOverwriteExistingConfig(t *testing.T) {
 	}
 	if string(after) != raw {
 		t.Fatalf("existing config was modified by LoadFrom: got %q, want %q", string(after), raw)
+	}
+}
+
+func TestSaveToNewWithoutTokenPermissions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if p := os.Getenv("TTV_TEST_CONFIG_PATH"); p != "" {
+		path = p
+	}
+
+	want := Config{
+		Language: "pt-BR",
+	}
+	if err := SaveTo(path, want); err != nil {
+		t.Fatalf("SaveTo returned error: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat saved config: %v", err)
+	}
+	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
+		t.Fatalf("got file permissions %#o, want 0600", gotPerm)
+	}
+	if out, err := exec.Command("stat", "-c", "%a", path).Output(); err == nil {
+		t.Logf("stat -c %%a %s: %s", filepath.Base(path), strings.TrimSpace(string(out)))
+	}
+
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom saved config: %v", err)
+	}
+	if got != want {
+		t.Fatalf("round-trip mismatch: got %+v, want %+v", got, want)
+	}
+}
+
+func TestSaveToPreexistingLoosePermissionsTightenedWithoutToken(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	if err := os.WriteFile(path, []byte("language = \"en\"\n"), 0o644); err != nil {
+		t.Fatalf("write loose file: %v", err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatalf("chmod 0644: %v", err)
+	}
+	if before, err := exec.Command("stat", "-c", "%a", path).Output(); err == nil {
+		t.Logf("before SaveTo stat -c %%a %s: %s", filepath.Base(path), strings.TrimSpace(string(before)))
+	}
+
+	want := Config{
+		Language: "pt-BR",
+	}
+	if err := SaveTo(path, want); err != nil {
+		t.Fatalf("SaveTo returned error: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat saved config: %v", err)
+	}
+	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
+		t.Fatalf("got file permissions %#o, want 0600", gotPerm)
+	}
+	if after, err := exec.Command("stat", "-c", "%a", path).Output(); err == nil {
+		t.Logf("after SaveTo stat -c %%a %s: %s", filepath.Base(path), strings.TrimSpace(string(after)))
+	}
+
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom saved config: %v", err)
+	}
+	if got != want {
+		t.Fatalf("round-trip mismatch: got %+v, want %+v", got, want)
+	}
+}
+
+func TestSaveToNewWithTokenPermissions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	want := Config{
+		Language:    "pt-BR",
+		Username:    "streamer",
+		AccessToken: "secret-access-token",
+	}
+	if err := SaveTo(path, want); err != nil {
+		t.Fatalf("SaveTo returned error: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat saved config: %v", err)
+	}
+	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
+		t.Fatalf("got file permissions %#o, want 0600", gotPerm)
+	}
+
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom saved config: %v", err)
+	}
+	if got != want {
+		t.Fatalf("round-trip mismatch: got %+v, want %+v", got, want)
 	}
 }
 
