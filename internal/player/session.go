@@ -506,6 +506,12 @@ func (s *Session) superviseIPC(ctx context.Context) {
 	_ = writeIPC(conn, map[string]any{
 		"command": []any{"observe_property", 3, "volume"},
 	})
+	// Explicit baseline after connect: mpv softvol can open above 100 (observed
+	// 102) while the status bar starts at 100, and pause must not be presumed
+	// from the Session zero value. Setting both here keeps the UI and mpv aligned
+	// without reading get_property; later observe_property events still track
+	// manual/window changes.
+	s.applyPlaybackBaseline()
 
 	readErr := make(chan error, 1)
 	go func() {
@@ -668,6 +674,21 @@ func (s *Session) emitStatus() {
 	}
 	s.mu.Unlock()
 	s.cfg.Emit(ev)
+}
+
+// applyPlaybackBaseline sets volume=100 and pause=false on the connected mpv.
+// Chosen over get_property so softvol values above the UI clamp (0..100) are
+// written back instead of only clamped in memory.
+func (s *Session) applyPlaybackBaseline() {
+	s.mu.Lock()
+	s.desiredPaused = false
+	s.hasDesiredPause = true
+	s.mu.Unlock()
+	_ = s.setVolume(100)
+	_ = s.sendCommand([]any{"set_property", "pause", false}, pendingCommand{
+		kind:   pendingPause,
+		paused: false,
+	})
 }
 
 func (s *Session) togglePause() error {

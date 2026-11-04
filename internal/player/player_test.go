@@ -527,6 +527,8 @@ func runPlayerHelper() {
 			EmitPropOnSet:    true,
 			LogCommandsPath:  os.Getenv("TTV_PLAYER_HELPER_CMDS"),
 			DeferPropOnPause: os.Getenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP") == "1",
+			InitialVolume:    helperInitialVolume(),
+			InitialPause:     os.Getenv("TTV_PLAYER_HELPER_INIT_PAUSE") == "1",
 		})
 	case "ad-then-play":
 		fmt.Println("[plugins.twitch][info] Waiting for pre-roll ads to finish, be patient")
@@ -601,6 +603,21 @@ type helperIPCOptions struct {
 	EmitPropOnSet    bool
 	LogCommandsPath  string
 	DeferPropOnPause bool
+	// InitialVolume is the first volume property-change (mpv softvol); 0 means 100.
+	InitialVolume float64
+	InitialPause  bool
+}
+
+func helperInitialVolume() float64 {
+	s := strings.TrimSpace(os.Getenv("TTV_PLAYER_HELPER_INIT_VOLUME"))
+	if s == "" {
+		return 0
+	}
+	var v float64
+	if _, err := fmt.Sscanf(s, "%f", &v); err != nil {
+		return 0
+	}
+	return v
 }
 
 func helperPlay(socket, login string, withChild bool, opts helperIPCOptions) {
@@ -696,10 +713,24 @@ func serveFakeMPV(conn net.Conn, delay time.Duration, opts helperIPCOptions) {
 	if delay > 0 {
 		time.Sleep(delay)
 	}
+	initVol := opts.InitialVolume
+	if initVol == 0 {
+		initVol = 100
+	}
 	_, _ = conn.Write([]byte(`{"event":"playback-restart"}` + "\n"))
 	_, _ = conn.Write([]byte(`{"event":"property-change","name":"idle-active","data":false}` + "\n"))
-	_, _ = conn.Write([]byte(`{"event":"property-change","name":"pause","data":false}` + "\n"))
-	_, _ = conn.Write([]byte(`{"event":"property-change","name":"volume","data":100}` + "\n"))
+	pauseLine, _ := json.Marshal(map[string]any{
+		"event": "property-change",
+		"name":  "pause",
+		"data":  opts.InitialPause,
+	})
+	_, _ = conn.Write(append(pauseLine, '\n'))
+	volLine, _ := json.Marshal(map[string]any{
+		"event": "property-change",
+		"name":  "volume",
+		"data":  initVol,
+	})
+	_, _ = conn.Write(append(volLine, '\n'))
 
 	sc := json.NewDecoder(conn)
 	for {
@@ -818,6 +849,71 @@ func TestClampVolume(t *testing.T) {
 			t.Fatalf("clampVolume(%d)=%d want %d", tc.in, got, tc.want)
 		}
 	}
+}
+
+// TestPlaybackBaselineSyncsVolumeAndPause: mpv may open at softvol 102 and/or
+// paused; after IPC connect the session forces volume 100 and pause=false so the
+// status bar matches the player, then manual controls still work.
+func TestPlaybackBaselineSyncsVolumeAndPause(t *testing.T) {
+	cmdLog := filepath.Join(t.TempDir(), "baseline-cmds.jsonl")
+	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
+	t.Setenv("TTV_PLAYER_HELPER_INIT_VOLUME", "102")
+	t.Setenv("TTV_PLAYER_HELPER_INIT_PAUSE", "1")
+	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "0")
+
+	mgr := newTestManager(t, "play-control", Options{})
+	gen, err := mgr.Start("baseline")
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	play := waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+	if play.State != StatePlaying {
+		t.Fatalf("state=%s, want tocando after baseline unpause", play.State)
+	}
+	waitVolume(t, mgr, gen, 100, 3*time.Second)
+	if mgr.Volume() != 100 {
+		t.Fatalf("Volume=%d, want 100 (baseline must override softvol 102)", mgr.Volume())
+	}
+
+	deadline := time.After(2 * time.Second)
+	var data []byte
+	for {
+		var err error
+		data, err = os.ReadFile(cmdLog)
+		if err == nil {
+			body := string(data)
+			if strings.Contains(body, `"volume"`) && strings.Contains(body, `"pause"`) {
+				break
+			}
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timeout waiting for baseline set_property in log: %s", data)
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	body := string(data)
+	if !strings.Contains(body, `["set_property","volume",100]`) {
+		t.Fatalf("expected baseline set_property volume 100, got %s", body)
+	}
+	if !strings.Contains(body, `["set_property","pause",false]`) {
+		t.Fatalf("expected baseline set_property pause false, got %s", body)
+	}
+
+	// Manual controls still work after the baseline.
+	if err := mgr.TogglePause(); err != nil {
+		t.Fatalf("TogglePause: %v", err)
+	}
+	_ = waitForState(t, mgr.Events(), gen, StatePaused, 5*time.Second)
+	if err := mgr.TogglePause(); err != nil {
+		t.Fatalf("TogglePause resume: %v", err)
+	}
+	_ = waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+
+	if err := mgr.AdjustVolume(-5); err != nil {
+		t.Fatalf("AdjustVolume: %v", err)
+	}
+	waitVolume(t, mgr, gen, 95, 3*time.Second)
 }
 
 func TestPauseCommandCorrelatesByRequestID(t *testing.T) {

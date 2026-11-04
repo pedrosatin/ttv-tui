@@ -323,9 +323,91 @@ func TestVisualTruncationUnicodeCJKAndEmojiNeverOverflowWidth(t *testing.T) {
 				t.Fatalf("width=%d line %d overflowed visual width (%d > %d): %q", width, i, visualW, width, line)
 			}
 		}
-		if !strings.Contains(plain, "…") {
-			t.Fatalf("width=%d: expected ellipsis '…' from visual truncation:\n%s", width, plain)
+		if !strings.Contains(plain, "…") && !strings.Contains(plain, "...") {
+			t.Fatalf("width=%d: expected ellipsis from visual truncation:\n%s", width, plain)
 		}
+	}
+}
+
+// TestCJKChannelNameDoesNotInsertBlankListRow: a CJK display name plus the row
+// em dash used to overflow by one cell on East Asian terminals (ambiguous width),
+// wrapping a spurious blank line under the name. fitListRow keeps one logical row.
+func TestCJKChannelNameDoesNotInsertBlankListRow(t *testing.T) {
+	catEN, err := i18n.New(i18n.LangEN)
+	if err != nil {
+		t.Fatalf("i18n.New: %v", err)
+	}
+	title := "配信タイトル — とても長いタイトルで折り返しを誘発する"
+	m := New(catEN)
+	m.mode = ModeChannels
+	m.channels = []twitch.Channel{
+		{ID: "cjk-1", Login: "nihongo", DisplayName: "日本語配信者", Viewers: twitch.IntPtr(1234), Title: &title, Availability: twitch.AvailabilityLive},
+		{ID: "cjk-2", Login: "nextchan", DisplayName: "次のチャンネル", Viewers: twitch.IntPtr(56), Title: twitch.StringPtr("short"), Availability: twitch.AvailabilityLive},
+		{ID: "lat-3", Login: "latin", DisplayName: "LatinOnly", Viewers: twitch.IntPtr(99), Title: twitch.StringPtr("ascii title"), Availability: twitch.AvailabilityLive},
+	}
+	m.highlightedID = "cjk-1"
+
+	for _, width := range []int{80, 120} {
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 14})
+		m = updated.(Model)
+		plain := ansi.Strip(m.View())
+		lines := strings.Split(plain, "\n")
+		if len(lines) != 14 {
+			t.Fatalf("width=%d: got %d lines, want 14:\n%s", width, len(lines), plain)
+		}
+		for i, line := range lines {
+			if ansi.StringWidth(line) > width {
+				t.Fatalf("width=%d line %d overflow (%d): %q", width, i, ansi.StringWidth(line), line)
+			}
+		}
+
+		// List body: header then channel rows without an empty line between them.
+		var listRows []string
+		for _, line := range lines[:len(lines)-1] {
+			cell := strings.TrimRight(line, " ")
+			if left, _, ok := strings.Cut(line, panelSeparator); ok {
+				cell = strings.TrimRight(left, " ")
+			}
+			listRows = append(listRows, cell)
+		}
+		idxNihongo, idxNext := -1, -1
+		for i, row := range listRows {
+			if strings.Contains(row, "nihongo") {
+				idxNihongo = i
+			}
+			if strings.Contains(row, "nextchan") {
+				idxNext = i
+			}
+		}
+		if idxNihongo < 0 || idxNext < 0 {
+			t.Fatalf("width=%d: missing CJK channel rows:\n%s", width, plain)
+		}
+		if idxNext != idxNihongo+1 {
+			t.Fatalf("width=%d: expected next channel immediately after CJK row (got %d then %d):\n%s",
+				width, idxNihongo, idxNext, strings.Join(listRows, "\n"))
+		}
+		if strings.Contains(listRows[idxNihongo], "—") {
+			t.Fatalf("width=%d: CJK row still has ambiguous em dash: %q", width, listRows[idxNihongo])
+		}
+		if !strings.Contains(listRows[idxNihongo], "日本語配信者") {
+			t.Fatalf("width=%d: CJK display name missing: %q", width, listRows[idxNihongo])
+		}
+	}
+
+	// Unit: fitListRow replaces em dash and stays within maxWidth for CJK.
+	row := "▸   1.2k  日本語配信者 (nihongo) — " + title
+	for _, max := range []int{20, 31, 40, 55, 80} {
+		got := fitListRow(row, max)
+		if hasWideRune(got) && strings.Contains(got, "—") {
+			t.Fatalf("fitListRow(%d) kept em dash: %q", max, got)
+		}
+		if w := ansi.StringWidth(got); w > max {
+			t.Fatalf("fitListRow(%d) width %d: %q", max, w, got)
+		}
+	}
+	latin := "▸   1.2k  LatinOnly (latin) — ascii title"
+	if got := fitListRow(latin, 80); !strings.Contains(got, "—") {
+		t.Fatalf("Latin row should keep em dash: %q", got)
 	}
 }
 

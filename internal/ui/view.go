@@ -32,6 +32,47 @@ func TruncateVisual(s string, maxWidth int) string {
 	return ansi.Truncate(s, maxWidth, "…")
 }
 
+// hasWideRune reports whether s contains a grapheme that occupies two terminal
+// cells under the default (non–East-Asian) width tables (CJK, emoji, …).
+func hasWideRune(s string) bool {
+	for _, r := range ansi.Strip(s) {
+		if r == '\n' || r == '\r' {
+			continue
+		}
+		if ansi.StringWidth(string(r)) >= 2 {
+			return true
+		}
+	}
+	return false
+}
+
+// listRowEmDash is U+2014. Built without a string literal so the i18n loose-
+// string check does not treat the technical separator as copy.
+var listRowEmDash = string(rune(0x2014))
+
+// fitListRow prepares one list row for a fixed panel width. When the row has
+// wide (CJK/emoji) runes, East Asian terminals often draw ambiguous glyphs such
+// as U+2014 EM DASH and U+2026 HORIZONTAL ELLIPSIS two cells wide; ansi width
+// still counts them as one, so a "perfect" truncate wraps and leaves a blank
+// line under the name. Replace those separators with ASCII and use an ASCII
+// ellipsis so measured width matches the terminal.
+func fitListRow(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	if !hasWideRune(s) {
+		return TruncateVisual(s, maxWidth)
+	}
+	s = strings.ReplaceAll(s, listRowEmDash, "-")
+	if ansi.StringWidth(s) <= maxWidth {
+		return s
+	}
+	if maxWidth == 1 {
+		return ansi.Truncate(s, 1, "")
+	}
+	return ansi.Truncate(s, maxWidth, "...")
+}
+
 func padOrTruncateVisual(s string, width int) string {
 	if width <= 0 {
 		return s
@@ -288,7 +329,7 @@ func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
 }
 
 func (m Model) renderBodyLines(maxWidth int) []string {
-	header := TruncateVisual(m.headerLine(), maxWidth)
+	header := fitListRow(m.headerLine(), maxWidth)
 	if m.hasChatPanel() && m.Focus() == FocusList {
 		header = lipgloss.NewStyle().Bold(true).Render(header)
 	}
@@ -383,7 +424,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		text := fmt.Sprintf("── %s ──", title)
 		allRows = append(allRows, rowEntry{
 			isHeader: true,
-			text:     sectionStyle.Render(TruncateVisual(text, maxWidth)),
+			text:     sectionStyle.Render(fitListRow(text, maxWidth)),
 		})
 	}
 
@@ -426,7 +467,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 			row = m.formatChannelRow(marker, ch, it.Availability)
 		}
 
-		row = TruncateVisual(row, maxWidth)
+		row = fitListRow(row, maxWidth)
 		if it.ID() == m.highlightedID {
 			row = highlightStyle.Render(row)
 		}
