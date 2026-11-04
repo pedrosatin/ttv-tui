@@ -101,13 +101,19 @@ func runTUIHelper() int {
 		Source:     emptySource{},
 		Player:     mgr,
 	}
-	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" {
+	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" || os.Getenv("TTV_APP_RECENT_ORDER") == "1" {
 		// Logged-in chat whose dial never reaches the network, so every UI
 		// mode can be entered from the PTY.
 		opts.Source = oneChannelSource{}
 		if os.Getenv("TTV_APP_FILTER_CLEAR") == "1" {
 			opts.Source = filterClearSource{}
 			if err := seedFilterClearFavorite(opts.StatePath); err != nil {
+				return 3
+			}
+		}
+		if os.Getenv("TTV_APP_RECENT_ORDER") == "1" {
+			opts.Source = recentOrderSource{}
+			if err := seedRecentOrderState(opts.StatePath); err != nil {
 				return 3
 			}
 		}

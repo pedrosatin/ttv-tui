@@ -214,7 +214,8 @@ func TestEnterSemanticsByItemType(t *testing.T) {
 	}
 	m.reconcileHighlight()
 
-	// 1. Enter on Favorite: selects channel, records recent, saves store
+	// 1. Enter on Favorite: selects channel; visible recents stay put until next load
+	orderBefore := visibleLogins(m.VisibleItems())
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if cmd == nil {
@@ -225,9 +226,22 @@ func TestEnterSemanticsByItemType(t *testing.T) {
 	if !ok || selMsg.Channel.Login != "streamer_fav" {
 		t.Fatalf("expected ChannelSelectedMsg for streamer_fav, got %+v", msg)
 	}
-	// Verify it was moved to top of recents
-	if m.Recents()[0].Login != "streamer_fav" {
-		t.Fatalf("expected streamer_fav recorded as newest recent, got %q", m.Recents()[0].Login)
+	if got := visibleLogins(m.VisibleItems()); !equalStringSlices(got, orderBefore) {
+		t.Fatalf("visible order changed on select: before=%v after=%v", orderBefore, got)
+	}
+	updated, cmd = m.Update(selMsg)
+	m = updated.(Model)
+	if cmd != nil {
+		_ = cmd()
+	}
+	if fs.saveCalls != 1 {
+		t.Fatalf("expected store save once after channel open, got %d", fs.saveCalls)
+	}
+	if len(fs.savedState.Recents) == 0 || fs.savedState.Recents[0].Login != "streamer_fav" {
+		t.Fatalf("store must record streamer_fav as newest recent, got %+v", fs.savedState.Recents)
+	}
+	if m.Recents()[0].Login != "streamer_rec1" {
+		t.Fatalf("visible recents must stay frozen until next load, got %q", m.Recents()[0].Login)
 	}
 
 	// 2. Enter on Category: drills down to ModeChannels without recording recent

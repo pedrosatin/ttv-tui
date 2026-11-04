@@ -346,6 +346,9 @@ func (m *Model) markChannelOffline(login string) {
 	m.channels = apply(m.channels)
 	m.favorites = apply(m.favorites)
 	m.recents = apply(m.recents)
+	if m.pendingRecents != nil {
+		m.pendingRecents = apply(m.pendingRecents)
+	}
 }
 
 // refreshSavedAvailability copies the stream state of freshly loaded channels
@@ -355,6 +358,9 @@ func (m *Model) markChannelOffline(login string) {
 func (m *Model) refreshSavedAvailability(loaded []twitch.Channel) {
 	m.favorites = m.withLoadedAvailability(m.favorites, loaded)
 	m.recents = m.withLoadedAvailability(m.recents, loaded)
+	if m.pendingRecents != nil {
+		m.pendingRecents = m.withLoadedAvailability(m.pendingRecents, loaded)
+	}
 }
 
 // withLoadedAvailability returns a copy of saved with the evidence from loaded
@@ -442,6 +448,7 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.tracker.cancelActive()
 	m.generation++
 	m.hydrateGen++
+	m.applyPendingRecents()
 	m.mode = ModeCategories
 	m.filtering = false
 	m.searching = false
@@ -471,6 +478,7 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 	m.tracker.cancelActive()
 	m.generation++
 	m.hydrateGen++
+	m.applyPendingRecents()
 	m.loading = true
 	m.err = nil
 	m.nextCursor = ""
@@ -494,17 +502,33 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m *Model) recordRecent(ch twitch.Channel) {
-	filtered := make([]twitch.Channel, 0, len(m.recents))
-	for _, r := range m.recents {
+// queueRecent records ch as the newest recent for persistence without changing
+// the visible list. VisibleItems keeps using m.recents until applyPendingRecents
+// runs on the next list load.
+func (m *Model) queueRecent(ch twitch.Channel) {
+	base := m.recents
+	if m.pendingRecents != nil {
+		base = m.pendingRecents
+	}
+	filtered := make([]twitch.Channel, 0, len(base))
+	for _, r := range base {
 		if !channelMatches(r, ch) {
 			filtered = append(filtered, r)
 		}
 	}
-	m.recents = append([]twitch.Channel{ch}, filtered...)
-	if len(m.recents) > defaultMaxRecents {
-		m.recents = m.recents[:defaultMaxRecents]
+	m.pendingRecents = append([]twitch.Channel{ch}, filtered...)
+	if len(m.pendingRecents) > defaultMaxRecents {
+		m.pendingRecents = m.pendingRecents[:defaultMaxRecents]
 	}
+}
+
+// applyPendingRecents promotes the store-ordered recents into the visible list.
+func (m *Model) applyPendingRecents() {
+	if m.pendingRecents == nil {
+		return
+	}
+	m.recents = m.pendingRecents
+	m.pendingRecents = nil
 }
 
 // ToggleFavorite toggles ch in favorites. If present, removes it; if absent, adds it.
@@ -521,9 +545,13 @@ func (m *Model) ToggleFavorite(ch twitch.Channel) bool {
 }
 
 func (m Model) toStoreState() store.State {
+	recs := m.recents
+	if m.pendingRecents != nil {
+		recs = m.pendingRecents
+	}
 	return store.State{
 		Favorites: store.FromTwitchChannels(m.favorites),
-		Recents:   store.FromTwitchChannels(m.recents),
+		Recents:   store.FromTwitchChannels(recs),
 	}
 }
 
@@ -602,8 +630,8 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		// the list are visible again; the user did not ask to stay filtered.
 		m.filter = ""
 		m.filtering = false
-		m.recordRecent(selected)
-		m.reconcileHighlight()
+		// Recents are queued for the store in ChannelSelectedMsg; the visible
+		// order stays frozen so Enter does not land on a shifted row.
 		return m, func() tea.Msg {
 			return ChannelSelectedMsg{Channel: selected}
 		}
@@ -866,8 +894,12 @@ func (m Model) withHydrate(cmd tea.Cmd) tea.Cmd {
 
 // savedLogins returns unique non-empty logins from favorites and recents.
 func (m Model) savedLogins() []string {
-	seen := make(map[string]struct{}, len(m.favorites)+len(m.recents))
-	out := make([]string, 0, len(m.favorites)+len(m.recents))
+	n := len(m.favorites) + len(m.recents)
+	if m.pendingRecents != nil {
+		n += len(m.pendingRecents)
+	}
+	seen := make(map[string]struct{}, n)
+	out := make([]string, 0, n)
 	add := func(ch twitch.Channel) {
 		login := strings.TrimSpace(ch.Login)
 		if login == "" {
@@ -884,6 +916,9 @@ func (m Model) savedLogins() []string {
 		add(ch)
 	}
 	for _, ch := range m.recents {
+		add(ch)
+	}
+	for _, ch := range m.pendingRecents {
 		add(ch)
 	}
 	return out
