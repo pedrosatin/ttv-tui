@@ -125,7 +125,7 @@ Widen the terminal back to 80 columns or more and the chat panel reappears autom
 
 ## 8. Quit cleanly
 
-Press `Ctrl+Q` or `Ctrl+C` (even while typing in chat or filter prompts) to exit `ttv-tui`.
+Press `Ctrl+Q` (even while typing in chat or filter prompts) to exit `ttv-tui`. `Ctrl+C` does not quit; it shows a hint to use `Ctrl+Q`.
 
 On shutdown, `ttv-tui`:
 1. Closes the `mpv` IPC connection.

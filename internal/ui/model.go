@@ -219,6 +219,9 @@ type Model struct {
 	authNotice       string
 	corruptNotice    string
 	statusNotice     string
+	// ctrlCNotice is the transient "To quit use Ctrl+Q" status after Ctrl+C.
+	// It outranks filter/search prompts so the hint stays visible in every mode.
+	ctrlCNotice string
 	// copyNotice is the transient "Copied: …" status after yanking a chat
 	// message with y. copyNoticeGen invalidates stale clear ticks; copyNoticeUntil
 	// records when the notice should disappear (tests advance nowFunc).
@@ -304,6 +307,11 @@ func (m Model) CorruptNotice() string {
 // StatusNotice returns the active one-time status notice in the status bar, if any.
 func (m Model) StatusNotice() string {
 	return m.statusNotice
+}
+
+// CtrlCNotice returns the transient "use Ctrl+Q to quit" hint after Ctrl+C, if any.
+func (m Model) CtrlCNotice() string {
+	return m.ctrlCNotice
 }
 
 // Init implements tea.Model.

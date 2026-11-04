@@ -39,10 +39,12 @@ func cmdQuits(cmd tea.Cmd) bool {
 	return false
 }
 
-// Ctrl+C must take the same shutdown path as Ctrl+Q from every mode: player and
-// chat stopped, program told to quit.
-func TestCtrlCQuitsFromEveryMode(t *testing.T) {
-	modes := []struct {
+func everyModeEnter(t *testing.T) []struct {
+	name  string
+	enter func(t *testing.T, m Model) Model
+} {
+	t.Helper()
+	return []struct {
 		name  string
 		enter func(t *testing.T, m Model) Model
 	}{
@@ -84,35 +86,85 @@ func TestCtrlCQuitsFromEveryMode(t *testing.T) {
 			return m
 		}},
 	}
-	for _, mode := range modes {
-		for _, quitKey := range []tea.KeyType{tea.KeyCtrlC, tea.KeyCtrlQ} {
-			t.Run(mode.name+"/"+quitKey.String(), func(t *testing.T) {
-				m, pb, fc := setupTwoPanelModel(t)
-				m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
-				m = mode.enter(t, m)
-				pbStops, chatStops := pb.stopped, fc.stopped
+}
 
-				m, cmd := pressKey(m, tea.KeyMsg{Type: quitKey})
-				if !m.Quitting() {
-					t.Fatal("Quitting() = false")
-				}
-				if pb.stopped != pbStops+1 {
-					t.Errorf("player stops = %d, want %d", pb.stopped, pbStops+1)
-				}
-				if fc.stopped != chatStops+1 {
-					t.Errorf("chat stops = %d, want %d", fc.stopped, chatStops+1)
-				}
-				if !cmdQuits(cmd) {
-					t.Error("returned command does not quit the program")
-				}
-				if len(fc.sent) != 0 {
-					t.Errorf("quitting sent chat messages: %v", fc.sent)
-				}
-				if v := m.View(); v != "" {
-					t.Errorf("View() after quit = %q, want empty", v)
-				}
-			})
-		}
+// Ctrl+Q takes the shutdown path from every mode: player and chat stopped,
+// program told to quit.
+func TestCtrlQQuitsFromEveryMode(t *testing.T) {
+	for _, mode := range everyModeEnter(t) {
+		t.Run(mode.name, func(t *testing.T) {
+			m, pb, fc := setupTwoPanelModel(t)
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+			m = mode.enter(t, m)
+			pbStops, chatStops := pb.stopped, fc.stopped
+
+			m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlQ})
+			if !m.Quitting() {
+				t.Fatal("Quitting() = false")
+			}
+			if pb.stopped != pbStops+1 {
+				t.Errorf("player stops = %d, want %d", pb.stopped, pbStops+1)
+			}
+			if fc.stopped != chatStops+1 {
+				t.Errorf("chat stops = %d, want %d", fc.stopped, chatStops+1)
+			}
+			if !cmdQuits(cmd) {
+				t.Error("returned command does not quit the program")
+			}
+			if len(fc.sent) != 0 {
+				t.Errorf("quitting sent chat messages: %v", fc.sent)
+			}
+			if v := m.View(); v != "" {
+				t.Errorf("View() after quit = %q, want empty", v)
+			}
+		})
+	}
+}
+
+// Ctrl+C never quits. In every mode it shows a localized hint to use Ctrl+Q
+// and leaves player, chat, filter, search, and compose state alone.
+func TestCtrlCDoesNotQuitAndShowsHint(t *testing.T) {
+	for _, mode := range everyModeEnter(t) {
+		t.Run(mode.name, func(t *testing.T) {
+			m, pb, fc := setupTwoPanelModel(t)
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+			m = mode.enter(t, m)
+			pbStops, chatStops := pb.stopped, fc.stopped
+			wasFiltering, wasSearching := m.Filtering(), m.Searching()
+			wasComposing, draft := m.Composing(), m.ComposeDraft()
+			focus := m.Focus()
+
+			m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlC})
+			if m.Quitting() || cmdQuits(cmd) {
+				t.Fatal("Ctrl+C quit the app")
+			}
+			if pb.stopped != pbStops {
+				t.Errorf("player stops = %d, want %d", pb.stopped, pbStops)
+			}
+			if fc.stopped != chatStops {
+				t.Errorf("chat stops = %d, want %d", fc.stopped, chatStops)
+			}
+			wantHint := m.t("status.ctrl_c_hint")
+			if m.CtrlCNotice() != wantHint {
+				t.Fatalf("CtrlCNotice() = %q, want %q", m.CtrlCNotice(), wantHint)
+			}
+			bar := ansi.Strip(m.StatusBar())
+			if !strings.Contains(bar, wantHint) {
+				t.Fatalf("status bar missing Ctrl+C hint %q:\n%q", wantHint, bar)
+			}
+			if m.Filtering() != wasFiltering || m.Searching() != wasSearching {
+				t.Fatalf("mode changed: filtering=%v searching=%v", m.Filtering(), m.Searching())
+			}
+			if m.Composing() != wasComposing || m.ComposeDraft() != draft {
+				t.Fatalf("compose changed: composing=%v draft=%q", m.Composing(), m.ComposeDraft())
+			}
+			if m.Focus() != focus {
+				t.Fatalf("focus = %v, want %v", m.Focus(), focus)
+			}
+			if len(fc.sent) != 0 {
+				t.Errorf("Ctrl+C sent chat messages: %v", fc.sent)
+			}
+		})
 	}
 }
 
@@ -140,14 +192,14 @@ func TestQIsTextWhileComposingAndNotAQuitKey(t *testing.T) {
 	}
 }
 
-func TestHelpAndStatusBarCiteCtrlCAndCtrlQAt80Cols(t *testing.T) {
+func TestHelpAndStatusBarCiteOnlyCtrlQAt80Cols(t *testing.T) {
 	for _, tc := range []struct {
 		lang     string
 		helpQuit string
 		barQuit  string
 	}{
-		{i18n.LangEN, "Ctrl+C or Ctrl+Q quit", "Ctrl+C/Ctrl+Q quit"},
-		{i18n.LangPTBR, "Ctrl+C ou Ctrl+Q sair", "Ctrl+C/Ctrl+Q sair"},
+		{i18n.LangEN, "Ctrl+Q quit", "Ctrl+Q quit"},
+		{i18n.LangPTBR, "Ctrl+Q sair", "Ctrl+Q sair"},
 	} {
 		t.Run(tc.lang, func(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
@@ -180,9 +232,15 @@ func TestHelpAndStatusBarCiteCtrlCAndCtrlQAt80Cols(t *testing.T) {
 			if !strings.Contains(appLine, tc.helpQuit) {
 				t.Errorf("help app line %q does not cite %q", appLine, tc.helpQuit)
 			}
+			if strings.Contains(appLine, "Ctrl+C") {
+				t.Errorf("help app line still cites Ctrl+C: %q", appLine)
+			}
 			status := lines[len(lines)-1]
 			if !strings.Contains(status, tc.barQuit) {
 				t.Errorf("status bar %q does not cite %q", status, tc.barQuit)
+			}
+			if strings.Contains(status, "Ctrl+C") {
+				t.Errorf("status bar still cites Ctrl+C: %q", status)
 			}
 		})
 	}

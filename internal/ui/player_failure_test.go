@@ -182,8 +182,11 @@ func TestPlayerFailureAt80ColumnsKeepsMainAction(t *testing.T) {
 			if !strings.Contains(bar, msgs[i]) {
 				t.Fatalf("%s/%s: main action truncated at 80 columns:\n%q", lang, f, bar)
 			}
-			if !strings.Contains(bar, "Ctrl+C/Ctrl+Q") {
+			if !strings.Contains(bar, "Ctrl+Q") {
 				t.Fatalf("%s/%s: quit hint lost:\n%q", lang, f, bar)
+			}
+			if strings.Contains(bar, "Ctrl+C") {
+				t.Fatalf("%s/%s: quit hint still cites Ctrl+C:\n%q", lang, f, bar)
 			}
 		}
 	}

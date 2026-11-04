@@ -73,11 +73,10 @@ func defaultKeyMap() keyMap {
 		Clear: key.NewBinding(
 			key.WithKeys("esc"),
 		),
-		// Ctrl+C is what someone new to terminal apps tries first. In raw mode
-		// Bubble Tea delivers it as a key, not SIGINT, so it shares Ctrl+Q's
-		// shutdown path. It is checked before every mode, composing included.
+		// Ctrl+Q is the only in-app quit key. Ctrl+C is handled separately so
+		// it never exits (raw mode delivers it as a key, not SIGINT).
 		Quit: key.NewBinding(
-			key.WithKeys("ctrl+q", "ctrl+c"),
+			key.WithKeys("ctrl+q"),
 		),
 		Pause: key.NewBinding(
 			key.WithKeys(" ", "space"),
@@ -158,6 +157,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.authNotice = ""
 	m.corruptNotice = ""
 	m.statusNotice = ""
+	m.ctrlCNotice = ""
 	m.copyNotice = ""
 	m.playerWindowNotice = false
 	if key.Matches(msg, m.keys.Quit) {
@@ -174,6 +174,13 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, tea.Quit)
 		return m, tea.Batch(cmds...)
+	}
+
+	// Ctrl+C reaches a raw-mode TUI as a key, not SIGINT. It never quits;
+	// only Ctrl+Q takes the shutdown path. Show a localized hint instead.
+	if msg.Type == tea.KeyCtrlC {
+		m.ctrlCNotice = m.t("status.ctrl_c_hint")
+		return m, nil
 	}
 
 	// F1 toggles keyboard help at any time, even while typing.

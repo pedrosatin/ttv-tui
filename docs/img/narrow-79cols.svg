@@ -29,6 +29,6 @@
     <text x="16" y="531" xml:space="preserve">       875  Viper (viper) — Morning streamer got rank 1 + 2 | Going for 5000lp…</text>
     <text x="16" y="551" xml:space="preserve"><tspan font-weight="700" fill="#ffffff">  ! Chat hidden (&lt;80 cols) — widen terminal to view chat</tspan></text>
     <rect x="8" y="556" width="680" height="20" rx="4" fill="#1e1e2e"/>
-    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Playing caedrel · vol 100 | ? help · Ctrl+C/Ctrl+Q quit</text>
+    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Playing caedrel · vol 100 | ? help · Ctrl+Q quit</text>
   </g>
 </svg>

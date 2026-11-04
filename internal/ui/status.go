@@ -127,6 +127,9 @@ func (m Model) statusParts() (string, []string) {
 	}
 	primary := m.t("status.ready")
 	switch {
+	case m.ctrlCNotice != "":
+		// Ctrl+C hint outranks filter/search prompts so every mode shows it.
+		primary = m.ctrlCNotice
 	case m.err != nil:
 		primary = m.listErrorAction()
 		// The technical detail goes last: it is the first thing to drop.
@@ -235,7 +238,7 @@ func (m Model) softStatusPrimary() bool {
 	if m.err != nil || m.searching || m.filtering || m.loading {
 		return false
 	}
-	if m.authNotice != "" || m.corruptNotice != "" || m.copyNotice != "" || m.statusNotice != "" {
+	if m.authNotice != "" || m.corruptNotice != "" || m.copyNotice != "" || m.statusNotice != "" || m.ctrlCNotice != "" {
 		return false
 	}
 	if m.playerWindowNoticeShown() || m.playerState == PlayerStateError {

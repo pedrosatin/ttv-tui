@@ -29,6 +29,6 @@
     <text x="16" y="531" xml:space="preserve">     22.6k  Hunt: Showdown 1896</text>
     <text x="16" y="551" xml:space="preserve">     21.3k  Sports</text>
     <rect x="8" y="556" width="1024" height="20" rx="4" fill="#1e1e2e"/>
-    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Ready | ? help · Ctrl+C/Ctrl+Q quit</text>
+    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Ready | ? help · Ctrl+Q quit</text>
   </g>
 </svg>

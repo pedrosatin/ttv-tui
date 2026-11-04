@@ -29,6 +29,6 @@
     <text x="16" y="531" xml:space="preserve">       875  Viper (viper) — Morning streamer … │</text>
     <text x="16" y="551" xml:space="preserve">       848  Diamondprox_LoL (diamondprox_lol)… │ <tspan fill-opacity="0.65" fill="#9399b2">  &gt; Run &#x27;ttv-tui login --from-browser&#x27; to send messages in chat</tspan></text>
     <rect x="8" y="556" width="1024" height="20" rx="4" fill="#1e1e2e"/>
-    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Video opened in a separate window (mpv) · Playing caedrel · vol 100 | ? help · Ctrl+C/Ctrl+Q quit</text>
+    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Video opened in a separate window (mpv) · Playing caedrel · vol 100 | ? help · Ctrl+Q quit</text>
   </g>
 </svg>

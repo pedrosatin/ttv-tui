@@ -154,7 +154,7 @@ Press `?` or `F1` to toggle the in-app shortcuts overlay. The tables below list 
 | Key | Action |
 | --- | --- |
 | `?` or `F1` | Toggle the keyboard shortcuts overlay (`F1` works even while typing) |
-| `Ctrl+C` or `Ctrl+Q` | Stop active playback, disconnect chat, and quit |
+| `Ctrl+Q` | Stop active playback, disconnect chat, and quit |
 
 ## Layout
 

@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -101,9 +100,10 @@ func (p *ptyTUI) openChannel() {
 }
 
 // Ctrl+C reaches a raw-mode TUI as byte 0x03, not SIGINT. In every mode it
-// must run the Ctrl+Q shutdown: exit 0 (not 130) with the player group,
-// records and IPC sockets gone.
-func TestCtrlCByteQuitsFromEveryMode(t *testing.T) {
+// must stay running, show the "To quit use Ctrl+Q" hint, and leave the player
+// group alive. Ctrl+Q afterwards still exits cleanly with code 0.
+func TestCtrlCByteDoesNotQuitFromEveryMode(t *testing.T) {
+	const hint = "To quit use Ctrl+Q"
 	modes := []struct {
 		name  string
 		enter func(p *ptyTUI)
@@ -149,14 +149,24 @@ func TestCtrlCByteQuitsFromEveryMode(t *testing.T) {
 			if !alive(p.playerPid) || !alive(p.childPid) {
 				t.Fatal("player not running before Ctrl+C")
 			}
-			p.send([]byte{0x03})
+			p.sendAndWait([]byte{0x03}, hint)
+			select {
+			case <-p.done:
+				t.Fatalf("Ctrl+C exited the TUI (code %d)", p.cmd.ProcessState.ExitCode())
+			default:
+			}
+			if !alive(p.playerPid) || !alive(p.childPid) {
+				t.Fatal("player died after Ctrl+C")
+			}
+			p.send([]byte{0x11}) // Ctrl+Q
 			code := p.waitExit(10 * time.Second)
 			if code != 0 {
-				t.Errorf("Ctrl+C exit code = %d, want 0 (SIGINT path would be %d)", code, 128+int(syscall.SIGINT))
+				t.Errorf("Ctrl+Q exit code = %d, want 0", code)
 			}
 			p.assertPlayerGone()
 			if !t.Failed() {
-				t.Logf("%s: 0x03 → exit %d; player %d and descendant %d gone", mode.name, code, p.playerPid, p.childPid)
+				t.Logf("%s: 0x03 → hint %q, stayed up; Ctrl+Q → exit %d; player %d and descendant %d gone",
+					mode.name, hint, code, p.playerPid, p.childPid)
 			}
 		})
 	}

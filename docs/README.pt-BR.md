@@ -154,7 +154,7 @@ Pressione `?` ou `F1` para abrir ou fechar o quadro de atalhos no aplicativo. As
 | Tecla | Ação |
 | --- | --- |
 | `?` ou `F1` | Mostrar ou ocultar o quadro de atalhos (`F1` funciona mesmo durante a digitação) |
-| `Ctrl+C` ou `Ctrl+Q` | Encerrar o vídeo ativo, desconectar do chat e sair |
+| `Ctrl+Q` | Encerrar o vídeo ativo, desconectar do chat e sair |
 
 ## Layout
 

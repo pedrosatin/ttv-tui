@@ -27,8 +27,8 @@
     <text x="16" y="491" xml:space="preserve">  Search: / filter list · Ctrl+S search Twitch channels · r retry</text>
     <text x="16" y="511" xml:space="preserve">  Player (own mpv window): Space pause/resume · +/- volume · Ctrl+X stop</text>
     <text x="16" y="531" xml:space="preserve">  Chat: i write · Enter send · Esc leave input · Ctrl+T reconnect</text>
-    <text x="16" y="551" xml:space="preserve">  App: Ctrl+C or Ctrl+Q quit · ? or F1 toggle help</text>
+    <text x="16" y="551" xml:space="preserve">  App: Ctrl+Q quit · ? or F1 toggle help</text>
     <rect x="8" y="556" width="1024" height="20" rx="4" fill="#1e1e2e"/>
-    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Playing caedrel · vol 100 · 41.5k · League of Legends · Connected to #ca… | ? help · Ctrl+C/Ctrl+Q quit</text>
+    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Playing caedrel · vol 100 · 41.5k · League of Legends · Connected to #ca… | ? help · Ctrl+Q quit</text>
   </g>
 </svg>
