@@ -95,7 +95,48 @@ func defaultKeyMap() keyMap {
 	}
 }
 
+// expandBatchedKeyMsg splits a KeyMsg that carries several runes into one
+// KeyMsg per rune, in order. Bubble Tea can deliver a burst such as "jjj" as a
+// single KeyRunes message; without splitting, key.Matches never sees "j" and
+// the movement is dropped. Paste events stay as one message so pasted text
+// never fires navigation shortcuts rune-by-rune. Single-rune and non-rune
+// keys are returned unchanged.
+func expandBatchedKeyMsg(msg tea.KeyMsg) []tea.KeyMsg {
+	if msg.Type != tea.KeyRunes || msg.Paste || len(msg.Runes) <= 1 {
+		return []tea.KeyMsg{msg}
+	}
+	out := make([]tea.KeyMsg, len(msg.Runes))
+	for i, r := range msg.Runes {
+		out[i] = tea.KeyMsg{
+			Type:  tea.KeyRunes,
+			Runes: []rune{r},
+			Alt:   msg.Alt,
+		}
+	}
+	return out
+}
+
+func (m Model) handleKeyMsgBatch(keys []tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	cur := m
+	for _, k := range keys {
+		next, cmd := cur.handleKeyMsg(k)
+		cur = next.(Model)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if cur.quitting {
+			break
+		}
+	}
+	return cur, tea.Batch(cmds...)
+}
+
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if keys := expandBatchedKeyMsg(msg); len(keys) > 1 {
+		return m.handleKeyMsgBatch(keys)
+	}
+
 	m.authNotice = ""
 	m.corruptNotice = ""
 	m.statusNotice = ""
