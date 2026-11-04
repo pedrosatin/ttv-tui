@@ -132,12 +132,12 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 		}
 	}
 
-	style := lipgloss.NewStyle()
-	if m.Focus() == FocusChat {
-		style = style.Bold(true)
-	}
 	for i, line := range headerLines {
-		headerLines[i] = style.Render(TruncateVisual(line, maxWidth))
+		line = TruncateVisual(line, maxWidth)
+		if m.Focus() == FocusChat {
+			line = styleFocus(line)
+		}
+		headerLines[i] = line
 	}
 	return headerLines
 }
@@ -157,24 +157,23 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 		footer = append(footer, notice)
 	}
 	if m.chatPanel.sendWarning != "" {
-		warnStyle := lipgloss.NewStyle().Bold(true)
 		if maxWidth <= 0 {
-			warnLine := "  ! " + warnStyle.Render(sanitizeChatText(m.chatPanel.sendWarning))
+			warnLine := "  ! " + styleWarning(sanitizeChatText(m.chatPanel.sendWarning))
 			footer = append(footer, warnLine)
 		} else {
 			warnRows := wrapChatRow("  ! ", sanitizeChatText(m.chatPanel.sendWarning), maxWidth)
 			for _, r := range warnRows {
-				footer = append(footer, warnStyle.Render(r))
+				footer = append(footer, styleWarning(r))
 			}
 		}
 	}
 	if m.composing && m.chatHasToken() {
 		hint := m.renderComposeHintLine(maxWidth)
-		style := lipgloss.NewStyle().Faint(true)
 		if m.composeDraftOverLimit() {
-			style = lipgloss.NewStyle().Bold(true)
+			footer = append(footer, styleWarning(hint))
+		} else {
+			footer = append(footer, lipgloss.NewStyle().Faint(true).Render(hint))
 		}
-		footer = append(footer, style.Render(hint))
 	}
 	footer = append(footer, TruncateVisual(m.renderChatInputLine(maxWidth), maxWidth))
 
@@ -486,13 +485,11 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 	body := sanitizeChatText(msg.Body)
 	if msg.Kind == chat.MessageNotice {
 		prefix := m.t("chat.notice_prefix")
-		style := lipgloss.NewStyle().Faint(true)
-		return selLead, style.Render(fmt.Sprintf("%s %s", prefix, body))
+		return selLead, styleNotice(fmt.Sprintf("%s %s", prefix, body))
 	}
 	if msg.Kind == chat.MessageSystem {
 		prefix := m.t("chat.system_prefix")
-		style := lipgloss.NewStyle().Faint(true).Italic(true)
-		return selLead, style.Render(fmt.Sprintf("%s %s", prefix, body))
+		return selLead, styleSystem(fmt.Sprintf("%s %s", prefix, body))
 	}
 
 	name := sanitizeChatText(msg.DisplayName)
@@ -501,7 +498,9 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 	}
 
 	nameStyle := lipgloss.NewStyle().Bold(true)
-	if msg.Color != "" {
+	// Twitch nick hex is truecolor; only paint it when orientation colors are on
+	// so NO_COLOR stays free of foreground SGR.
+	if colorsEnabled() && msg.Color != "" {
 		nameStyle = nameStyle.Foreground(lipgloss.Color(msg.Color))
 	}
 	renderedName := nameStyle.Render(name)
@@ -512,14 +511,28 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 		suffix = " " + deliveryBadge
 	}
 
-	if msg.Highlighted {
+	mentions := m.mentionsSelf(body)
+	if msg.Highlighted || mentions {
 		tag := m.t("chat.highlight_tag")
-		hlStyle := lipgloss.NewStyle().Bold(true).Reverse(true)
+		styleTag := styleChatHighlight
+		if mentions && !msg.Highlighted {
+			tag = m.t("chat.mention_tag")
+			styleTag = styleMention
+		}
 		lead := "★ "
 		if selected && m.Focus() == FocusChat {
 			lead = "▌★"
 		}
-		return lead, fmt.Sprintf("%s: %s%s", hlStyle.Render(tag)+" "+renderedName, body, suffix)
+		head := styleTag(tag) + " " + renderedName
+		if mentions && !msg.Highlighted {
+			// Whole line carries the mention style; tag stays in the plain text.
+			text := fmt.Sprintf("%s %s: %s", tag, name, body)
+			if deliveryBadge != "" {
+				return lead, styleMention(text) + " " + deliveryBadge
+			}
+			return lead, styleMention(text)
+		}
+		return lead, fmt.Sprintf("%s: %s%s", head, body, suffix)
 	}
 	if msg.Action {
 		// The action marker stays on the first row; its "* " is part of the lead.
@@ -540,10 +553,10 @@ func (m Model) formatDeliveryBadge(msg ChatMessage) string {
 		return m.t("chat.send.confirmed")
 	case chat.DeliveryRejected:
 		reason := m.formatRejectReason(msg.RejectReason, msg.RejectDetail)
-		return fmt.Sprintf(m.t("chat.send.rejected"), reason)
+		return styleReject(fmt.Sprintf(m.t("chat.send.rejected"), reason))
 	case chat.DeliveryDiscarded:
 		reason := m.formatRejectReason(msg.RejectReason, msg.RejectDetail)
-		return fmt.Sprintf(m.t("chat.send.discarded"), reason)
+		return styleReject(fmt.Sprintf(m.t("chat.send.discarded"), reason))
 	default:
 		return ""
 	}

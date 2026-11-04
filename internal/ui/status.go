@@ -340,20 +340,26 @@ func (m Model) StatusBar() string {
 		}
 	}
 
-	stateText := primary
+	// Color the lead before measuring/joining so SGR does not eat column budget.
+	styledPrimary := m.styleStatusPrimary(primary)
+	stateText := styledPrimary
+	plainState := primary
 	if m.width <= 0 {
 		for _, s := range secondary {
 			stateText += sep + s
+			plainState += sep + s
 		}
 	} else {
 		avail := m.width - ansi.StringWidth(chosen.left) - ansi.StringWidth(chosen.right)
-		if ansi.StringWidth(stateText) > avail {
-			stateText = TruncateVisual(stateText, max(avail, 1))
+		if ansi.StringWidth(plainState) > avail {
+			plainState = TruncateVisual(primary, max(avail, 1))
+			stateText = m.styleStatusPrimary(plainState)
 		} else {
 			for i, s := range secondary {
-				room := avail - ansi.StringWidth(stateText) - ansi.StringWidth(sep)
+				room := avail - ansi.StringWidth(plainState) - ansi.StringWidth(sep)
 				if ansi.StringWidth(s) <= room {
 					stateText += sep + s
+					plainState += sep + s
 					continue
 				}
 				// Channel name outranks remaining secondaries: try the short
@@ -361,17 +367,22 @@ func (m Model) StatusBar() string {
 				if ref := m.chatChannelRef(); ref != "" && strings.Contains(s, ref) {
 					if ansi.StringWidth(ref) <= room {
 						stateText += sep + ref
+						plainState += sep + ref
 						break
 					}
 					if i == len(secondary)-1 && room >= minSecondaryCut {
-						stateText += sep + TruncateVisual(ref, room)
+						cut := TruncateVisual(ref, room)
+						stateText += sep + cut
+						plainState += sep + cut
 					}
 					break
 				}
 				// Only the last secondary may be cut, and only when enough of
 				// it survives to be read; a stub like "vo…" helps nobody.
 				if i == len(secondary)-1 && room >= minSecondaryCut {
-					stateText += sep + TruncateVisual(s, room)
+					cut := TruncateVisual(s, room)
+					stateText += sep + cut
+					plainState += sep + cut
 				}
 				break
 			}
@@ -381,7 +392,14 @@ func (m Model) StatusBar() string {
 
 	style := lipgloss.NewStyle().Reverse(true)
 	if m.width > 0 {
-		line = padOrTruncateVisual(line, m.width)
+		// Pad using the plain visual width so colored SGR does not inflate the bar.
+		plainLine := chosen.left + plainState + chosen.right
+		pad := m.width - ansi.StringWidth(plainLine)
+		if pad > 0 {
+			line += strings.Repeat(" ", pad)
+		} else if pad < 0 {
+			line = padOrTruncateVisual(line, m.width)
+		}
 	}
 	return style.Render(line)
 }

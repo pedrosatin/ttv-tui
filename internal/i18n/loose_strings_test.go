@@ -66,6 +66,7 @@ var allowedExceptions = map[string]bool{
 	"%s (%s)":           true,
 	"%s %s":             true,
 	"%s: %s%s":          true,
+	"%s %s: %s":         true,
 	"  %s: %s%s":        true,
 	"  * %s %s%s":       true,
 	"★ %s %s: %s%s":     true,
@@ -135,6 +136,11 @@ var allowedExceptions = map[string]bool{
 	"clipboard":             true,
 	"WAYLAND_DISPLAY":       true,
 	"DISPLAY":               true,
+	"NO_COLOR":              true,
+	"CLICOLOR":              true,
+	"CLICOLOR_FORCE":        true,
+	"TERM":                  true,
+	"dumb":                  true,
 
 	// CLI binary, command, and flag names
 	"ttv-tui":             true,

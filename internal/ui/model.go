@@ -271,6 +271,14 @@ type Model struct {
 
 // New creates a new UI Model backed by the given i18n catalog and options.
 func New(catalog *i18n.Catalog, opts ...Option) Model {
+	// Only auto-detect once per process; tests may override via
+	// forceOrientationColorsForTest without New resetting them.
+	colorMu.RLock()
+	inited := colorInited
+	colorMu.RUnlock()
+	if !inited {
+		configureOrientationColors()
+	}
 	if catalog == nil {
 		catalog, _ = i18n.New(i18n.LangEN)
 	}

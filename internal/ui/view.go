@@ -232,9 +232,8 @@ func (m Model) View() string {
 // truncating, so the whole sentence (and the way out) stays readable.
 func (m Model) narrowChatNoticeLines(maxWidth int) []string {
 	rows := wrapChatRow("  ! ", m.t("chat.hidden_narrow"), maxWidth)
-	style := lipgloss.NewStyle().Bold(true)
 	for i, row := range rows {
-		rows[i] = style.Render(row)
+		rows[i] = styleWarning(row)
 	}
 	return rows
 }
@@ -257,6 +256,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		"  " + m.t("help.player"),
 		"  " + m.t("help.chat"),
 		"  " + m.t("help.app"),
+		"  " + m.t("help.colors"),
 	}
 	if line := m.playerErrorLine(); line != "" {
 		raw = append(raw, "  "+fmt.Sprintf(m.t("help.player_error"), line))
@@ -331,7 +331,7 @@ func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
 func (m Model) renderBodyLines(maxWidth int) []string {
 	header := fitListRow(m.headerLine(), maxWidth)
 	if m.hasChatPanel() && m.Focus() == FocusList {
-		header = lipgloss.NewStyle().Bold(true).Render(header)
+		header = styleFocus(header)
 	}
 
 	if m.err != nil {
@@ -339,15 +339,15 @@ func (m Model) renderBodyLines(maxWidth int) []string {
 		lines = m.appendPromptLines(lines, maxWidth)
 		if maxWidth <= 0 {
 			lines = append(lines,
-				m.errorMessage(m.err),
-				m.t("error.action_retry"),
+				styleError(m.errorMessage(m.err)),
+				styleWarning(m.t("error.action_retry")),
 			)
 		} else {
 			for _, part := range strings.Split(ansi.Wrap(m.errorMessage(m.err), maxWidth, ""), "\n") {
-				lines = append(lines, TruncateVisual(part, maxWidth))
+				lines = append(lines, styleError(TruncateVisual(part, maxWidth)))
 			}
 			for _, part := range strings.Split(ansi.Wrap(m.t("error.action_retry"), maxWidth, ""), "\n") {
-				lines = append(lines, TruncateVisual(part, maxWidth))
+				lines = append(lines, styleWarning(TruncateVisual(part, maxWidth)))
 			}
 		}
 		return lines
@@ -419,7 +419,6 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	}
 	showSectionHeaders := hasFavorites || hasRecents || (isSearch && (hasSearchCategory || hasSearchChannel))
 
-	highlightStyle := lipgloss.NewStyle().Bold(true)
 	sectionStyle := lipgloss.NewStyle().Faint(true)
 
 	type rowEntry struct {
@@ -430,11 +429,16 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 
 	var allRows []rowEntry
 
-	addSectionHeader := func(title string) {
-		text := fmt.Sprintf("── %s ──", title)
+	addSectionHeader := func(title string, favorite bool) {
+		text := fitListRow(fmt.Sprintf("── %s ──", title), maxWidth)
+		if favorite {
+			text = styleFavorite(text)
+		} else {
+			text = sectionStyle.Render(text)
+		}
 		allRows = append(allRows, rowEntry{
 			isHeader: true,
-			text:     sectionStyle.Render(fitListRow(text, maxWidth)),
+			text:     text,
 		})
 	}
 
@@ -445,22 +449,22 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 			currentSection = it.Type
 			switch it.Type {
 			case ItemTypeFavorite:
-				addSectionHeader(m.t("section.favorites"))
+				addSectionHeader(m.t("section.favorites"), true)
 			case ItemTypeRecent:
-				addSectionHeader(m.t("section.recents"))
+				addSectionHeader(m.t("section.recents"), false)
 			case ItemTypeCategory:
 				if isSearch {
-					addSectionHeader(m.t("search.section_categories"))
+					addSectionHeader(m.t("search.section_categories"), false)
 				} else {
-					addSectionHeader(m.t("categories.title"))
+					addSectionHeader(m.t("categories.title"), false)
 				}
 			case ItemTypeChannel:
 				if isSearch {
-					addSectionHeader(m.t("search.section_channels"))
+					addSectionHeader(m.t("search.section_channels"), false)
 				} else if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-					addSectionHeader(fmt.Sprintf(m.t("channels.title_category"), sanitizeChatText(m.selectedCategory.Name)))
+					addSectionHeader(fmt.Sprintf(m.t("channels.title_category"), sanitizeChatText(m.selectedCategory.Name)), false)
 				} else {
-					addSectionHeader(m.t("channels.title"))
+					addSectionHeader(m.t("channels.title"), false)
 				}
 			}
 		}
@@ -481,8 +485,11 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		}
 
 		row = fitListRow(row, maxWidth)
+		row = m.styleChannelListRow(row, it)
 		if it.ID() == m.highlightedID {
-			row = highlightStyle.Render(row)
+			// Highlight keeps the semantic color and adds bold/cyan on top of the
+			// plain text so selection stays visible without color alone (▸ marker).
+			row = styleHighlight(ansi.Strip(row))
 		}
 
 		allRows = append(allRows, rowEntry{
@@ -597,6 +604,31 @@ func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.A
 			suffix = " — " + titleText
 		}
 		return fmt.Sprintf("%s %7s  %s — %s%s", marker, m.t("channels.viewers_unknown"), identity, m.t("channels.unverified_tag"), suffix)
+	}
+}
+
+// styleChannelListRow applies availability / favorite / playing colors. Labels
+// and markers stay in the plain text so the row stays readable without color.
+func (m Model) styleChannelListRow(row string, it ListItem) string {
+	if it.Channel == nil {
+		return row
+	}
+	if m.isPlayingChannel(*it.Channel) {
+		return stylePlayingChannel(row)
+	}
+	switch it.Availability {
+	case twitch.AvailabilityOffline:
+		return styleOffline(row)
+	case twitch.AvailabilityLive:
+		if it.Type == ItemTypeFavorite {
+			return styleFavorite(row)
+		}
+		return styleLive(row)
+	default:
+		if it.Type == ItemTypeFavorite {
+			return styleFavorite(row)
+		}
+		return styleUnverified(row)
 	}
 }
 
