@@ -10,18 +10,18 @@ Terminal UI for Twitch on Linux. Browse live categories and channels, watch stre
 
 ## Install
 
-### Release binary (v0.1.3, Linux amd64 / arm64)
+### Release binary (v0.1.4, Linux amd64 / arm64)
 
-Download the archive for your architecture (`linux_amd64` or `linux_arm64`) and `checksums.txt` from the [v0.1.3 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.3), verify the SHA-256 digest, and place the binary in `~/.local/bin`:
+Download the archive for your architecture (`linux_amd64` or `linux_arm64`) and `checksums.txt` from the [v0.1.4 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.4), verify the SHA-256 digest, and place the binary in `~/.local/bin`:
 
 ```bash
 ARCH=amd64 # or arm64
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.3/ttv-tui_0.1.3_linux_${ARCH}.tar.gz"
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.3/checksums.txt"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.4/ttv-tui_0.1.4_linux_${ARCH}.tar.gz"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.4/checksums.txt"
 sha256sum --ignore-missing -c checksums.txt
 
 mkdir -p ~/.local/bin
-tar -xzf "ttv-tui_0.1.3_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
+tar -xzf "ttv-tui_0.1.4_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
 ```
 
 Ensure `~/.local/bin` is in your `PATH`.
@@ -31,7 +31,7 @@ Ensure `~/.local/bin` is in your `PATH`.
 Requires Go 1.27 or newer:
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.3
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.4
 ```
 
 ### Arch Linux (AUR)
@@ -50,7 +50,7 @@ Requires Go 1.27:
 ```bash
 git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.3" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.4" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
 ## Requirements
@@ -248,7 +248,7 @@ Architecture Decision Records are documented in [`docs/adr/`](docs/adr/).
 
 ## Limitations and roadmap
 
-Current limitations in `v0.1.3`:
+Current limitations in `v0.1.4`:
 
 - **Linux only.** Process-group supervision (`/proc` checks, `Setpgid`), keyring lookup (`secret-tool`), and browser cookie paths target Linux.
 - **No chat moderation commands.** Deleting messages, timeouts, and bans are not implemented.
