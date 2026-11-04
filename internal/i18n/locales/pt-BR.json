@@ -86,6 +86,7 @@
   "chat.warn.channel_switched": "Canal alterado: envio pendente descartado",
   "chat.warn.no_token": "Envio desabilitado: rode 'ttv-tui login --from-browser' para entrar",
   "status.help_hint": "? ajuda",
+  "status.channel_ref": "#%s",
   "status.focus_list": "Foco: lista",
   "status.focus_chat": "Foco: chat",
   "focus.active_tag": "[foco]",

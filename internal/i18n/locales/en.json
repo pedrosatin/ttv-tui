@@ -86,6 +86,7 @@
   "chat.warn.channel_switched": "Channel changed: pending message discarded",
   "chat.warn.no_token": "Sending disabled: run 'ttv-tui login --from-browser' to sign in",
   "status.help_hint": "? help",
+  "status.channel_ref": "#%s",
   "status.focus_list": "Focus: list",
   "status.focus_chat": "Focus: chat",
   "focus.active_tag": "[focus]",
