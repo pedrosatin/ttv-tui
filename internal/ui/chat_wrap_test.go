@@ -294,3 +294,190 @@ func TestWrapChatRowCarriesStylesAcrossRows(t *testing.T) {
 		t.Fatalf("unbounded width should not wrap: %q", got)
 	}
 }
+
+// longURLBody is a single token wider than both an 80-col and a 120-col chat
+// panel, so soft word-wrap cannot place it on one row.
+const longURLBody = "https://www.twitch.tv/videos/123456789012345?filter=archives&sort=time&t=1h2m3s&" +
+	"utm_source=ttv-tui&utm_medium=chat&utm_campaign=wrap-token-test&ref=" +
+	"abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func chatMessagePlain(block []string) string {
+	var b strings.Builder
+	for i, row := range block {
+		plain := ansi.Strip(row)
+		if i == 0 {
+			b.WriteString(strings.TrimPrefix(plain, "  "))
+			continue
+		}
+		b.WriteString(strings.TrimPrefix(plain, strings.Repeat(" ", chatContinuationIndent)))
+	}
+	return b.String()
+}
+
+func TestLongURLTokenWrapsWithoutEllipsis(t *testing.T) {
+	if cells := ansi.StringWidth(longURLBody); cells < 150 {
+		t.Fatalf("fixture URL is %d cells, want 150+", cells)
+	}
+	for _, width := range []int{80, 120} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			m, _, _ := setupTwoPanelModel(t)
+			m = resize(m, width, 28)
+			_, chatW := m.panelWidths()
+			m = withChatMessages(t, m, ChatMessage{
+				Kind: chat.MessageChat, ID: "url", User: "linkbot", DisplayName: "LinkBot",
+				Body: longURLBody,
+			})
+
+			col := chatColumn(t, m)
+			block := messageBlock(t, col, "LinkBot:")
+			if len(block) < 2 {
+				t.Fatalf("long URL did not wrap at term=%d chatW=%d:\n%s", width, chatW, strings.Join(col, "\n"))
+			}
+			joined := strings.Join(block, "\n")
+			if strings.Contains(joined, "…") {
+				t.Fatalf("long URL was truncated with ellipsis at term=%d chatW=%d:\n%s", width, chatW, joined)
+			}
+			got := squash(chatMessagePlain(block))
+			want := squash("LinkBot: " + longURLBody)
+			if got != want {
+				t.Fatalf("URL characters not preserved at term=%d:\n got %q\nwant %q\n%s", width, got, want, joined)
+			}
+			if last := col[len(col)-1]; !strings.HasPrefix(last, "  > ") {
+				t.Fatalf("input line is not the last chat row: %q", last)
+			}
+			assertRowsFit(t, m)
+		})
+	}
+}
+
+func TestMixedTextURLEmojiWrapsWithoutEllipsis(t *testing.T) {
+	body := "olha isso " + longURLBody + " 🔥 fim 漢字"
+	for _, width := range []int{80, 100, 120} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			m, _, _ := setupTwoPanelModel(t)
+			m = resize(m, width, 28)
+			m = withChatMessages(t, m, ChatMessage{
+				Kind: chat.MessageChat, ID: "mix", User: "mix", DisplayName: "MixUser🎌",
+				Color: "#FF69B4", Body: body,
+			})
+			col := chatColumn(t, m)
+			block := messageBlock(t, col, "MixUser🎌:")
+			if strings.Contains(strings.Join(block, ""), "…") {
+				t.Fatalf("mixed message truncated:\n%s", strings.Join(block, "\n"))
+			}
+			if got, want := squash(chatMessagePlain(block)), squash("MixUser🎌: "+body); got != want {
+				t.Fatalf("mixed message not whole:\n got %q\nwant %q\n%s", got, want, strings.Join(block, "\n"))
+			}
+			assertRowsFit(t, m)
+		})
+	}
+}
+
+func TestLongTokenHeightBudgetKeepsFooter(t *testing.T) {
+	m, _, _ := setupTwoPanelModel(t)
+	m = resize(m, 80, 14)
+	// Each body wraps across several rows; the newest message may contribute only
+	// its last rows when it alone fills the budget, so mark the tail uniquely.
+	msgs := make([]ChatMessage, 0, 25)
+	for i := 0; i < 25; i++ {
+		msgs = append(msgs, ChatMessage{
+			Kind: chat.MessageChat, ID: fmt.Sprintf("u%d", i), User: "u", DisplayName: "User",
+			Body: fmt.Sprintf("msg%02d %s#tail%02d", i, longURLBody, i),
+		})
+	}
+	m = withChatMessages(t, m, msgs...)
+	m = sendKeys(m, keyTab, keyI)
+	m = sendKeys(m, runes("oi")...)
+
+	rows := strings.Split(ansi.Strip(m.View()), "\n")
+	if len(rows) != 14 {
+		t.Fatalf("View has %d rows, want 14", len(rows))
+	}
+	col := chatColumn(t, m)
+	if !strings.Contains(col[0], "Chat — #gaules") {
+		t.Fatalf("chat header pushed off the panel: %q", col[0])
+	}
+	last := col[len(col)-1]
+	if !strings.HasPrefix(last, "  > ") || !strings.HasSuffix(last, "oi"+composeCursor) {
+		t.Fatalf("input line is not the last chat row: %q\n%s", last, strings.Join(col, "\n"))
+	}
+	text := strings.Join(col, "\n")
+	if !strings.Contains(text, "tail24") {
+		t.Fatalf("newest long-token message tail not visible:\n%s", text)
+	}
+	if strings.Contains(text, "msg00") || strings.Contains(text, "tail00") {
+		t.Fatalf("oldest message should have left the screen:\n%s", text)
+	}
+	if strings.Contains(text, "…") {
+		t.Fatalf("chat column contains ellipsis under height pressure:\n%s", text)
+	}
+	if got := len(m.ChatMessages()); got != 25 {
+		t.Fatalf("buffer lost messages: %d, want 25", got)
+	}
+	assertRowsFit(t, m)
+}
+
+// TestWrapChatRowRejectsEllipsisRegression fails if wrapChatRow starts truncating
+// long tokens with "…" again instead of hard-breaking them.
+func TestWrapChatRowRejectsEllipsisRegression(t *testing.T) {
+	token := strings.Repeat("ABCDEFGHIJ", 20) // 200 cells, no spaces
+	for _, maxWidth := range []int{8, 16, 34, 40, 59, 71, 80, 120} {
+		rows := wrapChatRow("  ", "name: "+token, maxWidth)
+		if len(rows) < 2 {
+			t.Fatalf("width=%d: expected hard wrap of long token, got %q", maxWidth, rows)
+		}
+		var plain strings.Builder
+		for i, row := range rows {
+			s := ansi.Strip(row)
+			if strings.Contains(s, "…") {
+				t.Fatalf("width=%d row %d reintroduced ellipsis: %q", maxWidth, i, s)
+			}
+			if w := ansi.StringWidth(row); w > maxWidth {
+				t.Fatalf("width=%d row %d overflows (%d): %q", maxWidth, i, w, s)
+			}
+			if i == 0 {
+				plain.WriteString(strings.TrimPrefix(s, "  "))
+			} else {
+				plain.WriteString(strings.TrimPrefix(s, strings.Repeat(" ", chatContinuationIndent)))
+			}
+		}
+		if got, want := squash(plain.String()), squash("name: "+token); got != want {
+			t.Fatalf("width=%d lost characters:\n got %q\nwant %q", maxWidth, got, want)
+		}
+	}
+	// Lead wider than the panel used to TruncateVisual with "…"; hard-break instead.
+	rows := wrapChatRow(strings.Repeat("L", 12), strings.Repeat("R", 30), 8)
+	for i, row := range rows {
+		if strings.Contains(ansi.Strip(row), "…") {
+			t.Fatalf("narrow emergency path still ellipsizes row %d: %q", i, row)
+		}
+		if w := ansi.StringWidth(row); w > 8 {
+			t.Fatalf("narrow emergency row %d overflows (%d): %q", i, w, row)
+		}
+	}
+	joined := squash(ansi.Strip(strings.Join(rows, "")))
+	if want := squash(strings.Repeat("L", 12) + strings.Repeat("R", 30)); joined != want {
+		t.Fatalf("narrow emergency lost characters:\n got %q\nwant %q", joined, want)
+	}
+}
+
+func TestCapturePTY80LongURLWrap(t *testing.T) {
+	m, _, _ := setupTwoPanelModel(t)
+	m = resize(m, 80, 24)
+	m = withChatMessages(t, m, ChatMessage{
+		Kind: chat.MessageChat, ID: "url", User: "linkbot", DisplayName: "LinkBot",
+		Body: "cole: " + longURLBody,
+	})
+	view := ansi.Strip(m.View())
+	printScreen(t, "URL longa quebrada sem reticências", view, 80)
+
+	col := chatColumn(t, m)
+	block := messageBlock(t, col, "LinkBot:")
+	if strings.Contains(strings.Join(block, ""), "…") {
+		t.Fatalf("PTY 80 capture still shows ellipsis in the chat message:\n%s", strings.Join(block, "\n"))
+	}
+	if got, want := squash(chatMessagePlain(block)), squash("LinkBot: cole: "+longURLBody); got != want {
+		t.Fatalf("PTY 80 capture lost URL characters:\n got %q\nwant %q", got, want)
+	}
+	assertRowsFit(t, m)
+}

@@ -278,9 +278,10 @@ const chatContinuationIndent = 4
 
 // chatMessageRows lays out msgs bottom-up into at most budget rows. Each message
 // wraps at word boundaries by visual width (wide runes count as two cells, ANSI
-// styling counts as zero), so nothing is cut with "…" when maxWidth > 0. When
-// the newest messages fill the budget, older ones leave the screen; the oldest
-// visible message may show only its last rows. The buffer is not touched.
+// styling counts as zero). A token longer than the column is hard-broken into
+// fitting pieces — never cut with "…" — so a long URL stays complete in reading
+// order. When the newest messages fill the budget, older ones leave the screen;
+// the oldest visible message may show only its last rows. The buffer is not touched.
 func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth int) []string {
 	if budget <= 0 {
 		return nil
@@ -298,8 +299,10 @@ func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth int) []strin
 
 // wrapChatRow wraps lead+content into rows no wider than maxWidth cells. The
 // first row starts with lead; later rows start with chatContinuationIndent
-// spaces. Styles that span a break are closed at the end of the row and reopened
-// on the next one, so colour never bleeds into padding or the other panel.
+// spaces. Word boundaries are preferred; a single token wider than the column
+// (a long URL, for example) is hard-broken into pieces that fit, without "…".
+// Styles that span a break are closed at the end of the row and reopened on the
+// next one, so colour never bleeds into padding or the other panel.
 // maxWidth <= 0 means no limit (a single row).
 func wrapChatRow(lead, content string, maxWidth int) []string {
 	if maxWidth <= 0 {
@@ -309,24 +312,60 @@ func wrapChatRow(lead, content string, maxWidth int) []string {
 		return []string{lead + content}
 	}
 	indent := chatContinuationIndent
-	if ansi.StringWidth(lead) > indent {
-		indent = ansi.StringWidth(lead)
+	if lw := ansi.StringWidth(lead); lw > indent {
+		indent = lw
 	}
 	limit := maxWidth - indent
 	if limit < 1 {
-		return []string{TruncateVisual(lead+content, maxWidth)}
+		// Lead alone fills the row: hard-break the combined string, no ellipsis.
+		return hardWrapVisual(lead+content, maxWidth)
 	}
 	parts := carrySGR(strings.Split(ansi.Wrap(content, limit, ""), "\n"))
 	pad := strings.Repeat(" ", indent)
 	rows := make([]string, 0, len(parts))
 	for i, part := range parts {
-		if i == 0 {
-			rows = append(rows, TruncateVisual(lead+part, maxWidth))
-			continue
+		prefix := lead
+		if i > 0 {
+			prefix = pad
 		}
-		rows = append(rows, TruncateVisual(pad+part, maxWidth))
+		rows = append(rows, fitPrefixedChatRow(prefix, part, maxWidth)...)
 	}
 	return rows
+}
+
+// fitPrefixedChatRow returns one or more rows of prefix+text that fit in
+// maxWidth cells. Text that still overflows (wide grapheme edge cases after
+// ansi.Wrap) is hard-broken; "…" is never inserted.
+func fitPrefixedChatRow(prefix, text string, maxWidth int) []string {
+	prefixW := ansi.StringWidth(prefix)
+	room := maxWidth - prefixW
+	if room < 1 {
+		return hardWrapVisual(prefix+text, maxWidth)
+	}
+	if ansi.StringWidth(text) <= room {
+		return []string{prefix + text}
+	}
+	chunks := carrySGR(hardWrapVisual(text, room))
+	rows := make([]string, 0, len(chunks))
+	for _, chunk := range chunks {
+		rows = append(rows, prefix+chunk)
+	}
+	return rows
+}
+
+// hardWrapVisual splits s into chunks of at most limit visual cells, preserving
+// ANSI sequences and every printable character. No ellipsis is inserted.
+// limit < 1 returns s unchanged.
+func hardWrapVisual(s string, limit int) []string {
+	if limit < 1 {
+		return []string{s}
+	}
+	if ansi.StringWidth(s) <= limit {
+		return []string{s}
+	}
+	// preserveSpace keeps leading spaces that belong to the token stream so a
+	// hard break never drops characters that soft-wrap would have discarded.
+	return strings.Split(ansi.Hardwrap(s, limit, true), "\n")
 }
 
 // carrySGR makes each row self-contained: SGR styles still open at the end of a
