@@ -24,8 +24,8 @@ conflicts=('ttv-tui')
 source_x86_64=("${url}/releases/download/v${pkgver}/ttv-tui_${pkgver}_linux_amd64.tar.gz")
 source_aarch64=("${url}/releases/download/v${pkgver}/ttv-tui_${pkgver}_linux_arm64.tar.gz")
 
-sha256sums_x86_64=('0000000000000000000000000000000000000000000000000000000000000000')
-sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums_x86_64=('43c1bf79146db51a4b9778bbd5990ad48c3f8858893fd17b82ecd034df635f0c')
+sha256sums_aarch64=('43e93968c275e7a3206dfa74599b5d77ab3b106f393d5257c4ca45c29abe8fef')
 
 package() {
   install -Dm755 "${srcdir}/ttv-tui" "${pkgdir}/usr/bin/ttv-tui"
