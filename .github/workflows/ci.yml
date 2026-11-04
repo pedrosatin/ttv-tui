@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    name: Build, Lint & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TMPDIR: /tmp
+      XDG_RUNTIME_DIR: /tmp
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build packages
+        run: go build ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.15.0
+
+      - name: Run tests
+        run: go test -count=1 ./...
+
+      - name: Run race detector on concurrent packages
+        run: go test -race -count=1 ./internal/player ./internal/chat ./internal/ui ./internal/store

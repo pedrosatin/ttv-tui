@@ -1,0 +1,11 @@
+# binários
+/ttv-tui
+/dist/
+
+# cobertura e artefatos de teste
+*.out
+coverage.*
+
+# editor
+.idea/
+.vscode/

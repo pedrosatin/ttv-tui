@@ -1,0 +1,713 @@
+package ui
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/store"
+	"github.com/pedrosatin/ttv-tui/internal/twitch"
+)
+
+type fakeStore struct {
+	savedState store.State
+	saveCalls  int
+}
+
+func (fs *fakeStore) Save(state store.State) error {
+	fs.savedState = state
+	fs.saveCalls++
+	return nil
+}
+
+func TestFavoritesToggling_ReflectedInListAndStore(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+	fs := &fakeStore{}
+
+	m := New(catEN,
+		WithStore(fs),
+		WithFavorites([]twitch.Channel{
+			{ID: "fav-1", Login: "streamer_fav", DisplayName: "Favorite Streamer"},
+		}),
+	)
+
+	// Add channels in ModeChannels
+	m.mode = ModeChannels
+	m.channels = []twitch.Channel{
+		{ID: "ch-1", Login: "streamer_normal", DisplayName: "Normal Streamer", Viewers: twitch.IntPtr(500)},
+	}
+	m.reconcileHighlight()
+
+	// Initially: 1 favorite ("streamer_fav"), 1 channel ("streamer_normal")
+	items := m.VisibleItems()
+	if len(items) != 2 {
+		t.Fatalf("expected 2 visible items, got %d", len(items))
+	}
+	if items[0].Type != ItemTypeFavorite || items[0].Login() != "streamer_fav" {
+		t.Fatalf("expected first item to be favorite 'streamer_fav', got %+v", items[0])
+	}
+	if items[1].Type != ItemTypeChannel || items[1].Login() != "streamer_normal" {
+		t.Fatalf("expected second item to be channel 'streamer_normal', got %+v", items[1])
+	}
+
+	// Move highlight down to normal streamer
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = updated.(Model)
+	if m.HighlightedID() != "ch-1" {
+		t.Fatalf("expected highlight on ch-1, got %q", m.HighlightedID())
+	}
+
+	// Press 'f' to favorite streamer_normal
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	if cmd != nil {
+		_ = cmd()
+	}
+
+	if fs.saveCalls != 1 {
+		t.Fatalf("expected store save called once, got %d", fs.saveCalls)
+	}
+	favs := m.Favorites()
+	if len(favs) != 2 {
+		t.Fatalf("expected 2 favorites after adding, got %d", len(favs))
+	}
+	if favs[1].Login != "streamer_normal" {
+		t.Fatalf("expected streamer_normal in favorites, got %+v", favs[1])
+	}
+
+	// Now unfavorite streamer_fav
+	// Move highlight to top (streamer_fav)
+	m.moveHighlight(-2)
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	if cmd != nil {
+		_ = cmd()
+	}
+
+	if fs.saveCalls != 2 {
+		t.Fatalf("expected store save called twice, got %d", fs.saveCalls)
+	}
+	favs = m.Favorites()
+	if len(favs) != 1 || favs[0].Login != "streamer_normal" {
+		t.Fatalf("expected only streamer_normal in favorites, got %+v", favs)
+	}
+}
+
+func TestListOrder_FavoritesRecentsContent(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+
+	m := New(catEN,
+		WithFavorites([]twitch.Channel{
+			{ID: "fav-1", Login: "streamer_fav1"},
+			{ID: "fav-2", Login: "streamer_fav2"},
+		}),
+		WithRecents([]twitch.Channel{
+			{ID: "rec-1", Login: "streamer_rec1"},
+			{ID: "rec-2", Login: "streamer_rec2"},
+		}),
+	)
+
+	m.mode = ModeCategories
+	m.categories = []twitch.Category{
+		{ID: "cat-1", Name: "Category 1"},
+		{ID: "cat-2", Name: "Category 2"},
+	}
+
+	items := m.VisibleItems()
+	if len(items) != 6 {
+		t.Fatalf("expected 6 visible items, got %d", len(items))
+	}
+
+	expectedTypes := []ListItemType{
+		ItemTypeFavorite,
+		ItemTypeFavorite,
+		ItemTypeRecent,
+		ItemTypeRecent,
+		ItemTypeCategory,
+		ItemTypeCategory,
+	}
+
+	expectedIDs := []string{
+		"fav-1",
+		"fav-2",
+		"rec-1",
+		"rec-2",
+		"cat-1",
+		"cat-2",
+	}
+
+	for i := range items {
+		if items[i].Type != expectedTypes[i] {
+			t.Errorf("item[%d] type = %q, want %q", i, items[i].Type, expectedTypes[i])
+		}
+		if items[i].ID() != expectedIDs[i] {
+			t.Errorf("item[%d] ID = %q, want %q", i, items[i].ID(), expectedIDs[i])
+		}
+	}
+}
+
+func TestNoDuplicatesAcrossSections(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+
+	// "shared_streamer" is in Favorites AND in Recents AND in loaded category channels
+	// "recent_shared" is in Recents AND in loaded category channels
+	m := New(catEN,
+		WithFavorites([]twitch.Channel{
+			{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer"},
+		}),
+		WithRecents([]twitch.Channel{
+			{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer"},
+			{ID: "ch-recent", Login: "recent_shared", DisplayName: "Recent Shared"},
+		}),
+	)
+
+	m.mode = ModeChannels
+	m.channels = []twitch.Channel{
+		{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer", Viewers: twitch.IntPtr(1000)},
+		{ID: "ch-recent", Login: "recent_shared", DisplayName: "Recent Shared", Viewers: twitch.IntPtr(500)},
+		{ID: "ch-unique", Login: "unique_streamer", DisplayName: "Unique Streamer", Viewers: twitch.IntPtr(200)},
+	}
+
+	items := m.VisibleItems()
+	// Should have:
+	// 1: shared_streamer (as Favorite)
+	// 2: recent_shared (as Recent)
+	// 3: unique_streamer (as Channel)
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items without duplicates, got %d", len(items))
+	}
+
+	if items[0].Type != ItemTypeFavorite || items[0].Login() != "shared_streamer" {
+		t.Errorf("expected items[0] to be Favorite 'shared_streamer', got %+v", items[0])
+	}
+	if items[1].Type != ItemTypeRecent || items[1].Login() != "recent_shared" {
+		t.Errorf("expected items[1] to be Recent 'recent_shared', got %+v", items[1])
+	}
+	if items[2].Type != ItemTypeChannel || items[2].Login() != "unique_streamer" {
+		t.Errorf("expected items[2] to be Channel 'unique_streamer', got %+v", items[2])
+	}
+}
+
+func TestEnterSemanticsByItemType(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+	fs := &fakeStore{}
+
+	m := New(catEN,
+		WithStore(fs),
+		WithFavorites([]twitch.Channel{
+			{ID: "fav-1", Login: "streamer_fav", DisplayName: "Fav"},
+		}),
+		WithRecents([]twitch.Channel{
+			{ID: "rec-1", Login: "streamer_rec1", DisplayName: "Rec1"},
+			{ID: "rec-2", Login: "streamer_rec2", DisplayName: "Rec2"},
+		}),
+	)
+	m.categories = []twitch.Category{
+		{ID: "cat-1", Name: "Category 1"},
+	}
+	m.reconcileHighlight()
+
+	// 1. Enter on Favorite: selects channel, records recent, saves store
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected command from Enter on favorite")
+	}
+	msg := cmd()
+	selMsg, ok := msg.(ChannelSelectedMsg)
+	if !ok || selMsg.Channel.Login != "streamer_fav" {
+		t.Fatalf("expected ChannelSelectedMsg for streamer_fav, got %+v", msg)
+	}
+	// Verify it was moved to top of recents
+	if m.Recents()[0].Login != "streamer_fav" {
+		t.Fatalf("expected streamer_fav recorded as newest recent, got %q", m.Recents()[0].Login)
+	}
+
+	// 2. Enter on Category: drills down to ModeChannels without recording recent
+	// Move highlight down to Category 1 (it is 4th item: fav-1, rec-1, rec-2, cat-1)
+	m.highlightedID = "cat-1"
+	recentsBefore := len(m.Recents())
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.SelectedCategory() == nil || m.SelectedCategory().ID != "cat-1" {
+		t.Fatalf("expected SelectedCategory = cat-1, got %+v", m.SelectedCategory())
+	}
+	if len(m.Recents()) != recentsBefore {
+		t.Fatalf("Enter on Category must not record recent, count changed from %d to %d", recentsBefore, len(m.Recents()))
+	}
+}
+
+func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+
+	// fav-off has no viewers and is not in the loaded listing: no evidence.
+	// fav-on is in the loaded category listing with viewers: live.
+	m := New(catEN,
+		WithFavorites([]twitch.Channel{
+			{ID: "fav-off", Login: "offline_guy", DisplayName: "Offline Guy", Viewers: nil},
+			{ID: "fav-on", Login: "online_guy", DisplayName: "Online Guy", Viewers: nil},
+		}),
+	)
+
+	m.mode = ModeChannels
+	m.channels = []twitch.Channel{
+		{ID: "fav-on", Login: "online_guy", DisplayName: "Online Guy", Viewers: twitch.IntPtr(1500), Title: twitch.StringPtr("Playing Game")},
+	}
+
+	items := m.VisibleItems()
+	if len(items) != 2 {
+		t.Fatalf("expected 2 visible items, got %d", len(items))
+	}
+
+	if items[0].Availability != twitch.AvailabilityUnknown || items[0].Offline() {
+		t.Errorf("items[0] (no evidence) availability = %v, want unknown", items[0].Availability)
+	}
+	if items[1].Availability != twitch.AvailabilityLive {
+		t.Errorf("items[1] (in listing) availability = %v, want live", items[1].Availability)
+	}
+
+	plain := ansi.Strip(m.View())
+	if strings.Contains(plain, "[offline]") {
+		t.Fatalf("view must not claim [offline] without evidence:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Offline Guy (offline_guy) — [unverified]") {
+		t.Fatalf("expected unverified tag for channel without evidence:\n%s", plain)
+	}
+	if !strings.Contains(plain, "1.5k") {
+		t.Fatalf("expected view to contain live viewer count '1.5k':\n%s", plain)
+	}
+}
+
+func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+	m := New(catEN,
+		WithRecents([]twitch.Channel{
+			{ID: "r-off", Login: "gaulestv", DisplayName: "gaulestv"},
+			{ID: "r-unk", Login: "xqc", DisplayName: "xQc"},
+		}),
+	)
+
+	plain := ansi.Strip(m.View())
+	if strings.Contains(plain, "[offline]") {
+		t.Fatalf("no evidence yet, [offline] must not appear:\n%s", plain)
+	}
+
+	// A search proves gaulestv is not broadcasting (stream:null upstream).
+	m.mode = ModeSearch
+	m.searchQuery = "gaules"
+	updated, _ := m.Update(SearchLoadedMsg{
+		Generation: m.generation,
+		Page: twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+			{ID: "r-off", Login: "gaulestv", DisplayName: "gaulestv", Availability: twitch.AvailabilityOffline},
+		}},
+	})
+	m = updated.(Model)
+
+	byLogin := map[string]ListItem{}
+	for _, it := range m.VisibleItems() {
+		byLogin[it.Login()] = it
+	}
+	if !byLogin["gaulestv"].Offline() {
+		t.Fatalf("gaulestv with explicit evidence should be offline, got %v", byLogin["gaulestv"].Availability)
+	}
+	if byLogin["xqc"].Availability != twitch.AvailabilityUnknown {
+		t.Fatalf("xqc without evidence should stay unknown, got %v", byLogin["xqc"].Availability)
+	}
+
+	plain = ansi.Strip(m.View())
+	if !strings.Contains(plain, "gaulestv (gaulestv) — [offline]") {
+		t.Fatalf("expected [offline] for channel with evidence:\n%s", plain)
+	}
+	if strings.Contains(plain, "xQc (xqc) — [offline]") {
+		t.Fatalf("xqc must not be shown offline without evidence:\n%s", plain)
+	}
+}
+
+func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
+	catPT, _ := i18n.New(i18n.LangPTBR)
+	m := New(catPT,
+		WithRecents([]twitch.Channel{
+			// Store only carries identity; worst case it even says offline.
+			{ID: "r-1", Login: "eslcs", DisplayName: "ESLCS", Availability: twitch.AvailabilityOffline},
+		}),
+	)
+	m.playerLogin = "ESLCS"
+
+	for _, st := range []PlayerState{PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak} {
+		m.playerState = st
+		items := m.VisibleItems()
+		if len(items) != 1 || items[0].Availability != twitch.AvailabilityLive {
+			t.Fatalf("state %q: playing channel availability = %+v, want live", st, items)
+		}
+		plain := ansi.Strip(m.View())
+		if strings.Contains(plain, "[offline]") {
+			t.Fatalf("state %q: playing channel shown offline:\n%s", st, plain)
+		}
+		if !strings.Contains(plain, "ao vivo  ESLCS (eslcs)") {
+			t.Fatalf("state %q: playing channel must read as live:\n%s", st, plain)
+		}
+	}
+
+	// Once the player is gone the stored evidence is back in charge.
+	m.playerState = PlayerStateEnded
+	if items := m.VisibleItems(); !items[0].Offline() {
+		t.Fatalf("after playback ends availability = %v, want stored offline", items[0].Availability)
+	}
+}
+
+func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+	m := New(catEN,
+		WithFavorites([]twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
+		WithRecents([]twitch.Channel{
+			{ID: "r-1", Login: "strogo", DisplayName: "StRoGo"},
+			{ID: "r-2", Login: "elsewhere", DisplayName: "Elsewhere"},
+		}),
+	)
+	cat := twitch.Category{ID: "cs", Name: "Counter-Strike"}
+	m.mode = ModeChannels
+	m.selectedCategory = &cat
+
+	updated, _ := m.Update(ChannelsLoadedMsg{
+		Generation: m.generation,
+		Category:   cat,
+		Page: twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+			{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(12900), Title: twitch.StringPtr("Major"), Availability: twitch.AvailabilityLive},
+			{ID: "r-1", Login: "strogo", DisplayName: "StRoGo", Viewers: twitch.IntPtr(30400), Availability: twitch.AvailabilityLive},
+		}},
+	})
+	m = updated.(Model)
+
+	favs := m.Favorites()
+	if favs[0].Availability != twitch.AvailabilityLive || favs[0].Viewers == nil || *favs[0].Viewers != 12900 {
+		t.Fatalf("favorite not refreshed from listing: %+v", favs[0])
+	}
+	recs := m.Recents()
+	if recs[0].Availability != twitch.AvailabilityLive {
+		t.Fatalf("recent strogo not refreshed: %+v", recs[0])
+	}
+	if recs[1].Availability != twitch.AvailabilityUnknown {
+		t.Fatalf("channel absent from listing must stay unknown, got %v", recs[1].Availability)
+	}
+
+	// Leaving the category keeps the evidence for the saved channels.
+	m.mode = ModeCategories
+	m.channels = nil
+	plain := ansi.Strip(m.View())
+	if !strings.Contains(plain, "12.9k  Gaules (gaules) — Major") {
+		t.Fatalf("favorite should keep live status after leaving category:\n%s", plain)
+	}
+	if !strings.Contains(plain, "30.4k  StRoGo (strogo)") {
+		t.Fatalf("recent should keep live status after leaving category:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Elsewhere (elsewhere) — [unverified]") || strings.Contains(plain, "[offline]") {
+		t.Fatalf("channel outside the listing must be unverified, never offline:\n%s", plain)
+	}
+
+	// Persistence keeps identity only: no stale availability on disk.
+	st := m.toStoreState()
+	if got := st.Favorites[0].ToTwitch().Availability; got != twitch.AvailabilityUnknown {
+		t.Fatalf("store must not persist availability, got %v", got)
+	}
+}
+
+func TestAvailabilityLabelsFitIn120And80Columns(t *testing.T) {
+	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
+		cat, _ := i18n.New(lang)
+		m := New(cat,
+			WithFavorites([]twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
+			WithRecents([]twitch.Channel{
+				{ID: "r-1", Login: "eslcs", DisplayName: "ESLCS"},
+				{ID: "r-2", Login: "gaulestv", DisplayName: "gaulestv", Availability: twitch.AvailabilityOffline},
+			}),
+		)
+		m.chatPanel.channel = "eslcs"
+		m.playerLogin = "eslcs"
+		m.playerState = PlayerStatePlaying
+		unverified := cat.T("channels.unverified_tag")
+		live := cat.T("channels.live_label")
+
+		for _, width := range []int{120, 80} {
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+			mw := updated.(Model)
+			plain := ansi.Strip(mw.View())
+			for i, line := range strings.Split(plain, "\n") {
+				if w := ansi.StringWidth(line); w > width {
+					t.Fatalf("%s %d cols: line %d too wide (%d): %q", lang, width, i, w, line)
+				}
+			}
+			// At 80 columns with chat the list pane is ~43 columns: the identity
+			// and the start of the label must survive; at 120 the whole label does.
+			unverifiedShown := unverified
+			if width < 100 {
+				unverifiedShown = "[" + string([]rune(unverified)[1:5])
+			}
+			for _, want := range []string{
+				"Gaules (gaules) — " + unverifiedShown,
+				live + "  ESLCS (eslcs)",
+				"gaulestv (gaulestv) — [offline]",
+			} {
+				if !strings.Contains(plain, want) {
+					t.Fatalf("%s %d cols: missing %q:\n%s", lang, width, want, plain)
+				}
+			}
+		}
+	}
+}
+
+func TestSectionsRenderIn120And79Columns(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+
+	m := New(catEN,
+		WithFavorites([]twitch.Channel{
+			{ID: "fav-1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(12000)},
+		}),
+		WithRecents([]twitch.Channel{
+			{ID: "rec-1", Login: "alanzoka", DisplayName: "alanzoka", Viewers: nil},
+		}),
+	)
+	m.categories = []twitch.Category{
+		{ID: "cat-1", Name: "Counter-Strike", Viewers: twitch.IntPtr(50000)},
+	}
+
+	// 1. Render in 120 columns
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
+	m120 := updated.(Model)
+	plain120 := ansi.Strip(m120.View())
+
+	if !strings.Contains(plain120, "Favorites") {
+		t.Fatalf("expected 120-col view to contain 'Favorites' section header:\n%s", plain120)
+	}
+	if !strings.Contains(plain120, "Recent") {
+		t.Fatalf("expected 120-col view to contain 'Recent' section header:\n%s", plain120)
+	}
+	if !strings.Contains(plain120, "Live Categories") {
+		t.Fatalf("expected 120-col view to contain 'Live Categories' section header:\n%s", plain120)
+	}
+
+	for i, line := range strings.Split(plain120, "\n") {
+		if w := ansi.StringWidth(line); w > 120 {
+			t.Fatalf("120-col line %d exceeded width: %d > 120: %q", i, w, line)
+		}
+	}
+
+	// 2. Render in 79 columns
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 79, Height: 20})
+	m79 := updated.(Model)
+	plain79 := ansi.Strip(m79.View())
+
+	if !strings.Contains(plain79, "Favorites") {
+		t.Fatalf("expected 79-col view to contain 'Favorites' section header:\n%s", plain79)
+	}
+	if !strings.Contains(plain79, "Recent") {
+		t.Fatalf("expected 79-col view to contain 'Recent' section header:\n%s", plain79)
+	}
+	for i, line := range strings.Split(plain79, "\n") {
+		if w := ansi.StringWidth(line); w > 79 {
+			t.Fatalf("79-col line %d exceeded width: %d > 79: %q", i, w, line)
+		}
+	}
+}
+
+func TestCorruptStateWarnsOnceInStatusBar(t *testing.T) {
+	catPT, _ := i18n.New(i18n.LangPTBR)
+
+	notice := catPT.T("store.corrupt_notice")
+	m := New(catPT, WithCorruptNotice(notice))
+
+	if m.CorruptNotice() != notice {
+		t.Fatalf("expected CorruptNotice() = %q, got %q", notice, m.CorruptNotice())
+	}
+
+	plain := ansi.Strip(m.StatusBar())
+	if !strings.Contains(plain, notice) {
+		t.Fatalf("expected status bar to show corrupt notice:\n%s", plain)
+	}
+
+	// Pressing any key clears the notice
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = updated.(Model)
+
+	if m.CorruptNotice() != "" {
+		t.Fatalf("expected CorruptNotice cleared after keypress, got %q", m.CorruptNotice())
+	}
+	plainAfter := ansi.Strip(m.StatusBar())
+	if strings.Contains(plainAfter, notice) {
+		t.Fatalf("expected status bar to not contain notice after keypress:\n%s", plainAfter)
+	}
+}
+
+func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
+	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
+		cat, err := i18n.New(lang)
+		if err != nil {
+			t.Fatalf("i18n.New: %v", err)
+		}
+		favCh := twitch.Channel{ID: "f-1", Login: "favchannel", DisplayName: "FavChannel"}
+		recCh := twitch.Channel{ID: "r-1", Login: "recchannel", DisplayName: "RecChannel"}
+		liveCh := twitch.Channel{
+			ID:           "s-1",
+			Login:        "livechannel",
+			DisplayName:  "LiveChannel",
+			Viewers:      twitch.IntPtr(1500),
+			Title:        twitch.StringPtr("Live Title"),
+			Availability: twitch.AvailabilityLive,
+		}
+
+		m := New(cat,
+			WithFavorites([]twitch.Channel{favCh}),
+			WithRecents([]twitch.Channel{recCh}),
+		)
+
+		// 1. In Search Mode:
+		m.mode = ModeSearch
+		m.searchQuery = "channel"
+		m.channels = []twitch.Channel{liveCh}
+		m.reconcileHighlight()
+
+		plainSearch := ansi.Strip(m.View())
+		lines := strings.Split(plainSearch, "\n")
+
+		findLine := func(all []string, login string) string {
+			for _, line := range all {
+				if strings.Contains(line, "("+login+")") {
+					return line
+				}
+			}
+			return ""
+		}
+
+		favLine := findLine(lines, "favchannel")
+		recLine := findLine(lines, "recchannel")
+		liveLine := findLine(lines, "livechannel")
+
+		if favLine == "" || recLine == "" || liveLine == "" {
+			t.Fatalf("%s: missing lines in search view:\n%s", lang, plainSearch)
+		}
+
+		unverifiedTag := cat.T("channels.unverified_tag")
+		viewersUnknown := cat.T("channels.viewers_unknown")
+
+		// Favorite and recent must show the unknown viewers placeholder and unverified availability tag
+		if !strings.Contains(favLine, viewersUnknown) || !strings.Contains(favLine, unverifiedTag) {
+			t.Fatalf("%s: favLine missing viewers or availability tag: %q", lang, favLine)
+		}
+		if !strings.Contains(recLine, viewersUnknown) || !strings.Contains(recLine, unverifiedTag) {
+			t.Fatalf("%s: recLine missing viewers or availability tag: %q", lang, recLine)
+		}
+		if !strings.Contains(liveLine, "1.5k") || !strings.Contains(liveLine, "Live Title") {
+			t.Fatalf("%s: liveLine missing viewers or title: %q", lang, liveLine)
+		}
+
+		// All three lines share the exact same format: [marker:2] [viewers:7]  [identity] — [tag or title]
+		lineRe := regexp.MustCompile(`^[ ▸] \s*(\S+)\s{2}(\S+ \(\S+\)) — (.+)$`)
+		for name, line := range map[string]string{"favorite": favLine, "recent": recLine, "live": liveLine} {
+			if !lineRe.MatchString(line) {
+				t.Fatalf("%s: %s line does not match consistent row format: %q", lang, name, line)
+			}
+		}
+
+		// 2. The same channel has the same line (except highlight marker) in search and category modes
+		mCat := New(cat,
+			WithFavorites([]twitch.Channel{favCh}),
+			WithRecents([]twitch.Channel{recCh}),
+		)
+		mCat.mode = ModeCategories
+		mCat.categories = []twitch.Category{{ID: "c-1", Name: "Games"}}
+		mCat.highlightedID = "c-1"
+
+		plainCat := ansi.Strip(mCat.View())
+		catLines := strings.Split(plainCat, "\n")
+
+		// In search, highlight is on search result, so fav and rec have "  " marker
+		m.highlightedID = "s-1"
+		plainSearchNoHighlight := ansi.Strip(m.View())
+		searchLines := strings.Split(plainSearchNoHighlight, "\n")
+
+		catFav := findLine(catLines, "favchannel")
+		searchFav := findLine(searchLines, "favchannel")
+		if catFav != searchFav {
+			t.Fatalf("%s: favorite row differs between category and search:\ncategory: %q\nsearch:   %q", lang, catFav, searchFav)
+		}
+
+		catRec := findLine(catLines, "recchannel")
+		searchRec := findLine(searchLines, "recchannel")
+		if catRec != searchRec {
+			t.Fatalf("%s: recent row differs between category and search:\ncategory: %q\nsearch:   %q", lang, catRec, searchRec)
+		}
+
+		// Also check an offline channel and a live channel with viewers
+		offCh := twitch.Channel{ID: "off-1", Login: "offchannel", DisplayName: "OffChannel", Availability: twitch.AvailabilityOffline}
+		liveFav := twitch.Channel{ID: "favlive-1", Login: "favlive", DisplayName: "FavLive", Viewers: twitch.IntPtr(5200), Title: twitch.StringPtr("Playing Game"), Availability: twitch.AvailabilityLive}
+
+		mDualCat := New(cat, WithFavorites([]twitch.Channel{liveFav}), WithRecents([]twitch.Channel{offCh}))
+		mDualCat.mode = ModeCategories
+		mDualCat.categories = []twitch.Category{{ID: "c-1", Name: "Games"}}
+		mDualCat.highlightedID = "c-1"
+
+		mDualSearch := New(cat, WithFavorites([]twitch.Channel{liveFav}), WithRecents([]twitch.Channel{offCh}))
+		mDualSearch.mode = ModeSearch
+		mDualSearch.searchQuery = "channel"
+		mDualSearch.channels = []twitch.Channel{liveCh}
+		mDualSearch.highlightedID = "s-1"
+
+		plainDualCat := ansi.Strip(mDualCat.View())
+		plainDualSearch := ansi.Strip(mDualSearch.View())
+
+		if findLine(strings.Split(plainDualCat, "\n"), "offchannel") != findLine(strings.Split(plainDualSearch, "\n"), "offchannel") {
+			t.Fatalf("%s: offline channel row differs between category and search", lang)
+		}
+		if findLine(strings.Split(plainDualCat, "\n"), "favlive") != findLine(strings.Split(plainDualSearch, "\n"), "favlive") {
+			t.Fatalf("%s: live favorite row differs between category and search", lang)
+		}
+
+		// 3. 80 and 120 columns without overflowing width
+		for _, width := range []int{80, 120} {
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+			mw := updated.(Model)
+			plain := ansi.Strip(mw.View())
+			for i, l := range strings.Split(plain, "\n") {
+				if w := ansi.StringWidth(l); w > width {
+					t.Fatalf("%s %d cols: line %d exceeded width (%d > %d): %q", lang, width, i, w, width, l)
+				}
+			}
+		}
+	}
+}
+
+func TestCaptureSearchScreenPTY(t *testing.T) {
+	cat, err := i18n.New(i18n.LangPTBR)
+	if err != nil {
+		t.Fatalf("i18n.New: %v", err)
+	}
+	favCh := twitch.Channel{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}
+	recCh := twitch.Channel{ID: "r-1", Login: "alanzoka", DisplayName: "alanzoka"}
+	liveCh := twitch.Channel{
+		ID:           "s-1",
+		Login:        "cellbit",
+		DisplayName:  "Cellbit",
+		Viewers:      twitch.IntPtr(15420),
+		Title:        twitch.StringPtr("Enigmas e RPG ao vivo"),
+		Availability: twitch.AvailabilityLive,
+	}
+
+	m := New(cat,
+		WithFavorites([]twitch.Channel{favCh}),
+		WithRecents([]twitch.Channel{recCh}),
+	)
+
+	m.mode = ModeSearch
+	m.searchQuery = "cellbit"
+	m.channels = []twitch.Channel{liveCh}
+	m.reconcileHighlight()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
+	m = updated.(Model)
+
+	out := m.View()
+	t.Logf("\n%s\n", out)
+	fmt.Printf("\n--- PTY CAPTURE START ---\n%s\n--- PTY CAPTURE END ---\n", out)
+}

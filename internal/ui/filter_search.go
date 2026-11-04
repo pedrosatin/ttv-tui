@@ -1,0 +1,182 @@
+package ui
+
+import (
+	"context"
+	"strings"
+
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// Filter returns the active filter string.
+func (m Model) Filter() string {
+	return m.filter
+}
+
+// Filtering reports whether the local filter input is currently active.
+func (m Model) Filtering() bool {
+	return m.filtering
+}
+
+// Searching reports whether the global search prompt is currently active.
+func (m Model) Searching() bool {
+	return m.searching
+}
+
+// SearchQuery returns the active or last submitted global search query.
+func (m Model) SearchQuery() string {
+	return m.searchQuery
+}
+
+// SetFilter updates the active filter while preserving selection by item ID.
+// If the previously highlighted item ID remains in the filtered list, it stays
+// highlighted regardless of its new positional index.
+func (m Model) SetFilter(filter string) Model {
+	m.filter = filter
+	m.reconcileHighlight()
+	return m
+}
+
+func (m Model) updateSearchingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Clear):
+		m.searching = false
+		m.searchInput = ""
+		return m, nil
+
+	case key.Matches(msg, m.keys.Select), key.Matches(msg, m.keys.Search):
+		q := strings.TrimSpace(m.searchInput)
+		if q == "" {
+			m.searching = false
+			return m, nil
+		}
+		return m.startSearch(q)
+
+	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
+		m.searchInput = trimLastRune(m.searchInput)
+		return m, nil
+
+	case msg.Type == tea.KeySpace:
+		m.searchInput += " "
+		return m, nil
+
+	case msg.Type == tea.KeyRunes:
+		m.searchInput += string(msg.Runes)
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Clear):
+		m.filtering = false
+		m.filter = ""
+		m.reconcileHighlight()
+		return m, nil
+
+	case key.Matches(msg, m.keys.Search):
+		if q := strings.TrimSpace(m.filter); q != "" {
+			return m.startSearch(q)
+		}
+		m.filtering = false
+		m.searching = true
+		m.searchInput = ""
+		return m, nil
+
+	case msg.Type == tea.KeyUp:
+		m.moveHighlight(-1)
+		return m, nil
+
+	case msg.Type == tea.KeyDown:
+		m.moveHighlight(1)
+		if m.shouldLoadNextPage() {
+			m.generation++
+			m.loading = true
+			if m.Mode() == ModeChannels && m.selectedCategory != nil {
+				return m, m.fetchChannelsCmd(m.generation, *m.selectedCategory, m.nextCursor, true)
+			}
+			return m, m.fetchCategoriesCmd(m.generation, m.nextCursor, true)
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keys.Select):
+		m.filtering = false
+		return m.selectHighlighted()
+
+	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
+		m.filter = trimLastRune(m.filter)
+		m.reconcileHighlight()
+		return m, nil
+
+	case msg.Type == tea.KeySpace:
+		m.filter += " "
+		m.reconcileHighlight()
+		return m, nil
+
+	case msg.Type == tea.KeyRunes:
+		m.filter += string(msg.Runes)
+		m.reconcileHighlight()
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
+	q := strings.TrimSpace(query)
+	m.searching = false
+	m.filtering = false
+	m.searchInput = ""
+	m.filter = ""
+	if q == "" {
+		return m, nil
+	}
+	m.searchQuery = q
+	m.mode = ModeSearch
+	m.channels = nil
+	m.highlightedID = ""
+	m.focusResults = true
+	m.nextCursor = ""
+	m.hasMore = false
+	m.err = nil
+	if m.source == nil {
+		m.loading = false
+		return m, nil
+	}
+	m.tracker.cancelActive()
+	m.generation++
+	m.loading = true
+	return m, m.fetchSearchCmd(m.generation, q)
+}
+
+func (m Model) fetchSearchCmd(gen uint64, query string) tea.Cmd {
+	src := m.source
+	tracker := m.tracker
+	return func() tea.Msg {
+		ctx := context.Background()
+		var cancel context.CancelFunc
+		if tracker != nil {
+			ctx, cancel = tracker.newContext()
+			defer cancel()
+		}
+		page, err := src.Search(ctx, query)
+		return SearchLoadedMsg{
+			Generation: gen,
+			Query:      query,
+			Page:       page,
+			Err:        err,
+		}
+	}
+}
+
+// filterHasNoMatches reports whether a non-empty local filter hides every item
+// of a list that has items. That is when global search is the way forward.
+func (m Model) filterHasNoMatches() bool {
+	if strings.TrimSpace(m.filter) == "" {
+		return false
+	}
+	if len(m.categories) == 0 && len(m.channels) == 0 && len(m.favorites) == 0 && len(m.recents) == 0 {
+		return false
+	}
+	return len(m.VisibleItems()) == 0
+}

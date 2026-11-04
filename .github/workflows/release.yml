@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6.1.0
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify injected version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="dist/ttv-tui_${VERSION}_linux_amd64.tar.gz"
+          echo "Verificando o arquivo $ARCHIVE"
+          tar -xzf "$ARCHIVE" -C /tmp ttv-tui
+          OUTPUT=$(/tmp/ttv-tui --version)
+          echo "Saída de ttv-tui --version: $OUTPUT"
+          echo "$OUTPUT" | grep -F "$VERSION"
