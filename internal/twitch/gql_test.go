@@ -1147,6 +1147,133 @@ func TestSearchPrefersExactLoginFromTwitchOrder(t *testing.T) {
 	}
 }
 
+func TestSearchCategoriesFixturesSuccessEmptyAndOrdering(t *testing.T) {
+	t.Run("success uses games inline fragment and ranks exact then viewers", func(t *testing.T) {
+		var gotQuery, gotVarQ string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req gqlRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Errorf("decode request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			gotQuery = req.Query
+			if q, ok := req.Variables["q"].(string); ok {
+				gotVarQ = q
+			}
+			if strings.Contains(req.Query, "categories") && !strings.Contains(req.Query, "games") {
+				t.Errorf("SearchCategories must query searchFor.games, not categories")
+			}
+			w.Header().Set("Content-Type", "application/json")
+			// Deliberately out of preferred order: Manager 2, Tactics, Manager(null).
+			_, _ = w.Write([]byte(`{
+				"data": {
+					"searchFor": {
+						"games": {
+							"edges": [
+								{"item": {"id": "528672376", "name": "Teamfight Manager 2", "viewersCount": 3}},
+								{"item": {"id": "513143", "name": "Teamfight Tactics", "viewersCount": 4063}},
+								{"item": {"id": "1049329847", "name": "Teamfight Manager", "viewersCount": null}}
+							]
+						}
+					}
+				}
+			}`))
+		}))
+		defer srv.Close()
+
+		src := NewGQLSource(GQLConfig{
+			Endpoint:   srv.URL,
+			HTTPClient: srv.Client(),
+		})
+
+		cats, err := src.SearchCategories(context.Background(), "  teamfight tactics  ")
+		if err != nil {
+			t.Fatalf("SearchCategories returned unexpected error: %v", err)
+		}
+		if !strings.Contains(gotQuery, "... on Game") || !strings.Contains(gotQuery, "games") {
+			t.Fatalf("expected games inline fragment in query, got: %s", gotQuery)
+		}
+		if strings.Contains(gotQuery, "categories {") {
+			t.Fatalf("query must not request non-existent searchFor.categories: %s", gotQuery)
+		}
+		if gotVarQ != "teamfight tactics" {
+			t.Fatalf("variables[q] = %q, want trimmed teamfight tactics", gotVarQ)
+		}
+		if len(cats) != 3 {
+			t.Fatalf("len(cats) = %d, want 3", len(cats))
+		}
+		if cats[0].Name != "Teamfight Tactics" || cats[0].Viewers == nil || *cats[0].Viewers != 4063 {
+			t.Fatalf("cats[0] = %+v, want exact Teamfight Tactics with 4063", cats[0])
+		}
+		if cats[1].Name != "Teamfight Manager 2" || cats[1].Viewers == nil || *cats[1].Viewers != 3 {
+			t.Fatalf("cats[1] = %+v, want Teamfight Manager 2 with 3", cats[1])
+		}
+		if cats[2].Name != "Teamfight Manager" || cats[2].Viewers != nil {
+			t.Fatalf("cats[2] = %+v, want Teamfight Manager with null viewers last", cats[2])
+		}
+	})
+
+	t.Run("empty search result returns empty slice without error", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"searchFor":{"games":{"edges":[]}}}}`))
+		}))
+		defer srv.Close()
+
+		src := NewGQLSource(GQLConfig{
+			Endpoint:   srv.URL,
+			HTTPClient: srv.Client(),
+		})
+
+		cats, err := src.SearchCategories(context.Background(), "nonexistent_xyz")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(cats) != 0 {
+			t.Fatalf("empty search cats = %+v, want 0 items", cats)
+		}
+	})
+
+	t.Run("blank query skips network", func(t *testing.T) {
+		var calls int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&calls, 1)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		src := NewGQLSource(GQLConfig{
+			Endpoint:   srv.URL,
+			HTTPClient: srv.Client(),
+		})
+		cats, err := src.SearchCategories(context.Background(), "   ")
+		if err != nil {
+			t.Fatalf("blank query error: %v", err)
+		}
+		if len(cats) != 0 || atomic.LoadInt32(&calls) != 0 {
+			t.Fatalf("blank query cats=%v calls=%d, want empty and no HTTP", cats, calls)
+		}
+	})
+
+	t.Run("missing games is Contrato", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"searchFor":{"channels":{"edges":[]}}}}`))
+		}))
+		defer srv.Close()
+
+		src := NewGQLSource(GQLConfig{
+			Endpoint:   srv.URL,
+			HTTPClient: srv.Client(),
+		})
+		_, err := src.SearchCategories(context.Background(), "tft")
+		if KindOf(err) != Contrato {
+			t.Fatalf("KindOf(err) = %v, want Contrato; err=%v", KindOf(err), err)
+		}
+	})
+}
+
 func TestChannelsByLoginsLiveOfflineAndAbsent(t *testing.T) {
 	var calls int32
 	var gotLogins any

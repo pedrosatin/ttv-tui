@@ -59,6 +59,10 @@ func (emptySource) Search(context.Context, string) (twitch.Page[twitch.Channel],
 	return twitch.Page[twitch.Channel]{}, nil
 }
 
+func (emptySource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+	return nil, nil
+}
+
 func (emptySource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
 	return nil, nil
 }

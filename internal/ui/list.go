@@ -263,7 +263,20 @@ func (m Model) VisibleItems() []ListItem {
 				Category: &catCopy,
 			})
 		}
-	case ModeChannels, ModeSearch:
+	case ModeSearch:
+		// Categories section first, then channels (ticket 09).
+		for _, cat := range m.searchCategories {
+			if !matchesFilter(cat.Name, "", "") {
+				continue
+			}
+			catCopy := cat
+			items = append(items, ListItem{
+				Type:     ItemTypeCategory,
+				Category: &catCopy,
+			})
+		}
+		fallthrough
+	case ModeChannels:
 		for _, ch := range m.channels {
 			if isSeen(ch) {
 				continue
@@ -455,6 +468,7 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.searching = false
 	m.filter = ""
 	m.searchInput = ""
+	m.searchCategories = nil
 	m.clearStaleStatusErrors()
 	m.nextCursor = ""
 	m.hasMore = false
@@ -498,6 +512,7 @@ func (m Model) returnToChannels() (tea.Model, tea.Cmd) {
 	m.filter = ""
 	m.searchInput = ""
 	m.searchQuery = ""
+	m.searchCategories = nil
 	m.clearStaleStatusErrors()
 	m.nextCursor = ""
 	m.hasMore = false
@@ -650,6 +665,9 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		m.generation++
 		m.mode = ModeChannels
 		m.channels = nil
+		m.searchCategories = nil
+		m.searchQuery = ""
+		m.searchOrigin = ""
 		m.filter = ""
 		m.filtering = false
 		m.searching = false
@@ -801,14 +819,26 @@ func (m *Model) settleHighlightAfterLoad() {
 }
 
 // firstResultID returns the ID of the first visible row of the loaded listing.
-// For search, PreferSearchChannels already put the intended Enter target at
-// channels[0] (exact login when present); highlight that row wherever it
-// renders — including when it was folded into Favorites/Recents and omitted
-// from the search section. For category channels, prefer the listing's own
-// section; when every loaded channel is already shown as a favorite or
-// recent, fall back to the first loaded channel wherever it renders.
+// For search, categories come first (PreferSearchCategories); otherwise
+// PreferSearchChannels already put the intended Enter target at channels[0]
+// (exact login when present). Highlight that row wherever it renders —
+// including when it was folded into Favorites/Recents and omitted from the
+// search section. For category channels, prefer the listing's own section;
+// when every loaded channel is already shown as a favorite or recent, fall
+// back to the first loaded channel wherever it renders.
 func (m Model) firstResultID() (string, bool) {
 	items := m.VisibleItems()
+	if m.Mode() == ModeSearch && len(m.searchCategories) > 0 {
+		targetID := m.searchCategories[0].ID
+		for _, it := range items {
+			if it.Type == ItemTypeCategory && it.Category != nil && it.Category.ID == targetID {
+				return it.ID(), true
+			}
+		}
+		if targetID != "" {
+			return targetID, true
+		}
+	}
 	if m.Mode() == ModeSearch && len(m.channels) > 0 {
 		target := m.channels[0]
 		for _, it := range items {
@@ -818,6 +848,9 @@ func (m Model) firstResultID() (string, bool) {
 		}
 	}
 	for _, it := range items {
+		if it.Type == ItemTypeCategory && m.Mode() == ModeSearch {
+			return it.ID(), true
+		}
 		if it.Type == ItemTypeChannel {
 			return it.ID(), true
 		}

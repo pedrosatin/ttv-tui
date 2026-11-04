@@ -374,7 +374,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	}
 
 	if len(items) == 0 {
-		if m.source == nil && len(m.categories) == 0 && len(m.channels) == 0 && len(m.favorites) == 0 && len(m.recents) == 0 && !m.filtering && !m.searching && m.filter == "" {
+		if m.source == nil && len(m.categories) == 0 && len(m.channels) == 0 && len(m.searchCategories) == 0 && len(m.favorites) == 0 && len(m.recents) == 0 && !m.filtering && !m.searching && m.filter == "" {
 			return nil
 		}
 		lines := []string{header}
@@ -385,7 +385,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 				TruncateVisual(m.t("filter.empty"), maxWidth),
 				TruncateVisual(fmt.Sprintf(m.t("filter.search_hint"), sanitizeChatText(strings.TrimSpace(m.filter))), maxWidth),
 			)
-		} else if (len(m.categories) > 0 || len(m.channels) > 0 || len(m.favorites) > 0 || len(m.recents) > 0) && m.filter != "" {
+		} else if (len(m.categories) > 0 || len(m.channels) > 0 || len(m.searchCategories) > 0 || len(m.favorites) > 0 || len(m.recents) > 0) && m.filter != "" {
 			lines = append(lines, TruncateVisual(m.t("filter.empty"), maxWidth))
 		} else if isSearch {
 			lines = append(lines, TruncateVisual(m.t("search.empty"), maxWidth))
@@ -399,15 +399,25 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 
 	hasFavorites := false
 	hasRecents := false
+	hasSearchCategory := false
+	hasSearchChannel := false
 	for _, it := range items {
 		switch it.Type {
 		case ItemTypeFavorite:
 			hasFavorites = true
 		case ItemTypeRecent:
 			hasRecents = true
+		case ItemTypeCategory:
+			if isSearch {
+				hasSearchCategory = true
+			}
+		case ItemTypeChannel:
+			if isSearch {
+				hasSearchChannel = true
+			}
 		}
 	}
-	showSectionHeaders := hasFavorites || hasRecents
+	showSectionHeaders := hasFavorites || hasRecents || (isSearch && (hasSearchCategory || hasSearchChannel))
 
 	highlightStyle := lipgloss.NewStyle().Bold(true)
 	sectionStyle := lipgloss.NewStyle().Faint(true)
@@ -439,10 +449,14 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 			case ItemTypeRecent:
 				addSectionHeader(m.t("section.recents"))
 			case ItemTypeCategory:
-				addSectionHeader(m.t("categories.title"))
+				if isSearch {
+					addSectionHeader(m.t("search.section_categories"))
+				} else {
+					addSectionHeader(m.t("categories.title"))
+				}
 			case ItemTypeChannel:
-				if m.Mode() == ModeSearch {
-					addSectionHeader(m.t("search.title"))
+				if isSearch {
+					addSectionHeader(m.t("search.section_channels"))
 				} else if m.selectedCategory != nil && m.selectedCategory.Name != "" {
 					addSectionHeader(fmt.Sprintf(m.t("channels.title_category"), sanitizeChatText(m.selectedCategory.Name)))
 				} else {
@@ -460,8 +474,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		switch it.Type {
 		case ItemTypeCategory:
 			cat := *it.Category
-			viewersText := m.formatViewers(cat.Viewers)
-			row = fmt.Sprintf("%s %7s  %s", marker, viewersText, sanitizeChatText(cat.Name))
+			row = m.formatCategoryRow(marker, cat, isSearch)
 		default: // ItemTypeChannel, ItemTypeFavorite, ItemTypeRecent
 			ch := *it.Channel
 			row = m.formatChannelRow(marker, ch, it.Availability)
@@ -585,6 +598,18 @@ func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.A
 		}
 		return fmt.Sprintf("%s %7s  %s — %s%s", marker, m.t("channels.viewers_unknown"), identity, m.t("channels.unverified_tag"), suffix)
 	}
+}
+
+func (m Model) formatCategoryRow(marker string, cat twitch.Category, inSearch bool) string {
+	name := sanitizeChatText(cat.Name)
+	if inSearch && categoryNoBroadcast(cat) {
+		return fmt.Sprintf("%s %7s  %s — %s", marker, m.t("categories.viewers_unknown"), name, m.t("categories.no_stream"))
+	}
+	return fmt.Sprintf("%s %7s  %s", marker, m.formatViewers(cat.Viewers), name)
+}
+
+func categoryNoBroadcast(cat twitch.Category) bool {
+	return cat.Viewers == nil || *cat.Viewers <= 0
 }
 
 func (m Model) formatViewers(v *int) string {

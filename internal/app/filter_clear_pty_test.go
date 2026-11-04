@@ -34,6 +34,10 @@ func (filterClearSource) Search(context.Context, string) (twitch.Page[twitch.Cha
 	}}, nil
 }
 
+func (filterClearSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+	return nil, nil
+}
+
 func (filterClearSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
 	return nil, nil
 }

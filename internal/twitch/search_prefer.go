@@ -39,9 +39,59 @@ func PreferSearchChannels(query string, items []Channel) []Channel {
 	return out
 }
 
+// PreferSearchCategories reorders SearchCategories hits for navigation.
+//
+// Chosen rule (v1.4 ticket 09):
+//  1. exact name match first (case-insensitive, trimmed query and name);
+//  2. among the rest, higher viewersCount first;
+//  3. nil or zero viewersCount last (shown as "no broadcast" in the UI).
+//
+// Applied by GQLSource.SearchCategories before caching/returning, and again by
+// the UI when it handles SearchLoadedMsg.
+func PreferSearchCategories(query string, items []Category) []Category {
+	if len(items) < 2 {
+		return items
+	}
+	q := strings.TrimSpace(query)
+	out := append([]Category(nil), items...)
+	sort.SliceStable(out, func(i, j int) bool {
+		ei := nameEqualsQuery(out[i].Name, q)
+		ej := nameEqualsQuery(out[j].Name, q)
+		if ei != ej {
+			return ei
+		}
+		hi, vi := categoryHasViewers(out[i])
+		hj, vj := categoryHasViewers(out[j])
+		if hi != hj {
+			return hi
+		}
+		if hi && hj && vi != vj {
+			return vi > vj
+		}
+		return false
+	})
+	return out
+}
+
 func loginEqualsQuery(login, query string) bool {
 	if query == "" {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(login), query)
+}
+
+func nameEqualsQuery(name, query string) bool {
+	if query == "" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(name), query)
+}
+
+// categoryHasViewers reports whether c has a positive viewer count. Nil and
+// zero both count as "no broadcast" for ranking and display.
+func categoryHasViewers(c Category) (ok bool, n int) {
+	if c.Viewers == nil || *c.Viewers <= 0 {
+		return false, 0
+	}
+	return true, *c.Viewers
 }

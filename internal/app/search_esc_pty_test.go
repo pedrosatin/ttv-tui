@@ -32,6 +32,10 @@ func (searchEscSource) Search(context.Context, string) (twitch.Page[twitch.Chann
 	}}, nil
 }
 
+func (searchEscSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+	return nil, nil
+}
+
 func (searchEscSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
 	return nil, nil
 }
@@ -61,7 +65,7 @@ func TestEscFromSearchReturnsToOrigin_PTY(t *testing.T) {
 	}
 
 	// Search from the open category.
-	p.sendAndWait([]byte{0x13}, "Search channel:") // Ctrl+S
+	p.sendAndWait([]byte{0x13}, "Search:") // Ctrl+S
 	p.sendAndWait([]byte("hit\r"), "Search Results — hit")
 	deadline = time.Now().Add(10 * time.Second)
 	for !strings.Contains(p.screenSince(0), "SearchHit") {
@@ -99,7 +103,7 @@ func TestEscFromSearchReturnsToOrigin_PTY(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	p.sendAndWait([]byte{0x13}, "Search channel:")
+	p.sendAndWait([]byte{0x13}, "Search:")
 	p.sendAndWait([]byte("hit\r"), "Search Results — hit")
 	deadline = time.Now().Add(10 * time.Second)
 	for !strings.Contains(p.screenSince(0), "SearchHit") {

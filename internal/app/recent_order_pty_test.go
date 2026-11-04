@@ -33,6 +33,10 @@ func (recentOrderSource) Search(context.Context, string) (twitch.Page[twitch.Cha
 	}}, nil
 }
 
+func (recentOrderSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+	return nil, nil
+}
+
 func (recentOrderSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
 	return nil, nil
 }

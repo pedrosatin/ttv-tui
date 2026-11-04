@@ -48,10 +48,12 @@ type ChannelsLoadedMsg struct {
 }
 
 // SearchLoadedMsg delivers the result of an asynchronous Search request.
+// Categories come from SearchCategories and render above channel hits.
 type SearchLoadedMsg struct {
 	Generation uint64
 	Query      string
 	Page       twitch.Page[twitch.Channel]
+	Categories []twitch.Category
 	Err        error
 }
 
@@ -198,13 +200,17 @@ type Model struct {
 	err         error
 	categories  []twitch.Category
 	channels    []twitch.Channel
-	nextCursor  string
-	hasMore     bool
-	filter      string
-	filtering   bool
-	searching   bool
-	searchInput string
-	searchQuery string
+	// searchCategories holds category hits for ModeSearch only. Kept separate
+	// from categories so Esc back to the live top list does not briefly show
+	// search results while the reload runs.
+	searchCategories []twitch.Category
+	nextCursor       string
+	hasMore          bool
+	filter           string
+	filtering        bool
+	searching        bool
+	searchInput      string
+	searchQuery      string
 	// searchOrigin is the list mode active when the current search started
 	// (ModeChannels or ModeCategories). Esc returns there; Ctrl+R ignores it.
 	searchOrigin     Mode
@@ -518,6 +524,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.err = nil
+		// Prefer exact name then viewers (twitch.PreferSearchCategories).
+		cats := twitch.PreferSearchCategories(msg.Query, msg.Categories)
+		m.searchCategories = make([]twitch.Category, len(cats))
+		copy(m.searchCategories, cats)
 		// Prefer exact login then live among clones (twitch.PreferSearchChannels).
 		// Lives here so every Source gets the same Enter/highlight target.
 		items := twitch.PreferSearchChannels(msg.Query, msg.Page.Items)

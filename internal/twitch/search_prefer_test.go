@@ -84,3 +84,52 @@ func TestPreferSearchChannelsDoesNotMutateInput(t *testing.T) {
 		t.Fatalf("input mutated: first = %q", items[0].Login)
 	}
 }
+
+func TestPreferSearchCategoriesExactThenViewers(t *testing.T) {
+	// Twitch relevance may put a partial match ahead of the exact name.
+	items := []Category{
+		{ID: "2", Name: "Teamfight Manager 2", Viewers: IntPtr(3)},
+		{ID: "1", Name: "Teamfight Tactics", Viewers: IntPtr(4063)},
+		{ID: "3", Name: "Teamfight Manager", Viewers: nil},
+	}
+	got := PreferSearchCategories("teamfight tactics", items)
+	if len(got) != 3 {
+		t.Fatalf("len = %d, want 3", len(got))
+	}
+	if got[0].Name != "Teamfight Tactics" {
+		t.Fatalf("first = %q, want exact Teamfight Tactics", got[0].Name)
+	}
+	if got[1].Name != "Teamfight Manager 2" {
+		t.Fatalf("second = %q, want higher-viewers Teamfight Manager 2", got[1].Name)
+	}
+	if got[2].Name != "Teamfight Manager" || got[2].Viewers != nil {
+		t.Fatalf("third = %+v, want null-viewers Teamfight Manager last", got[2])
+	}
+}
+
+func TestPreferSearchCategoriesZeroViewersLast(t *testing.T) {
+	items := []Category{
+		{ID: "z", Name: "Zero Game", Viewers: IntPtr(0)},
+		{ID: "a", Name: "Active Game", Viewers: IntPtr(10)},
+		{ID: "n", Name: "Null Game", Viewers: nil},
+	}
+	got := PreferSearchCategories("game", items)
+	if got[0].Name != "Active Game" {
+		t.Fatalf("first = %q, want Active Game", got[0].Name)
+	}
+	// Zero and nil stay after positive viewers; relative order among them kept.
+	if got[1].Name != "Zero Game" || got[2].Name != "Null Game" {
+		t.Fatalf("tail = %q, %q; want zero then null in input order", got[1].Name, got[2].Name)
+	}
+}
+
+func TestPreferSearchCategoriesDoesNotMutateInput(t *testing.T) {
+	items := []Category{
+		{ID: "1", Name: "B", Viewers: IntPtr(1)},
+		{ID: "2", Name: "A", Viewers: IntPtr(9)},
+	}
+	_ = PreferSearchCategories("a", items)
+	if items[0].Name != "B" {
+		t.Fatalf("input mutated: first = %q", items[0].Name)
+	}
+}

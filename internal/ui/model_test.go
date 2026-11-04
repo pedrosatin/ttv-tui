@@ -16,6 +16,7 @@ type fakeSource struct {
 	categoriesFn       func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error)
 	channelsFn         func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error)
 	searchFn           func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error)
+	searchCategoriesFn func(ctx context.Context, query string) ([]twitch.Category, error)
 	channelsByLoginsFn func(ctx context.Context, logins []string) ([]twitch.Channel, error)
 }
 
@@ -38,6 +39,13 @@ func (f *fakeSource) Search(ctx context.Context, query string) (twitch.Page[twit
 		return f.searchFn(ctx, query)
 	}
 	return twitch.Page[twitch.Channel]{}, nil
+}
+
+func (f *fakeSource) SearchCategories(ctx context.Context, query string) ([]twitch.Category, error) {
+	if f.searchCategoriesFn != nil {
+		return f.searchCategoriesFn(ctx, query)
+	}
+	return nil, nil
 }
 
 func (f *fakeSource) ChannelsByLogins(ctx context.Context, logins []string) ([]twitch.Channel, error) {
@@ -733,7 +741,7 @@ func TestEmptyAndErrorStatesInChannelsAndSearch(t *testing.T) {
 	updated, _ = m.Update(searchCmd())
 	m = updated.(Model)
 
-	if !strings.Contains(m.View(), "Nenhum canal encontrado para esta busca.") {
+	if !strings.Contains(m.View(), "Nenhum resultado para esta busca.") {
 		t.Fatalf("expected explicit empty search message in view, got: %q", m.View())
 	}
 }

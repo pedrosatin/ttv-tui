@@ -26,6 +26,10 @@ func (oneChannelSource) Search(context.Context, string) (twitch.Page[twitch.Chan
 	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{{ID: "ch-pty", Login: "ptychan", DisplayName: "PtyChan"}}}, nil
 }
 
+func (oneChannelSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+	return nil, nil
+}
+
 func (oneChannelSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
 	return nil, nil
 }
@@ -123,8 +127,8 @@ func TestCtrlCByteDoesNotQuitFromEveryMode(t *testing.T) {
 			p.sendAndWait([]byte("pty"), "Filter: pty")
 		}},
 		{"search", func(p *ptyTUI) {
-			p.sendAndWait([]byte{0x13}, "Search channel:") // Ctrl+S
-			p.sendAndWait([]byte("ptyc"), "Search channel: ptyc")
+			p.sendAndWait([]byte{0x13}, "Search:") // Ctrl+S
+			p.sendAndWait([]byte("ptyc"), "Search: ptyc")
 		}},
 		{"chat", func(p *ptyTUI) {
 			p.openChannel()

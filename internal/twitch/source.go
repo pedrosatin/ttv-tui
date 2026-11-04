@@ -59,6 +59,12 @@ type Source interface {
 	Categories(ctx context.Context, page PageRequest) (Page[Category], error)
 	Channels(ctx context.Context, categoryID string, page PageRequest) (Page[Channel], error)
 	Search(ctx context.Context, query string) (Page[Channel], error)
+	// SearchCategories finds categories by name via the global search API.
+	// Unlike Categories (top live page), it reaches games outside the top N.
+	// Empty query yields an empty slice with no network call. Results are not
+	// paginated: Twitch returns one relevance window. PreferSearchCategories
+	// reorders hits (exact name, then viewers) before return.
+	SearchCategories(ctx context.Context, query string) ([]Category, error)
 	// ChannelsByLogins returns identity and Availability for the given logins
 	// in a single upstream request. Empty logins yields an empty result with
 	// no network call. Logins that do not resolve are omitted so callers keep

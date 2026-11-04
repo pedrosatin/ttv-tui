@@ -92,6 +92,24 @@ const searchQuery = `query($q: String!) {
   }
 }`
 
+// searchCategoriesQuery uses searchFor.games (not categories — that field does
+// not exist on SearchFor). Validated against the live Twitch GQL API.
+const searchCategoriesQuery = `query($q: String!) {
+  searchFor(userQuery: $q, platform: "web") {
+    games {
+      edges {
+        item {
+          ... on Game {
+            id
+            name
+            viewersCount
+          }
+        }
+      }
+    }
+  }
+}`
+
 // usersByLoginsQuery resolves many channel logins in one round-trip. Twitch
 // accepts up to 100 logins; null array entries mean the login does not exist.
 const usersByLoginsQuery = `query($logins: [String!]!) {
@@ -318,6 +336,21 @@ type gqlSearchData struct {
 
 type gqlSearchFor struct {
 	Channels *gqlSearchChannelsConnection `json:"channels"`
+	Games    *gqlSearchGamesConnection    `json:"games"`
+}
+
+type gqlSearchGamesConnection struct {
+	Edges []gqlSearchGameEdge `json:"edges"`
+}
+
+type gqlSearchGameEdge struct {
+	Item *gqlSearchGame `json:"item"`
+}
+
+type gqlSearchGame struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ViewersCount *int   `json:"viewersCount"`
 }
 
 type gqlSearchChannelsConnection struct {
@@ -522,6 +555,52 @@ func (s *GQLSource) Search(ctx context.Context, query string) (Page[Channel], er
 	res.Items = PreferSearchChannels(q, res.Items)
 	s.setCachedChannels(cacheKey, res)
 	return res, nil
+}
+
+// SearchCategories searches categories globally by user query via searchFor.games.
+func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]Category, error) {
+	const op = "searchCategories"
+
+	if err := ctx.Err(); err != nil {
+		return nil, &Error{
+			Kind: Rede,
+			Op:   op,
+			Err:  fmt.Errorf("context canceled before request: %w", err),
+		}
+	}
+
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []Category{}, nil
+	}
+
+	cacheKey := fmt.Sprintf("searchCategories|%s", q)
+	if cached, ok := s.getCachedCategories(cacheKey); ok {
+		return cached.Items, nil
+	}
+
+	payload, err := json.Marshal(gqlRequest{
+		Query: searchCategoriesQuery,
+		Variables: map[string]any{
+			"q": q,
+		},
+	})
+	if err != nil {
+		return nil, &Error{
+			Kind: Contrato,
+			Op:   op,
+			Err:  fmt.Errorf("encode graphql request: %w", err),
+		}
+	}
+
+	res, reqErr := executeWithRetry(s, ctx, op, payload, s.parseSearchCategoriesResponse)
+	if reqErr != nil {
+		return nil, reqErr
+	}
+	res.Items = PreferSearchCategories(q, res.Items)
+	s.rememberCategories(res.Items)
+	s.setCachedCategories(cacheKey, res)
+	return res.Items, nil
 }
 
 // ChannelsByLogins fetches Availability for many logins in one GraphQL request.
@@ -1016,6 +1095,86 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 	}
 
 	return Page[Channel]{
+		Items:   items,
+		Cursor:  "",
+		HasMore: false,
+	}, nil
+}
+
+func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], *Error) {
+	const op = "searchCategories"
+
+	var gqlResp gqlSearchResponse
+	if err := json.Unmarshal(body, &gqlResp); err != nil {
+		return Page[Category]{}, &Error{
+			Kind: Contrato,
+			Op:   op,
+			Err:  fmt.Errorf("decode graphql json: %w", err),
+		}
+	}
+
+	if isIntegrityCheckFailed(gqlResp.Errors) {
+		return Page[Category]{
+			Items:   []Category{},
+			Cursor:  "",
+			HasMore: false,
+		}, nil
+	}
+
+	if len(gqlResp.Errors) > 0 {
+		msg := strings.TrimSpace(gqlResp.Errors[0].Message)
+		if msg == "" {
+			msg = "graphql error"
+		}
+		return Page[Category]{}, &Error{
+			Kind: Contrato,
+			Op:   op,
+			Err:  fmt.Errorf("graphql error: %s", msg),
+		}
+	}
+
+	if gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Games == nil {
+		return Page[Category]{}, &Error{
+			Kind: Contrato,
+			Op:   op,
+			Err:  errors.New("missing data.searchFor.games in graphql response"),
+		}
+	}
+
+	edges := gqlResp.Data.SearchFor.Games.Edges
+	items := make([]Category, 0, len(edges))
+	for i, edge := range edges {
+		if edge.Item == nil {
+			return Page[Category]{}, &Error{
+				Kind: Contrato,
+				Op:   op,
+				Err:  fmt.Errorf("edge %d has null item", i),
+			}
+		}
+		name := strings.TrimSpace(edge.Item.Name)
+		if name == "" {
+			return Page[Category]{}, &Error{
+				Kind: Contrato,
+				Op:   op,
+				Err:  fmt.Errorf("edge %d missing required category name", i),
+			}
+		}
+		id := strings.TrimSpace(edge.Item.ID)
+		if id == "" {
+			id = name
+		}
+		cat := Category{
+			ID:   id,
+			Name: name,
+		}
+		if edge.Item.ViewersCount != nil {
+			v := *edge.Item.ViewersCount
+			cat.Viewers = &v
+		}
+		items = append(items, cat)
+	}
+
+	return Page[Category]{
 		Items:   items,
 		Cursor:  "",
 		HasMore: false,

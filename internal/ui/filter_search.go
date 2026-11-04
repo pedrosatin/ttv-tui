@@ -3,9 +3,11 @@ package ui
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // Filter returns the active filter string.
@@ -141,6 +143,7 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	m.searchQuery = q
 	m.mode = ModeSearch
 	m.channels = nil
+	m.searchCategories = nil
 	m.clearHighlight()
 	m.focusResults = true
 	m.nextCursor = ""
@@ -166,11 +169,34 @@ func (m Model) fetchSearchCmd(gen uint64, query string) tea.Cmd {
 			ctx, cancel = tracker.newContext()
 			defer cancel()
 		}
-		page, err := src.Search(ctx, query)
+
+		var (
+			page    twitch.Page[twitch.Channel]
+			cats    []twitch.Category
+			pageErr error
+			catsErr error
+			wg      sync.WaitGroup
+		)
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			page, pageErr = src.Search(ctx, query)
+		}()
+		go func() {
+			defer wg.Done()
+			cats, catsErr = src.SearchCategories(ctx, query)
+		}()
+		wg.Wait()
+
+		err := pageErr
+		if err == nil {
+			err = catsErr
+		}
 		return SearchLoadedMsg{
 			Generation: gen,
 			Query:      query,
 			Page:       page,
+			Categories: cats,
 			Err:        err,
 		}
 	}
@@ -182,7 +208,7 @@ func (m Model) filterHasNoMatches() bool {
 	if strings.TrimSpace(m.filter) == "" {
 		return false
 	}
-	if len(m.categories) == 0 && len(m.channels) == 0 && len(m.favorites) == 0 && len(m.recents) == 0 {
+	if len(m.categories) == 0 && len(m.channels) == 0 && len(m.searchCategories) == 0 && len(m.favorites) == 0 && len(m.recents) == 0 {
 		return false
 	}
 	return len(m.VisibleItems()) == 0
