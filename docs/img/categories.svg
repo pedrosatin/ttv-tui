@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 592" width="1040" height="592" data-cols="120" data-rows="28">
+  <rect width="1040" height="592" rx="8" fill="#11111b"/>
+  <g font-family="ui-monospace, 'JetBrains Mono', 'Fira Code', 'Cascadia Mono', 'DejaVu Sans Mono', monospace" font-size="14" fill="#cdd6f4">
+    <text x="16" y="31" xml:space="preserve">Live Categories</text>
+    <text x="16" y="51" xml:space="preserve"><tspan font-weight="700" fill="#ffffff">▸   446.8k  Just Chatting</tspan></text>
+    <text x="16" y="71" xml:space="preserve">    254.6k  Minecraft</text>
+    <text x="16" y="91" xml:space="preserve">    159.1k  League of Legends</text>
+    <text x="16" y="111" xml:space="preserve">    113.7k  World of Warcraft</text>
+    <text x="16" y="131" xml:space="preserve">    110.0k  AION 2</text>
+    <text x="16" y="151" xml:space="preserve">    108.5k  Fortnite</text>
+    <text x="16" y="171" xml:space="preserve">     94.5k  Counter-Strike</text>
+    <text x="16" y="191" xml:space="preserve">     88.3k  Grand Theft Auto V</text>
+    <text x="16" y="211" xml:space="preserve">     76.1k  IRL</text>
+    <text x="16" y="231" xml:space="preserve">     68.1k  VALORANT</text>
+    <text x="16" y="251" xml:space="preserve">     66.2k  Dota 2</text>
+    <text x="16" y="271" xml:space="preserve">     57.5k  The Legend of Zelda: Ocarina of Time</text>
+    <text x="16" y="291" xml:space="preserve">     48.4k  Overwatch</text>
+    <text x="16" y="311" xml:space="preserve">     47.6k  $cam With Your Friends</text>
+    <text x="16" y="331" xml:space="preserve">     43.5k  Phantom Blade Zero</text>
+    <text x="16" y="351" xml:space="preserve">     38.6k  Call of Duty: Modern Warfare 4</text>
+    <text x="16" y="371" xml:space="preserve">     36.0k  Slots</text>
+    <text x="16" y="391" xml:space="preserve">     33.1k  World of Tanks</text>
+    <text x="16" y="411" xml:space="preserve">     33.0k  Apex Legends</text>
+    <text x="16" y="431" xml:space="preserve">     30.7k  Deadlock</text>
+    <text x="16" y="451" xml:space="preserve">     26.8k  Dead by Daylight</text>
+    <text x="16" y="471" xml:space="preserve">     26.4k  Enshrouded</text>
+    <text x="16" y="491" xml:space="preserve">     25.9k  Old School RuneScape</text>
+    <text x="16" y="511" xml:space="preserve">     22.8k  EA Sports FC 27</text>
+    <text x="16" y="531" xml:space="preserve">     22.6k  Hunt: Showdown 1896</text>
+    <text x="16" y="551" xml:space="preserve">     21.3k  Sports</text>
+    <rect x="8" y="556" width="1024" height="20" rx="4" fill="#1e1e2e"/>
+    <text x="16" y="571" xml:space="preserve"> ttv-tui | [en] Ready | ? help · Ctrl+C/Ctrl+Q quit</text>
+  </g>
+</svg>

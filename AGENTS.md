@@ -1,9 +1,8 @@
 # ttv-tui — regras do projeto
 
 TUI em Go para Twitch: navegar por categorias e canais, assistir via streamlink +
-mpv e conversar no chat IRC, sem navegador. Leia o
-[README](README.md) para o produto e
-[.scratch/ttv-tui-v1/spec.md](.scratch/ttv-tui-v1/spec.md) para o desenho aprovado.
+mpv e conversar no chat IRC, sem navegador. Leia o [README](README.md) para o produto e os [ADRs](docs/adr/) para as decisões de
+arquitetura.
 
 ## Regras que sustentam o desenho
 
@@ -45,15 +44,3 @@ mpv e conversar no chat IRC, sem navegador. Leia o
 - Erros: `fmt.Errorf("...: %w", err)`, sem `panic` fora do `main`.
 - Testes junto do código (`_test.go`); parser de IRC e `Source` com fixtures.
 - `go vet ./...` e `golangci-lint run` limpos antes de qualquer PR.
-
-## Agent skills
-
-### Issue tracker
-
-Local tracking in Markdown files under `.scratch/<feature>/` on the primary worktree.
-Interactive dashboard at `.scratch/index.html`.
-See `docs/agents/issue-tracker.md`.
-
-### Domain docs
-
-Single-context convention (`GLOSSARY.md`, `docs/adr/`). See `docs/agents/domain.md`.
