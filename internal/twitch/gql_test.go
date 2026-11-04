@@ -1146,3 +1146,118 @@ func TestSearchPrefersExactLoginFromTwitchOrder(t *testing.T) {
 		t.Fatalf("Items[0].Login = %q, want landonorris", page.Items[0].Login)
 	}
 }
+
+func TestChannelsByLoginsLiveOfflineAndAbsent(t *testing.T) {
+	var calls int32
+	var gotLogins any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		var req gqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if !strings.Contains(req.Query, "users(logins:") {
+			t.Errorf("query must use users(logins:), got: %s", req.Query)
+		}
+		gotLogins = req.Variables["logins"]
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"users":[
+			{"id":"1","login":"live_one","displayName":"Live One","stream":{"id":"s1","viewersCount":327,"title":"  Lobby   ao vivo "}},
+			{"id":"2","login":"off_one","displayName":"Off One","stream":null},
+			null
+		]}}`))
+	}))
+	defer srv.Close()
+
+	src := NewGQLSource(GQLConfig{Endpoint: srv.URL, HTTPClient: srv.Client()})
+	got, err := src.ChannelsByLogins(context.Background(), []string{"Live_One", "off_one", "missing_zzz", "live_one"})
+	if err != nil {
+		t.Fatalf("ChannelsByLogins: %v", err)
+	}
+	if atomic.LoadInt32(&calls) != 1 {
+		t.Fatalf("HTTP calls = %d, want 1 for N logins", calls)
+	}
+	logins, ok := gotLogins.([]any)
+	if !ok {
+		t.Fatalf("variables.logins type = %T, want []any", gotLogins)
+	}
+	if len(logins) != 3 {
+		t.Fatalf("sent %d logins, want 3 unique (duplicates collapsed): %v", len(logins), logins)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2 (absent omitted)", len(got))
+	}
+
+	live := got[0]
+	if live.Login != "live_one" || live.Availability != AvailabilityLive {
+		t.Fatalf("live = %+v, want live_one / AvailabilityLive", live)
+	}
+	if live.Viewers == nil || *live.Viewers != 327 {
+		t.Fatalf("live.Viewers = %v, want 327", live.Viewers)
+	}
+	if live.Title == nil || *live.Title != "Lobby ao vivo" {
+		t.Fatalf("live.Title = %v, want normalized title", live.Title)
+	}
+
+	off := got[1]
+	if off.Login != "off_one" || off.Availability != AvailabilityOffline || off.Viewers != nil {
+		t.Fatalf("off = %+v, want offline without viewers", off)
+	}
+}
+
+func TestChannelsByLoginsEmptyDoesNotRequest(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	src := NewGQLSource(GQLConfig{Endpoint: srv.URL, HTTPClient: srv.Client()})
+	got, err := src.ChannelsByLogins(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("nil logins error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("nil logins result = %+v, want nil", got)
+	}
+	got, err = src.ChannelsByLogins(context.Background(), []string{"", "  "})
+	if err != nil {
+		t.Fatalf("blank logins error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("blank logins result = %+v, want nil", got)
+	}
+	if atomic.LoadInt32(&calls) != 0 {
+		t.Fatalf("HTTP calls = %d, want 0 for empty batch", calls)
+	}
+}
+
+func TestChannelsByLoginsFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("boom"))
+	}))
+	defer srv.Close()
+
+	src := NewGQLSource(GQLConfig{
+		Endpoint:     srv.URL,
+		HTTPClient:   srv.Client(),
+		RetryBackoff: time.Millisecond,
+		Sleep: func(ctx context.Context, d time.Duration) error {
+			return nil
+		},
+	})
+	got, err := src.ChannelsByLogins(context.Background(), []string{"gaules"})
+	if err == nil {
+		t.Fatal("expected error on 500")
+	}
+	if KindOf(err) != Servidor {
+		t.Fatalf("KindOf(err) = %q, want %q (err=%v)", KindOf(err), Servidor, err)
+	}
+	if got != nil {
+		t.Fatalf("got = %+v, want nil on failure", got)
+	}
+}

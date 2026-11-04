@@ -13,9 +13,10 @@ import (
 )
 
 type fakeSource struct {
-	categoriesFn func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error)
-	channelsFn   func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error)
-	searchFn     func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error)
+	categoriesFn       func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error)
+	channelsFn         func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error)
+	searchFn           func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error)
+	channelsByLoginsFn func(ctx context.Context, logins []string) ([]twitch.Channel, error)
 }
 
 func (f *fakeSource) Categories(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
@@ -37,6 +38,13 @@ func (f *fakeSource) Search(ctx context.Context, query string) (twitch.Page[twit
 		return f.searchFn(ctx, query)
 	}
 	return twitch.Page[twitch.Channel]{}, nil
+}
+
+func (f *fakeSource) ChannelsByLogins(ctx context.Context, logins []string) ([]twitch.Channel, error) {
+	if f.channelsByLoginsFn != nil {
+		return f.channelsByLoginsFn(ctx, logins)
+	}
+	return nil, nil
 }
 
 func TestCtrlQQuitsModel(t *testing.T) {

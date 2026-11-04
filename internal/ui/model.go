@@ -55,6 +55,14 @@ type SearchLoadedMsg struct {
 	Err        error
 }
 
+// SavedAvailabilityMsg delivers a batch availability lookup for favorites and
+// recents. Failures leave saved channels unverified and never set Model.err.
+type SavedAvailabilityMsg struct {
+	Generation uint64
+	Channels   []twitch.Channel
+	Err        error
+}
+
 // CategorySelectedMsg is emitted when the user presses Enter on a highlighted category
 // when no Source is attached.
 type CategorySelectedMsg struct {
@@ -185,6 +193,7 @@ type Model struct {
 	focus              Focus
 	helpVisible        bool
 	generation         uint64
+	hydrateGen         uint64
 	loading            bool
 	err                error
 	categories         []twitch.Category
@@ -246,6 +255,7 @@ func New(catalog *i18n.Catalog, opts ...Option) Model {
 		mode:         ModeCategories,
 		focus:        FocusList,
 		generation:   1,
+		hydrateGen:   1,
 		playerVolume: 100,
 		chatPanel:    newChatPanel(),
 		favorites:    make([]twitch.Channel, 0),
@@ -284,18 +294,23 @@ func (m Model) StatusNotice() string {
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	switch {
-	case m.source == nil && m.tokenCheck == nil:
+	var cmds []tea.Cmd
+	if m.source != nil {
+		cmds = append(cmds, m.fetchCategoriesCmd(m.generation, "", false))
+		if hydrate := m.fetchHydrateCmd(m.hydrateGen); hydrate != nil {
+			cmds = append(cmds, hydrate)
+		}
+	}
+	if m.tokenCheck != nil {
+		cmds = append(cmds, m.checkTokenCmd())
+	}
+	switch len(cmds) {
+	case 0:
 		return nil
-	case m.source != nil && m.tokenCheck == nil:
-		return m.fetchCategoriesCmd(m.generation, "", false)
-	case m.source == nil && m.tokenCheck != nil:
-		return m.checkTokenCmd()
+	case 1:
+		return cmds[0]
 	default:
-		return tea.Batch(
-			m.fetchCategoriesCmd(m.generation, "", false),
-			m.checkTokenCmd(),
-		)
+		return tea.Batch(cmds...)
 	}
 }
 
@@ -487,6 +502,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nextCursor = msg.Page.Cursor
 		m.hasMore = msg.Page.HasMore
 		m.settleHighlightAfterLoad()
+		return m, nil
+
+	case SavedAvailabilityMsg:
+		if msg.Generation != m.hydrateGen {
+			return m, nil
+		}
+		if msg.Err != nil {
+			// Keep [unverified]; never surface a hard error for this soft check.
+			return m, nil
+		}
+		m.refreshSavedAvailability(msg.Channels)
 		return m, nil
 
 	case ChannelSelectedMsg:

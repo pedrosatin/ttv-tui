@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -676,6 +679,177 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestHydrateSavedAvailabilityOnInit(t *testing.T) {
+	cat, err := i18n.New(i18n.LangEN)
+	if err != nil {
+		t.Fatalf("i18n.New: %v", err)
+	}
+
+	var calls int32
+	var gotLogins []string
+	src := &fakeSource{
+		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+			return twitch.Page[twitch.Category]{
+				Items: []twitch.Category{{ID: "jc", Name: "Just Chatting"}},
+			}, nil
+		},
+		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]twitch.Channel, error) {
+			atomic.AddInt32(&calls, 1)
+			gotLogins = append([]string(nil), logins...)
+			return []twitch.Channel{
+				{
+					ID:           "1",
+					Login:        "gaules",
+					DisplayName:  "Gaules",
+					Viewers:      twitch.IntPtr(12900),
+					Title:        twitch.StringPtr("Major"),
+					Availability: twitch.AvailabilityLive,
+				},
+				{
+					ID:           "2",
+					Login:        "xqc",
+					DisplayName:  "xQc",
+					Availability: twitch.AvailabilityOffline,
+				},
+			}, nil
+		},
+	}
+
+	m := New(cat,
+		WithSource(src),
+		WithFavorites([]twitch.Channel{
+			{ID: "f-1", Login: "gaules", DisplayName: "Gaules"},
+			{ID: "f-2", Login: "elsewhere", DisplayName: "Elsewhere"},
+		}),
+		WithRecents([]twitch.Channel{
+			{ID: "r-1", Login: "xqc", DisplayName: "xQc"},
+			{ID: "r-2", Login: "gaules", DisplayName: "Gaules"},
+		}),
+	)
+
+	updated, cmd := m.Update(m.Init()())
+	m = updated.(Model)
+	if cmd != nil {
+		updated, _ = m.Update(cmd())
+		m = updated.(Model)
+	}
+
+	if atomic.LoadInt32(&calls) != 1 {
+		t.Fatalf("ChannelsByLogins calls = %d, want 1", calls)
+	}
+	if len(gotLogins) != 3 {
+		t.Fatalf("logins = %v, want 3 unique (gaules, elsewhere, xqc)", gotLogins)
+	}
+
+	favs := m.Favorites()
+	if favs[0].Availability != twitch.AvailabilityLive || favs[0].Viewers == nil || *favs[0].Viewers != 12900 {
+		t.Fatalf("favorite gaules not hydrated: %+v", favs[0])
+	}
+	if favs[0].Title == nil || *favs[0].Title != "Major" {
+		t.Fatalf("favorite gaules title not hydrated: %+v", favs[0])
+	}
+	if favs[1].Availability != twitch.AvailabilityUnknown {
+		t.Fatalf("elsewhere absent from batch must stay unknown, got %v", favs[1].Availability)
+	}
+
+	recs := m.Recents()
+	if recs[0].Availability != twitch.AvailabilityOffline || recs[0].Viewers != nil {
+		t.Fatalf("recent xqc not hydrated offline: %+v", recs[0])
+	}
+	if recs[1].Availability != twitch.AvailabilityLive {
+		t.Fatalf("recent gaules not hydrated live: %+v", recs[1])
+	}
+
+	plain := ansi.Strip(m.View())
+	if !strings.Contains(plain, "12.9k") || !strings.Contains(plain, "Major") {
+		t.Fatalf("view missing hydrated live favorite:\n%s", plain)
+	}
+	if !strings.Contains(plain, "[offline]") {
+		t.Fatalf("view missing offline recent:\n%s", plain)
+	}
+	if !strings.Contains(plain, "[unverified]") {
+		t.Fatalf("elsewhere must stay unverified:\n%s", plain)
+	}
+}
+
+func TestHydrateEmptySavedDoesNotRequest(t *testing.T) {
+	cat, err := i18n.New(i18n.LangEN)
+	if err != nil {
+		t.Fatalf("i18n.New: %v", err)
+	}
+
+	var calls int32
+	src := &fakeSource{
+		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+			return twitch.Page[twitch.Category]{
+				Items: []twitch.Category{{ID: "jc", Name: "Just Chatting"}},
+			}, nil
+		},
+		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]twitch.Channel, error) {
+			atomic.AddInt32(&calls, 1)
+			return nil, nil
+		},
+	}
+
+	m := New(cat, WithSource(src))
+	updated, _ := m.Update(m.Init()())
+	m = updated.(Model)
+	if atomic.LoadInt32(&calls) != 0 {
+		t.Fatalf("ChannelsByLogins calls = %d, want 0 for empty saved set", calls)
+	}
+	if len(m.Categories()) != 1 {
+		t.Fatalf("categories not loaded: %+v", m.Categories())
+	}
+}
+
+func TestHydrateFailureKeepsUnverified(t *testing.T) {
+	cat, err := i18n.New(i18n.LangEN)
+	if err != nil {
+		t.Fatalf("i18n.New: %v", err)
+	}
+
+	src := &fakeSource{
+		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+			return twitch.Page[twitch.Category]{
+				Items: []twitch.Category{{ID: "jc", Name: "Just Chatting"}},
+			}, nil
+		},
+		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]twitch.Channel, error) {
+			return nil, errors.New("upstream down")
+		},
+	}
+
+	m := New(cat,
+		WithSource(src),
+		WithFavorites([]twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
+		WithRecents([]twitch.Channel{{ID: "r-1", Login: "xqc", DisplayName: "xQc"}}),
+	)
+
+	updated, follow := m.Update(m.Init()())
+	m = updated.(Model)
+	if follow != nil {
+		updated, _ = m.Update(follow())
+		m = updated.(Model)
+	}
+
+	if m.Err() != nil {
+		t.Fatalf("hydrate failure must not set model err, got %v", m.Err())
+	}
+	if m.Favorites()[0].Availability != twitch.AvailabilityUnknown {
+		t.Fatalf("favorite changed on failure: %+v", m.Favorites()[0])
+	}
+	if m.Recents()[0].Availability != twitch.AvailabilityUnknown {
+		t.Fatalf("recent changed on failure: %+v", m.Recents()[0])
+	}
+	plain := ansi.Strip(m.View())
+	if !strings.Contains(plain, "[unverified]") {
+		t.Fatalf("expected unverified after hydrate failure:\n%s", plain)
+	}
+	if strings.Contains(plain, "upstream down") {
+		t.Fatalf("hydrate failure must not surface aggressive error text:\n%s", plain)
 	}
 }
 

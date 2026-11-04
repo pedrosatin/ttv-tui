@@ -52,10 +52,19 @@ type Page[T any] struct {
 
 // Source defines the data contract consumed by the UI for browsing categories,
 // channels, and search results without exposing transport or wire details.
+//
+// ChannelsByLogins is a batch availability lookup for saved channels
+// (favorites/recents). It does not replace Search, Channels, or Categories.
 type Source interface {
 	Categories(ctx context.Context, page PageRequest) (Page[Category], error)
 	Channels(ctx context.Context, categoryID string, page PageRequest) (Page[Channel], error)
 	Search(ctx context.Context, query string) (Page[Channel], error)
+	// ChannelsByLogins returns identity and Availability for the given logins
+	// in a single upstream request. Empty logins yields an empty result with
+	// no network call. Logins that do not resolve are omitted so callers keep
+	// AvailabilityUnknown. stream:null is AvailabilityOffline; a stream object
+	// is AvailabilityLive with viewers/title when present.
+	ChannelsByLogins(ctx context.Context, logins []string) ([]Channel, error)
 }
 
 // IntPtr returns a pointer to v.

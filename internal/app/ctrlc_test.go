@@ -27,6 +27,10 @@ func (oneChannelSource) Search(context.Context, string) (twitch.Page[twitch.Chan
 	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{{ID: "ch-pty", Login: "ptychan", DisplayName: "PtyChan"}}}, nil
 }
 
+func (oneChannelSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+	return nil, nil
+}
+
 var ansiSeq = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[@-Z\\-_]`)
 
 // screenSince is the PTY output written after byte offset off, without escape sequences.

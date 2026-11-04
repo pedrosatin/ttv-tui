@@ -92,6 +92,24 @@ const searchQuery = `query($q: String!) {
   }
 }`
 
+// usersByLoginsQuery resolves many channel logins in one round-trip. Twitch
+// accepts up to 100 logins; null array entries mean the login does not exist.
+const usersByLoginsQuery = `query($logins: [String!]!) {
+  users(logins: $logins) {
+    id
+    login
+    displayName
+    stream {
+      id
+      viewersCount
+      title
+    }
+  }
+}`
+
+// maxUsersByLogins is Twitch's documented ceiling for users(logins:).
+const maxUsersByLogins = 100
+
 // GQLConfig configures a GQLSource adapter.
 type GQLConfig struct {
 	Endpoint       string
@@ -326,6 +344,16 @@ type gqlSearchStream struct {
 	Title        *string `json:"title"`
 }
 
+type gqlUsersByLoginsResponse struct {
+	Data   *gqlUsersByLoginsData `json:"data"`
+	Errors []gqlErrorItem        `json:"errors"`
+}
+
+type gqlUsersByLoginsData struct {
+	// Pointers so a missing login (JSON null) becomes a nil entry.
+	Users []*gqlSearchUser `json:"users"`
+}
+
 // Categories fetches a page of live categories ordered by viewer count descending.
 func (s *GQLSource) Categories(ctx context.Context, page PageRequest) (Page[Category], error) {
 	const op = "categories"
@@ -494,6 +522,69 @@ func (s *GQLSource) Search(ctx context.Context, query string) (Page[Channel], er
 	res.Items = PreferSearchChannels(q, res.Items)
 	s.setCachedChannels(cacheKey, res)
 	return res, nil
+}
+
+// ChannelsByLogins fetches Availability for many logins in one GraphQL request.
+// An empty or all-blank logins slice returns nil without contacting the network.
+// Duplicate logins (case-insensitive) are collapsed; at most maxUsersByLogins
+// are sent. Users absent from the response are omitted so the caller keeps
+// AvailabilityUnknown for them.
+func (s *GQLSource) ChannelsByLogins(ctx context.Context, logins []string) ([]Channel, error) {
+	const op = "channelsByLogins"
+
+	if err := ctx.Err(); err != nil {
+		return nil, &Error{
+			Kind: Rede,
+			Op:   op,
+			Err:  fmt.Errorf("context canceled before request: %w", err),
+		}
+	}
+
+	unique := uniqueLogins(logins)
+	if len(unique) == 0 {
+		return nil, nil
+	}
+	if len(unique) > maxUsersByLogins {
+		unique = unique[:maxUsersByLogins]
+	}
+
+	payload, err := json.Marshal(gqlRequest{
+		Query: usersByLoginsQuery,
+		Variables: map[string]any{
+			"logins": unique,
+		},
+	})
+	if err != nil {
+		return nil, &Error{
+			Kind: Contrato,
+			Op:   op,
+			Err:  fmt.Errorf("encode graphql request: %w", err),
+		}
+	}
+
+	res, reqErr := executeWithRetry(s, ctx, op, payload, s.parseUsersByLoginsResponse)
+	if reqErr != nil {
+		return nil, reqErr
+	}
+	return res.Items, nil
+}
+
+// uniqueLogins returns non-empty logins lowercased, first occurrence wins.
+func uniqueLogins(logins []string) []string {
+	seen := make(map[string]struct{}, len(logins))
+	out := make([]string, 0, len(logins))
+	for _, raw := range logins {
+		login := strings.ToLower(strings.TrimSpace(raw))
+		if login == "" {
+			continue
+		}
+		if _, ok := seen[login]; ok {
+			continue
+		}
+		seen[login] = struct{}{}
+		out = append(out, login)
+	}
+	return out
 }
 
 func executeWithRetry[T any](
@@ -919,6 +1010,87 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d stream: %w", i, err),
+			}
+		}
+		items = append(items, ch)
+	}
+
+	return Page[Channel]{
+		Items:   items,
+		Cursor:  "",
+		HasMore: false,
+	}, nil
+}
+
+func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Error) {
+	const op = "channelsByLogins"
+
+	var gqlResp gqlUsersByLoginsResponse
+	if err := json.Unmarshal(body, &gqlResp); err != nil {
+		return Page[Channel]{}, &Error{
+			Kind: Contrato,
+			Op:   op,
+			Err:  fmt.Errorf("decode graphql json: %w", err),
+		}
+	}
+
+	if isIntegrityCheckFailed(gqlResp.Errors) {
+		return Page[Channel]{
+			Items:   []Channel{},
+			Cursor:  "",
+			HasMore: false,
+		}, nil
+	}
+
+	if len(gqlResp.Errors) > 0 {
+		msg := strings.TrimSpace(gqlResp.Errors[0].Message)
+		if msg == "" {
+			msg = "graphql error"
+		}
+		return Page[Channel]{}, &Error{
+			Kind: Contrato,
+			Op:   op,
+			Err:  fmt.Errorf("graphql error: %s", msg),
+		}
+	}
+
+	if gqlResp.Data == nil {
+		return Page[Channel]{}, &Error{
+			Kind: Contrato,
+			Op:   op,
+			Err:  errors.New("missing data.users in graphql response"),
+		}
+	}
+
+	items := make([]Channel, 0, len(gqlResp.Data.Users))
+	for i, user := range gqlResp.Data.Users {
+		if user == nil {
+			// Login did not resolve; omit so the caller keeps unknown.
+			continue
+		}
+		login := strings.TrimSpace(user.Login)
+		displayName := strings.TrimSpace(user.DisplayName)
+		if login == "" || displayName == "" {
+			return Page[Channel]{}, &Error{
+				Kind: Contrato,
+				Op:   op,
+				Err:  fmt.Errorf("user %d missing required identity (login=%q, displayName=%q)", i, login, displayName),
+			}
+		}
+		id := strings.TrimSpace(user.ID)
+		if id == "" {
+			id = login
+		}
+		ch := Channel{
+			ID:          id,
+			Login:       login,
+			DisplayName: displayName,
+		}
+		if err := applySearchStream(&ch, user.Stream); err != nil {
+			return Page[Channel]{}, &Error{
+				Kind: Contrato,
+				Op:   op,
+				Err:  fmt.Errorf("user %d stream: %w", i, err),
 			}
 		}
 		items = append(items, ch)

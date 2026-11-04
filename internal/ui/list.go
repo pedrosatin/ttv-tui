@@ -441,6 +441,7 @@ func (m Model) SelectedChannel() *twitch.Channel {
 func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.tracker.cancelActive()
 	m.generation++
+	m.hydrateGen++
 	m.mode = ModeCategories
 	m.filtering = false
 	m.searching = false
@@ -460,7 +461,7 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.loading = true
-	return m, m.fetchCategoriesCmd(m.generation, "", false)
+	return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
 }
 
 func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
@@ -469,6 +470,7 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 	}
 	m.tracker.cancelActive()
 	m.generation++
+	m.hydrateGen++
 	m.loading = true
 	m.err = nil
 	m.nextCursor = ""
@@ -477,18 +479,18 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 	switch m.Mode() {
 	case ModeChannels:
 		if m.selectedCategory != nil {
-			return m, m.fetchChannelsCmd(m.generation, *m.selectedCategory, "", false)
+			return m, m.withHydrate(m.fetchChannelsCmd(m.generation, *m.selectedCategory, "", false))
 		}
 		m.mode = ModeCategories
-		return m, m.fetchCategoriesCmd(m.generation, "", false)
+		return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
 	case ModeSearch:
 		if strings.TrimSpace(m.searchQuery) != "" {
-			return m, m.fetchSearchCmd(m.generation, m.searchQuery)
+			return m, m.withHydrate(m.fetchSearchCmd(m.generation, m.searchQuery))
 		}
 		m.mode = ModeCategories
-		return m, m.fetchCategoriesCmd(m.generation, "", false)
+		return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
 	default:
-		return m, m.fetchCategoriesCmd(m.generation, "", false)
+		return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
 	}
 }
 
@@ -837,6 +839,67 @@ func (m Model) fetchChannelsCmd(gen uint64, cat twitch.Category, cursor string, 
 			Category:   cat,
 			Page:       page,
 			Append:     appendPage,
+			Err:        err,
+		}
+	}
+}
+
+// withHydrate batches cmd with a favorites/recents availability lookup when
+// there is anything to hydrate. Hydration uses its own generation and does not
+// share the request tracker, so it never cancels catalog fetches.
+func (m Model) withHydrate(cmd tea.Cmd) tea.Cmd {
+	hydrate := m.fetchHydrateCmd(m.hydrateGen)
+	switch {
+	case cmd == nil:
+		return hydrate
+	case hydrate == nil:
+		return cmd
+	default:
+		return tea.Batch(cmd, hydrate)
+	}
+}
+
+// savedLogins returns unique non-empty logins from favorites and recents.
+func (m Model) savedLogins() []string {
+	seen := make(map[string]struct{}, len(m.favorites)+len(m.recents))
+	out := make([]string, 0, len(m.favorites)+len(m.recents))
+	add := func(ch twitch.Channel) {
+		login := strings.TrimSpace(ch.Login)
+		if login == "" {
+			return
+		}
+		key := strings.ToLower(login)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, login)
+	}
+	for _, ch := range m.favorites {
+		add(ch)
+	}
+	for _, ch := range m.recents {
+		add(ch)
+	}
+	return out
+}
+
+// fetchHydrateCmd looks up Availability for favorites and recents in one batch.
+// An empty saved set returns nil so no request is issued.
+func (m Model) fetchHydrateCmd(gen uint64) tea.Cmd {
+	src := m.source
+	if src == nil {
+		return nil
+	}
+	logins := m.savedLogins()
+	if len(logins) == 0 {
+		return nil
+	}
+	return func() tea.Msg {
+		channels, err := src.ChannelsByLogins(context.Background(), logins)
+		return SavedAvailabilityMsg{
+			Generation: gen,
+			Channels:   channels,
 			Err:        err,
 		}
 	}
