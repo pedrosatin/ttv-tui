@@ -323,6 +323,31 @@ func (m Model) isPlayingChannel(ch twitch.Channel) bool {
 	}
 }
 
+// markChannelOffline records explicit offline evidence for login in the
+// channels listing, favorites and recents. Only the matching channel is
+// touched: viewers of other channels stay intact. The slices are copied so
+// earlier Model values that share a backing array are not mutated.
+func (m *Model) markChannelOffline(login string) {
+	if strings.TrimSpace(login) == "" {
+		return
+	}
+	apply := func(chs []twitch.Channel) []twitch.Channel {
+		out := make([]twitch.Channel, len(chs))
+		copy(out, chs)
+		for i := range out {
+			if !strings.EqualFold(out[i].Login, login) {
+				continue
+			}
+			out[i].Availability = twitch.AvailabilityOffline
+			out[i].Viewers = nil
+		}
+		return out
+	}
+	m.channels = apply(m.channels)
+	m.favorites = apply(m.favorites)
+	m.recents = apply(m.recents)
+}
+
 // refreshSavedAvailability copies the stream state of freshly loaded channels
 // into the matching favorites and recents, so the evidence survives leaving the
 // listing. Identity is preserved; only availability, viewers and title change.

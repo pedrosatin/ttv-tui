@@ -216,3 +216,191 @@ func TestRetryKeyRestartsFailedPlayback(t *testing.T) {
 		t.Fatalf("generation after retry = %d, want 2", m.PlayerGeneration())
 	}
 }
+
+// liveChannel seeds a channel that still looks live in the listing (stale
+// viewers) so an offline play failure can correct it.
+func liveChannel(id, login, display string, viewers int) twitch.Channel {
+	return twitch.Channel{
+		ID:           id,
+		Login:        login,
+		DisplayName:  display,
+		Viewers:      twitch.IntPtr(viewers),
+		Title:        twitch.StringPtr("Live now"),
+		Availability: twitch.AvailabilityLive,
+	}
+}
+
+func channelByLogin(chs []twitch.Channel, login string) (twitch.Channel, bool) {
+	for _, ch := range chs {
+		if strings.EqualFold(ch.Login, login) {
+			return ch, true
+		}
+	}
+	return twitch.Channel{}, false
+}
+
+// setupStaleLiveListing builds a channels-mode model with xqc live in the
+// listing, favorites and recents, plus another live channel whose viewers
+// must survive an offline failure for xqc.
+func setupStaleLiveListing(t *testing.T) Model {
+	t.Helper()
+	catEN, err := i18n.New(i18n.LangEN)
+	if err != nil {
+		t.Fatalf("i18n.New: %v", err)
+	}
+	pb := &fakePlayback{}
+	xqc := liveChannel("xqc-id", "xqc", "xQc", 13000)
+	gaules := liveChannel("gaules-id", "gaules", "Gaules", 8500)
+	m := New(catEN,
+		WithPlayback(pb),
+		WithFavorites([]twitch.Channel{xqc, gaules}),
+		WithRecents([]twitch.Channel{xqc}),
+	)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
+	m = updated.(Model)
+	m.mode = ModeChannels
+	m.channels = []twitch.Channel{xqc, gaules}
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: xqc})
+	m = updated.(Model)
+	m = drainCmd(t, m, cmd)
+	if m.PlayerGeneration() != 1 || m.PlayerLogin() != "xqc" {
+		t.Fatalf("after select: gen=%d login=%q", m.PlayerGeneration(), m.PlayerLogin())
+	}
+	return m
+}
+
+func TestOfflinePlayFailureMarksChannelOfflineInListFavoritesRecents(t *testing.T) {
+	m := setupStaleLiveListing(t)
+	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
+
+	assertOfflineCleared := func(t *testing.T, where string, ch twitch.Channel) {
+		t.Helper()
+		if ch.Availability != twitch.AvailabilityOffline {
+			t.Fatalf("%s availability = %v, want offline", where, ch.Availability)
+		}
+		if ch.Viewers != nil {
+			t.Fatalf("%s viewers = %v, want nil after offline evidence", where, *ch.Viewers)
+		}
+	}
+
+	ch, ok := channelByLogin(m.Channels(), "xqc")
+	if !ok {
+		t.Fatal("xqc missing from channels listing")
+	}
+	assertOfflineCleared(t, "channels", ch)
+
+	fav, ok := channelByLogin(m.Favorites(), "xqc")
+	if !ok {
+		t.Fatal("xqc missing from favorites")
+	}
+	assertOfflineCleared(t, "favorites", fav)
+
+	rec, ok := channelByLogin(m.Recents(), "xqc")
+	if !ok {
+		t.Fatal("xqc missing from recents")
+	}
+	assertOfflineCleared(t, "recents", rec)
+
+	byLogin := map[string]ListItem{}
+	for _, it := range m.VisibleItems() {
+		byLogin[strings.ToLower(it.Login())] = it
+	}
+	if !byLogin["xqc"].Offline() {
+		t.Fatalf("visible xqc availability = %v, want offline", byLogin["xqc"].Availability)
+	}
+
+	plain := ansi.Strip(m.View())
+	if !strings.Contains(plain, "xQc (xqc) — [offline]") {
+		t.Fatalf("view must show [offline] without stale viewers:\n%s", plain)
+	}
+	if strings.Contains(plain, "13.0k") || strings.Contains(plain, "13k") {
+		t.Fatalf("stale viewers for offline channel still rendered:\n%s", plain)
+	}
+}
+
+func TestNetworkOrTimeoutFailureDoesNotChangeAvailability(t *testing.T) {
+	for _, f := range []PlayerFailure{PlayerFailureNetwork, PlayerFailureTimeout, PlayerFailureUnknown} {
+		t.Run(string(f), func(t *testing.T) {
+			m := setupStaleLiveListing(t)
+			beforeCh := m.Channels()
+			beforeFav := m.Favorites()
+			beforeRec := m.Recents()
+
+			m = failWith(t, m, 1, f, "error: Unable to open URL")
+
+			ch, _ := channelByLogin(m.Channels(), "xqc")
+			if ch.Availability != twitch.AvailabilityLive || ch.Viewers == nil || *ch.Viewers != 13000 {
+				t.Fatalf("channels xqc changed on %s: %+v", f, ch)
+			}
+			fav, _ := channelByLogin(m.Favorites(), "xqc")
+			if fav.Availability != twitch.AvailabilityLive || fav.Viewers == nil || *fav.Viewers != 13000 {
+				t.Fatalf("favorites xqc changed on %s: %+v", f, fav)
+			}
+			rec, _ := channelByLogin(m.Recents(), "xqc")
+			if rec.Availability != twitch.AvailabilityLive || rec.Viewers == nil || *rec.Viewers != 13000 {
+				t.Fatalf("recents xqc changed on %s: %+v", f, rec)
+			}
+			if len(m.Channels()) != len(beforeCh) || len(m.Favorites()) != len(beforeFav) || len(m.Recents()) != len(beforeRec) {
+				t.Fatalf("%s altered collection sizes", f)
+			}
+		})
+	}
+}
+
+func TestStaleOfflineFailureDoesNotMarkCurrentChannel(t *testing.T) {
+	m := setupStaleLiveListing(t)
+
+	// Switch to gaules: generation 2 starts.
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: liveChannel("gaules-id", "gaules", "Gaules", 8500)})
+	m = updated.(Model)
+	m = drainCmd(t, m, cmd)
+	updated, _ = m.Update(PlayerStatusMsg{Generation: 2, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m = updated.(Model)
+
+	// Late offline failure from xqc (generation 1) must be ignored.
+	updated, _ = m.Update(PlayerStatusMsg{
+		Generation: 1,
+		State:      PlayerStateError,
+		Login:      "xqc",
+		LastLine:   offlineLine,
+		Failure:    PlayerFailureOffline,
+	})
+	m = updated.(Model)
+
+	if m.PlayerState() != PlayerStatePlaying || m.PlayerLogin() != "gaules" {
+		t.Fatalf("stale failure affected player: state=%q login=%q", m.PlayerState(), m.PlayerLogin())
+	}
+	ch, _ := channelByLogin(m.Channels(), "xqc")
+	if ch.Availability != twitch.AvailabilityLive || ch.Viewers == nil || *ch.Viewers != 13000 {
+		t.Fatalf("stale offline marked xqc offline: %+v", ch)
+	}
+	fav, _ := channelByLogin(m.Favorites(), "xqc")
+	if fav.Availability != twitch.AvailabilityLive || fav.Viewers == nil {
+		t.Fatalf("stale offline marked favorite xqc: %+v", fav)
+	}
+}
+
+func TestOfflinePlayFailurePreservesOtherChannelViewers(t *testing.T) {
+	m := setupStaleLiveListing(t)
+	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
+
+	other, ok := channelByLogin(m.Channels(), "gaules")
+	if !ok {
+		t.Fatal("gaules missing from channels")
+	}
+	if other.Availability != twitch.AvailabilityLive || other.Viewers == nil || *other.Viewers != 8500 {
+		t.Fatalf("other channel viewers changed: %+v", other)
+	}
+	favOther, ok := channelByLogin(m.Favorites(), "gaules")
+	if !ok {
+		t.Fatal("gaules missing from favorites")
+	}
+	if favOther.Availability != twitch.AvailabilityLive || favOther.Viewers == nil || *favOther.Viewers != 8500 {
+		t.Fatalf("favorite other channel viewers changed: %+v", favOther)
+	}
+
+	plain := ansi.Strip(m.View())
+	if !strings.Contains(plain, "8.5k") {
+		t.Fatalf("gaules viewers must remain visible:\n%s", plain)
+	}
+}

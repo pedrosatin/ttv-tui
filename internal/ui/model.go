@@ -539,6 +539,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.State == PlayerStateError {
 			m.playerFailure = msg.Failure
+			// A classified offline failure is fresh evidence for this channel:
+			// the listing may still show stale viewers from before play.
+			if msg.Failure == PlayerFailureOffline {
+				m.markChannelOffline(m.playerLogin)
+			}
 		} else {
 			m.playerFailure = PlayerFailureNone
 		}
