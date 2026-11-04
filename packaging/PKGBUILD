@@ -13,10 +13,9 @@ pkgdesc="Twitch no terminal: navegue por categorias, assista canais e converse n
 arch=('x86_64' 'aarch64')
 url="https://github.com/pedrosatin/ttv-tui"
 license=('MIT')
-depends=('sqlite')
+depends=('streamlink' 'mpv')
 optdepends=(
-  'streamlink: reproduzir lives (sem ele não há vídeo)'
-  'mpv: player de vídeo do streamlink (sem ele não há vídeo)'
+  'sqlite: necessário apenas para ttv-tui login --from-browser'
 )
 provides=('ttv-tui')
 conflicts=('ttv-tui')

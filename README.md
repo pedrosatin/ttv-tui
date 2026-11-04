@@ -55,10 +55,15 @@ CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.0" -o ~/.local/bin/tt
 
 ## Requirements
 
+### Required (video playback)
+
 - Linux.
-- `streamlink` in `PATH` to negotiate stream playback and filter ad segments.
-- `mpv` in `PATH` to decode and display video in its own window while exposing a local JSON IPC socket.
-- `sqlite3` in `PATH`. `ttv-tui` runs the `sqlite3` command-line binary to copy and query your browser's cookie database during `ttv-tui login --from-browser` (using SQLite's online `.backup` command so an open browser lock is not contested).
+- `streamlink` in `PATH` to negotiate stream playback and filter ad segments (without it, there is no video).
+- `mpv` in `PATH` to decode and display video in its own window while exposing a local JSON IPC socket (without it, there is no video).
+
+### Optional (login and chat)
+
+- `sqlite3` in `PATH`. `ttv-tui` runs the `sqlite3` command-line binary only during `ttv-tui login --from-browser` to copy and query your browser's cookie database (using SQLite's online `.backup` command so an open browser lock is not contested). Not needed if you browse and watch anonymously or import tokens via `ttv-tui login --import twt`.
 - A supported browser logged into `twitch.tv` (Brave, Chrome, Chromium, Edge, Vivaldi, Opera, or Firefox) if you want to send chat messages. For Chromium-family browsers, `secret-tool` (`libsecret`) must also be in `PATH` to read the OSCrypt key from the desktop keyring. Browsing categories, watching streams, and reading chat work anonymously without logging in.
 
 ## Quick start

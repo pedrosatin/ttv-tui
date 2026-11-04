@@ -53,8 +53,15 @@ CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.0" -o ~/.local/bin/tt
 
 ## Requisitos
 
+### Obrigatórios (reprodução de vídeo)
+
 - Linux (testado no Omarchy/Hyprland).
-- `streamlink`, `mpv` e `sqlite3` no `PATH` (o app executa o binário `sqlite3` para copiar e consultar o banco de cookies do navegador sem disputar lock).
+- `streamlink` no `PATH` para negociar o stream e filtrar anúncios (sem ele não há vídeo).
+- `mpv` no `PATH` para decodificar e exibir o vídeo com controle IPC (sem ele não há vídeo).
+
+### Opcionais (login e chat)
+
+- `sqlite3` no `PATH`: necessário apenas para `ttv-tui login --from-browser` (o app executa o binário `sqlite3` para copiar e consultar o banco de cookies do navegador sem disputar lock). Não é necessário para navegar/assistir anonimamente nem para `ttv-tui login --import twt`.
 - Um navegador suportado logado na Twitch (Brave, Chrome, Chromium, Edge, Vivaldi, Opera ou Firefox) apenas para enviar mensagens no chat; navegar pelas categorias, assistir aos vídeos e ler o chat funcionam de forma anônima. Em navegadores da família Chromium, `secret-tool` (`libsecret`) também é necessário no `PATH` para descriptografar o cookie via keyring.
 
 ## Uso rápido
