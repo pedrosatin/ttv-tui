@@ -42,11 +42,13 @@ type errWriter struct{ err error }
 
 func (w errWriter) Write([]byte) (int, error) { return 0, w.err }
 
-// forceOSCClipboardEnv clears display env so writeClipboard skips helpers.
+// forceOSCClipboardEnv clears display env and isolates PATH so writeClipboard
+// skips helpers and cannot resolve real wl-copy/xclip binaries.
 func forceOSCClipboardEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("WAYLAND_DISPLAY", "")
 	t.Setenv("DISPLAY", "")
+	t.Setenv("PATH", t.TempDir())
 }
 
 // flushCopy runs the copy cmd, feeds copyResultMsg back into Update, and
@@ -580,6 +582,9 @@ func TestCopyAllPathsFailShowsError(t *testing.T) {
 }
 
 func TestWriteClipboard_PersistsViaRealHelperSmoke(t *testing.T) {
+	if os.Getenv("TTV_REAL_CLIPBOARD") != "1" {
+		t.Skip("set TTV_REAL_CLIPBOARD=1 to run real clipboard helper smoke")
+	}
 	// Optional machine smoke: real wl-copy then wl-paste. Skips when the
 	// desktop clipboard tools are unavailable.
 	if testing.Short() {
