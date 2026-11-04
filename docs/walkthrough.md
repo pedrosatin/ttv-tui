@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · [Português (Brasil)](README.pt-BR.md)
 
-This guide walks through a complete session with `ttv-tui` `v0.1.0` on Linux: installing the binary and its runtime tools, authenticating with your browser session, browsing categories, opening your first stream, switching channels, using chat and favorites, handling narrow terminal widths, and exiting cleanly.
+This guide walks through a complete session with `ttv-tui` `v0.1.1` on Linux: installing the binary and its runtime tools, authenticating with your browser session, browsing categories, opening your first stream, switching channels, using chat and favorites, handling narrow terminal widths, and exiting cleanly.
 
 ## 1. Install `ttv-tui` and dependencies
 
@@ -16,16 +16,16 @@ sudo pacman -S streamlink mpv sqlite libsecret
 sudo apt install streamlink mpv sqlite3 libsecret-tools
 ```
 
-Download the `v0.1.0` release archive for your CPU architecture (`amd64` or `arm64`), verify its SHA-256 checksum against `checksums.txt`, and unpack `ttv-tui` into `~/.local/bin`:
+Download the `v0.1.1` release archive for your CPU architecture (`amd64` or `arm64`), verify its SHA-256 checksum against `checksums.txt`, and unpack `ttv-tui` into `~/.local/bin`:
 
 ```bash
 ARCH=amd64 # or arm64
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.0/ttv-tui_0.1.0_linux_${ARCH}.tar.gz"
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.0/checksums.txt"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.1/ttv-tui_0.1.1_linux_${ARCH}.tar.gz"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.1/checksums.txt"
 sha256sum --ignore-missing -c checksums.txt
 
 mkdir -p ~/.local/bin
-tar -xzf "ttv-tui_0.1.0_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
+tar -xzf "ttv-tui_0.1.1_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
 ```
 
 Verify the binary and its CLI flags:
