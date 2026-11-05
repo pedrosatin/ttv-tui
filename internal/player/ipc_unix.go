@@ -4,9 +4,16 @@ package player
 
 import (
 	"errors"
+	"net"
 	"os"
 	"syscall"
+	"time"
 )
+
+// dialIPCOnce makes one attempt to connect to the socket file at endpoint.
+func dialIPCOnce(endpoint string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("unix", endpoint, timeout)
+}
 
 // platformIPCPeerGone reports peer-gone errors that only exist on this OS.
 // Unix has none beyond ECONNRESET, EPIPE and ECONNABORTED, which

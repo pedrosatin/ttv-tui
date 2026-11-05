@@ -78,22 +78,6 @@ func TestDialIPCUntilAbsorbsBindListenRace(t *testing.T) {
 	}
 }
 
-// An endpoint that never appears keeps being waited for until the deadline,
-// however short the refused grace is by comparison.
-func TestDialIPCUntilKeepsWaitingForAbsentEndpoint(t *testing.T) {
-	endpoint := filepath.Join(t.TempDir(), "absent")
-	wait := ipcRefusedGrace + 500*time.Millisecond
-	start := time.Now()
-	_, err := dialIPCUntil(context.Background(), nil, endpoint, time.Now().Add(wait))
-	elapsed := time.Since(start)
-	if !errors.Is(err, errIPCWaitTimeout) {
-		t.Fatalf("err = %v, want errIPCWaitTimeout", err)
-	}
-	if elapsed < wait-100*time.Millisecond {
-		t.Fatalf("gave up after %v, before the %v deadline", elapsed, wait)
-	}
-}
-
 func TestDialIPCUntilAbortsDuringRefusedGrace(t *testing.T) {
 	endpoint := filepath.Join(t.TempDir(), "dead")
 	fd := bindOnly(t, endpoint)

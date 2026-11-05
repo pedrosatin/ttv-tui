@@ -1,6 +1,7 @@
 package player
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,13 +41,88 @@ func TestPipeNameHasNoSeparators(t *testing.T) {
 	if pipeName("/a/1-x", 7) == pipeName("/a/1-y", 7) {
 		t.Error("two session directories share a pipe name")
 	}
+	if pipeName("/a/1-x", 7) == pipeName("/a/1-x", 8) {
+		t.Error("two processes share a pipe name")
+	}
+	// The name reaches mpv through streamlink's shlex: it has to survive unquoted.
+	for _, dir := range []string{"/run/ttv-tui/3-123456", "/tmp/ttv-tui-42-3"} {
+		name := pipeName(dir, 42)
+		if got := quotePlayerArg(name); got != name {
+			t.Errorf("pipeName(%q) = %q needs quoting: %q", dir, name, got)
+		}
+	}
+}
+
+// unusableRuntimeDir cannot be created on any OS: a file sits where its parent
+// should be.
+func unusableRuntimeDir(t *testing.T) string {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	return filepath.Join(file, "run")
+}
+
+// useTempDir points os.TempDir at dir on every OS.
+func useTempDir(t *testing.T, dir string) {
+	t.Helper()
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, dir)
+	}
+}
+
+func TestFallbackGoesToOSTempDir(t *testing.T) {
+	base := t.TempDir()
+	useTempDir(t, base)
+	for name, runtimeDir := range map[string]string{
+		"unusable": unusableRuntimeDir(t),
+		"empty":    "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			l, err := prepareSession(runtimeDir, 7)
+			if err != nil {
+				t.Fatalf("prepareSession: %v", err)
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(l.Dir) })
+			want := filepath.Join(base, fmt.Sprintf("ttv-tui-%d-7", os.Getpid()))
+			if l.Dir != want {
+				t.Fatalf("Dir = %q, want %q", l.Dir, want)
+			}
+			if fi, err := os.Stat(l.Dir); err != nil || !fi.IsDir() {
+				t.Fatalf("fallback directory: %v, %v", fi, err)
+			}
+		})
+	}
+}
+
+// The base is read at use, not frozen at startup.
+func TestFallbackBaseFollowsTempDir(t *testing.T) {
+	first, second := t.TempDir(), t.TempDir()
+	useTempDir(t, first)
+	if got := getFallbackBaseDir(); got != first {
+		t.Fatalf("base = %q, want %q", got, first)
+	}
+	useTempDir(t, second)
+	if got := getFallbackBaseDir(); got != second {
+		t.Fatalf("base = %q, want %q", got, second)
+	}
+	override := t.TempDir()
+	restore := setFallbackBaseDirForTest(override)
+	if got := getFallbackBaseDir(); got != override {
+		t.Fatalf("base = %q, want the override %q", got, override)
+	}
+	restore()
+	if got := getFallbackBaseDir(); got != second {
+		t.Fatalf("base after restore = %q, want %q", got, second)
+	}
 }
 
 // The directory and the endpoint share no root: input.conf must still land in
 // the directory, the command must get the endpoint as given, and cleanup must
 // remove the directory and the endpoint without touching the endpoint's parent.
 func TestSessionKeepsDirAndEndpointSeparate(t *testing.T) {
-	skipWithoutSessionIPC(t)
+	skipWithoutSocketFile(t)
 	dir := filepath.Join(t.TempDir(), "sd")
 	epRoot := filepath.Join(t.TempDir(), "ep")
 	for _, d := range []string{dir, epRoot} {

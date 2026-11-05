@@ -18,7 +18,8 @@ import (
 
 // This test file never invokes real streamlink or mpv. Instead, when
 // TTV_PLAYER_HELPER is set, the test binary re-executes itself as a helper
-// that mimics streamlink (stdout/stderr lines) and mpv (Unix IPC JSON).
+// that mimics streamlink (stdout/stderr lines) and mpv (IPC JSON, on a Unix socket
+// or a named pipe through listenEndpoint).
 // Production Manager.Command is replaced with helperCommand in each test.
 
 func TestMain(m *testing.M) {
@@ -42,32 +43,27 @@ func helperCommand(mode string) CommandFunc {
 	}
 }
 
-// fakeMPVModes are the helper modes that listen on the IPC endpoint.
-var fakeMPVModes = map[string]bool{
-	"play":                       true,
+// processTreeModes are the helper modes whose test is about descendants of the
+// spawned process. Windows only stops that one process until the Job Object
+// exists, so they wait for it.
+var processTreeModes = map[string]bool{
 	"play-child":                 true,
-	"play-control":               true,
-	"ad-then-play":               true,
-	"socket-no-listener":         true,
-	"ignore-term":                true,
-	"socket-eof":                 true,
-	"exit-after-play":            true,
 	"term-parent-stubborn-child": true,
 }
 
-// skipWithoutSessionIPC skips a test that needs a session to reach the fake mpv:
-// on Windows the endpoint is a pipe name that dialIPCOnce cannot dial yet.
-func skipWithoutSessionIPC(t *testing.T) {
+// skipWithoutSocketFile skips a test about the endpoint being a path: the socket
+// file's length limit, its place in a directory. A named pipe has neither.
+func skipWithoutSocketFile(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("session IPC needs the named-pipe dial (v1.8 ticket 08)")
+		t.Skip("the Windows endpoint is a pipe name, not a file")
 	}
 }
 
 func newTestManager(t *testing.T, mode string, opts Options) *Manager {
 	t.Helper()
-	if fakeMPVModes[mode] {
-		skipWithoutSessionIPC(t)
+	if processTreeModes[mode] && runtime.GOOS == "windows" {
+		t.Skip("needs the Job Object to see descendants (v1.8 ticket 09)")
 	}
 	opts.Command = helperCommand(mode)
 	if opts.RuntimeDir == "" {
@@ -303,15 +299,15 @@ func TestSocketRemovedAfterExit(t *testing.T) {
 	if socket == "" {
 		t.Fatal("expected socket path")
 	}
-	if _, err := os.Stat(socket); err != nil {
-		t.Fatalf("socket should exist during play: %v", err)
+	if !endpointPresent(socket) {
+		t.Fatalf("socket should exist: %s", socket)
 	}
 
 	mgr.Stop()
 	time.Sleep(100 * time.Millisecond)
 
-	if _, err := os.Stat(socket); !os.IsNotExist(err) {
-		t.Fatalf("socket still present after Stop: %v", err)
+	if !endpointGone(socket) {
+		t.Fatalf("socket still present after Stop: %s", socket)
 	}
 	if sessionDir != "" {
 		if _, err := os.Stat(sessionDir); !os.IsNotExist(err) {
@@ -681,7 +677,7 @@ func helperPlay(socket, login string, withChild bool, opts helperIPCOptions) {
 
 	go helperAdScript(os.Getenv("TTV_PLAYER_HELPER_ADS"))
 
-	ln, err := net.Listen("unix", socket)
+	ln, err := listenEndpoint(socket)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
@@ -729,7 +725,7 @@ func helperAdScript(script string) {
 }
 
 func helperExitAfterPlay(socket string) {
-	ln, err := net.Listen("unix", socket)
+	ln, err := listenEndpoint(socket)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
@@ -844,7 +840,7 @@ func serveFakeMPV(conn net.Conn, delay time.Duration, opts helperIPCOptions) {
 
 func helperIgnoreTerm(socket string) {
 	signal.Ignore(syscall.SIGTERM)
-	ln, err := net.Listen("unix", socket)
+	ln, err := listenEndpoint(socket)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
@@ -864,7 +860,7 @@ func helperIgnoreTerm(socket string) {
 }
 
 func helperSocketEOF(socket string) {
-	ln, err := net.Listen("unix", socket)
+	ln, err := listenEndpoint(socket)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
@@ -1284,8 +1280,8 @@ func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
 	_ = waitForState(t, mgr.Events(), gen, StateEnded, 5*time.Second)
 
 	time.Sleep(100 * time.Millisecond)
-	if _, err := os.Stat(socket); !os.IsNotExist(err) {
-		t.Fatalf("socket still present: %v", err)
+	if !endpointGone(socket) {
+		t.Fatalf("socket still present: %s", socket)
 	}
 	if pid > 0 {
 		if pidExists(pid) {
@@ -1443,20 +1439,37 @@ func TestRealStreamlinkSmoke(t *testing.T) {
 		}
 	}
 	if socket != "" {
-		if _, err := os.Stat(socket); !os.IsNotExist(err) {
-			t.Fatalf("socket still present: %v", err)
+		if !endpointGone(socket) {
+			t.Fatalf("socket still present: %s", socket)
 		}
 	}
 }
 
 func TestLongRuntimeDirFallsBackAndCleansUp(t *testing.T) {
+	skipWithoutSocketFile(t)
 	longDir := filepath.Join(t.TempDir(), strings.Repeat("long-component/", 16))
 	if len(longDir) < 200 {
 		t.Fatalf("expected longDir >= 200 bytes, got %d", len(longDir))
 	}
+	base := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", longDir)
-	t.Setenv("TMPDIR", longDir)
+	useTempDir(t, base)
+	assertLongRuntimeDirFallsBackTo(t, longDir, base)
+}
 
+// Nothing the environment names fits, $TMPDIR included: the session still starts.
+func TestLongRuntimeAndTempDirsFallBackToShortBase(t *testing.T) {
+	skipWithoutSocketFile(t)
+	longDir := filepath.Join(t.TempDir(), strings.Repeat("long-component/", 16))
+	t.Setenv("XDG_RUNTIME_DIR", longDir)
+	useTempDir(t, longDir)
+	assertLongRuntimeDirFallsBackTo(t, longDir, shortFallbackBaseDir)
+}
+
+// assertLongRuntimeDirFallsBackTo plays a session whose runtime directory cannot
+// hold the socket, and checks that it lands under base and leaves nothing behind.
+func assertLongRuntimeDirFallsBackTo(t *testing.T, longDir, base string) {
+	t.Helper()
 	mgr := newTestManager(t, "play", Options{RuntimeDir: longDir})
 	gen, err := mgr.Start("longchan")
 	if err != nil {
@@ -1482,18 +1495,18 @@ func TestLongRuntimeDirFallsBackAndCleansUp(t *testing.T) {
 		t.Fatalf("socket path length %d > %d: %s", len(socket), maxSocketPathLen, socket)
 	}
 
-	if !strings.HasPrefix(sessionDir, getFallbackBaseDir()) {
-		t.Fatalf("expected sessionDir to fall back under %s, got %s", getFallbackBaseDir(), sessionDir)
+	if filepath.Dir(sessionDir) != base {
+		t.Fatalf("expected sessionDir to fall back under %s, got %s", base, sessionDir)
 	}
 
-	if _, err := os.Stat(socket); err != nil {
-		t.Fatalf("socket should exist during playback: %v", err)
+	if !endpointPresent(socket) {
+		t.Fatalf("socket should exist: %s", socket)
 	}
 
 	mgr.Stop()
 	time.Sleep(100 * time.Millisecond)
 
-	if _, err := os.Stat(socket); !os.IsNotExist(err) {
+	if !endpointGone(socket) {
 		t.Fatalf("socket still exists after Stop: %s", socket)
 	}
 	if _, err := os.Stat(sessionDir); !os.IsNotExist(err) {
@@ -1502,7 +1515,7 @@ func TestLongRuntimeDirFallsBackAndCleansUp(t *testing.T) {
 }
 
 func TestLongRuntimeDirDefaultEnvFallsBack(t *testing.T) {
-	skipWithoutSessionIPC(t)
+	skipWithoutSocketFile(t)
 	longDir := filepath.Join(t.TempDir(), strings.Repeat("xdg-long/", 25))
 	if len(longDir) < 200 {
 		t.Fatalf("expected longDir >= 200 bytes, got %d", len(longDir))
@@ -1534,14 +1547,14 @@ func TestLongRuntimeDirDefaultEnvFallsBack(t *testing.T) {
 	if len(socket) > maxSocketPathLen {
 		t.Fatalf("socket length %d > %d", len(socket), maxSocketPathLen)
 	}
-	if _, err := os.Stat(socket); err != nil {
-		t.Fatalf("socket should exist: %v", err)
+	if !endpointPresent(socket) {
+		t.Fatalf("socket should exist: %s", socket)
 	}
 
 	mgr.Stop()
 	time.Sleep(100 * time.Millisecond)
 
-	if _, err := os.Stat(socket); !os.IsNotExist(err) {
+	if !endpointGone(socket) {
 		t.Fatalf("socket still exists after Stop: %s", socket)
 	}
 	if _, err := os.Stat(sessionDir); !os.IsNotExist(err) {
@@ -1550,7 +1563,9 @@ func TestLongRuntimeDirDefaultEnvFallsBack(t *testing.T) {
 }
 
 func TestFallbackNotWritableReturnsError(t *testing.T) {
-	skipWithoutSessionIPC(t)
+	if runtime.GOOS == "windows" {
+		t.Skip("Chmod cannot make a Windows directory read-only")
+	}
 	roBase, err := os.MkdirTemp("/tmp", "ro-fallback-*")
 	if err != nil {
 		t.Fatalf("create roBase: %v", err)

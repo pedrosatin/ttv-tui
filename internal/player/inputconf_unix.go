@@ -19,3 +19,9 @@ func checkDirPrivacy(dir string, fi os.FileInfo) error {
 	}
 	return nil
 }
+
+// checkInputConfTarget accepts anything: writeInputConf removes what is at path
+// and O_EXCL never follows a link left there.
+func checkInputConfTarget(string) error {
+	return nil
+}

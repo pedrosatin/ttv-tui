@@ -40,7 +40,8 @@ jobs:
         run: go test -race -count=1 ./internal/player ./internal/chat ./internal/ui ./internal/store
 
   # Proves on every push that the app and its tests compile on each OS, and that
-  # the suite runs there. No job needs mpv, streamlink or the network.
+  # the suite runs there. The suite needs neither mpv nor streamlink; only the
+  # Windows handshake step below uses a real mpv.
   portability:
     name: Build & Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -81,6 +82,22 @@ jobs:
 
       - name: Run tests
         run: go test -count=1 ./...
+
+      # Installing depends on a third-party mirror, so a failed install only skips
+      # the check. Once mpv is there, a failed handshake fails the job.
+      - name: Install mpv
+        id: mpv
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        timeout-minutes: 4
+        run: choco install mpv --no-progress -y
+
+      - name: Run the IPC handshake against a real mpv
+        if: runner.os == 'Windows' && steps.mpv.outcome == 'success'
+        timeout-minutes: 3
+        env:
+          TTV_TEST_REAL_MPV: "1"
+        run: go test -count=1 -v -run '^TestRealMPVHandshake$' ./internal/player
 
       # go test hides t.Logf of a passing test, so this step prints what the kernel
       # answered whether the run above passed or not.

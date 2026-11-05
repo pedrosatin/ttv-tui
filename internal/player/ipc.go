@@ -63,21 +63,13 @@ var (
 	errIPCNoListener = errors.New("player: ipc endpoint exists but nothing listens on it")
 )
 
-// dialIPCOnce makes one attempt to connect to the endpoint.
-//
-// STUB: Unix sockets only. The Windows named-pipe dial arrives with v1.8
-// ticket 08, which replaces this one function; dialIPCUntil does not change.
-func dialIPCOnce(endpoint string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("unix", endpoint, timeout)
-}
-
 // dialIPCUntil dials endpoint until it connects. Readiness is the successful
 // dial itself, never the existence of a file: that is the only test that works
 // the same for a socket file and a named pipe. It gives up with
 // errIPCWaitTimeout once deadline passes, or with errIPCWaitAborted when ctx is
 // done or gone is closed. An endpoint that is absent (or busy) is waited for
 // until deadline; one that is present but keeps refusing connections fails
-// with errIPCNoListener after ipcRefusedGrace instead.
+// with errIPCNoListener after ipcRefusedGrace instead. dialIPCOnce is per OS.
 func dialIPCUntil(ctx context.Context, gone <-chan struct{}, endpoint string, deadline time.Time) (net.Conn, error) {
 	var last error
 	var refusedSince time.Time // zero while the endpoint is not present-and-refusing

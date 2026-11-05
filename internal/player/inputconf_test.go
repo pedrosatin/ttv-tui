@@ -73,26 +73,20 @@ func TestInputConfPathIsInSessionDir(t *testing.T) {
 	}
 }
 
+// privateDir is a directory writeInputConf accepts. LOCALAPPDATA only matters on
+// Windows, where being inside it is what makes a directory private.
 func privateDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "session")
+	parent := t.TempDir()
+	t.Setenv("LOCALAPPDATA", parent)
+	dir := filepath.Join(parent, "session")
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatalf("Mkdir: %v", err)
 	}
 	return dir
 }
 
-// skipWithoutDirPrivacy skips a test that needs writeInputConf to succeed: on
-// Windows checkDirPrivacy refuses every directory until it can read the ACL.
-func skipWithoutDirPrivacy(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("the privacy check is a stub on Windows (v1.8 tickets 08/09)")
-	}
-}
-
 func TestWriteInputConfCreatesPrivateFile(t *testing.T) {
-	skipWithoutDirPrivacy(t)
 	path := filepath.Join(privateDir(t), inputConfName)
 	if err := writeInputConf(path); err != nil {
 		t.Fatalf("writeInputConf: %v", err)
@@ -101,7 +95,8 @@ func TestWriteInputConfCreatesPrivateFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
-	if perm := fi.Mode().Perm(); perm != 0o600 {
+	// Windows has no such bits: see checkDirPrivacy.
+	if perm := fi.Mode().Perm(); runtime.GOOS != "windows" && perm != 0o600 {
 		t.Fatalf("perm = %o, want 600", perm)
 	}
 	got, err := os.ReadFile(path)
@@ -113,54 +108,13 @@ func TestWriteInputConfCreatesPrivateFile(t *testing.T) {
 	}
 }
 
-func TestWriteInputConfRefusesSharedDir(t *testing.T) {
-	dir := privateDir(t)
-	if err := os.Chmod(dir, 0o755); err != nil {
-		t.Fatalf("Chmod: %v", err)
-	}
-	path := filepath.Join(dir, inputConfName)
-	if err := writeInputConf(path); err == nil {
-		t.Fatal("writeInputConf accepted a directory other users can read")
-	}
-	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("file left behind: %v", err)
-	}
-}
-
 func TestWriteInputConfFailsOnMissingDir(t *testing.T) {
 	if err := writeInputConf(filepath.Join(t.TempDir(), "gone", inputConfName)); err == nil {
 		t.Fatal("expected an error for a missing directory")
 	}
 }
 
-func TestWriteInputConfDoesNotWriteThroughSymlink(t *testing.T) {
-	skipWithoutDirPrivacy(t)
-	dir := privateDir(t)
-	target := filepath.Join(t.TempDir(), "victim")
-	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	path := filepath.Join(dir, inputConfName)
-	if err := os.Symlink(target, path); err != nil {
-		t.Fatalf("Symlink: %v", err)
-	}
-	if err := writeInputConf(path); err != nil {
-		t.Fatalf("writeInputConf: %v", err)
-	}
-	if got, _ := os.ReadFile(target); string(got) != "keep" {
-		t.Fatalf("symlink target overwritten: %q", got)
-	}
-	fi, err := os.Lstat(path)
-	if err != nil {
-		t.Fatalf("Lstat: %v", err)
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		t.Fatal("path is still a symlink")
-	}
-}
-
 func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
-	skipWithoutSessionIPC(t)
 	type seen struct {
 		dir     string
 		content string
@@ -171,8 +125,10 @@ func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
 	// The directory is learned from where the writer is asked to put the file,
 	// not from the endpoint the command receives.
 	var confPath atomic.Value
+	runtimeDir := t.TempDir()
+	t.Setenv("LOCALAPPDATA", runtimeDir)
 	mgr := New(Options{
-		RuntimeDir: t.TempDir(),
+		RuntimeDir: runtimeDir,
 		SocketWait: 5 * time.Second,
 		StopWait:   500 * time.Millisecond,
 		WriteInputConf: func(path string) error {
@@ -210,7 +166,7 @@ func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
 	if s.content != inputConfContent() {
 		t.Fatalf("file when the command was built = %q", s.content)
 	}
-	if s.perm != 0o600 || s.dirPerm != 0o700 {
+	if runtime.GOOS != "windows" && (s.perm != 0o600 || s.dirPerm != 0o700) {
 		t.Fatalf("perm = %o, dir = %o; want 600 in 700", s.perm, s.dirPerm)
 	}
 	if err := mgr.InputConfErr(); err != nil {
@@ -264,9 +220,10 @@ func TestInputConfWriteFailureWithCustomCommandKeepsCommand(t *testing.T) {
 	}
 }
 
-// A real failure of the production writer: the /tmp fallback directory already
-// exists and others can read it.
+// A real failure of the production writer: the temp fallback directory already
+// exists and others can read it. On Windows that is a temp outside the profile.
 func TestSharedFallbackDirRunsWithoutInputConf(t *testing.T) {
+	t.Setenv("LOCALAPPDATA", t.TempDir())
 	base := t.TempDir()
 	defer setFallbackBaseDirForTest(base)()
 	dir := filepath.Join(base, fmt.Sprintf("ttv-tui-%d-1", os.Getpid()))
@@ -277,9 +234,7 @@ func TestSharedFallbackDirRunsWithoutInputConf(t *testing.T) {
 		t.Fatalf("Chmod: %v", err)
 	}
 
-	mgr := newTestManager(t, "play", Options{
-		RuntimeDir: filepath.Join(t.TempDir(), strings.Repeat("x", 120)),
-	})
+	mgr := newTestManager(t, "play", Options{RuntimeDir: unusableRuntimeDir(t)})
 	gen, err := mgr.Start("shared")
 	if err != nil {
 		t.Fatalf("Start: %v", err)

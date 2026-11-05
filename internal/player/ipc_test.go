@@ -48,14 +48,13 @@ func TestIsIPCPeerGone(t *testing.T) {
 // The endpoint does not exist when the wait starts: readiness is the dial
 // succeeding, not a file showing up first.
 func TestDialIPCUntilWaitsForLateListener(t *testing.T) {
-	skipWithoutSessionIPC(t)
-	endpoint := filepath.Join(t.TempDir(), "late")
-	if _, err := os.Lstat(endpoint); !os.IsNotExist(err) {
-		t.Fatalf("endpoint exists before the wait: %v", err)
+	endpoint := testEndpoint(t, "late")
+	if !endpointGone(endpoint) {
+		t.Fatal("endpoint exists before the wait")
 	}
 	lnCh := make(chan net.Listener, 1)
 	time.AfterFunc(200*time.Millisecond, func() {
-		ln, err := net.Listen("unix", endpoint)
+		ln, err := listenEndpoint(endpoint)
 		if err != nil {
 			t.Errorf("Listen: %v", err)
 			lnCh <- nil
@@ -75,6 +74,22 @@ func TestDialIPCUntilWaitsForLateListener(t *testing.T) {
 	}
 	if ln := <-lnCh; ln != nil {
 		_ = ln.Close()
+	}
+}
+
+// An endpoint that never appears keeps being waited for until the deadline,
+// however short the refused grace is by comparison: absent is not refused.
+func TestDialIPCUntilKeepsWaitingForAbsentEndpoint(t *testing.T) {
+	endpoint := testEndpoint(t, "absent")
+	wait := ipcRefusedGrace + 500*time.Millisecond
+	start := time.Now()
+	_, err := dialIPCUntil(context.Background(), nil, endpoint, time.Now().Add(wait))
+	elapsed := time.Since(start)
+	if !errors.Is(err, errIPCWaitTimeout) {
+		t.Fatalf("err = %v, want errIPCWaitTimeout", err)
+	}
+	if elapsed < wait-100*time.Millisecond {
+		t.Fatalf("gave up after %v, before the %v deadline", elapsed, wait)
 	}
 }
 

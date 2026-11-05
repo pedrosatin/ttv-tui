@@ -55,6 +55,11 @@ func (e pathEnv) envOrHome(name string, fallback ...string) (string, error) {
 	return e.homeJoin(fallback...)
 }
 
+// localAppData is the Windows per-user folder that stays on this machine.
+func (e pathEnv) localAppData() (string, error) {
+	return e.envOrHome("LOCALAPPDATA", "AppData", "Local")
+}
+
 // configBase is the directory that holds each application's config directory:
 // $XDG_CONFIG_HOME on every OS, otherwise the OS convention. XDG goes first
 // everywhere because that is how tests keep away from the operator's real
@@ -101,7 +106,7 @@ func (e pathEnv) stateDir() (string, error) {
 	case "darwin":
 		return e.homeJoin("Library", "Application Support", appDirName, "state")
 	case "windows":
-		local, err := e.envOrHome("LOCALAPPDATA", "AppData", "Local")
+		local, err := e.localAppData()
 		if err != nil {
 			return "", err
 		}
@@ -124,7 +129,7 @@ func (e pathEnv) runtimeDir() string {
 			return filepath.Join(tmp, appDirName)
 		}
 	case "windows":
-		if local, err := e.envOrHome("LOCALAPPDATA", "AppData", "Local"); err == nil {
+		if local, err := e.localAppData(); err == nil {
 			return filepath.Join(local, appDirName, "run")
 		}
 	}
@@ -137,4 +142,12 @@ func (e pathEnv) runtimeDir() string {
 // elsewhere.
 func RuntimeDir() string {
 	return osPathEnv().runtimeDir()
+}
+
+// LocalAppData is %LOCALAPPDATA%, or AppData\Local under the home directory when
+// the variable is empty. Unlike the directories above it ignores XDG: the player
+// asks for it to learn which folder Windows keeps private to this user, wherever
+// the sessions happen to live.
+func LocalAppData() (string, error) {
+	return osPathEnv().localAppData()
 }

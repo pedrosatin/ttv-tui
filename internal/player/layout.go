@@ -55,20 +55,32 @@ const socketFileName = "i"
 // pipeName is the named-pipe endpoint for a session directory. It is only the
 // name, with no separators: streamlink splits --player-args with shlex and mpv
 // prefixes `\\.\pipe\` itself, so a name containing slashes would be taken as a
-// path. The directory's base name is already unique per session.
+// path. The directory's base name is unique per session; callers add what the
+// fallback directory's predictable name cannot promise.
 func pipeName(dir string, pid int) string {
 	return "ttv-tui-" + strconv.Itoa(pid) + "-" + filepath.Base(dir)
 }
 
+// shortFallbackBaseDir is the last place a session can go. It only comes into
+// play when the OS temp directory is too long for a Unix socket path; a named
+// pipe has no such limit, so Windows never reaches it.
+const shortFallbackBaseDir = "/tmp"
+
 var (
-	fallbackMu      sync.RWMutex
-	fallbackBaseDir = "/tmp"
+	fallbackMu sync.RWMutex
+	// fallbackBaseDir replaces the OS temp directory in tests; empty in production.
+	fallbackBaseDir string
 )
 
+// getFallbackBaseDir is the OS temp directory, read on each use so that a
+// $TMPDIR set after startup counts.
 func getFallbackBaseDir() string {
 	fallbackMu.RLock()
 	defer fallbackMu.RUnlock()
-	return fallbackBaseDir
+	if fallbackBaseDir != "" {
+		return fallbackBaseDir
+	}
+	return os.TempDir()
 }
 
 func setFallbackBaseDirForTest(dir string) func() {
@@ -94,7 +106,7 @@ func checkDirWritable(dir string) error {
 	return nil
 }
 
-// createFallbackDir makes the /tmp fallback directory, or reuses one left by an
+// createFallbackDir makes the temp fallback directory, or reuses one left by an
 // earlier run with the same pid and generation, dropping the stale endpoint.
 func createFallbackDir(dir, endpoint string) error {
 	if err := os.Mkdir(dir, 0o700); err != nil {
@@ -116,7 +128,7 @@ func createFallbackDir(dir, endpoint string) error {
 
 // prepareSession creates the session's private directory and works out its IPC
 // endpoint. It prefers a directory under runtimeDir and falls back to
-// <fallback base>/ttv-tui-<pid>-<gen> when that one is unusable (too long an
+// <OS temp dir>/ttv-tui-<pid>-<gen> when that one is unusable (too long an
 // endpoint, not writable). The directory is the same on every OS; the endpoint
 // comes from endpointInDir, which is per OS.
 func prepareSession(runtimeDir string, gen uint64) (sessionLayout, error) {
@@ -129,8 +141,7 @@ func prepareSession(runtimeDir string, gen uint64) (sessionLayout, error) {
 		primaryErr = err
 	}
 
-	fallbackDir := filepath.Join(getFallbackBaseDir(), fmt.Sprintf("ttv-tui-%d-%d", os.Getpid(), gen))
-	fallbackEndpoint, err := endpointInDir(fallbackDir)
+	fallbackDir, fallbackEndpoint, err := fallbackLocation(gen)
 	if err != nil {
 		if primaryErr != nil {
 			return sessionLayout{}, fmt.Errorf("player: fallback %w (primary %q: %v)", err, runtimeDir, primaryErr)
@@ -146,6 +157,23 @@ func prepareSession(runtimeDir string, gen uint64) (sessionLayout, error) {
 	}
 
 	return sessionLayout{Dir: fallbackDir, Endpoint: fallbackEndpoint}, nil
+}
+
+// fallbackLocation picks the fallback directory and its endpoint: the OS temp
+// directory, or shortFallbackBaseDir when a long $TMPDIR cannot hold the socket.
+// It touches nothing on disk.
+func fallbackLocation(gen uint64) (dir, endpoint string, err error) {
+	name := fmt.Sprintf("ttv-tui-%d-%d", os.Getpid(), gen)
+	dir = filepath.Join(getFallbackBaseDir(), name)
+	endpoint, err = endpointInDir(dir)
+	if err == nil {
+		return dir, endpoint, nil
+	}
+	short := filepath.Join(shortFallbackBaseDir, name)
+	if endpoint, shortErr := endpointInDir(short); shortErr == nil {
+		return short, endpoint, nil
+	}
+	return "", "", err
 }
 
 // prepareIn builds the preferred layout under runtimeDir. Any error means "use

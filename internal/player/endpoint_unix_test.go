@@ -60,6 +60,25 @@ func TestFallbackDropsStaleEndpoint(t *testing.T) {
 	}
 }
 
+// A $TMPDIR that cannot hold the socket must not cost the session: it used to
+// work from /tmp and still does.
+func TestFallbackLeavesTempDirTooLongForTheSocket(t *testing.T) {
+	long := filepath.Join(t.TempDir(), strings.Repeat("t", maxSocketPathLen))
+	useTempDir(t, long)
+
+	l, err := prepareSession(unusableRuntimeDir(t), 11)
+	if err != nil {
+		t.Fatalf("prepareSession: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(l.Dir) })
+	if want := filepath.Join(shortFallbackBaseDir, "ttv-tui-"+strconv.Itoa(os.Getpid())+"-11"); l.Dir != want {
+		t.Fatalf("Dir = %q, want %q", l.Dir, want)
+	}
+	if len(l.Endpoint) > maxSocketPathLen {
+		t.Fatalf("endpoint %q exceeds %d bytes", l.Endpoint, maxSocketPathLen)
+	}
+}
+
 func TestEndpointInDirSocketLimitBoundary(t *testing.T) {
 	// "<dir>/i" is len(dir)+2 bytes; the limit is the running OS's sun_path less the NUL.
 	fits := "/" + strings.Repeat("d", maxSocketPathLen-3)

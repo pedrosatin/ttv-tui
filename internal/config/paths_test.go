@@ -152,6 +152,26 @@ func TestWindowsFallsBackToHomeWhenKnownFolderVarsAreEmpty(t *testing.T) {
 	}
 }
 
+// The player trusts this folder as private, so a test's XDG must not move it.
+func TestLocalAppDataIgnoresXDG(t *testing.T) {
+	e := fakeEnv("windows", map[string]string{
+		"LOCALAPPDATA":    `C:\Users\a\AppData\Local`,
+		"XDG_RUNTIME_DIR": "/run/user/1000",
+		"XDG_STATE_HOME":  "/state",
+	})
+	if got, err := e.localAppData(); err != nil || got != `C:\Users\a\AppData\Local` {
+		t.Fatalf("localAppData = %q, %v", got, err)
+	}
+}
+
+func TestLocalAppDataFallsBackToHome(t *testing.T) {
+	e := fakeEnv("windows", nil)
+	want := fakeHome("AppData", "Local")
+	if got, err := e.localAppData(); err != nil || got != want {
+		t.Fatalf("localAppData = %q, %v; want %q", got, err, want)
+	}
+}
+
 func TestDarwinRuntimeWithoutTMPDIRUsesTempDir(t *testing.T) {
 	e := fakeEnv("darwin", nil)
 	if got := e.runtimeDir(); got != filepath.Join("/fake/tmp", "ttv-tui") {

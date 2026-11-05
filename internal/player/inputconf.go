@@ -44,11 +44,15 @@ func inputConfPath(sessionDir string) string {
 }
 
 // writeInputConf creates the input.conf at path. input.conf can run arbitrary
-// commands, and the /tmp fallback directory has a predictable name that may
+// commands, and the temp fallback directory has a predictable name that may
 // already exist, so it refuses a directory other users can write to and never
-// writes through a file or symlink left at path.
+// writes through a file or symlink left at path. What "other users" and "left
+// at path" mean is per OS: see checkDirPrivacy and checkInputConfTarget.
 func writeInputConf(path string) error {
 	if err := checkPrivateDir(filepath.Dir(path)); err != nil {
+		return err
+	}
+	if err := checkInputConfTarget(path); err != nil {
 		return err
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -69,8 +73,7 @@ func writeInputConf(path string) error {
 	return nil
 }
 
-// checkPrivateDir accepts only a real directory owned by this user that no one
-// else can reach.
+// checkPrivateDir accepts only a real directory that no other user can reach.
 func checkPrivateDir(dir string) error {
 	fi, err := os.Lstat(dir)
 	if err != nil {
