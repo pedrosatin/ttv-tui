@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -15,6 +16,15 @@ func testdata(t *testing.T, name string) string {
 		t.Fatalf("testdata %s: %v", name, err)
 	}
 	return p
+}
+
+// requireSQLite3 skips a test that reads a real cookie database, which only the
+// sqlite3 binary can do.
+func requireSQLite3(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("sqlite3"); err != nil {
+		t.Skip("sqlite3 is not on PATH")
+	}
 }
 
 func testPassword(t *testing.T) string {
@@ -99,6 +109,7 @@ func TestDecryptChromiumValue_V10Peanuts(t *testing.T) {
 }
 
 func TestExtractChromium_SuccessWithHostHash(t *testing.T) {
+	requireSQLite3(t)
 	got, err := ExtractChromiumWithPassword(testdata(t, "chromium_v11_hosthash.db"), testPassword(t))
 	if err != nil {
 		t.Fatal(err)
@@ -109,6 +120,7 @@ func TestExtractChromium_SuccessWithHostHash(t *testing.T) {
 }
 
 func TestExtractChromium_SuccessWithoutHostHash(t *testing.T) {
+	requireSQLite3(t)
 	got, err := ExtractChromiumWithPassword(testdata(t, "chromium_v11_plain.db"), testPassword(t))
 	if err != nil {
 		t.Fatal(err)
@@ -119,6 +131,7 @@ func TestExtractChromium_SuccessWithoutHostHash(t *testing.T) {
 }
 
 func TestExtractChromium_CookieMissing(t *testing.T) {
+	requireSQLite3(t)
 	_, err := ExtractChromiumWithPassword(testdata(t, "chromium_empty.db"), testPassword(t))
 	if !errors.Is(err, ErrCookieNotFound) {
 		t.Fatalf("err = %v, want ErrCookieNotFound", err)
@@ -126,6 +139,7 @@ func TestExtractChromium_CookieMissing(t *testing.T) {
 }
 
 func TestExtractChromium_UnknownFormat(t *testing.T) {
+	requireSQLite3(t)
 	_, err := ExtractChromiumWithPassword(testdata(t, "chromium_unknown_prefix.db"), testPassword(t))
 	if !errors.Is(err, ErrUnknownCookieFormat) {
 		t.Fatalf("err = %v, want ErrUnknownCookieFormat", err)
@@ -133,6 +147,7 @@ func TestExtractChromium_UnknownFormat(t *testing.T) {
 }
 
 func TestExtractFirefox_Success(t *testing.T) {
+	requireSQLite3(t)
 	got, err := ExtractFirefox(testdata(t, "firefox_cookies.sqlite"))
 	if err != nil {
 		t.Fatal(err)
@@ -143,6 +158,7 @@ func TestExtractFirefox_Success(t *testing.T) {
 }
 
 func TestExtractFirefox_CookieMissing(t *testing.T) {
+	requireSQLite3(t)
 	_, err := ExtractFirefox(testdata(t, "firefox_empty.sqlite"))
 	if !errors.Is(err, ErrCookieNotFound) {
 		t.Fatalf("err = %v, want ErrCookieNotFound", err)
@@ -172,6 +188,7 @@ func TestKeyringUnavailable(t *testing.T) {
 }
 
 func TestCopyCookieDB_DoesNotTouchOriginal(t *testing.T) {
+	requireSQLite3(t)
 	src := testdata(t, "chromium_v11_plain.db")
 	before, err := os.ReadFile(src)
 	if err != nil {

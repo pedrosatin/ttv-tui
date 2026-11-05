@@ -3,6 +3,7 @@ package player
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -89,6 +90,59 @@ func (k fakeKernel) procs() sysctlProcs {
 			}
 			return procArgs2Bytes("/opt/homebrew/bin/x", p.argv, p.env), nil
 		},
+	}
+}
+
+// traceProcs logs every answer of s: what was asked, how many bytes came back and
+// the errno, which FindOrphans does not surface.
+func traceProcs(logf func(string, ...any), s sysctlProcs) sysctlProcs {
+	trace := func(name string, call func(int) ([]byte, error)) func(int) ([]byte, error) {
+		return func(arg int) ([]byte, error) {
+			raw, err := call(arg)
+			logf("%s[%d]: %d bytes, %s", name, arg, len(raw), errnoText(err))
+			return raw, err
+		}
+	}
+	return sysctlProcs{
+		proc:  trace("kern.proc.pid", s.proc),
+		group: trace("kern.proc.pgrp", s.group),
+		args:  trace("kern.procargs2", s.args),
+	}
+}
+
+func errnoText(err error) string {
+	var errno syscall.Errno
+	switch {
+	case err == nil:
+		return "errno 0"
+	case errors.As(err, &errno):
+		return fmt.Sprintf("errno %d (%v)", int(errno), errno)
+	}
+	return "error: " + err.Error()
+}
+
+func TestTraceProcsReportsSizeAndErrno(t *testing.T) {
+	const pgid = 500
+	var lines []string
+	logf := func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }
+	kernel := fakeKernel{table: map[int]fakeProc{pgid: {pgid: pgid, start: 1, argsErr: syscall.EINVAL}}}
+
+	if got, err := traceProcs(logf, kernel.procs()).groupHasArg(pgid, "/tmp/1-a/i"); got || !errors.Is(err, syscall.EINVAL) {
+		t.Fatalf("groupHasArg = %v, %v, want false, EINVAL", got, err)
+	}
+	want := []string{
+		"kern.proc.pgrp[500]: 648 bytes, errno 0",
+		fmt.Sprintf("kern.procargs2[500]: 0 bytes, errno %d (%v)", int(syscall.EINVAL), syscall.EINVAL),
+		"kern.proc.pid[500]: 648 bytes, errno 0",
+	}
+	if !slices.Equal(lines, want) {
+		t.Fatalf("trace = %q, want %q", lines, want)
+	}
+}
+
+func TestErrnoTextNamesWhatIsNotAnErrno(t *testing.T) {
+	if got := errnoText(errors.New("player: kinfo_proc answer of 7 bytes")); !strings.Contains(got, "7 bytes") {
+		t.Fatalf("errnoText = %q", got)
 	}
 }
 

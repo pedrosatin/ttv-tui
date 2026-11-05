@@ -20,6 +20,12 @@ import (
 // ignores SIGTERM. The descendant's argv carries the socket path, like mpv's
 // --input-ipc-server does.
 func helperTermParentStubbornChild(socket, login string) {
+	// Linux would bind an empty name to an abstract address and carry on, with a
+	// descendant that has no socket in its argv. Darwin refuses it.
+	if socket == "" {
+		fmt.Fprintln(os.Stderr, "term-parent-stubborn-child needs TTV_PLAYER_HELPER_SOCKET")
+		os.Exit(2)
+	}
 	child := exec.Command(os.Args[0], "--", login, socket)
 	child.Env = append(os.Environ(), "TTV_PLAYER_HELPER_MODE=stubborn-child")
 	if err := child.Start(); err != nil {

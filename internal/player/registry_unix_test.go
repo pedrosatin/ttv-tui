@@ -5,7 +5,6 @@ package player
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -13,6 +12,7 @@ import (
 )
 
 func TestFindOrphansDetectsAndTerminatesLeftoverPlayer(t *testing.T) {
+	traceKernel(t)
 	base := t.TempDir()
 	regDir := filepath.Join(base, "players")
 	sockDir := filepath.Join(base, "7-orphan")
@@ -24,13 +24,9 @@ func TestFindOrphansDetectsAndTerminatesLeftoverPlayer(t *testing.T) {
 
 	// A player left behind by a run that died: its own process group, a parent
 	// that obeys SIGTERM and a descendant that ignores it.
-	cmd := exec.Command(os.Args[0], "--", "orphaned", socket)
-	cmd.Env = append(os.Environ(),
-		"TTV_PLAYER_HELPER=1",
-		"TTV_PLAYER_HELPER_MODE=term-parent-stubborn-child",
-		"TTV_PLAYER_HELPER_CHILD_PIDFILE="+pidFile,
-	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd := helperCommand("term-parent-stubborn-child")("orphaned", socket)
+	cmd.Env = append(cmd.Env, "TTV_PLAYER_HELPER_CHILD_PIDFILE="+pidFile)
+	configureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start orphan: %v", err)
 	}
@@ -79,6 +75,7 @@ func TestFindOrphansDetectsAndTerminatesLeftoverPlayer(t *testing.T) {
 }
 
 func TestFindOrphansIgnoresStaleRecycledAndLiveOwner(t *testing.T) {
+	traceKernel(t)
 	regDir := t.TempDir()
 	dead := deadPid(t)
 
@@ -87,9 +84,12 @@ func TestFindOrphansIgnoresStaleRecycledAndLiveOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Group id alive but recycled (our own test group, no member mentions the
-	// socket): must not be reported, and must never be signalled.
-	recycled, err := writeRecord(regDir, Record{OwnerPID: dead, OwnerStart: 1, PGID: syscall.Getpgrp(), Socket: "/nonexistent/b/i", Generation: 2})
+	// Group id alive but recycled: a stranger's group, no member mentions the
+	// socket. It must not be reported, and must never be signalled. The group of
+	// this test would not do: it holds whatever started go test, and a member the
+	// kernel refuses to describe makes the answer "cannot tell".
+	stranger := startIdleGroup(t, "/nonexistent/stranger/i").Process.Pid
+	recycled, err := writeRecord(regDir, Record{OwnerPID: dead, OwnerStart: 1, PGID: stranger, Socket: "/nonexistent/b/i", Generation: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,11 +118,15 @@ func TestFindOrphansIgnoresStaleRecycledAndLiveOwner(t *testing.T) {
 	if _, err := os.Stat(live); err != nil {
 		t.Fatalf("live owner's record removed: %v", err)
 	}
+	if !processAlive(stranger) {
+		t.Fatalf("recycled group %d was signalled", stranger)
+	}
 }
 
 // The same record, judged twice: preserved while its player lives, cleared with
 // its files once the player is dead. A live owner's record survives both.
 func TestFindOrphansPreservesLivePlayerAndClearsDeadOne(t *testing.T) {
+	traceKernel(t)
 	base := t.TempDir()
 	regDir := filepath.Join(base, "players")
 	sockDir := filepath.Join(base, "1-orphan")
