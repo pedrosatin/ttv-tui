@@ -508,7 +508,7 @@ func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case msg.Type == tea.KeyRunes:
-		m.composeDraft += string(msg.Runes)
+		m.composeDraft += sanitizeChatText(string(msg.Runes))
 		m.clearComposeTooLongWarning()
 		return m, nil
 	}

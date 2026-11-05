@@ -643,19 +643,3 @@ func (m Model) formatRejectReason(reason chat.RejectReason, detail string) strin
 		return m.t("chat.reject.other")
 	}
 }
-
-func sanitizeChatText(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		if r == '\n' || r == '\r' || r == '\t' {
-			b.WriteByte(' ')
-			continue
-		}
-		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
-}

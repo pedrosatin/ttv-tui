@@ -63,7 +63,7 @@ func (m Model) updateSearchingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case msg.Type == tea.KeyRunes:
-		m.searchInput += string(msg.Runes)
+		m.searchInput += sanitizeChatText(string(msg.Runes))
 		return m, nil
 	}
 	return m, nil
@@ -123,7 +123,7 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case msg.Type == tea.KeyRunes:
-		m.filter += string(msg.Runes)
+		m.filter += sanitizeChatText(string(msg.Runes))
 		m.reconcileHighlight()
 		return m, nil
 	}
