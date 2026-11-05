@@ -2,14 +2,17 @@ package doctor
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/player"
 )
 
 func TestMain(m *testing.M) {
@@ -146,5 +149,53 @@ func TestMalformedConfigDoesNotLeak(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Token configured: unreadable") {
 		t.Fatal("missing config error")
+	}
+}
+
+func TestRegistryFinishedSessionIsPending(t *testing.T) {
+	base := isolate(t)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(exe)
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	// Use an exited, reaped process rather than a guessed unused PID, on every OS.
+	dead := cmd.Process.Pid
+	dir := filepath.Join(base, "players")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	conf := filepath.Join(base, "input.conf")
+	if err := os.WriteFile(conf, []byte("session residue"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(player.Record{OwnerPID: dead, PGID: dead, Socket: filepath.Join(base, "i"), Dir: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "player-1-2.json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := registryStatus(dir); got != "doctor.pending" {
+		t.Fatalf("finished session = %s, want doctor.pending", got)
+	}
+	if got, err := os.ReadFile(path); err != nil || !bytes.Equal(got, data) {
+		t.Fatal("doctor modified the record")
+	}
+	if got, err := os.ReadFile(conf); err != nil || string(got) != "session residue" {
+		t.Fatal("doctor modified session files")
+	}
+	if orphans, err := player.FindOrphans(dir); err != nil || len(orphans) != 0 {
+		t.Fatalf("FindOrphans = %v, %v", orphans, err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("FindOrphans did not remove stale record: %v", err)
+	}
+	if got := registryStatus(dir); got != "doctor.clean" {
+		t.Fatalf("after cleanup = %s, want doctor.clean", got)
 	}
 }

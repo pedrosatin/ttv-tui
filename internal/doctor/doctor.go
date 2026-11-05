@@ -4,19 +4,17 @@ package doctor
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/player"
 )
 
 // Options selects the version, language and configuration to inspect.
@@ -81,19 +79,13 @@ func Run(out io.Writer, opts Options) int {
 }
 
 // Records disappear after cleanup, so the registry cannot prove past IPC health.
-// Do not call FindOrphans here: that operation deletes stale records and files.
 func registryStatus(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if errors.Is(err, os.ErrNotExist) {
-		return "doctor.clean"
-	}
+	pending, err := player.RegistryPending(dir)
 	if err != nil {
 		return "doctor.unreadable"
 	}
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "player-") && strings.HasSuffix(e.Name(), ".json") {
-			return "doctor.pending"
-		}
+	if pending {
+		return "doctor.pending"
 	}
 	return "doctor.clean"
 }

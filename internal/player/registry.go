@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -104,16 +105,47 @@ func writeRecord(dir string, rec Record) (string, error) {
 // orphaned. So are records the OS cannot judge, which may belong to a live
 // instance. A missing dir yields no orphans.
 func FindOrphans(dir string) ([]Orphan, error) {
+	orphans, _, err := scanRegistry(dir, true)
+	return orphans, err
+}
+
+// RegistryPending inspects the registry without removing records or session files.
+// It uses FindOrphans' owner and player checks: a proven live owner is clean;
+// malformed, stale, orphaned or unverifiable records are pending. Stale files
+// still need cleanup even when no player survives (notably on Windows).
+func RegistryPending(dir string) (bool, error) {
+	_, pending, err := scanRegistry(dir, false)
+	return pending, err
+}
+
+func scanRegistry(dir string, cleanup bool) ([]Orphan, bool, error) {
 	if dir == "" {
-		return nil, nil
+		return nil, false, nil
 	}
-	entries, err := os.ReadDir(dir)
+	// Check the opened handle before enumerating: on Windows ReadDir on a
+	// regular file may look empty or return an error matching ErrNotExist.
+	// A file at the registry path must never be reported as clean.
+	f, err := os.Open(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
+			return nil, false, nil
 		}
-		return nil, fmt.Errorf("player: read registry: %w", err)
+		return nil, false, fmt.Errorf("player: read registry: %w", err)
 	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, false, fmt.Errorf("player: stat registry: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, false, fmt.Errorf("player: registry is not a directory")
+	}
+	entries, err := f.ReadDir(-1)
+	if err != nil {
+		return nil, false, fmt.Errorf("player: read registry: %w", err)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	var pending bool
 	var orphans []Orphan
 	for _, e := range entries {
 		name := e.Name()
@@ -123,29 +155,40 @@ func FindOrphans(dir string) ([]Orphan, error) {
 		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
+			pending = true
 			continue
 		}
 		var rec Record
 		if err := json.Unmarshal(data, &rec); err != nil || rec.PGID <= 1 || rec.Socket == "" {
-			_ = os.Remove(path)
+			pending = true
+			if cleanup {
+				_ = os.Remove(path)
+			}
 			continue
 		}
 		owned, err := ownerAlive(rec)
-		if err != nil || owned {
+		if err != nil {
+			pending = true
 			continue
 		}
+		if owned {
+			continue
+		}
+		pending = true
 		isPlayer, err := groupIsPlayer(rec.PGID, rec.Socket)
 		if err != nil {
 			continue
 		}
 		if !isPlayer {
-			removeStaleFiles(rec)
-			_ = os.Remove(path)
+			if cleanup {
+				removeStaleFiles(rec)
+				_ = os.Remove(path)
+			}
 			continue
 		}
 		orphans = append(orphans, Orphan{Record: rec, path: path})
 	}
-	return orphans, nil
+	return orphans, pending, nil
 }
 
 // Terminate stops the orphaned process group (SIGTERM, then SIGKILL after wait)

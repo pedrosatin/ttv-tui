@@ -316,3 +316,30 @@ func TestTerminateRefusesWhatItCannotJudge(t *testing.T) {
 		t.Fatalf("socket removed without proof the player is gone: %v", err)
 	}
 }
+
+func TestRegistryPendingUsesOwnerChecksReadOnly(t *testing.T) {
+	for _, unknown := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unverifiable=%t", unknown), func(t *testing.T) {
+			dir := t.TempDir()
+			rec := Record{OwnerPID: os.Getpid(), OwnerStart: selfStart, PGID: os.Getpid(), Socket: "recorded-endpoint", Generation: 1}
+			if unknown {
+				cannotInspect(t)
+				rec.OwnerPID = deadPid(t)
+			}
+			path, err := writeRecord(dir, rec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if pending, err := RegistryPending(dir); err != nil || pending != unknown {
+				t.Fatalf("RegistryPending = %t, %v; want %t, nil", pending, err, unknown)
+			}
+			orphans, err := FindOrphans(dir)
+			if err != nil || len(orphans) != 0 {
+				t.Fatalf("FindOrphans = %v, %v", orphans, err)
+			}
+			if _, err := os.Stat(path); err != nil {
+				t.Fatalf("record removed: %v", err)
+			}
+		})
+	}
+}
