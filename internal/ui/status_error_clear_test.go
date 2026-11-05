@@ -12,7 +12,7 @@ import (
 )
 
 func TestPlayerOfflineErrorClearsOnNavigation(t *testing.T) {
-	offline := "Canal offline: escolha outro canal"
+	offline := "Erro: Canal offline · r repetir · ? detalhes"
 	m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
 	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
 	if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, offline) {
@@ -33,7 +33,7 @@ func TestPlayerOfflineErrorClearsOnNavigation(t *testing.T) {
 }
 
 func TestPlayerOfflineErrorClearsOnFilterAndSearch(t *testing.T) {
-	offline := "Canal offline: escolha outro canal"
+	offline := "Erro: Canal offline · r repetir · ? detalhes"
 
 	t.Run("filter", func(t *testing.T) {
 		m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
@@ -63,7 +63,7 @@ func TestPlayerOfflineErrorClearsOnFilterAndSearch(t *testing.T) {
 }
 
 func TestPlayerOfflineErrorRemainsOnSameScreen(t *testing.T) {
-	offline := "Canal offline: escolha outro canal"
+	offline := "Erro: Canal offline · r repetir · ? detalhes"
 	m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
 	m.mode = ModeChannels
 	m.channels = []twitch.Channel{
@@ -148,7 +148,7 @@ func TestClearStaleStatusErrorsKeepsTransientNotice(t *testing.T) {
 }
 
 func TestSuccessfulChannelSwitchClearsOfflineStatus(t *testing.T) {
-	offline := "Canal offline: escolha outro canal"
+	offline := "Erro: Canal offline · r repetir · ? detalhes"
 	m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
 	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
 	m.err = &twitch.Error{Kind: twitch.Rede, Op: "channels", Err: errors.New("stale")}

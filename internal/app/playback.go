@@ -82,6 +82,17 @@ func (b *playbackBridge) Listen() tea.Cmd {
 }
 
 func mapPlayerEvent(ev player.Event) ui.PlayerStatusMsg {
+	// Only an explicit Stop is neutral. Process/IPC exits may arrive without
+	// a classified error, especially when mpv cannot open a video window.
+	if ev.State == player.StateEnded && ev.Reason != player.EndReasonStopped {
+		ev.State = player.StateError
+		if ev.Failure == player.FailureNone {
+			ev.Failure = player.ClassifyLine(ev.LastLine)
+			if ev.Failure == player.FailureNone {
+				ev.Failure = player.FailureUnknown
+			}
+		}
+	}
 	return ui.PlayerStatusMsg{
 		Generation:   ev.Generation,
 		State:        ui.PlayerState(ev.State),

@@ -68,3 +68,24 @@ func TestLogInputConfErr(t *testing.T) {
 		})
 	}
 }
+
+func TestMapPlayerTerminalEvent(t *testing.T) {
+	for _, reason := range []player.EndReason{player.EndReasonStopped, player.EndReasonMPVDead, player.EndReasonSocketEOF, player.EndReasonStreamlinkExit, ""} {
+		for _, line := range []string{"", "streamlink: not found"} {
+			msg := mapPlayerEvent(player.Event{Generation: 7, State: player.StateEnded, Reason: reason, Login: "xaryu", LastLine: line})
+			if reason == player.EndReasonStopped {
+				if msg.State != ui.PlayerStateEnded {
+					t.Fatalf("stop became failure: %+v", msg)
+				}
+			} else {
+				want := ui.PlayerFailureUnknown
+				if line != "" {
+					want = ui.PlayerFailureStreamlinkMissing
+				}
+				if msg.State != ui.PlayerStateError || msg.Failure != want || msg.LastLine != line || msg.Generation != 7 || msg.Login != "xaryu" {
+					t.Fatalf("%s: %+v", reason, msg)
+				}
+			}
+		}
+	}
+}

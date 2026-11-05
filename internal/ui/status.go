@@ -125,8 +125,8 @@ func channelCategoryName(ch *twitch.Channel) string {
 // may drop.
 //
 // Drop order among secondaries: trailing technical detail first, then the
-// least useful of context vs chat. Soft states (ready / category selected /
-// playback ended) promote a channel-bearing chat status to primary so 80
+// least useful of context vs chat. Soft states (ready / category selected)
+// promote a channel-bearing chat status to primary so 80
 // columns keep the name whole. When the lead already names the channel
 // (playing/selected), context outranks the duplicate chat line; otherwise
 // chat outranks context so the name is not cut behind category/viewers.
@@ -141,6 +141,10 @@ func (m Model) statusParts() (string, []string) {
 	}
 	primary := m.t("status.ready")
 	switch {
+	case m.playerState == PlayerStateError:
+		primary = m.playerFailureText()
+		// The technical detail goes last: it is the first thing to drop.
+		trailing = m.playerErrorDetail()
 	case m.ctrlCNotice != "":
 		// Ctrl+C hint outranks filter/search prompts so every mode shows it.
 		primary = m.ctrlCNotice
@@ -178,10 +182,6 @@ func (m Model) statusParts() (string, []string) {
 		}
 		secondary = append(secondary, m.playerStatusBase())
 		addContext()
-	case m.playerState == PlayerStateError:
-		primary = m.playerFailureText()
-		// The technical detail goes last: it is the first thing to drop.
-		trailing = m.playerErrorDetail()
 	case m.playerState != PlayerStateNone && m.playerState != PlayerStateEnded:
 		primary = m.playerStatusBase()
 		if vol := m.playerVolumeText(); vol != "" {
@@ -272,7 +272,7 @@ func (m Model) softStatusPrimary() bool {
 	if m.authNotice != "" || m.corruptNotice != "" || m.copyNotice != "" || m.statusNotice != "" || m.ctrlCNotice != "" {
 		return false
 	}
-	if m.playerWindowNoticeShown() || m.playerState == PlayerStateError {
+	if m.playerWindowNoticeShown() || m.playerState == PlayerStateError || m.playerState == PlayerStateEnded {
 		return false
 	}
 	if m.playerState != PlayerStateNone && m.playerState != PlayerStateEnded {

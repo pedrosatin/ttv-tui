@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -71,12 +73,12 @@ func TestPlayerFailureMessagesPerClass(t *testing.T) {
 		pt      string
 		en      string
 	}{
-		{PlayerFailureOffline, offlineLine, "Canal offline: escolha outro canal", "Channel offline: pick another channel"},
-		{PlayerFailureNetwork, "error: Unable to open URL: https://gql.twitch.tv/gql (Connection refused)", "Erro de rede: r para tentar de novo", "Network error: press r to retry"},
-		{PlayerFailureTimeout, "error: Connection to gql.twitch.tv timed out", "Tempo esgotado: r para tentar de novo", "Timed out: press r to retry"},
-		{PlayerFailureStreamlinkMissing, "player: streamlink not found: exec: \"streamlink\": executable file not found in $PATH", "streamlink não encontrado: instale-o", "streamlink not found: install it"},
-		{PlayerFailureMPVMissing, "error: Failed to start player: mpv (Player executable not found)", "mpv não encontrado: instale o mpv", "mpv not found: install mpv"},
-		{PlayerFailureUnknown, "streamlink exited with code 1", "Falha no player: r para tentar de novo", "Player failed: press r to retry"},
+		{PlayerFailureOffline, offlineLine, "Erro: Canal offline · r repetir · ? detalhes", "Player error: channel offline · r retry · ? details"},
+		{PlayerFailureNetwork, "error: Unable to open URL: https://gql.twitch.tv/gql (Connection refused)", "Erro de rede: r para tentar de novo · ? detalhes", "Network error: press r to retry · ? details"},
+		{PlayerFailureTimeout, "error: Connection to gql.twitch.tv timed out", "Erro: tempo esgotado · r repetir · ? detalhes", "Player error: timed out · r retry · ? details"},
+		{PlayerFailureStreamlinkMissing, "player: streamlink not found: exec: \"streamlink\": executable file not found in $PATH", "Erro: streamlink ausente · r repetir · ? detalhes", "Player error: streamlink missing · r retry · ? details"},
+		{PlayerFailureMPVMissing, "error: Failed to start player: mpv (Player executable not found)", "Erro: mpv ausente · r repetir · ? detalhes", "Player error: mpv missing · r retry · ? details"},
+		{PlayerFailureUnknown, "streamlink exited with code 1", "Falha no player: r para tentar de novo · ? detalhes", "Player failed: press r to retry · ? details"},
 	}
 	for _, c := range cases {
 		for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
@@ -151,20 +153,20 @@ func TestStalePlayerFailureDoesNotOverwriteCurrentChannel(t *testing.T) {
 func TestPlayerFailureAt80ColumnsKeepsMainAction(t *testing.T) {
 	wants := map[string][]string{
 		i18n.LangPTBR: {
-			"Canal offline: escolha outro canal",
-			"Erro de rede: r para tentar de novo",
-			"Tempo esgotado: r para tentar de novo",
-			"streamlink não encontrado: instale-o",
-			"mpv não encontrado: instale o mpv",
-			"Falha no player: r para tentar de novo",
+			"Erro: Canal offline · r repetir · ? detalhes",
+			"Erro de rede: r para tentar de novo · ? detalhes",
+			"Erro: tempo esgotado · r repetir · ? detalhes",
+			"Erro: streamlink ausente · r repetir · ? detalhes",
+			"Erro: mpv ausente · r repetir · ? detalhes",
+			"Falha no player: r para tentar de novo · ? detalhes",
 		},
 		i18n.LangEN: {
-			"Channel offline: pick another channel",
-			"Network error: press r to retry",
-			"Timed out: press r to retry",
-			"streamlink not found: install it",
-			"mpv not found: install mpv",
-			"Player failed: press r to retry",
+			"Player error: channel offline · r retry · ? details",
+			"Network error: press r to retry · ? details",
+			"Player error: timed out · r retry · ? details",
+			"Player error: streamlink missing · r retry · ? details",
+			"Player error: mpv missing · r retry · ? details",
+			"Player failed: press r to retry · ? details",
 		},
 	}
 	failures := []PlayerFailure{
@@ -198,7 +200,7 @@ func TestPlayerFailureAt80ColumnsWithChat(t *testing.T) {
 	m = updated.(Model)
 	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
 	bar := ansi.Strip(m.StatusBar())
-	if !strings.Contains(bar, "Channel offline: pick another channel") {
+	if !strings.Contains(bar, "Player error: channel offline · r retry · ? details") {
 		t.Fatalf("main action truncated with chat connected:\n%q", bar)
 	}
 }
@@ -405,5 +407,41 @@ func TestOfflinePlayFailurePreservesOtherChannelViewers(t *testing.T) {
 	plain := ansi.Strip(m.View())
 	if !strings.Contains(plain, "8.5k") {
 		t.Fatalf("gaules viewers must remain visible:\n%s", plain)
+	}
+}
+
+func TestPlayerTerminalStatesRender(t *testing.T) {
+	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+		for _, size := range [][2]int{{80, 24}, {120, 40}} {
+			t.Run(fmt.Sprintf("%s/%dx%d", lang, size[0], size[1]), func(t *testing.T) {
+				m, pb := newFailureModel(t, lang, size[0], "xaryu")
+				updated, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+				m = updated.(Model)
+				m.chatPanel.state = ChatStateConnected
+				m.chatPanel.channel = "xaryu"
+				updated, _ = m.Update(PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "xaryu", Volume: 100})
+				playing := updated.(Model)
+				updated, cmd := playing.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
+				stopped := drainCmd(t, updated.(Model), cmd)
+				neutral := ansi.Strip(stopped.View())
+				if pb.stopped == 0 || !strings.Contains(neutral, m.t("player.ended")) || strings.Contains(neutral, m.t("player.fail.unknown")) {
+					t.Fatalf("intentional stop must stay visible and neutral:\n%s", neutral)
+				}
+				for _, failure := range []PlayerFailure{PlayerFailureNone, PlayerFailureUnknown, PlayerFailureOffline, PlayerFailureNetwork, PlayerFailureTimeout, PlayerFailureStreamlinkMissing, PlayerFailureMPVMissing} {
+					failed := failWith(t, playing, 1, failure, "")
+					failed.statusNotice = "secondary notice"
+					failed.copyNotice = "copy notice"
+					failed.err = errors.New("list error")
+					view := ansi.Strip(failed.View())
+					want := failed.playerFailureText()
+					if !strings.Contains(view, want) || !strings.Contains(want, "r ") || !strings.Contains(want, "?") || strings.Contains(view, m.t("player.ended")) {
+						t.Fatalf("failure %q must retain label, reason and actions:\n%s", failure, view)
+					}
+					if failure == PlayerFailureUnknown {
+						t.Logf("FAILURE\n%s\nSTOPPED\n%s", view, neutral)
+					}
+				}
+			})
+		}
 	}
 }
