@@ -21,7 +21,7 @@ func (m Model) hasChatPanel() bool {
 }
 
 func (m Model) chatStatusSummary() string {
-	ch := m.chatPanel.channel
+	ch := sanitizeScreenText(m.chatPanel.channel)
 	switch m.chatPanel.state {
 	case ChatStateConnecting:
 		return fmt.Sprintf(m.t("chat.connecting"), ch)
@@ -35,7 +35,7 @@ func (m Model) chatStatusSummary() string {
 	case ChatStateDisconnected:
 		return m.t("chat.disconnected")
 	case ChatStateError:
-		errText := m.chatPanel.errText
+		errText := sanitizeScreenText(m.chatPanel.errText)
 		if errText == "" {
 			errText = m.t("player.error_unknown")
 		}
@@ -74,7 +74,7 @@ func (m Model) chatHeaderState() string {
 	case ChatStateDisconnected:
 		return m.t("chat.disconnected")
 	case ChatStateError:
-		errText := m.chatPanel.errText
+		errText := sanitizeScreenText(m.chatPanel.errText)
 		if errText == "" {
 			errText = m.t("player.error_unknown")
 		}
@@ -92,7 +92,7 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 	if showFocusChrome {
 		focusMarker = "▸ "
 	}
-	title := fmt.Sprintf(m.t("chat.title"), m.chatPanel.channel)
+	title := fmt.Sprintf(m.t("chat.title"), sanitizeScreenText(m.chatPanel.channel))
 	state := m.chatHeaderState()
 	modes := m.chatRoomModesSummary()
 
@@ -161,10 +161,10 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 	}
 	if m.chatPanel.sendWarning != "" {
 		if maxWidth <= 0 {
-			warnLine := "  ! " + styleWarning(sanitizeChatText(m.chatPanel.sendWarning))
+			warnLine := "  ! " + styleWarning(sanitizeScreenText(m.chatPanel.sendWarning))
 			footer = append(footer, warnLine)
 		} else {
-			warnRows := wrapChatRow("  ! ", sanitizeChatText(m.chatPanel.sendWarning), maxWidth)
+			warnRows := wrapChatRow("  ! ", sanitizeScreenText(m.chatPanel.sendWarning), maxWidth)
 			for _, r := range warnRows {
 				footer = append(footer, styleWarning(r))
 			}
@@ -259,7 +259,10 @@ func formatComposeHintWithCounter(hint, counter string, maxWidth int) string {
 }
 
 func (m Model) renderChatInputLine(maxWidth int) string {
-	ch := m.chatPanel.channel
+	ch := sanitizeScreenText(m.chatPanel.channel)
+	if maxWidth > 1 && hasWideRune(ch+normalizeScreenText(m.composeDraft)) {
+		maxWidth--
+	}
 	if !m.chatHasToken() {
 		hint := m.t("chat.input.no_token")
 		if maxWidth > 0 && ansi.StringWidth("  > "+hint) > maxWidth {
@@ -280,12 +283,12 @@ func (m Model) renderChatInputLine(maxWidth int) string {
 				prefix = ""
 			}
 		}
-		draft := sanitizeChatText(m.composeDraft)
+		draft := sanitizeScreenText(m.composeDraft)
 		line := prefix + draftWindow(draft, prefix, maxWidth, ansi.StringWidth(composeCursor)) + composeCursor
 		return lipgloss.NewStyle().Bold(true).Render(line)
 	}
 	if m.composeDraft != "" {
-		draft := sanitizeChatText(m.composeDraft)
+		draft := sanitizeScreenText(m.composeDraft)
 		prefix := "  > " + fmt.Sprintf(m.t("chat.input.draft"), "")
 		line := prefix + draftWindow(draft, prefix, maxWidth, 0)
 		return lipgloss.NewStyle().Faint(true).Render(line)
@@ -370,6 +373,13 @@ func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth, selectedIdx
 // next one, so colour never bleeds into padding or the other panel.
 // maxWidth <= 0 means no limit (a single row).
 func wrapChatRow(lead, content string, maxWidth int) []string {
+	lead = normalizeScreenText(lead)
+	content = normalizeScreenText(content)
+	// Leave the final cell free before wrapping, so the screen-level guard
+	// removes padding only and never drops the end of a chat message.
+	if maxWidth > 1 && hasWideRune(lead+content) {
+		maxWidth--
+	}
 	if maxWidth <= 0 {
 		return []string{lead + content}
 	}
@@ -485,7 +495,7 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 	if selected && m.Focus() == FocusChat {
 		selLead = "▌ "
 	}
-	body := sanitizeChatText(msg.Body)
+	body := sanitizeScreenText(msg.Body)
 	if msg.Kind == chat.MessageNotice {
 		prefix := m.t("chat.notice_prefix")
 		return selLead, styleNotice(fmt.Sprintf("%s %s", prefix, body))
@@ -495,9 +505,9 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 		return selLead, styleSystem(fmt.Sprintf("%s %s", prefix, body))
 	}
 
-	name := sanitizeChatText(msg.DisplayName)
+	name := sanitizeScreenText(msg.DisplayName)
 	if name == "" {
-		name = sanitizeChatText(msg.User)
+		name = sanitizeScreenText(msg.User)
 	}
 
 	// Nicks use only blue/white ANSI slots so they never collide with the
@@ -593,7 +603,7 @@ func (m Model) formatRejectReason(reason chat.RejectReason, detail string) strin
 	case chat.RejectBanned:
 		return m.t("chat.reject.banned")
 	default:
-		if clean := sanitizeChatText(strings.TrimSpace(detail)); clean != "" {
+		if clean := sanitizeScreenText(strings.TrimSpace(detail)); clean != "" {
 			return clean
 		}
 		return m.t("chat.reject.other")

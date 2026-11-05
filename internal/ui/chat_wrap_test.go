@@ -70,8 +70,12 @@ func assertRowsFit(t *testing.T, m Model) {
 		if w := ansi.StringWidth(left); w != listW {
 			t.Fatalf("row %d: separator at col %d, want %d: %q", i, w, listW, row)
 		}
-		if w := ansi.StringWidth(right); w != chatW {
-			t.Fatalf("row %d: chat cell is %d cols, want %d: %q", i, w, chatW, row)
+		wantChatW := chatW
+		if hasWideRune(row) {
+			wantChatW--
+		}
+		if w := ansi.StringWidth(right); w != wantChatW {
+			t.Fatalf("row %d: chat cell is %d cols, want %d: %q", i, w, wantChatW, row)
 		}
 	}
 }

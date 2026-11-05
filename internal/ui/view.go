@@ -20,6 +20,7 @@ const (
 // accounting for wide Unicode/CJK/emoji runes and preserving ANSI sequences),
 // appending an ellipsis ("…") when truncated.
 func TruncateVisual(s string, maxWidth int) string {
+	s = normalizeScreenText(s)
 	if maxWidth <= 0 {
 		return s
 	}
@@ -57,6 +58,7 @@ var listRowEmDash = string(rune(0x2014))
 // line under the name. Replace those separators with ASCII and use an ASCII
 // ellipsis so measured width matches the terminal.
 func fitListRow(s string, maxWidth int) string {
+	s = normalizeScreenText(s)
 	if maxWidth <= 0 {
 		return s
 	}
@@ -127,7 +129,8 @@ func (m Model) panelWidths() (int, int) {
 }
 
 // View implements tea.Model.
-func (m Model) View() string {
+func (m Model) View() (view string) {
+	defer func() { view = fitScreenLines(view, m.width) }()
 	if m.quitting {
 		return ""
 	}
@@ -392,13 +395,13 @@ func (m Model) headerLine() string {
 	switch m.Mode() {
 	case ModeChannels:
 		if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-			title = fmt.Sprintf(m.t("channels.title_category"), sanitizeChatText(m.selectedCategory.Name))
+			title = fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.selectedCategory.Name))
 		} else {
 			title = m.t("channels.title")
 		}
 	case ModeSearch:
 		if m.searchQuery != "" {
-			title = fmt.Sprintf(m.t("search.title_query"), sanitizeChatText(m.searchQuery))
+			title = fmt.Sprintf(m.t("search.title_query"), sanitizeScreenText(m.searchQuery))
 		} else {
 			title = m.t("search.title")
 		}
@@ -417,10 +420,10 @@ func (m Model) headerLine() string {
 
 func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
 	if m.searching {
-		line := fmt.Sprintf(m.t("search.prompt"), sanitizeChatText(m.searchInput))
+		line := fmt.Sprintf(m.t("search.prompt"), sanitizeScreenText(m.searchInput))
 		lines = append(lines, TruncateVisual(line, maxWidth))
 	} else if m.filtering || m.filter != "" {
-		line := fmt.Sprintf(m.t("filter.prompt"), sanitizeChatText(m.filter))
+		line := fmt.Sprintf(m.t("filter.prompt"), sanitizeScreenText(m.filter))
 		lines = append(lines, TruncateVisual(line, maxWidth))
 	}
 	return lines
@@ -481,7 +484,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 			// Enter or Ctrl+F (Ctrl+S alias) takes the filter text as the query.
 			lines = append(lines,
 				TruncateVisual(m.t("filter.empty"), maxWidth),
-				TruncateVisual(fmt.Sprintf(m.t("filter.search_hint"), sanitizeChatText(strings.TrimSpace(m.filter))), maxWidth),
+				TruncateVisual(fmt.Sprintf(m.t("filter.search_hint"), sanitizeScreenText(strings.TrimSpace(m.filter))), maxWidth),
 			)
 		} else if m.preferenceFilterHidesChannels() {
 			summary := m.activeChannelFilterSummary()
@@ -562,7 +565,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 				if isSearch {
 					addSectionHeader(m.t("search.section_channels"))
 				} else if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-					addSectionHeader(fmt.Sprintf(m.t("channels.title_category"), sanitizeChatText(m.selectedCategory.Name)))
+					addSectionHeader(fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.selectedCategory.Name)))
 				} else {
 					addSectionHeader(m.t("channels.title"))
 				}
@@ -673,13 +676,13 @@ func listRowMarker(highlighted, favorite bool) string {
 }
 
 func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.Availability, maxWidth int) string {
-	displayName := sanitizeChatText(ch.DisplayName)
-	login := sanitizeChatText(ch.Login)
+	displayName := sanitizeScreenText(ch.DisplayName)
+	login := sanitizeScreenText(ch.Login)
 	identity := fmt.Sprintf("%s (%s)", displayName, login)
 	playing := m.isPlayingChannel(ch)
 	titleText := ""
 	if ch.Title != nil && strings.TrimSpace(*ch.Title) != "" {
-		titleText = sanitizeChatText(strings.TrimSpace(*ch.Title))
+		titleText = sanitizeScreenText(strings.TrimSpace(*ch.Title))
 	}
 	// When a language preference is active, channels without language metadata
 	// stay visible and carry an explicit unknown tag (ticket 01 choice).
@@ -744,6 +747,9 @@ func formatLiveViewersCell(viewers string) string {
 // truncates status tags ([offline]/[não verificado]/[ao vivo]). Title goes
 // first when space is short; then identity.
 func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, maxWidth int) string {
+	identity = normalizeScreenText(identity)
+	title = normalizeScreenText(title)
+	tag = normalizeScreenText(tag)
 	gap := " "
 	mid := "  "
 	sep := " — "
@@ -807,7 +813,7 @@ func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, m
 }
 
 func (m Model) formatCategoryRow(marker string, cat twitch.Category, inSearch bool, maxWidth int) string {
-	name := sanitizeChatText(cat.Name)
+	name := sanitizeScreenText(cat.Name)
 	if inSearch && categoryNoBroadcast(cat) {
 		row := fmt.Sprintf("%s %7s  %s — %s", marker, m.t("categories.viewers_unknown"), name, m.t("categories.no_stream"))
 		return fitListRow(row, maxWidth)

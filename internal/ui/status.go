@@ -60,9 +60,9 @@ func (m Model) listErrorDetail() string {
 	}
 	var te *twitch.Error
 	if errors.As(m.err, &te) && te != nil && te.Err != nil {
-		return fmt.Sprintf(m.t("error.fail.detail"), sanitizeChatText(te.Err.Error()))
+		return fmt.Sprintf(m.t("error.fail.detail"), sanitizeScreenText(te.Err.Error()))
 	}
-	if msg := strings.TrimSpace(sanitizeChatText(m.err.Error())); msg != "" {
+	if msg := strings.TrimSpace(sanitizeScreenText(m.err.Error())); msg != "" {
 		return fmt.Sprintf(m.t("error.fail.detail"), msg)
 	}
 	return ""
@@ -72,8 +72,8 @@ func (m Model) activeContextSummary() string {
 	var parts []string
 	if m.selectedChannel != nil {
 		playerHasLogin := m.playerLogin != "" && strings.EqualFold(m.playerLogin, m.selectedChannel.Login)
-		name := sanitizeChatText(m.selectedChannel.DisplayName)
-		login := sanitizeChatText(m.selectedChannel.Login)
+		name := sanitizeScreenText(m.selectedChannel.DisplayName)
+		login := sanitizeScreenText(m.selectedChannel.Login)
 		chText := ""
 		if !playerHasLogin {
 			chText = login
@@ -101,7 +101,7 @@ func (m Model) activeContextSummary() string {
 		return strings.Join(parts, " · ")
 	}
 	if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-		catText := sanitizeChatText(m.selectedCategory.Name)
+		catText := sanitizeScreenText(m.selectedCategory.Name)
 		if m.selectedCategory.Viewers != nil {
 			catText += " (" + m.formatViewers(m.selectedCategory.Viewers) + ")"
 		}
@@ -116,7 +116,7 @@ func channelCategoryName(ch *twitch.Channel) string {
 	if ch == nil || ch.CategoryName == nil {
 		return ""
 	}
-	return sanitizeChatText(strings.TrimSpace(*ch.CategoryName))
+	return sanitizeScreenText(strings.TrimSpace(*ch.CategoryName))
 }
 
 // statusParts splits the status text into the main message for the current
@@ -378,6 +378,10 @@ func (m Model) StatusBar() string {
 	}
 
 	primary, secondary := m.statusParts()
+	primary = normalizeScreenText(primary)
+	for i := range secondary {
+		secondary[i] = normalizeScreenText(secondary[i])
+	}
 	// Non-default layouts lead the secondaries so the layout token is visible;
 	// default split omits it (see includeLayoutStatus). The volume stays ahead
 	// of it: the mpv window can change volume with no other place to show it,
@@ -483,7 +487,7 @@ func (m Model) StatusBar() string {
 			line = padOrTruncateVisual(line, m.width)
 		}
 	}
-	return style.Render(line)
+	return style.Render(fitScreenLines(line, m.width))
 }
 
 // minSecondaryCut is the narrowest room in which a truncated secondary part
