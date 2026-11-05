@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -398,12 +399,17 @@ func commandNoInputConf(login, socketPath string) *exec.Cmd {
 
 // playerCommand omits --input-conf when inputConf is empty.
 func playerCommand(login, socketPath, inputConf string) *exec.Cmd {
-	playerArgs := fmt.Sprintf(
-		"--no-config --no-input-default-bindings --no-osc --volume-max=100 --input-ipc-server=%s --force-window=immediate --hwdec=auto-safe",
-		socketPath,
-	)
+	mpvArgs := []string{
+		"--no-config",
+		"--no-input-default-bindings",
+		"--no-osc",
+		"--volume-max=100",
+		"--input-ipc-server=" + socketPath,
+		"--force-window=immediate",
+		"--hwdec=auto-safe",
+	}
 	if inputConf != "" {
-		playerArgs += " --input-conf=" + inputConf
+		mpvArgs = append(mpvArgs, "--input-conf="+inputConf)
 	}
 	cmd := exec.Command(
 		"streamlink",
@@ -412,9 +418,51 @@ func playerCommand(login, socketPath, inputConf string) *exec.Cmd {
 		fmt.Sprintf("https://www.twitch.tv/%s", login),
 		"best",
 		"--player", "mpv",
-		"--player-args", playerArgs,
+		"--player-args", buildPlayerArgs(mpvArgs),
 	)
 	return cmd
+}
+
+// buildPlayerArgs joins an mpv argv into the single string --player-args takes.
+// streamlink runs shlex.split on that string, so each argument is quoted to come
+// back out identical. Callers pass an argv, never a hand-interpolated string.
+func buildPlayerArgs(argv []string) string {
+	quoted := make([]string, len(argv))
+	for i, arg := range argv {
+		quoted[i] = quotePlayerArg(arg)
+	}
+	return strings.Join(quoted, " ")
+}
+
+// quotePlayerArg quotes one argument for Python's shlex.split (POSIX mode).
+// Arguments made only of characters shlex.quote treats as safe pass through
+// unchanged, so the common case stays readable. Anything else goes inside single
+// quotes, where backslashes are literal (Windows paths, \\.\pipe\name) and an
+// embedded ' is written as '\” (close quote, escaped quote, reopen).
+func quotePlayerArg(arg string) string {
+	if arg == "" {
+		return "''"
+	}
+	safe := true
+	for i := 0; i < len(arg); i++ {
+		if !isShlexSafe(arg[i]) {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return arg
+	}
+	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+}
+
+// isShlexSafe matches the set shlex.quote leaves unquoted: [A-Za-z0-9_@%+=:,./-].
+func isShlexSafe(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	}
+	return strings.IndexByte("@%+=:,./-_", c) >= 0
 }
 
 func defaultRuntimeDir() string {
