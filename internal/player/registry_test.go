@@ -185,6 +185,24 @@ func TestRemoveStaleFilesRemovesInputConfAndDir(t *testing.T) {
 	}
 }
 
+// A record whose endpoint is not the Unix socket in its directory (a pipe name,
+// or anything else) describes a layout this cleanup does not know: it deletes
+// nothing rather than guess what the directory holds.
+func TestRemoveStaleFilesLeavesUnknownLayoutAlone(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "session")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	conf := filepath.Join(dir, inputConfName)
+	if err := os.WriteFile(conf, nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	removeStaleFiles(Record{Dir: dir, Socket: "ttv-tui-1-2-3"})
+	if _, err := os.Stat(conf); err != nil {
+		t.Fatalf("input.conf removed for an unknown layout: %v", err)
+	}
+}
+
 // startIdleGroup spawns a process in its own group, with socket in its argv like
 // mpv's --input-ipc-server, and reaps it once it dies.
 func startIdleGroup(t *testing.T, socket string) *exec.Cmd {

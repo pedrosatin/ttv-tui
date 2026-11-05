@@ -2,6 +2,7 @@ package player
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,17 +39,71 @@ func (e ipcMessage) indicatesPlaying() bool {
 	return false
 }
 
-func dialIPC(socketPath string) (net.Conn, error) {
+const (
+	// ipcDialAttemptTimeout bounds one dial; ipcDialRetry is the pause between
+	// attempts while the endpoint is not accepting connections yet.
+	ipcDialAttemptTimeout = 500 * time.Millisecond
+	ipcDialRetry          = 50 * time.Millisecond
+)
+
+var (
+	// errIPCWaitAborted means the wait was cut short (session cancelled or its
+	// process gone), not that the endpoint failed to appear.
+	errIPCWaitAborted = errors.New("player: ipc wait aborted")
+	// errIPCWaitTimeout means the endpoint never accepted a connection before
+	// the deadline.
+	errIPCWaitTimeout = errors.New("player: ipc endpoint did not accept connections")
+)
+
+// dialIPCOnce makes one attempt to connect to the endpoint.
+//
+// STUB: Unix sockets only. The Windows named-pipe dial arrives with v1.8
+// ticket 08, which replaces this one function; dialIPCUntil does not change.
+func dialIPCOnce(endpoint string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("unix", endpoint, timeout)
+}
+
+// dialIPCUntil dials endpoint until it connects. Readiness is the successful
+// dial itself, never the existence of a file: that is the only test that works
+// the same for a socket file and a named pipe. It gives up with
+// errIPCWaitTimeout once deadline passes, or with errIPCWaitAborted when ctx is
+// done or gone is closed.
+func dialIPCUntil(ctx context.Context, gone <-chan struct{}, endpoint string, deadline time.Time) (net.Conn, error) {
 	var last error
-	for i := 0; i < 40; i++ {
-		conn, err := net.DialTimeout("unix", socketPath, 500*time.Millisecond)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, errIPCWaitAborted
+		case <-gone:
+			return nil, errIPCWaitAborted
+		default:
+		}
+
+		timeout := ipcDialAttemptTimeout
+		if left := time.Until(deadline); left > 0 && left < timeout {
+			timeout = left
+		}
+		conn, err := dialIPCOnce(endpoint, timeout)
 		if err == nil {
 			return conn, nil
 		}
 		last = err
-		time.Sleep(50 * time.Millisecond)
+
+		left := time.Until(deadline)
+		if left <= 0 {
+			return nil, fmt.Errorf("%w: %s: %v", errIPCWaitTimeout, endpoint, last)
+		}
+		timer := time.NewTimer(min(ipcDialRetry, left))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, errIPCWaitAborted
+		case <-gone:
+			timer.Stop()
+			return nil, errIPCWaitAborted
+		case <-timer.C:
+		}
 	}
-	return nil, fmt.Errorf("player: dial ipc %s: %w", socketPath, last)
 }
 
 func writeIPC(conn net.Conn, payload map[string]any) error {
@@ -82,8 +137,10 @@ func readIPCMessages(conn net.Conn, handle func(ipcMessage)) error {
 }
 
 // isIPCPeerGone reports whether err means the mpv IPC peer closed or reset the
-// socket. A clean EOF and ECONNRESET (common when the peer Close()s while our
-// observe_property writes are still unread) both end playback.
+// connection. A clean EOF and ECONNRESET (common when the peer Close()s while our
+// observe_property writes are still unread) both end playback. Errors that exist
+// only on one OS (Windows reports a closed pipe or socket with its own codes, not
+// these) are judged by platformIPCPeerGone.
 func isIPCPeerGone(err error) bool {
 	if err == nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 		return true
@@ -93,7 +150,7 @@ func isIPCPeerGone(err error) bool {
 		errors.Is(err, syscall.ECONNABORTED) {
 		return true
 	}
-	return false
+	return platformIPCPeerGone(err)
 }
 
 func clampVolume(v int) int {

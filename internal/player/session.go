@@ -3,12 +3,12 @@ package player
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,14 +19,17 @@ type sessionConfig struct {
 	Generation         uint64
 	Login              string
 	RuntimeDir         string
-	Command            CommandFunc
-	CommandNoInputConf CommandFunc
+	Command            sessionCommand
+	CommandNoInputConf sessionCommand
 	WriteInputConf     func(path string) error
-	SocketWait         time.Duration
-	StopWait           time.Duration
-	BreakMaxHold       time.Duration
-	RegistryDir        string
-	Emit               func(Event)
+	// Prepare builds the session's directory and IPC endpoint. Nil uses
+	// prepareSession; tests inject a layout whose two parts share no root.
+	Prepare      func(runtimeDir string, gen uint64) (sessionLayout, error)
+	SocketWait   time.Duration
+	StopWait     time.Duration
+	BreakMaxHold time.Duration
+	RegistryDir  string
+	Emit         func(Event)
 }
 
 type pendingKind int
@@ -44,10 +47,14 @@ type pendingCommand struct {
 
 // Session is one supervised playback (one generation).
 type Session struct {
-	cfg    sessionConfig
-	dir    string
-	socket string
-	cmd    *exec.Cmd
+	cfg sessionConfig
+	// dir is the private session directory: input.conf lives in it and all of
+	// it is removed with the session. endpoint is what mpv listens on and the
+	// TUI dials (a socket file on Unix, a pipe name on Windows). They are not
+	// derived from each other.
+	dir      string
+	endpoint string
+	cmd      *exec.Cmd
 	// group is set right after cmd starts; read it only once cmd.Process exists.
 	group  processGroup
 	record string
@@ -90,8 +97,6 @@ type Session struct {
 	pending map[int64]pendingCommand
 }
 
-const maxSocketPathLen = 100
-
 // readerDrainWait bounds how long the exit path waits for the reader goroutines
 // to consume what the process wrote before exiting. Without the wait a fast
 // failure (error line, then exit) can be classified before its line is read.
@@ -99,124 +104,21 @@ const maxSocketPathLen = 100
 // deadline keeps that case from blocking the session.
 const readerDrainWait = 500 * time.Millisecond
 
-var (
-	fallbackMu      sync.RWMutex
-	fallbackBaseDir = "/tmp"
-)
-
-func getFallbackBaseDir() string {
-	fallbackMu.RLock()
-	defer fallbackMu.RUnlock()
-	return fallbackBaseDir
-}
-
-func setFallbackBaseDirForTest(dir string) func() {
-	fallbackMu.Lock()
-	orig := fallbackBaseDir
-	fallbackBaseDir = dir
-	fallbackMu.Unlock()
-	return func() {
-		fallbackMu.Lock()
-		fallbackBaseDir = orig
-		fallbackMu.Unlock()
-	}
-}
-
-func checkDirWritable(dir string) error {
-	f, err := os.CreateTemp(dir, ".probe-*")
-	if err != nil {
-		return err
-	}
-	name := f.Name()
-	_ = f.Close()
-	_ = os.Remove(name)
-	return nil
-}
-
-func createFallbackDir(dir string) error {
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		if os.IsExist(err) {
-			if err := checkDirWritable(dir); err != nil {
-				return fmt.Errorf("fallback directory %q not writable: %w", dir, err)
-			}
-			_ = os.Remove(filepath.Join(dir, "i"))
-			return nil
-		}
-		return fmt.Errorf("create fallback directory %q: %w", dir, err)
-	}
-	if err := checkDirWritable(dir); err != nil {
-		_ = os.RemoveAll(dir)
-		return fmt.Errorf("fallback directory %q not writable: %w", dir, err)
-	}
-	return nil
-}
-
-func prepareSessionSocket(runtimeDir string, gen uint64) (string, string, error) {
-	var primaryErr error
-	if runtimeDir != "" {
-		minSocketLen := len(runtimeDir) + 1 + len(fmt.Sprintf("%d-", gen)) + 2
-		if minSocketLen > maxSocketPathLen {
-			primaryErr = fmt.Errorf("socket path exceeds %d bytes (%d)", maxSocketPathLen, minSocketLen)
-		} else {
-			if err := os.MkdirAll(runtimeDir, 0o700); err != nil {
-				primaryErr = err
-			} else {
-				dir, err := os.MkdirTemp(runtimeDir, fmt.Sprintf("%d-", gen))
-				if err != nil {
-					primaryErr = err
-				} else {
-					if err := os.Chmod(dir, 0o700); err != nil {
-						_ = os.RemoveAll(dir)
-						primaryErr = err
-					} else {
-						socket := filepath.Join(dir, "i")
-						if len(socket) > maxSocketPathLen {
-							_ = os.RemoveAll(dir)
-							primaryErr = fmt.Errorf("socket path %q exceeds %d bytes (%d)", socket, maxSocketPathLen, len(socket))
-						} else if err := checkDirWritable(dir); err != nil {
-							_ = os.RemoveAll(dir)
-							primaryErr = fmt.Errorf("directory %q not writable: %w", dir, err)
-						} else {
-							return dir, socket, nil
-						}
-					}
-				}
-			}
-		}
-	}
-
-	fallbackDir := filepath.Join(getFallbackBaseDir(), fmt.Sprintf("ttv-tui-%d-%d", os.Getpid(), gen))
-	fallbackSocket := filepath.Join(fallbackDir, "i")
-
-	if len(fallbackSocket) > maxSocketPathLen {
-		if primaryErr != nil {
-			return "", "", fmt.Errorf("player: fallback socket path %q too long (%d > %d bytes) (primary %q: %v)",
-				fallbackSocket, len(fallbackSocket), maxSocketPathLen, runtimeDir, primaryErr)
-		}
-		return "", "", fmt.Errorf("player: fallback socket path %q too long (%d > %d bytes)",
-			fallbackSocket, len(fallbackSocket), maxSocketPathLen)
-	}
-
-	if err := createFallbackDir(fallbackDir); err != nil {
-		if primaryErr != nil {
-			return "", "", fmt.Errorf("player: %w (primary %q: %v)", err, runtimeDir, primaryErr)
-		}
-		return "", "", fmt.Errorf("player: %w", err)
-	}
-
-	return fallbackDir, fallbackSocket, nil
-}
-
 func startSession(cfg sessionConfig) (*Session, error) {
-	dir, socket, err := prepareSessionSocket(cfg.RuntimeDir, cfg.Generation)
+	prepare := cfg.Prepare
+	if prepare == nil {
+		prepare = prepareSession
+	}
+	layout, err := prepare(cfg.RuntimeDir, cfg.Generation)
 	if err != nil {
 		return nil, err
 	}
+	dir, endpoint := layout.Dir, layout.Endpoint
 
 	// Written before streamlink starts: mpv reads it once, at startup. A failure
 	// costs the keys in the mpv window, never the playback.
 	command := cfg.Command
-	inputConfErr := cfg.WriteInputConf(inputConfPath(socket))
+	inputConfErr := cfg.WriteInputConf(inputConfPath(dir))
 	if inputConfErr != nil {
 		if cfg.CommandNoInputConf != nil {
 			command = cfg.CommandNoInputConf
@@ -232,7 +134,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	s := &Session{
 		cfg:      cfg,
 		dir:      dir,
-		socket:   socket,
+		endpoint: endpoint,
 		cancel:   cancel,
 		state:    StateStarting,
 		volume:   100,
@@ -242,7 +144,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		inputConfErr: inputConfErr,
 	}
 
-	cmd := command(cfg.Login, socket)
+	cmd := command(cfg.Login, layout)
 	if cmd == nil {
 		s.cleanupFiles()
 		cancel()
@@ -298,7 +200,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 			OwnerPID:   os.Getpid(),
 			OwnerStart: selfStart,
 			PGID:       cmd.Process.Pid,
-			Socket:     socket,
+			Socket:     endpoint,
 			Dir:        dir,
 			Login:      cfg.Login,
 			Generation: cfg.Generation,
@@ -319,7 +221,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	return s, nil
 }
 
-// Stop terminates the process group (SIGTERM, then SIGKILL), waits, and removes the socket.
+// Stop terminates the process group (SIGTERM, then SIGKILL), waits, and removes the session directory and endpoint.
 func (s *Session) Stop() {
 	s.mu.Lock()
 	if s.stopped {
@@ -468,50 +370,23 @@ func (s *Session) consumeLines(ctx context.Context, r io.Reader) {
 }
 
 func (s *Session) superviseIPC(ctx context.Context) {
-	deadline := time.Now().Add(s.cfg.SocketWait)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-s.waitDone:
-			return
-		default:
-		}
-		if _, err := os.Stat(s.socket); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			s.mu.Lock()
-			last := s.lastLine
-			s.failHint = FailureTimeout
-			s.mu.Unlock()
-			if last == "" {
-				last = "mpv IPC socket did not appear"
-			}
-			s.transition(StateError, "", last)
-			s.cancel()
-			s.terminateProcessGroup()
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-
-	conn, err := dialIPC(s.socket)
+	// Being able to dial is the readiness criterion: it holds for a socket file
+	// and for a named pipe alike, and needs no file to exist beforehand.
+	conn, err := dialIPCUntil(ctx, s.waitDone, s.endpoint, time.Now().Add(s.cfg.SocketWait))
 	if err != nil {
-		select {
-		case <-ctx.Done():
+		if errors.Is(err, errIPCWaitAborted) {
 			return
-		case <-s.waitDone:
-			return
-		default:
 		}
 		s.mu.Lock()
 		last := s.lastLine
+		s.failHint = FailureTimeout
 		s.mu.Unlock()
 		if last == "" {
-			last = err.Error()
+			last = "mpv IPC socket did not appear"
 		}
 		s.transition(StateError, "", last)
+		s.cancel()
+		s.terminateProcessGroup()
 		return
 	}
 
@@ -986,9 +861,7 @@ func (s *Session) emit(ev Event) {
 }
 
 func (s *Session) cleanupFiles() {
-	if s.socket != "" {
-		_ = os.Remove(s.socket)
-	}
+	removeEndpoint(s.endpoint)
 	if s.dir != "" {
 		_ = os.RemoveAll(s.dir)
 	}
@@ -1014,7 +887,8 @@ func (s *Session) Volume() int {
 	return s.volume
 }
 
-// SocketPath returns the IPC socket path for this session (tests/diagnostics).
-func (s *Session) SocketPath() string {
-	return s.socket
+// IPCEndpoint returns the endpoint mpv listens on: a socket path on Unix, a
+// pipe name on Windows (tests/diagnostics).
+func (s *Session) IPCEndpoint() string {
+	return s.endpoint
 }

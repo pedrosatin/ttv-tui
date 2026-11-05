@@ -123,7 +123,7 @@ func TestQuotePlayerArgForms(t *testing.T) {
 // A socket path with a space must reach mpv as a single argument.
 func TestDefaultCommandPlayerArgsSocketWithSpace(t *testing.T) {
 	socket := "/home/a b/x/i"
-	cmd := DefaultCommand("gaules", socket)
+	cmd := DefaultCommand("gaules", socket, "/home/a b/x/mpv-input.conf")
 	var playerArgs string
 	for i, a := range cmd.Args {
 		if a == "--player-args" && i+1 < len(cmd.Args) {

@@ -57,13 +57,37 @@ type Event struct {
 	InputConfFailed bool
 }
 
-// CommandFunc builds the process to supervise for a given channel login and IPC socket path.
-// Tests inject a helper that mimics streamlink+mpv without network or a real window.
-type CommandFunc func(login, socketPath string) *exec.Cmd
+// CommandFunc builds the process to supervise for a given channel login and IPC
+// endpoint (a socket path on Unix, a pipe name on Windows). The endpoint is not
+// a place to find the session's other files. Tests inject a helper that mimics
+// streamlink+mpv without network or a real window.
+type CommandFunc func(login, endpoint string) *exec.Cmd
+
+// sessionCommand is a CommandFunc that also sees the session's directory. The
+// default command needs it for --input-conf, which an endpoint cannot give.
+type sessionCommand func(login string, layout sessionLayout) *exec.Cmd
+
+// sessionCommandOf adapts a CommandFunc, which only needs the endpoint.
+func sessionCommandOf(f CommandFunc) sessionCommand {
+	if f == nil {
+		return nil
+	}
+	return func(login string, layout sessionLayout) *exec.Cmd {
+		return f(login, layout.Endpoint)
+	}
+}
+
+// defaultSessionCommand is the production command: input.conf in the session
+// directory, IPC on the session endpoint.
+func defaultSessionCommand(login string, layout sessionLayout) *exec.Cmd {
+	return DefaultCommand(login, layout.Endpoint, inputConfPath(layout.Dir))
+}
 
 // Options configures a Manager. Zero values select production defaults.
 type Options struct {
 	// Command builds the supervised process. Nil uses the default streamlink+mpv invocation.
+	// It receives the IPC endpoint only; the default invocation also gets the
+	// session directory.
 	Command CommandFunc
 	// CommandNoInputConf replaces Command for a session whose input.conf could
 	// not be written. Nil with the default Command drops --input-conf; nil with
@@ -75,7 +99,8 @@ type Options struct {
 	// RuntimeDir is the parent for per-playback private directories.
 	// Nil/empty uses $XDG_RUNTIME_DIR/ttv-tui, falling back to os.TempDir()/ttv-tui.
 	RuntimeDir string
-	// SocketWait is how long to wait for the mpv IPC socket file to appear after spawn.
+	// SocketWait is how long to wait, after spawn, for the mpv IPC endpoint to
+	// accept a connection.
 	SocketWait time.Duration
 	// StopWait is how long to wait after SIGTERM before escalating to SIGKILL.
 	StopWait time.Duration
@@ -109,6 +134,9 @@ const (
 type Manager struct {
 	opts   Options
 	events chan Event
+	// defaultCommand is true when Options.Command was nil: the session then
+	// builds the default invocation from its directory and endpoint.
+	defaultCommand bool
 
 	mu      sync.Mutex
 	gen     uint64
@@ -137,8 +165,8 @@ func New(opts Options) *Manager {
 	if opts.EventsBuffer <= 0 {
 		opts.EventsBuffer = defaultEventsBuffer
 	}
-	if opts.Command == nil {
-		opts.Command = DefaultCommand
+	defaultCommand := opts.Command == nil
+	if defaultCommand {
 		if opts.CommandNoInputConf == nil {
 			opts.CommandNoInputConf = commandNoInputConf
 		}
@@ -156,8 +184,9 @@ func New(opts Options) *Manager {
 		opts.RuntimeDir = defaultRuntimeDir()
 	}
 	m := &Manager{
-		opts:   opts,
-		events: make(chan Event, opts.EventsBuffer),
+		opts:           opts,
+		events:         make(chan Event, opts.EventsBuffer),
+		defaultCommand: defaultCommand,
 	}
 	m.stopped = sync.NewCond(&m.mu)
 	return m
@@ -221,12 +250,16 @@ func (m *Manager) Start(login string) (uint64, error) {
 		return gen, err
 	}
 
+	command := sessionCommandOf(m.opts.Command)
+	if m.defaultCommand {
+		command = defaultSessionCommand
+	}
 	sess, err := startSession(sessionConfig{
 		Generation:         gen,
 		Login:              login,
 		RuntimeDir:         m.opts.RuntimeDir,
-		Command:            m.opts.Command,
-		CommandNoInputConf: m.opts.CommandNoInputConf,
+		Command:            command,
+		CommandNoInputConf: sessionCommandOf(m.opts.CommandNoInputConf),
 		WriteInputConf:     m.opts.WriteInputConf,
 		SocketWait:         m.opts.SocketWait,
 		StopWait:           m.opts.StopWait,
@@ -386,25 +419,28 @@ func (m *Manager) emit(ev Event) {
 // session's input.conf provides the only keys. --volume-max=100 holds the window
 // to the 0..100 range the TUI shows; mpv's default ceiling is 130. --no-osc drops
 // the on-screen controller: it answers clicks outside our bindings and speaks English.
-func DefaultCommand(login, socketPath string) *exec.Cmd {
-	return playerCommand(login, socketPath, inputConfPath(socketPath))
+//
+// endpoint goes to --input-ipc-server and inputConf to --input-conf; they are
+// independent paths (the endpoint can be a pipe name).
+func DefaultCommand(login, endpoint, inputConf string) *exec.Cmd {
+	return playerCommand(login, endpoint, inputConf)
 }
 
 // commandNoInputConf is DefaultCommand for a session without an input.conf. The
 // built-in bindings stay off: the window ignores keys and the TUI keeps working,
 // which beats going back to bindings the user cannot see or undo.
-func commandNoInputConf(login, socketPath string) *exec.Cmd {
-	return playerCommand(login, socketPath, "")
+func commandNoInputConf(login, endpoint string) *exec.Cmd {
+	return playerCommand(login, endpoint, "")
 }
 
 // playerCommand omits --input-conf when inputConf is empty.
-func playerCommand(login, socketPath, inputConf string) *exec.Cmd {
+func playerCommand(login, endpoint, inputConf string) *exec.Cmd {
 	mpvArgs := []string{
 		"--no-config",
 		"--no-input-default-bindings",
 		"--no-osc",
 		"--volume-max=100",
-		"--input-ipc-server=" + socketPath,
+		"--input-ipc-server=" + endpoint,
 		"--force-window=immediate",
 		"--hwdec=auto-safe",
 	}

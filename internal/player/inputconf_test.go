@@ -66,8 +66,8 @@ func TestInputConfVolumeOSDHasNoWords(t *testing.T) {
 	}
 }
 
-func TestInputConfPathSitsNextToSocket(t *testing.T) {
-	if got, want := inputConfPath("/run/user/1000/ttv-tui/1-x/i"), "/run/user/1000/ttv-tui/1-x/mpv-input.conf"; got != want {
+func TestInputConfPathIsInSessionDir(t *testing.T) {
+	if got, want := inputConfPath("/run/user/1000/ttv-tui/1-x"), "/run/user/1000/ttv-tui/1-x/mpv-input.conf"; got != want {
 		t.Fatalf("inputConfPath = %q, want %q", got, want)
 	}
 }
@@ -155,14 +155,21 @@ func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
 		perm    os.FileMode
 	}
 	saw := make(chan seen, 1)
+	// The directory is learned from where the writer is asked to put the file,
+	// not from the endpoint the command receives.
+	var confPath atomic.Value
 	mgr := New(Options{
 		RuntimeDir: t.TempDir(),
 		SocketWait: 5 * time.Second,
 		StopWait:   500 * time.Millisecond,
-		Command: func(login, socketPath string) *exec.Cmd {
-			path := inputConfPath(socketPath)
+		WriteInputConf: func(path string) error {
+			confPath.Store(path)
+			return writeInputConf(path)
+		},
+		Command: func(login, endpoint string) *exec.Cmd {
+			path, _ := confPath.Load().(string)
 			var s seen
-			s.dir = filepath.Dir(socketPath)
+			s.dir = filepath.Dir(path)
 			if fi, err := os.Stat(s.dir); err == nil {
 				s.dirPerm = fi.Mode().Perm()
 			}
@@ -173,7 +180,7 @@ func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
 				s.content = string(raw)
 			}
 			saw <- s
-			return helperCommand("play")(login, socketPath)
+			return helperCommand("play")(login, endpoint)
 		},
 	})
 	t.Cleanup(mgr.Close)

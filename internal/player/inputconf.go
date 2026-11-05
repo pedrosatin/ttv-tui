@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// inputConfName is the mpv input.conf written next to the IPC socket.
+// inputConfName is the mpv input.conf written in the session directory.
 const inputConfName = "mpv-input.conf"
 
 // volumeOSD shows the new volume as a bare number. The add commands go through
@@ -36,10 +36,11 @@ func inputConfContent() string {
 	return b.String()
 }
 
-// inputConfPath is where a session's input.conf lives: the private directory
-// that holds its IPC socket, which is removed with the session.
-func inputConfPath(socketPath string) string {
-	return filepath.Join(filepath.Dir(socketPath), inputConfName)
+// inputConfPath is where a session's input.conf lives: its private directory,
+// which is removed with the session. It takes the directory, never the IPC
+// endpoint: on Windows the endpoint is a pipe name, not a path inside it.
+func inputConfPath(sessionDir string) string {
+	return filepath.Join(sessionDir, inputConfName)
 }
 
 // writeInputConf creates the input.conf at path. input.conf can run arbitrary

@@ -269,7 +269,7 @@ func TestSocketRemovedAfterExit(t *testing.T) {
 	socket := ""
 	sessionDir := ""
 	if mgr.session != nil {
-		socket = mgr.session.socket
+		socket = mgr.session.endpoint
 		sessionDir = mgr.session.dir
 	}
 	mgr.mu.Unlock()
@@ -1207,7 +1207,7 @@ func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
 	socket := ""
 	pid := 0
 	if mgr.session != nil {
-		socket = mgr.session.socket
+		socket = mgr.session.endpoint
 		pid = mgr.session.Pid()
 	}
 	mgr.mu.Unlock()
@@ -1284,7 +1284,7 @@ func TestPausePropertyChangeFromMPVWindow(t *testing.T) {
 }
 
 func TestDefaultCommandShape(t *testing.T) {
-	cmd := DefaultCommand("gaules", "/run/user/1000/ttv-tui/1/i")
+	cmd := DefaultCommand("gaules", "/run/user/1000/ttv-tui/1/i", "/run/user/1000/ttv-tui/1/mpv-input.conf")
 	if filepath.Base(cmd.Path) != "streamlink" && !strings.HasSuffix(cmd.Path, "streamlink") {
 		// exec.Command may leave Path empty until LookPath; check Args[0].
 		if cmd.Args[0] != "streamlink" {
@@ -1343,7 +1343,7 @@ func TestRealStreamlinkSmoke(t *testing.T) {
 	var socket string
 	if mgr.session != nil {
 		pid = mgr.session.Pid()
-		socket = mgr.session.socket
+		socket = mgr.session.endpoint
 	}
 	mgr.mu.Unlock()
 	if pid > 0 {
@@ -1404,7 +1404,7 @@ func TestLongRuntimeDirFallsBackAndCleansUp(t *testing.T) {
 	mgr.mu.Lock()
 	var socket, sessionDir string
 	if mgr.session != nil {
-		socket = mgr.session.socket
+		socket = mgr.session.endpoint
 		sessionDir = mgr.session.dir
 	}
 	mgr.mu.Unlock()
@@ -1460,7 +1460,7 @@ func TestLongRuntimeDirDefaultEnvFallsBack(t *testing.T) {
 	mgr.mu.Lock()
 	var socket, sessionDir string
 	if mgr.session != nil {
-		socket = mgr.session.socket
+		socket = mgr.session.endpoint
 		sessionDir = mgr.session.dir
 	}
 	mgr.mu.Unlock()
