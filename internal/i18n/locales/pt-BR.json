@@ -182,6 +182,7 @@
   "app.err_load_config": "carregar configuração: %w",
   "app.err_persist_lang": "gravar o idioma na configuração: %w",
   "app.err_resolve_state_path": "resolver caminho do estado: %w",
+  "app.err_tty_required": "stdin e stdout precisam ser terminais. Execute diretamente no terminal ou use ssh -t.",
   "app.err_run_tui": "executar tui: %w",
   "app.orphan_prompt": "Um player de uma sessão anterior ainda está tocando (canal %s, pid %d). Encerrar antes de continuar? [S/n] ",
   "app.orphan_stopped": "Player da sessão anterior encerrado.",

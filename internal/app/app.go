@@ -76,6 +76,18 @@ func Run(opts Options) error {
 		return fmt.Errorf("initialize i18n catalog: %w", err)
 	}
 
+	input := opts.Input
+	if input == nil {
+		input = os.Stdin
+	}
+	output := opts.Output
+	if output == nil {
+		output = os.Stdout
+	}
+	if !isTerminal(input) || !isTerminal(output) {
+		return errors.New(catalog.T("app.err_tty_required"))
+	}
+
 	if opts.Lang != "" {
 		norm := i18n.NormalizeLocale(opts.Lang)
 		if norm != "" && cfg.Language != norm {
@@ -103,14 +115,6 @@ func Run(opts Options) error {
 	}
 	registryDir := playerRegistryDir(statePath)
 
-	input := opts.Input
-	if input == nil {
-		input = os.Stdin
-	}
-	output := opts.Output
-	if output == nil {
-		output = os.Stdout
-	}
 	logw := opts.Log
 	if logw == nil {
 		logw = os.Stderr

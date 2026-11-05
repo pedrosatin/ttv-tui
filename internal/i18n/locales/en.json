@@ -182,6 +182,7 @@
   "app.err_load_config": "load config: %w",
   "app.err_persist_lang": "persist language to config: %w",
   "app.err_resolve_state_path": "resolve state path: %w",
+  "app.err_tty_required": "stdin and stdout must be terminals. Run directly in a terminal or use ssh -t.",
   "app.err_run_tui": "run tui: %w",
   "app.orphan_prompt": "A player from a previous session is still running (channel %s, pid %d). Stop it before continuing? [Y/n] ",
   "app.orphan_stopped": "Player from the previous session stopped.",

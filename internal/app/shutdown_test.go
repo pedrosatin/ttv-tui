@@ -487,22 +487,17 @@ func spawnOrphan(t *testing.T, dir string) (playerPid, childPid int) {
 	return playerPid, childPid
 }
 
-func TestRunStopsOrphanedPlayerAtStartupNonInteractive(t *testing.T) {
+func TestHandleOrphansStopsPlayerNonInteractive(t *testing.T) {
 	dir := t.TempDir()
 	playerPid, childPid := spawnOrphan(t, dir)
 
 	var logBuf bytes.Buffer
-	err := Run(Options{
-		ConfigPath: filepath.Join(dir, "config.toml"),
-		StatePath:  filepath.Join(dir, "state", "state.json"),
-		Source:     emptySource{},
-		Input:      strings.NewReader("\x11"), // not a terminal → no question; Ctrl+Q quits
-		Output:     &bytes.Buffer{},
-		Log:        &logBuf,
-	})
+	cat, err := i18n.New(i18n.LangEN)
 	if err != nil {
-		t.Fatalf("Run: %v", err)
+		t.Fatal(err)
 	}
+	handleOrphans(playerRegistryDir(filepath.Join(dir, "state", "state.json")),
+		strings.NewReader(""), &bytes.Buffer{}, &logBuf, false, cat)
 	if alive(playerPid) || alive(childPid) || groupHasMembers(playerPid) {
 		t.Fatalf("orphaned player group %d survived startup", playerPid)
 	}
