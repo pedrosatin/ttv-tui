@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -926,30 +927,11 @@ func TestPlaybackBaselineSyncsVolumeAndPause(t *testing.T) {
 		t.Fatalf("Volume=%d, want 100 (baseline must override softvol 102)", mgr.Volume())
 	}
 
-	deadline := time.After(2 * time.Second)
-	var data []byte
-	for {
-		var err error
-		data, err = os.ReadFile(cmdLog)
-		if err == nil {
-			body := string(data)
-			if strings.Contains(body, `"volume"`) && strings.Contains(body, `"pause"`) {
-				break
-			}
-		}
-		select {
-		case <-deadline:
-			t.Fatalf("timeout waiting for baseline set_property in log: %s", data)
-		case <-time.After(20 * time.Millisecond):
-		}
-	}
-	body := string(data)
-	if !strings.Contains(body, `["set_property","volume",100]`) {
-		t.Fatalf("expected baseline set_property volume 100, got %s", body)
-	}
-	if !strings.Contains(body, `["set_property","pause",false]`) {
-		t.Fatalf("expected baseline set_property pause false, got %s", body)
-	}
+	// Both baselines must reach mpv, in any order. The session has to end up
+	// playing with the pause lifted: the helper opened paused.
+	waitCommands(t, cmdLog, 5*time.Second, `["set_property","volume",100]`, `["set_property","pause",false]`)
+	waitCommandsSettled(t, mgr, StatePlaying, 5*time.Second)
+	drainEvents(mgr)
 
 	// Manual controls still work after the baseline.
 	if err := mgr.TogglePause(); err != nil {
@@ -998,16 +980,7 @@ func TestPauseCommandCorrelatesByRequestID(t *testing.T) {
 		t.Fatalf("state=%s", ev.State)
 	}
 
-	data, err := os.ReadFile(cmdLog)
-	if err != nil {
-		t.Fatalf("read cmd log: %v", err)
-	}
-	if !strings.Contains(string(data), `"request_id"`) {
-		t.Fatalf("expected request_id in command log, got %s", data)
-	}
-	if !strings.Contains(string(data), `"pause"`) {
-		t.Fatalf("expected pause command in log, got %s", data)
-	}
+	waitCommands(t, cmdLog, 5*time.Second, `["set_property","pause",true],"request_id":`)
 }
 
 func TestStaleRequestIDReplyIgnored(t *testing.T) {
@@ -1202,6 +1175,70 @@ func TestVolumeClampOnAdjust(t *testing.T) {
 		t.Fatalf("AdjustVolume +5 from 0: %v", err)
 	}
 	waitVolume(t, mgr, gen, 5, 3*time.Second)
+}
+
+// waitCommands reads the fake mpv's command log until every want is there, in
+// any order. A want is a piece of a log line, so it should name the command and
+// its arguments: a bare "pause" already matches observe_property.
+func waitCommands(t *testing.T, path string, timeout time.Duration, want ...string) {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		data, err := os.ReadFile(path)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatalf("read command log: %v", err)
+		}
+		missing := slices.DeleteFunc(slices.Clone(want), func(w string) bool {
+			return strings.Contains(string(data), w)
+		})
+		if len(missing) == 0 {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("mpv never received %q, log so far:\n%s", missing, data)
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// waitCommandsSettled waits until mpv has replied to every command sent and the
+// session is in want. Replies follow the events the helper sent on connect, so
+// none of those can still change the state afterwards.
+func waitCommandsSettled(t *testing.T, mgr *Manager, want State, timeout time.Duration) {
+	t.Helper()
+	mgr.mu.Lock()
+	sess := mgr.session
+	mgr.mu.Unlock()
+	if sess == nil {
+		t.Fatal("expected session")
+	}
+	deadline := time.After(timeout)
+	for {
+		sess.cmdMu.Lock()
+		pending := len(sess.pending)
+		sess.cmdMu.Unlock()
+		state, _ := sessionState(mgr)
+		if pending == 0 && state == want {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("session did not settle: %d commands unanswered, state=%s, want %s", pending, state, want)
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// drainEvents drops what is queued, so a later wait sees only what follows.
+func drainEvents(mgr *Manager) {
+	for {
+		select {
+		case <-mgr.Events():
+		default:
+			return
+		}
+	}
 }
 
 func waitVolume(t *testing.T, mgr *Manager, gen uint64, want int, timeout time.Duration) {

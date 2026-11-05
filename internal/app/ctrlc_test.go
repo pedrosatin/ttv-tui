@@ -6,6 +6,7 @@ import (
 	"context"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -56,18 +57,33 @@ func (p *ptyTUI) send(b []byte) {
 	}
 }
 
+// waitScreen waits until the output after offset off holds every want, and
+// returns that output. A frame reaches the PTY in pieces, so one part of it on
+// screen says nothing about the rest: wait for the text the test needs.
+func (p *ptyTUI) waitScreen(off int, want ...string) string {
+	p.t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		screen := p.screenSince(off)
+		missing := slices.DeleteFunc(slices.Clone(want), func(w string) bool {
+			return strings.Contains(screen, w)
+		})
+		if len(missing) == 0 {
+			return screen
+		}
+		if time.Now().After(deadline) {
+			p.t.Fatalf("screen never showed %q; got:\n%s", missing, screen)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // sendAndWait writes b and waits until the screen redrawn afterwards contains want.
 func (p *ptyTUI) sendAndWait(b []byte, want string) {
 	p.t.Helper()
 	off := p.mark()
 	p.send(b)
-	deadline := time.Now().Add(10 * time.Second)
-	for !strings.Contains(p.screenSince(off), want) {
-		if time.Now().After(deadline) {
-			p.t.Fatalf("after %q, screen never showed %q; got: %q", b, want, p.screenSince(off))
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	p.waitScreen(off, want)
 }
 
 // openChannel enters the category and the channel, which switches playback to

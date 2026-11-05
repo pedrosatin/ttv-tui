@@ -5,7 +5,6 @@ package app
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
@@ -31,19 +30,10 @@ func TestLanguageConsistency_PTY(t *testing.T) {
 			}
 			p := startTUIOnPTY(t, "TTV_APP_CHANNEL_FILTER=1", "LANG="+tc.locale, "LC_ALL=", "LC_MESSAGES=")
 
-			deadline := time.Now().Add(10 * time.Second)
-			for !strings.Contains(p.screenSince(0), "FilterLangCat") {
-				if time.Now().After(deadline) {
-					t.Fatalf("categories missing FilterLangCat:\n%s", p.screenSince(0))
-				}
-				time.Sleep(20 * time.Millisecond)
-			}
-			home := p.screenSince(0)
-			for _, key := range []string{"categories.title", "status.help_hint", "status.quit_hint"} {
-				if want := cat.T(key); !strings.Contains(home, want) {
-					t.Errorf("home missing %s = %q:\n%s", key, want, home)
-				}
-			}
+			// The bar closes the same frame that opens with the list: seeing the
+			// category proves nothing about it, so the wait names both.
+			home := p.waitScreen(0, "FilterLangCat", cat.T("categories.title"),
+				cat.T("status.help_hint"), cat.T("status.quit_hint"))
 			t.Logf("PTY capture (%s) — home:\n%s", tc.lang, home)
 
 			p.sendAndWait([]byte("\r"), "PtLive")
@@ -56,20 +46,20 @@ func TestLanguageConsistency_PTY(t *testing.T) {
 
 			helpOff := p.mark()
 			p.sendAndWait([]byte("?"), cat.T("help.title"))
-			help := p.screenSince(helpOff)
 			modes := strings.Join([]string{
 				cat.T("layout.mode.split"), cat.T("layout.mode.chat"),
 				cat.T("layout.mode.list"), cat.T("layout.mode.focus"),
 			}, "/")
-			if !strings.Contains(help, modes) {
-				t.Errorf("help must name the layout modes as %q:\n%s", modes, help)
-			}
+			help := p.waitScreen(helpOff, modes)
 			t.Logf("PTY capture (%s) — help:\n%s", tc.lang, help)
 			p.send([]byte("?"))
 
 			menuOff := p.mark()
 			p.sendAndWait([]byte("l"), cat.T("channel_filter.title"))
-			t.Logf("PTY capture (%s) — channel filter menu:\n%s", tc.lang, p.screenSince(menuOff))
+			// The scan below only proves absence over a whole frame, so wait for
+			// the status line that closes the menu's.
+			menu := p.waitScreen(menuOff, cat.T("channel_filter.status_open")+" | "+cat.T("status.help_hint"))
+			t.Logf("PTY capture (%s) — channel filter menu:\n%s", tc.lang, menu)
 
 			all := p.screenSince(0)
 			for _, word := range tc.forbidden {
