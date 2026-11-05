@@ -145,8 +145,6 @@
   "help.chat": "Chat: ↑/PgUp/Home rola · End/G vivo · y copia · i escreve · Ctrl+T reconecta",
   "help.app": "App: Ctrl+Q sair · ? ou F1 alternar ajuda",
   "layout.focus_hint": "Modo foco — Ctrl+H lista · Ctrl+L chat · Ctrl+W cicla layouts",
-  "wm.hyprctl_missing": "window_control=hyprland, mas hyprctl não está no PATH — as teclas de layout funcionam; o mpv não se move",
-  "wm.apply_failed": "Não foi possível posicionar a janela do mpv: %s",
   "help.colors": "Cores: verde = ●/[ao vivo] e viewers · amarelo = pausa e ★ favorito · ciano = foco · vermelho = erro/[offline] · magenta = sistema · menção com sublinhado",
   "section.favorites": "Favoritos",
   "section.recents": "Recentes",

@@ -145,8 +145,6 @@
   "help.chat": "Chat: ↑/PgUp/Home scroll · End/G live · y copy · i write · Ctrl+T reconnect",
   "help.app": "App: Ctrl+Q quit · ? or F1 toggle help",
   "layout.focus_hint": "Focus mode — Ctrl+H list · Ctrl+L chat · Ctrl+W cycle layouts",
-  "wm.hyprctl_missing": "window_control=hyprland but hyprctl not found — layout keys still work, mpv stays put",
-  "wm.apply_failed": "Could not place mpv window: %s",
   "help.colors": "Colors: green = ●/[live] and viewers · yellow = pause and ★ favorite · cyan = focus · red = error/[offline] · magenta = system · mention with underline",
   "section.favorites": "Favorites",
   "section.recents": "Recent",

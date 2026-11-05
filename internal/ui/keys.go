@@ -241,15 +241,15 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Layout controls work from any mode (compose, help, search, filter).
 	if key.Matches(msg, m.keys.CycleLayout) {
 		m.cycleLayout()
-		return m, m.applyWindowLayoutCmd()
+		return m, nil
 	}
 	if key.Matches(msg, m.keys.ToggleList) {
 		m.toggleListPanel()
-		return m, m.applyWindowLayoutCmd()
+		return m, nil
 	}
 	if key.Matches(msg, m.keys.ToggleChat) {
 		m.toggleChatPanel()
-		return m, m.applyWindowLayoutCmd()
+		return m, nil
 	}
 
 	if m.searching {

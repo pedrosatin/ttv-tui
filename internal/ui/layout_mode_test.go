@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -10,16 +9,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
-
-type recordingWindowCtrl struct {
-	calls []LayoutMode
-	err   error
-}
-
-func (r *recordingWindowCtrl) Apply(layout LayoutMode) error {
-	r.calls = append(r.calls, layout)
-	return r.err
-}
 
 func sendLayoutKey(t *testing.T, m Model, keyType tea.KeyType) Model {
 	t.Helper()
@@ -251,41 +240,6 @@ func TestLayoutFocusHasNoPanels(t *testing.T) {
 	}
 	if !strings.Contains(plain, "Focus mode") {
 		t.Fatalf("focus view missing hint:\n%s", plain)
-	}
-}
-
-func TestLayoutMissingWindowControllerDoesNotBreak(t *testing.T) {
-	m, _, _ := setupTwoPanelModel(t)
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 14})
-	m = updated.(Model)
-	m.windowCtrl = nil
-
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlW})
-	m = updated.(Model)
-	if cmd != nil {
-		t.Fatalf("nil windowCtrl must not schedule Apply cmd, got %T", cmd)
-	}
-	if m.LayoutMode() != LayoutChat {
-		t.Fatalf("layout still cycles without controller: %q", m.LayoutMode())
-	}
-}
-
-func TestLayoutWindowControllerInvoked(t *testing.T) {
-	m, _, _ := setupTwoPanelModel(t)
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 14})
-	m = updated.(Model)
-	rec := &recordingWindowCtrl{}
-	m.windowCtrl = rec
-
-	m = sendLayoutKey(t, m, tea.KeyCtrlW)
-	if len(rec.calls) != 1 || rec.calls[0] != LayoutChat {
-		t.Fatalf("Apply calls=%v, want [chat]", rec.calls)
-	}
-
-	rec.err = errors.New("boom")
-	m = sendLayoutKey(t, m, tea.KeyCtrlW)
-	if m.statusNotice == "" || !strings.Contains(m.statusNotice, "boom") {
-		t.Fatalf("expected apply failure notice, got %q", m.statusNotice)
 	}
 }
 

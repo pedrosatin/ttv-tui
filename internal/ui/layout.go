@@ -1,9 +1,7 @@
 package ui
 
-import tea "github.com/charmbracelet/bubbletea"
-
-// LayoutMode names the visible TUI panel arrangement for the status bar and
-// optional window-manager placement. Values match the ticket tokens exactly.
+// LayoutMode names the visible TUI panel arrangement for the status bar.
+// Values match the ticket tokens exactly.
 type LayoutMode string
 
 const (
@@ -12,12 +10,6 @@ const (
 	LayoutList  LayoutMode = "list"  // list only
 	LayoutFocus LayoutMode = "focus" // both hidden (video focus)
 )
-
-// WindowController places the external player window when the TUI layout
-// changes. Implementations must not panic; missing windows are a no-op.
-type WindowController interface {
-	Apply(layout LayoutMode) error
-}
 
 // LayoutMode returns the current panel arrangement derived from visibility flags.
 func (m Model) LayoutMode() LayoutMode {
@@ -92,21 +84,5 @@ func (m *Model) normalizeFocusAfterLayout() {
 	default:
 		// Focus mode: leave underlying focus as-is; Focus() reports list.
 		m.composing = false
-	}
-}
-
-// WindowControlMsg reports the result of an optional player-window placement.
-type WindowControlMsg struct {
-	Err error
-}
-
-func (m Model) applyWindowLayoutCmd() tea.Cmd {
-	if m.windowCtrl == nil {
-		return nil
-	}
-	ctrl := m.windowCtrl
-	layout := m.LayoutMode()
-	return func() tea.Msg {
-		return WindowControlMsg{Err: ctrl.Apply(layout)}
 	}
 }

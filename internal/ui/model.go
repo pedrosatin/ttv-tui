@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -188,19 +187,10 @@ func WithCorruptNotice(notice string) Option {
 	}
 }
 
-// WithStatusNotice initializes the Model with a one-time status-bar notice
-// (for example when optional window control is configured but unavailable).
+// WithStatusNotice initializes the Model with a one-time status-bar notice.
 func WithStatusNotice(notice string) Option {
 	return func(m *Model) {
 		m.statusNotice = notice
-	}
-}
-
-// WithWindowController attaches an optional compositor bridge that places the
-// mpv window when the TUI layout changes.
-func WithWindowController(ctrl WindowController) Option {
-	return func(m *Model) {
-		m.windowCtrl = ctrl
 	}
 }
 
@@ -293,12 +283,11 @@ type Model struct {
 	// showList / showChat are the session layout flags (ticket 02). Both start
 	// true (split). Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag
 	// independently. Layout is not persisted to disk.
-	showList   bool
-	showChat   bool
-	windowCtrl WindowController
-	width      int
-	height     int
-	quitting   bool
+	showList bool
+	showChat bool
+	width    int
+	height   int
+	quitting bool
 }
 
 // New creates a new UI Model backed by the given i18n catalog and options.
@@ -670,12 +659,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Volume > 0 || msg.State == PlayerStatePlaying || msg.State == PlayerStatePaused || msg.State == PlayerStateBreak {
 			m.playerVolume = clampPlayerVolume(msg.Volume)
-		}
-		return m, nil
-
-	case WindowControlMsg:
-		if msg.Err != nil {
-			m.statusNotice = fmt.Sprintf(m.t("wm.apply_failed"), sanitizeChatText(msg.Err.Error()))
 		}
 		return m, nil
 

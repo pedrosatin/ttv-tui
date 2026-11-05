@@ -246,62 +246,39 @@ func TestChannelFilterRoundTrip(t *testing.T) {
 	})
 }
 
-func TestWindowControlRoundTrip(t *testing.T) {
+func TestLegacyWindowControlKeyIgnored(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
 
-	want := Config{
-		Language:      "en",
-		WindowControl: "hyprland",
+	for _, raw := range []string{
+		`window_control = "hyprland"` + "\n",
+		`window_control = "Hypr"` + "\n",
+		`window_control = "off"` + "\n",
+		"language = \"en\"\nwindow_control = \"hyprland\"\nmin_viewers = 10\n",
+	} {
+		if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		got, err := LoadFrom(path)
+		if err != nil {
+			t.Fatalf("LoadFrom with legacy window_control must succeed: %v\nraw=%q", err, raw)
+		}
+		if strings.Contains(raw, "language") {
+			assertConfigEqual(t, got, Config{Language: "en", MinViewers: 10})
+		} else {
+			assertConfigEqual(t, got, Config{})
+		}
 	}
-	if err := SaveTo(path, want); err != nil {
+
+	if err := SaveTo(path, Config{Language: "pt-BR"}); err != nil {
 		t.Fatalf("SaveTo: %v", err)
 	}
-	raw, err := os.ReadFile(path)
+	saved, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("read saved: %v", err)
 	}
-	if !strings.Contains(string(raw), `window_control = "hyprland"`) {
-		t.Fatalf("missing window_control in %q", raw)
-	}
-	got, err := LoadFrom(path)
-	if err != nil {
-		t.Fatalf("LoadFrom: %v", err)
-	}
-	assertConfigEqual(t, got, want)
-
-	if err := os.WriteFile(path, []byte("window_control = \"Hypr\"\n"), 0o600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	got, err = LoadFrom(path)
-	if err != nil {
-		t.Fatalf("LoadFrom alias: %v", err)
-	}
-	assertConfigEqual(t, got, Config{WindowControl: "hyprland"})
-
-	if err := os.WriteFile(path, []byte("window_control = \"off\"\n"), 0o600); err != nil {
-		t.Fatalf("write off: %v", err)
-	}
-	got, err = LoadFrom(path)
-	if err != nil {
-		t.Fatalf("LoadFrom off: %v", err)
-	}
-	assertConfigEqual(t, got, Config{})
-}
-
-func TestNormalizeWindowControl(t *testing.T) {
-	cases := map[string]string{
-		"":         "",
-		"off":      "",
-		"NONE":     "",
-		"hyprland": "hyprland",
-		"Hypr":     "hyprland",
-		"sway":     "sway",
-	}
-	for in, want := range cases {
-		if got := NormalizeWindowControl(in); got != want {
-			t.Errorf("NormalizeWindowControl(%q)=%q, want %q", in, got, want)
-		}
+	if strings.Contains(string(saved), "window_control") {
+		t.Fatalf("SaveTo must not write removed window_control key: %q", saved)
 	}
 }
 
