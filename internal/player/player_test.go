@@ -1300,6 +1300,7 @@ func TestDefaultCommandShape(t *testing.T) {
 		"--no-config",
 		"--no-input-default-bindings",
 		"--input-conf=/run/user/1000/ttv-tui/1/mpv-input.conf",
+		"--no-osc",
 		"--volume-max=100",
 	} {
 		if !strings.Contains(joined, want) {

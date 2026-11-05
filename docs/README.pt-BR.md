@@ -197,7 +197,7 @@ chat nunca dispara o aviso de terminal estreito.
 
 Pausa e volume funcionam nas duas janelas, a TUI e a janela do `mpv`, e a barra de status acompanha o volume seja qual for a janela que o alterou. O volume para em 100% nas duas. `Ctrl+X` só funciona na TUI.
 
-O `ttv-tui` substitui os atalhos do `mpv`, então as demais teclas não fazem nada na janela do vídeo, incluindo `q`, `f` e as setas. Para fechar o vídeo, pressione `Ctrl+X` ou feche a janela dele.
+O `ttv-tui` substitui os atalhos do `mpv`, então as demais teclas não fazem nada na janela do vídeo, incluindo `q`, `f` e as setas. A janela do vídeo não tem controles próprios, nem barra na tela; tudo passa pela TUI. Para fechar o vídeo, pressione `Ctrl+X` ou feche a janela dele.
 
 ### Aplicativo
 
@@ -263,7 +263,7 @@ Consulte [SECURITY.md](../SECURITY.md) para instruções de relato privado de vu
 - **`Token expirado ou inválido` (`Token expired or invalid`).** Os tokens de sessão do navegador expiram quando a sessão web termina. Faça login novamente em `twitch.tv` pelo navegador e execute `ttv-tui login --from-browser` ou `ttv-tui login --import twt`.
 - **Pergunta sobre player órfão ao iniciar (`Um player de uma sessão anterior ainda está tocando...`).** Se um processo anterior do `ttv-tui` foi interrompido de forma abrupta com `SIGKILL`, o grupo de processos `streamlink` e `mpv` pode ter continuado em execução. Na abertura seguinte, o `ttv-tui` confere o PID e o socket registrados em `~/.local/state/ttv-tui/players/` e pergunta `[S/n]` antes de encerrar o player remanescente.
 - **Chat oculto.** O `ttv-tui` oculta o painel direito de chat quando a largura do terminal fica abaixo de 80 colunas. Redimensione a janela do terminal ou o painel do tmux para pelo menos 80 colunas.
-- **Sem janela de vídeo ou sem áudio no `mpv`.** O `ttv-tui` inicia o `mpv` com `--no-config --no-input-default-bindings --volume-max=100 --force-window=immediate --hwdec=auto-safe`. Verifique se a sessão gráfica Wayland ou X11 (`DISPLAY` ou `WAYLAND_DISPLAY`) e o servidor de áudio (PipeWire / PulseAudio) estão ativos, e confira se o volume na barra de status não está em `vol 0` (pressione `+` para aumentar). Pressione `?` após uma falha de reprodução para ler a linha `Último erro do player` (`Last player error`) retornada pelo `streamlink` ou pelo `mpv`.
+- **Sem janela de vídeo ou sem áudio no `mpv`.** O `ttv-tui` inicia o `mpv` com `--no-config --no-input-default-bindings --no-osc --volume-max=100 --force-window=immediate --hwdec=auto-safe`. Verifique se a sessão gráfica Wayland ou X11 (`DISPLAY` ou `WAYLAND_DISPLAY`) e o servidor de áudio (PipeWire / PulseAudio) estão ativos, e confira se o volume na barra de status não está em `vol 0` (pressione `+` para aumentar). Pressione `?` após uma falha de reprodução para ler a linha `Último erro do player` (`Last player error`) retornada pelo `streamlink` ou pelo `mpv`.
 
 ## Desenvolvimento
 

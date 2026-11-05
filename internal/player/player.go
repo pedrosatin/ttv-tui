@@ -383,7 +383,8 @@ func (m *Manager) emit(ev Event) {
 // with mpv IPC/window/hwdec flags. --no-config ignores user configs but keeps the
 // bindings compiled into mpv, so --no-input-default-bindings drops those and the
 // session's input.conf provides the only keys. --volume-max=100 holds the window
-// to the 0..100 range the TUI shows; mpv's default ceiling is 130.
+// to the 0..100 range the TUI shows; mpv's default ceiling is 130. --no-osc drops
+// the on-screen controller: it answers clicks outside our bindings and speaks English.
 func DefaultCommand(login, socketPath string) *exec.Cmd {
 	return playerCommand(login, socketPath, inputConfPath(socketPath))
 }
@@ -398,7 +399,7 @@ func commandNoInputConf(login, socketPath string) *exec.Cmd {
 // playerCommand omits --input-conf when inputConf is empty.
 func playerCommand(login, socketPath, inputConf string) *exec.Cmd {
 	playerArgs := fmt.Sprintf(
-		"--no-config --no-input-default-bindings --volume-max=100 --input-ipc-server=%s --force-window=immediate --hwdec=auto-safe",
+		"--no-config --no-input-default-bindings --no-osc --volume-max=100 --input-ipc-server=%s --force-window=immediate --hwdec=auto-safe",
 		socketPath,
 	)
 	if inputConf != "" {
