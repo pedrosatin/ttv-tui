@@ -171,6 +171,8 @@ var allowedExceptions = map[string]bool{
 	// CLI binary, command, and flag names
 	"ttv-tui":             true,
 	"login":               true,
+	"doctor":              true,
+	"ttv-tui doctor":      true,
 	"version":             true,
 	"help":                true,
 	"h":                   true,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/pedrosatin/ttv-tui/internal/app"
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/doctor"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
@@ -99,6 +100,9 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 
 	rest := fs.Args()
 	if len(rest) > 0 {
+		if rest[0] == "doctor" {
+			return runDoctorSubcommand(rest[1:], resolvedLang, cfgPath, stdout, stderr)
+		}
 		if rest[0] == "login" {
 			return runLoginSubcommand(rest[1:], lang, importSrc, stdin, stdout, stderr, baseLoginOpts, cfg)
 		}
@@ -215,4 +219,24 @@ func runLoginSubcommand(
 		return 1
 	}
 	return 0
+}
+
+func runDoctorSubcommand(args []string, rootLang, configPath string, stdout, stderr io.Writer) int {
+	cat, _ := i18n.New(i18n.Resolve(findLangFlag(args), rootLang, i18n.EnvLocale()))
+	fs := flag.NewFlagSet("ttv-tui doctor", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	lang := rootLang
+	fs.StringVar(&lang, "lang", rootLang, cat.T("cli.flag.lang"))
+	fs.Usage = func() { _, _ = fmt.Fprint(fs.Output(), cat.T("doctor.usage")); fs.PrintDefaults() }
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if len(fs.Args()) != 0 {
+		fs.Usage()
+		return 2
+	}
+	return doctor.Run(stdout, doctor.Options{Version: version, Lang: lang, ConfigPath: configPath})
 }

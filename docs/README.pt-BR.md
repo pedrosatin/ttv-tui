@@ -4,15 +4,29 @@
 
 [English](../README.md)
 
-Twitch no terminal para Linux. Navegue por categorias e canais ao vivo, assista às transmissões via `streamlink` e `mpv` com filtro de anúncios e controles de reprodução pela própria TUI, e converse no chat IRC sem abrir o navegador.
+Twitch no terminal para Linux, macOS e Windows. Navegue por categorias e canais ao vivo, assista às transmissões via `streamlink` e `mpv` com filtro de anúncios e controles de reprodução pela própria TUI, e converse no chat IRC sem abrir o navegador.
 
 ![Assistindo a um canal ao vivo com chat lado a lado](img/playing-chat.svg)
 
+## Suporte na v1.8
+
+| Sistema / arquitetura | Suporte |
+| --- | --- |
+| Linux amd64 / arm64 | Suportado |
+| macOS arm64 (Apple Silicon) | Suportado |
+| Windows x64 (amd64) | Suportado |
+| macOS Intel (darwin/amd64) | Experimental; compila, sem compromisso de suporte |
+| Windows ARM (windows/arm64) | Experimental; compila, sem compromisso de suporte |
+
+A matriz define os alvos da v1.8. Compilação cruzada não comprova reprodução, áudio, login, clipboard ou encerramento em máquina real. A release v0.1.9 citada abaixo contém binários Linux; arquivos macOS/Windows dependem de uma release que os publique.
+
+Navegação, busca, favoritos locais, chat IRC e vídeo externo com pausa/volume compõem o escopo nos alvos suportados. Use um terminal com Unicode e cores ANSI, com pelo menos 80 colunas para o chat. No Linux, vídeo exige uma sessão gráfica e áudio configurados. No Windows, use Windows Terminal; testes automatizados de ConPTY ficam fora desta versão.
+
 ## Instalação
 
-### Script de instalação
+### Linux e macOS: script de instalação
 
-O script [`packaging/install.sh`](../packaging/install.sh) baixa o tarball da release e o arquivo `checksums.txt`, valida o hash SHA-256 com `sha256sum` e instala o binário em `~/.local/bin/ttv-tui`, o atalho `.desktop` em `~/.local/share/applications/ttv-tui.desktop` e o ícone em `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
+O script [`packaging/install.sh`](../packaging/install.sh) baixa o tarball da release e o arquivo `checksums.txt`, valida o hash SHA-256 com `sha256sum` ou `shasum -a 256` e instala o binário em `~/.local/bin/ttv-tui`, o atalho `.desktop` em `~/.local/share/applications/ttv-tui.desktop` e o ícone em `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
 
 ```bash
 # Instalar a release mais recente ou informar uma versão como 0.1.9
@@ -31,6 +45,27 @@ Também é possível executar o script diretamente do GitHub:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.1.9
 ```
+
+No macOS, o script instala apenas o binário em `~/.local/bin`; atalho e ícone são exclusivos do Linux. Use uma versão com arquivo `darwin_arm64`. Binários sem notarização baixados pelo navegador podem exigir liberação em Ajustes do Sistema → Privacidade e Segurança (Gatekeeper), após conferir origem e checksum. Não há notarização paga. Downloads pelo script/Homebrew não aplicam a quarentena do navegador.
+
+### Windows x64: PowerShell
+
+Em um checkout, instale uma versão que publique o zip Windows:
+
+```powershell
+.\packaging\install.ps1 -DryRun
+.\packaging\install.ps1 -Version <versao-com-zip-windows>
+winget install --id shinchiro.mpv -e
+winget install --id streamlink.streamlink -e
+```
+
+O script verifica SHA-256, instala em `%LOCALAPPDATA%\Programs\ttv-tui\bin` e adiciona esse diretório ao PATH do usuário. Abra um novo terminal. Não instale o zip v0.1.9 como se ele já existisse.
+
+### Homebrew (macOS) e Scoop (Windows)
+
+A [fórmula Homebrew](../packaging/homebrew/README.md) é provisória, fixa um commit antigo e ainda não foi publicada nem validada no macOS. Após atualizar versão/hash e publicar o tap, o comando previsto é `brew install pedrosatin/tap/ttv-tui`. As dependências podem ser instaladas hoje com `brew install mpv streamlink`.
+
+O [manifesto Scoop](../packaging/scoop/ttv-tui.json) ainda tem SHA-256 zerado e aponta para um zip Windows ausente na v0.1.9. Só após atualizar URL/hash e publicar o arquivo, use `scoop install .\packaging\scoop\ttv-tui.json` em um checkout. As dependências usam `scoop bucket add extras` e `scoop install extras/mpv extras/streamlink`. Não ignore a verificação de hash.
 
 ### Binário da release (v0.1.9, Linux amd64 / arm64)
 
@@ -91,14 +126,14 @@ O atalho executa `xdg-terminal-exec ttv-tui` com `Terminal=false` e `StartupWMCl
 
 ### Obrigatórios (reprodução de vídeo)
 
-- Linux.
+- Um dos sistemas da matriz de suporte e um terminal com Unicode/ANSI.
 - `streamlink` no `PATH` para negociar a reprodução do stream e filtrar blocos de anúncios. Sem ele, não há reprodução de vídeo.
 - `mpv` no `PATH` para decodificar e exibir o vídeo em janela própria com controle por socket JSON IPC local. Sem ele, não há reprodução de vídeo.
 
 ### Opcionais (login e chat)
 
 - `sqlite3` no `PATH`. O `ttv-tui` executa o binário `sqlite3` apenas durante `ttv-tui login --from-browser` para copiar e consultar o banco de cookies do navegador pelo comando `.backup` do SQLite sem disputar lock com o navegador aberto. Não é necessário para navegar e assistir de forma anônima nem para importar credenciais via `ttv-tui login --import twt`.
-- Um navegador compatível logado em `twitch.tv` (Brave, Chrome, Chromium, Edge, Vivaldi, Opera ou Firefox) caso queira enviar mensagens no chat via `--from-browser`. Nos navegadores da família Chromium, `secret-tool` (`libsecret`) também precisa estar no `PATH` para ler o segredo OSCrypt Safe Storage no keyring da sessão. Navegar pelas categorias, assistir aos vídeos e ler o chat funcionam de forma anônima sem login.
+- Um navegador compatível logado em `twitch.tv` (Brave, Chrome, Chromium, Edge, Vivaldi, Opera ou Firefox) caso queira enviar mensagens no chat via `--from-browser`. No Linux, nos navegadores da família Chromium, `secret-tool` (`libsecret`) também precisa estar no `PATH` para ler o segredo OSCrypt Safe Storage no keyring da sessão. Navegar pelas categorias, assistir aos vídeos e ler o chat funcionam de forma anônima sem login.
 
 ## Uso rápido
 
@@ -236,6 +271,8 @@ Adaptação à largura do terminal:
 
 ## Login e segurança
 
+A extração de cookies descrita abaixo corresponde à implementação Linux atual. Consulte as limitações para a integração fora do Linux.
+
 O `ttv-tui` não registra aplicação OAuth na Twitch e não embute segredo de cliente OAuth de terceiros. A autenticação pode ser feita importando um token do `twitch-tui` (`--import twt`) ou extraindo o cookie de sessão do navegador (`--from-browser`):
 
 1. **O que `--from-browser` lê.** O `ttv-tui` localiza os bancos de cookies dos navegadores instalados: Brave, Chrome, Chromium, Edge, Vivaldi, Opera e Firefox, incluindo caminhos de Flatpak e Snap do Firefox. Ele copia o banco SQLite para um diretório temporário via `sqlite3 <db> ".backup '<tmp>'"`, com fallback para cópia de arquivo acompanhada dos sidecars `-wal` e `-shm`, consulta apenas o cookie `auth-token` de `.twitch.tv` / `twitch.tv` e apaga a cópia temporária em seguida. O arquivo original do navegador nunca é alterado.
@@ -244,9 +281,11 @@ O `ttv-tui` não registra aplicação OAuth na Twitch e não embute segredo de c
    - **Família Chromium.** Criptografa os cookies com AES-128-CBC (`v10` / `v11`). O `ttv-tui` executa `secret-tool` (`libsecret`) para ler a senha OSCrypt Safe Storage do navegador no keyring da sessão gráfica (`application=<navegador>` no schema `chrome_libsecret_os_crypt_password_v2`, ou o par legado `service="<Browser> Safe Storage"`), deriva a chave AES de 16 bytes com PBKDF2-HMAC-SHA1 (`saltysalt`, 1 iteração) e descarta o prefixo SHA-256 de 32 bytes do `host_key` usado nas versões recentes do banco do Chromium (`meta.version >= 24`). Como o Chromium usa um único segredo Safe Storage por instalação de navegador, essa chave do keyring é capaz de decifrar **todos** os cookies salvos por aquele navegador em qualquer site, e não apenas o `auth-token` de `twitch.tv`. Embora o `ttv-tui` consulte somente a linha `auth-token` de `twitch.tv` e mantenha a chave derivada em memória apenas durante a execução de `login`, desbloquear o keyring concede ao processo acesso à chave mestra de cookies daquele navegador.
 3. **Escopo de sessão completa e armazenamento em texto puro.**
    - **Sessão completa da conta.** O cookie `auth-token` de `twitch.tv` é um token de sessão web completa da sua conta na Twitch, e não um token OAuth restrito aos escopos de chat (`chat:read` / `chat:edit`). Qualquer processo ou pessoa que obtenha esse valor passa a ter acesso integral à sessão da conta até que ela seja invalidada.
-   - **Texto puro em disco (`0600`).** Após validar o token em `https://id.twitch.tv/oauth2/validate` para obter nome de usuário, escopos e tempo de expiração, o `ttv-tui` grava o token em texto puro em `~/.config/ttv-tui/config.toml` (ou `$XDG_CONFIG_HOME/ttv-tui/config.toml`) com permissão `0600`, legível e gravável apenas pelo seu usuário do sistema operacional. Qualquer processo rodando sob o seu usuário consegue ler esse arquivo. O valor do token nunca é impresso em stdout, stderr ou logs de erro.
+   - **Texto puro em disco (`0600`).** Após validar o token em `https://id.twitch.tv/oauth2/validate` para obter nome de usuário, escopos e tempo de expiração, o `ttv-tui` grava o token em texto puro em `~/.config/ttv-tui/config.toml` (ou `$XDG_CONFIG_HOME/ttv-tui/config.toml`) com permissão `0600`, legível e gravável apenas pelo seu usuário do sistema operacional. Qualquer processo rodando sob o seu usuário consegue ler esse arquivo. O valor do token nunca é impresso em stdout, stderr ou logs de erro. No macOS, o arquivo fica em `~/Library/Application Support/ttv-tui/config.toml`; no Windows, em `%APPDATA%\ttv-tui\config.toml`, protegido pela ACL herdada do perfil, sem garantia POSIX de `0600`. XDG tem prioridade nos três sistemas.
 4. **Quando preferir `--import twt`.** Se você já tem o `twitch-tui` configurado em `~/.config/twt/config.toml` ou prefere usar um token OAuth restrito ao chat sem expor o banco de cookies do navegador nem o segredo Safe Storage do keyring, execute `ttv-tui login --import twt` no lugar de `--from-browser`.
 5. **Como revogar.** Apagar `config.toml` remove apenas a cópia local; o token continua válido nos servidores da Twitch até ser revogado na conta. Para invalidar a sessão nos servidores da Twitch, acesse `twitch.tv` e use **Configurações -> Segurança e privacidade -> Sair em todos os lugares** (**Settings -> Security and Privacy -> Sign Out Everywhere**), encerre a sessão do navegador de onde o cookie foi extraído ou revogue a conexão em **Configurações -> Conexões** caso tenha importado via `--import twt`. Em seguida, apague o arquivo de configuração local:
+
+No Linux (no macOS/Windows, remova o arquivo indicado por `doctor`):
 
 ```bash
 rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/ttv-tui/config.toml"
@@ -255,6 +294,11 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/ttv-tui/config.toml"
 Consulte [SECURITY.md](../SECURITY.md) para instruções de relato privado de vulnerabilidades e revogação de credenciais.
 
 ## Solução de problemas
+
+Execute `ttv-tui doctor --lang pt-BR` (ou `--lang en`) antes de relatar uma falha. O comando mostra versão, SO/arquitetura, presença e versão numérica de `streamlink`/`mpv`, diretórios efetivos e token apenas como SIM/NÃO. Não valida o token na rede. Configuração ilegível é informada sem reproduzir o erro ou conteúdo. Dependência ausente ou diretório de estado/configuração ilegível retorna código 1; diagnóstico concluído retorna 0.
+
+“Limpo” significa ausência de registros pendentes; “pendente” também pode ser uma instância ativa. O comando não altera registros nem testa IPC anterior, terminal, áudio ou vídeo. Ferramenta encontrada cuja versão falha é informada como versão indisponível.
+
 
 - **`Canal offline: escolha outro canal` (`Channel offline: pick another channel`).** O `streamlink` informou que não há transmissão ativa para aquele canal. Escolha outro canal ao vivo ou pressione `r` para atualizar a lista.
 - **`streamlink não encontrado` / `mpv não encontrado` (`streamlink not found` / `mpv not found`).** Instale `streamlink` e `mpv` pelo gerenciador de pacotes da sua distribuição e confirme que ambos estão no `PATH`.
@@ -280,19 +324,17 @@ TMPDIR=/tmp go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.
 - **Por que `TMPDIR=/tmp` é usado.** Os testes de `internal/player` criam diretórios temporários via `t.TempDir()` e abrem sockets Unix locais (`i`) do `mpv` dentro deles. O kernel Linux limita `sockaddr_un.sun_path` a 108 bytes, e o pacote `internal/player` impõe o teto de 100 bytes. Quando o ambiente define um `TMPDIR` longo, o caminho do socket dentro de `t.TempDir()` pode ultrapassar esse limite de bytes e falhar ao abrir o socket. Definir `TMPDIR=/tmp` mantém curtos os caminhos de socket durante os testes.
 - **Versão fixada do `golangci-lint` (`v2.15.0`).** O CI executa `golangci-lint` na versão `v2.15.0`. Se o binário `golangci-lint` `v2.15.0` já estiver instalado no seu `PATH`, basta rodar `TMPDIR=/tmp golangci-lint run`.
 
-### Arquivos e diretórios XDG
+### Caminhos por sistema
 
-O `ttv-tui` armazena configuração, estado persistente e sockets de execução nos diretórios XDG padrão:
+`XDG_CONFIG_HOME`, `XDG_STATE_HOME` e `XDG_RUNTIME_DIR` têm prioridade em todos os sistemas, cada um com o sufixo `ttv-tui`. Sem essas variáveis:
 
-| Finalidade | Caminho | Fallback |
-| --- | --- | --- |
-| Configuração (`config.toml`, modo `0600`) | `$XDG_CONFIG_HOME/ttv-tui/config.toml` | `~/.config/ttv-tui/config.toml` |
-| Estado persistente (`state.json`: favoritos e até 50 canais recentes) | `$XDG_STATE_HOME/ttv-tui/state.json` | `~/.local/state/ttv-tui/state.json` |
-| Registro de players ativos (detecção de processos órfãos) | `$XDG_STATE_HOME/ttv-tui/players/player-<pid>-<gen>.json` | `~/.local/state/ttv-tui/players/player-<pid>-<gen>.json` |
-| Socket IPC do `mpv` por sessão (`i`, diretório modo `0700`; no Windows é um named pipe, sem arquivo) | `$XDG_RUNTIME_DIR/ttv-tui/<gen>-*/i` | `<temp do SO>/ttv-tui/<gen>-*/i` (macOS: `$TMPDIR/ttv-tui/<gen>-*/i`) |
-| Atalhos do `mpv` por sessão (`mpv-input.conf`, modo `0600`) | `$XDG_RUNTIME_DIR/ttv-tui/<gen>-*/mpv-input.conf` | `<temp do SO>/ttv-tui/<gen>-*/mpv-input.conf` (macOS: `$TMPDIR/ttv-tui/<gen>-*/mpv-input.conf`; Windows: `%LOCALAPPDATA%\ttv-tui\run\<gen>-*\mpv-input.conf`) |
+| Sistema | Configuração (token) | Estado | Runtime |
+| --- | --- | --- | --- |
+| Linux | `~/.config/ttv-tui/config.toml` | `~/.local/state/ttv-tui` | `<temp do SO>/ttv-tui` |
+| macOS | `~/Library/Application Support/ttv-tui/config.toml` | `~/Library/Application Support/ttv-tui/state` | `$TMPDIR/ttv-tui` (senão temp do SO) |
+| Windows | `%APPDATA%\ttv-tui\config.toml` | `%LOCALAPPDATA%\ttv-tui` | `%LOCALAPPDATA%\ttv-tui\run` |
 
-Se esse diretório de sessão não puder ser usado (caminho longo demais para o socket, sem permissão de escrita), a sessão vai para `<temp do SO>/ttv-tui-<pid>-<gen>/`.
+O diretório de estado contém `state.json` (favoritos e até 50 recentes) e `players/player-<pid>-<gen>.json`. Cada sessão cria `<runtime>/<gen>-*/mpv-input.conf`; no Unix, cria também o socket `i` em diretório `0700`, com arquivo de teclas `0600`. No Windows, o IPC é um named pipe, sem arquivo de socket. Se o diretório não puder ser usado, o fallback é `<temp do SO>/ttv-tui-<pid>-<gen>/`. O token usa `0600` no Unix e a ACL herdada do perfil no Windows; veja [SECURITY.md](../SECURITY.md).
 
 Se `state.json` estiver corrompido, o `ttv-tui` salva uma cópia em `state.json.bak` e inicia com listas de favoritos e recentes vazias.
 
@@ -300,9 +342,9 @@ As decisões de arquitetura (ADRs) estão documentadas em [`docs/adr/`](adr/).
 
 ## Limitações e próximos passos
 
-Limitações atuais na versão `v0.1.9`:
+Limitações atuais e integração da v1.8:
 
-- **Apenas Linux.** A supervisão de grupos de processos (verificações em `/proc`, `Setpgid`), a consulta ao keyring (`secret-tool`) e os caminhos de cookies dos navegadores são voltados para Linux.
+- **Login fora do Linux pendente neste checkout.** A descoberta de perfis ainda usa caminhos Linux e `login --token` ainda não está disponível. O escopo de autenticação da v1.8 prevê Firefox e entrada oculta de token; Chromium no Windows (App-Bound Encryption) fica de fora. A implementação e validação pertencem ao ticket de autenticação.
 - **Sem comandos de moderação no chat.** Exclusão de mensagens, timeouts e banimentos não estão implementados.
 - **Emotes apenas em texto.** O chat exibe texto e Unicode; emotes gráficos da Twitch, BTTV e 7TV não são renderizados como imagem no terminal.
 - **Apenas transmissões ao vivo.** VODs e clipes não são suportados.

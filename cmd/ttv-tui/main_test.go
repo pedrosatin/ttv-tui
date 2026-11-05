@@ -240,3 +240,34 @@ func TestCLILangFlagPersistsToConfig(t *testing.T) {
 		t.Fatalf("expected saved.Language to be en, got %q", saved.Language)
 	}
 }
+
+func TestDoctorCLI(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(dir, "runtime"))
+	t.Setenv("PATH", dir)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"doctor", "--lang", "en"}, "Token configured: NO"},
+		{[]string{"--lang", "pt-BR", "doctor"}, "Token configurado: NÃO"},
+		{[]string{"doctor", "--lang=pt-BR"}, "Token configurado: NÃO"},
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := run(tc.args, &stdout, &stderr); code != 1 {
+			t.Fatalf("doctor exit = %d", code)
+		}
+		if !strings.Contains(stdout.String(), tc.want) || stderr.Len() != 0 {
+			t.Fatal("doctor dispatch or language failed")
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"doctor", "--help"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("help exit = %d", code)
+	}
+	if code := run([]string{"doctor", "extra"}, &stdout, &stderr); code != 2 {
+		t.Fatalf("argument exit = %d", code)
+	}
+}
