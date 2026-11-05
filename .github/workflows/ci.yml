@@ -84,7 +84,8 @@ jobs:
         run: go test -count=1 ./...
 
       # Installing depends on a third-party mirror, so a failed install only skips
-      # the check. Once mpv is there, a failed handshake fails the job.
+      # the check. Chocolatey edits the machine PATH, which the running shell never
+      # sees, so the next step finds mpv.exe and hands its directory to later steps.
       - name: Install mpv
         id: mpv
         if: runner.os == 'Windows'
@@ -92,12 +93,42 @@ jobs:
         timeout-minutes: 4
         run: choco install mpv --no-progress -y
 
+      - name: Put mpv on PATH
+        id: mpvpath
+        if: runner.os == 'Windows' && steps.mpv.outcome == 'success'
+        timeout-minutes: 2
+        run: |
+          choco_root="${ChocolateyInstall:-C:\\ProgramData\\chocolatey}"
+          root="$(cygpath -u "$choco_root")"
+          for dir in "$root/lib/mpvio.install/tools" "$root/bin"; do
+            if [ -f "$dir/mpv.exe" ]; then
+              win_dir="$(cygpath -w "$dir")"
+              echo "$win_dir" >> "$GITHUB_PATH"
+              echo "mpv.exe found in $win_dir"
+              exit 0
+            fi
+          done
+          found="$(find "$root/lib" -iname mpv.exe 2>/dev/null | head -n 1)"
+          if [ -n "$found" ]; then
+            win_dir="$(cygpath -w "$(dirname "$found")")"
+            echo "$win_dir" >> "$GITHUB_PATH"
+            echo "mpv.exe found in $win_dir"
+            exit 0
+          fi
+          echo "::warning::mpv.exe not found under $choco_root after choco install"
+
+      # Only a mpv that answers --version turns the handshake on; otherwise the
+      # step warns and skips, so the log never claims a test that did not run.
       - name: Run the IPC handshake against a real mpv
         if: runner.os == 'Windows' && steps.mpv.outcome == 'success'
         timeout-minutes: 3
-        env:
-          TTV_TEST_REAL_MPV: "1"
-        run: go test -count=1 -v -run '^TestRealMPVHandshake$' ./internal/player
+        run: |
+          if mpv --version; then
+            export TTV_TEST_REAL_MPV=1
+            go test -count=1 -v -run '^TestRealMPVHandshake$' ./internal/player
+          else
+            echo "::warning::mpv is not runnable on this runner; the real-mpv handshake was NOT run"
+          fi
 
       # go test hides t.Logf of a passing test, so this step prints what the kernel
       # answered whether the run above passed or not.
