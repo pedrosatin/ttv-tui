@@ -171,7 +171,12 @@ func (m Model) statusParts() (string, []string) {
 		primary = m.statusNotice
 	case m.playerWindowNoticeShown():
 		primary = m.t("player.window_notice")
-		secondary = append(secondary, m.playerStatusText())
+		// The volume rides in the lead: at 80 columns secondaries drop, and a
+		// change made in the mpv window has no other place to show.
+		if vol := m.playerVolumeText(); vol != "" {
+			primary += " · " + vol
+		}
+		secondary = append(secondary, m.playerStatusBase())
 		addContext()
 	case m.playerState == PlayerStateError:
 		primary = m.playerFailureText()

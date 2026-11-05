@@ -17,15 +17,17 @@ import (
 )
 
 type sessionConfig struct {
-	Generation   uint64
-	Login        string
-	RuntimeDir   string
-	Command      CommandFunc
-	SocketWait   time.Duration
-	StopWait     time.Duration
-	BreakMaxHold time.Duration
-	RegistryDir  string
-	Emit         func(Event)
+	Generation         uint64
+	Login              string
+	RuntimeDir         string
+	Command            CommandFunc
+	CommandNoInputConf CommandFunc
+	WriteInputConf     func(path string) error
+	SocketWait         time.Duration
+	StopWait           time.Duration
+	BreakMaxHold       time.Duration
+	RegistryDir        string
+	Emit               func(Event)
 }
 
 type pendingKind int
@@ -48,6 +50,9 @@ type Session struct {
 	socket string
 	cmd    *exec.Cmd
 	record string
+	// inputConfErr is why the session runs without its input.conf; set once
+	// before the session starts, then only read.
+	inputConfErr error
 
 	cancel context.CancelFunc
 
@@ -207,6 +212,21 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		return nil, err
 	}
 
+	// Written before streamlink starts: mpv reads it once, at startup. A failure
+	// costs the keys in the mpv window, never the playback.
+	command := cfg.Command
+	inputConfErr := cfg.WriteInputConf(inputConfPath(socket))
+	if inputConfErr != nil {
+		if cfg.CommandNoInputConf != nil {
+			command = cfg.CommandNoInputConf
+		}
+		emit := cfg.Emit
+		cfg.Emit = func(ev Event) {
+			ev.InputConfFailed = true
+			emit(ev)
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Session{
 		cfg:      cfg,
@@ -217,9 +237,11 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		volume:   100,
 		waitDone: make(chan struct{}),
 		pending:  make(map[int64]pendingCommand),
+
+		inputConfErr: inputConfErr,
 	}
 
-	cmd := cfg.Command(cfg.Login, socket)
+	cmd := command(cfg.Login, socket)
 	if cmd == nil {
 		s.cleanupFiles()
 		cancel()

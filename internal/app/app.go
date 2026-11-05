@@ -225,6 +225,7 @@ func Run(opts Options) error {
 	_, runErr := p.Run()
 	// Stop the forwarders before the deferred player/chat shutdown.
 	cancel()
+	logInputConfErr(logw, playerMgr, catalog)
 	if sig, ok := caught.Load().(os.Signal); ok {
 		return &SignalError{Signal: sig}
 	}

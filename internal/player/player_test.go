@@ -529,6 +529,7 @@ func runPlayerHelper() {
 			DeferPropOnPause: os.Getenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP") == "1",
 			InitialVolume:    helperInitialVolume(),
 			InitialPause:     os.Getenv("TTV_PLAYER_HELPER_INIT_PAUSE") == "1",
+			ExternalVolume:   helperEnvFloat("TTV_PLAYER_HELPER_EXTERNAL_VOLUME"),
 		})
 	case "ad-then-play":
 		fmt.Println("[plugins.twitch][info] Waiting for pre-roll ads to finish, be patient")
@@ -606,10 +607,17 @@ type helperIPCOptions struct {
 	// InitialVolume is the first volume property-change (mpv softvol); 0 means 100.
 	InitialVolume float64
 	InitialPause  bool
+	// ExternalVolume is a volume change nobody asked for over IPC, as a key
+	// pressed in the mpv window: sent once, after the session's baseline.
+	ExternalVolume float64
 }
 
 func helperInitialVolume() float64 {
-	s := strings.TrimSpace(os.Getenv("TTV_PLAYER_HELPER_INIT_VOLUME"))
+	return helperEnvFloat("TTV_PLAYER_HELPER_INIT_VOLUME")
+}
+
+func helperEnvFloat(name string) float64 {
+	s := strings.TrimSpace(os.Getenv(name))
 	if s == "" {
 		return 0
 	}
@@ -775,6 +783,18 @@ func serveFakeMPV(conn net.Conn, delay time.Duration, opts helperIPCOptions) {
 			continue
 		}
 		prop, _ := cmdList[1].(string)
+		if prop == "pause" && opts.ExternalVolume != 0 {
+			// The baseline sets volume, then pause: this lands after both.
+			rawVol, _ := json.Marshal(map[string]any{
+				"event": "property-change",
+				"name":  "volume",
+				"data":  opts.ExternalVolume,
+			})
+			opts.ExternalVolume = 0
+			if _, err := conn.Write(append(rawVol, '\n')); err != nil {
+				return
+			}
+		}
 		if prop == "pause" && opts.DeferPropOnPause {
 			continue
 		}
@@ -1278,6 +1298,9 @@ func TestDefaultCommandShape(t *testing.T) {
 		"--force-window=immediate",
 		"--hwdec=auto-safe",
 		"--no-config",
+		"--no-input-default-bindings",
+		"--input-conf=/run/user/1000/ttv-tui/1/mpv-input.conf",
+		"--volume-max=100",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("command args %q missing %q", joined, want)

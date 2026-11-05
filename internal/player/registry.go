@@ -145,13 +145,15 @@ func (o Orphan) Terminate(wait time.Duration) error {
 	return nil
 }
 
-// removeStaleFiles deletes the socket and its private dir, only when the record
-// describes the layout the session created (dir/i) and the dir is empty after.
+// removeStaleFiles deletes the socket, the input.conf and their private dir, only
+// when the record describes the layout the session created (dir/i) and the dir is
+// empty after.
 func removeStaleFiles(rec Record) {
 	if rec.Dir == "" || !filepath.IsAbs(rec.Dir) || rec.Socket != filepath.Join(rec.Dir, "i") {
 		return
 	}
 	_ = os.Remove(rec.Socket)
+	_ = os.Remove(filepath.Join(rec.Dir, inputConfName))
 	_ = os.Remove(rec.Dir)
 }
 

@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
@@ -87,6 +90,16 @@ func mapPlayerEvent(ev player.Event) ui.PlayerStatusMsg {
 		BreakElapsed: ev.BreakElapsed,
 		Volume:       ev.Volume,
 		Failure:      ui.PlayerFailure(ev.Failure),
+
+		InputConfFailed: ev.InputConfFailed,
+	}
+}
+
+// logInputConfErr records why the mpv window ran without keys. It runs after the
+// TUI exits; the status bar already warned during playback.
+func logInputConfErr(log io.Writer, mgr *player.Manager, cat *i18n.Catalog) {
+	if err := mgr.InputConfErr(); err != nil {
+		_, _ = fmt.Fprintf(log, cat.T("app.warn_input_conf")+"\n", err)
 	}
 }
 

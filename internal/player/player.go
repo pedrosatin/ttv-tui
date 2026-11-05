@@ -51,6 +51,9 @@ type Event struct {
 	// Failure classifies a StateError event; LastLine keeps the original line
 	// as technical detail.
 	Failure Failure
+	// InputConfFailed is true on every event of a session whose mpv input.conf
+	// could not be written: the mpv window ignores keys, the TUI still controls it.
+	InputConfFailed bool
 }
 
 // CommandFunc builds the process to supervise for a given channel login and IPC socket path.
@@ -61,6 +64,13 @@ type CommandFunc func(login, socketPath string) *exec.Cmd
 type Options struct {
 	// Command builds the supervised process. Nil uses the default streamlink+mpv invocation.
 	Command CommandFunc
+	// CommandNoInputConf replaces Command for a session whose input.conf could
+	// not be written. Nil with the default Command drops --input-conf; nil with
+	// a custom Command keeps using Command.
+	CommandNoInputConf CommandFunc
+	// WriteInputConf creates the session's mpv input.conf at path. Nil uses the
+	// production writer; a failure never stops playback.
+	WriteInputConf func(path string) error
 	// RuntimeDir is the parent for per-playback private directories.
 	// Nil/empty uses $XDG_RUNTIME_DIR/ttv-tui, falling back to os.TempDir()/ttv-tui.
 	RuntimeDir string
@@ -107,6 +117,8 @@ type Manager struct {
 	// signalled (on m.mu) whenever one finishes.
 	stopping int
 	stopped  *sync.Cond
+	// inputConfErr is the last input.conf write failure, for the exit log.
+	inputConfErr error
 }
 
 // New creates a Manager. The Events channel stays open for the Manager lifetime;
@@ -126,9 +138,15 @@ func New(opts Options) *Manager {
 	}
 	if opts.Command == nil {
 		opts.Command = DefaultCommand
+		if opts.CommandNoInputConf == nil {
+			opts.CommandNoInputConf = commandNoInputConf
+		}
 		if opts.RequiredTools == nil {
 			opts.RequiredTools = []string{"streamlink", "mpv"}
 		}
+	}
+	if opts.WriteInputConf == nil {
+		opts.WriteInputConf = writeInputConf
 	}
 	if opts.LookPath == nil {
 		opts.LookPath = exec.LookPath
@@ -203,15 +221,17 @@ func (m *Manager) Start(login string) (uint64, error) {
 	}
 
 	sess, err := startSession(sessionConfig{
-		Generation:   gen,
-		Login:        login,
-		RuntimeDir:   m.opts.RuntimeDir,
-		Command:      m.opts.Command,
-		SocketWait:   m.opts.SocketWait,
-		StopWait:     m.opts.StopWait,
-		BreakMaxHold: m.opts.BreakMaxHold,
-		RegistryDir:  m.opts.RegistryDir,
-		Emit:         m.emit,
+		Generation:         gen,
+		Login:              login,
+		RuntimeDir:         m.opts.RuntimeDir,
+		Command:            m.opts.Command,
+		CommandNoInputConf: m.opts.CommandNoInputConf,
+		WriteInputConf:     m.opts.WriteInputConf,
+		SocketWait:         m.opts.SocketWait,
+		StopWait:           m.opts.StopWait,
+		BreakMaxHold:       m.opts.BreakMaxHold,
+		RegistryDir:        m.opts.RegistryDir,
+		Emit:               m.emit,
 	})
 	if err != nil {
 		m.emit(Event{
@@ -225,6 +245,9 @@ func (m *Manager) Start(login string) (uint64, error) {
 	}
 
 	m.mu.Lock()
+	if sess.inputConfErr != nil {
+		m.inputConfErr = sess.inputConfErr
+	}
 	// A newer Start may have won the race; drop this session if so.
 	if m.gen != gen || m.closed {
 		m.mu.Unlock()
@@ -314,6 +337,15 @@ func (m *Manager) Volume() int {
 	return sess.Volume()
 }
 
+// InputConfErr returns the last input.conf write failure, or nil. Callers read
+// it after the TUI exits: a log line written while it owns the terminal would
+// corrupt the screen.
+func (m *Manager) InputConfErr() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.inputConfErr
+}
+
 // Close stops playback and closes the Events channel. After Close, Start fails.
 func (m *Manager) Close() {
 	m.Stop()
@@ -348,12 +380,30 @@ func (m *Manager) emit(ev Event) {
 }
 
 // DefaultCommand builds: streamlink https://www.twitch.tv/<login> best --player mpv
-// with mpv IPC/window/hwdec flags and --no-config so user configs are ignored.
+// with mpv IPC/window/hwdec flags. --no-config ignores user configs but keeps the
+// bindings compiled into mpv, so --no-input-default-bindings drops those and the
+// session's input.conf provides the only keys. --volume-max=100 holds the window
+// to the 0..100 range the TUI shows; mpv's default ceiling is 130.
 func DefaultCommand(login, socketPath string) *exec.Cmd {
+	return playerCommand(login, socketPath, inputConfPath(socketPath))
+}
+
+// commandNoInputConf is DefaultCommand for a session without an input.conf. The
+// built-in bindings stay off: the window ignores keys and the TUI keeps working,
+// which beats going back to bindings the user cannot see or undo.
+func commandNoInputConf(login, socketPath string) *exec.Cmd {
+	return playerCommand(login, socketPath, "")
+}
+
+// playerCommand omits --input-conf when inputConf is empty.
+func playerCommand(login, socketPath, inputConf string) *exec.Cmd {
 	playerArgs := fmt.Sprintf(
-		"--no-config --input-ipc-server=%s --force-window=immediate --hwdec=auto-safe",
+		"--no-config --no-input-default-bindings --volume-max=100 --input-ipc-server=%s --force-window=immediate --hwdec=auto-safe",
 		socketPath,
 	)
+	if inputConf != "" {
+		playerArgs += " --input-conf=" + inputConf
+	}
 	cmd := exec.Command(
 		"streamlink",
 		"--no-config",

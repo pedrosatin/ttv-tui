@@ -52,6 +52,9 @@ type PlayerStatusMsg struct {
 	// FromStart marks the handshake message returned by Playback.Start so the
 	// UI can ignore in-flight pump events from the previous channel.
 	FromStart bool
+	// InputConfFailed marks a playback whose mpv window ignores keys because its
+	// key file could not be written. The TUI controls keep working.
+	InputConfFailed bool
 }
 
 // Playback is the UI→app bridge for starting and stopping video. The app

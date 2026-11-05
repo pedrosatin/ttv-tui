@@ -276,10 +276,13 @@ type Model struct {
 	// the next key press.
 	playerWindowNotified bool
 	playerWindowNotice   bool
-	chat                 Chat
-	chatPanel            chatPanel
-	composing            bool
-	composeDraft         string
+	// playerKeysWarnedGen is the last generation warned about its mpv window
+	// having no keys.
+	playerKeysWarnedGen uint64
+	chat                Chat
+	chatPanel           chatPanel
+	composing           bool
+	composeDraft        string
 	// showList / showChat are the session layout flags (ticket 02). Both start
 	// true (split). Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag
 	// independently. Layout is not persisted to disk.
@@ -632,6 +635,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.Generation > m.playerGen {
 			m.playerGen = msg.Generation
 		}
+		if msg.State != m.playerState {
+			// A pause in the mpv window never reaches the TUI as a key, so the
+			// notice cannot wait for one: the bar needs the room for the state.
+			m.playerWindowNotice = false
+		}
 		m.playerState = msg.State
 		if msg.Login != "" {
 			m.playerLogin = msg.Login
@@ -652,6 +660,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerFailure = PlayerFailureNone
 		}
 		m.playerBreakElapsed = msg.BreakElapsed
+		if msg.InputConfFailed && msg.Generation != m.playerKeysWarnedGen {
+			// Every event of that playback carries the flag; warn once.
+			m.playerKeysWarnedGen = msg.Generation
+			m.statusNotice = m.t("player.warn.input_conf")
+		}
 		if msg.State == PlayerStatePlaying && !m.playerWindowNotified {
 			// mpv opens its own window; someone new to the app may not notice it.
 			m.playerWindowNotified = true

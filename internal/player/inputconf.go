@@ -1,0 +1,89 @@
+package player
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+)
+
+// inputConfName is the mpv input.conf written next to the IPC socket.
+const inputConfName = "mpv-input.conf"
+
+// volumeOSD shows the new volume as a bare number. The add commands go through
+// no-osd because mpv's own volume OSD is the English "Volume: 50%".
+const volumeOSD = `show-text "${volume}%"`
+
+// inputBindings is every key the mpv window answers to, mirroring the TUI's
+// player keys. mpv runs with --no-input-default-bindings, so a key left out does
+// nothing. The window's close button does not depend on this list: mpv quits on
+// CLOSE_WIN even with no binding for it.
+var inputBindings = []struct{ key, command string }{
+	{"SPACE", "cycle pause"},
+	{"+", "no-osd add volume 5; " + volumeOSD},
+	{"=", "no-osd add volume 5; " + volumeOSD},
+	{"-", "no-osd add volume -5; " + volumeOSD},
+	{"_", "no-osd add volume -5; " + volumeOSD},
+}
+
+// inputConfContent returns the input.conf text, always the same bytes.
+func inputConfContent() string {
+	var b strings.Builder
+	for _, binding := range inputBindings {
+		fmt.Fprintf(&b, "%s %s\n", binding.key, binding.command)
+	}
+	return b.String()
+}
+
+// inputConfPath is where a session's input.conf lives: the private directory
+// that holds its IPC socket, which is removed with the session.
+func inputConfPath(socketPath string) string {
+	return filepath.Join(filepath.Dir(socketPath), inputConfName)
+}
+
+// writeInputConf creates the input.conf at path. input.conf can run arbitrary
+// commands, and the /tmp fallback directory has a predictable name that may
+// already exist, so it refuses a directory other users can write to and never
+// writes through a file or symlink left at path.
+func writeInputConf(path string) error {
+	if err := checkPrivateDir(filepath.Dir(path)); err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("player: replace input.conf: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return fmt.Errorf("player: create input.conf: %w", err)
+	}
+	_, err = f.WriteString(inputConfContent())
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("player: write input.conf: %w", err)
+	}
+	return nil
+}
+
+// checkPrivateDir accepts only a real directory owned by this user that no one
+// else can reach.
+func checkPrivateDir(dir string) error {
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("player: session directory: %w", err)
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("player: session directory %q is not a directory", dir)
+	}
+	if fi.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("player: session directory %q is not private (mode %o)", dir, fi.Mode().Perm())
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Geteuid() {
+		return fmt.Errorf("player: session directory %q has another owner", dir)
+	}
+	return nil
+}

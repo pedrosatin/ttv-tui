@@ -283,3 +283,20 @@ func TestFindOrphansIgnoresStaleRecycledAndLiveOwner(t *testing.T) {
 		t.Fatalf("live owner's record removed: %v", err)
 	}
 }
+
+func TestRemoveStaleFilesRemovesInputConfAndDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "session")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	socket := filepath.Join(dir, "i")
+	for _, path := range []string{socket, filepath.Join(dir, inputConfName)} {
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+	}
+	removeStaleFiles(Record{Dir: dir, Socket: socket})
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("orphan session directory left behind: %v", err)
+	}
+}

@@ -195,6 +195,10 @@ The layout is a session preference: the status bar names the active one
 | `-` / `_` | Decrease `mpv` volume by 5% |
 | `Ctrl+X` | Stop video playback without leaving the app |
 
+Pause and volume work in both windows, the TUI and the `mpv` window, and the status bar follows the volume whichever window changed it. Volume stops at 100% in both. `Ctrl+X` works only in the TUI.
+
+`ttv-tui` replaces the `mpv` key bindings, so every other key in the video window does nothing, including `q`, `f`, and the arrows. To close the video, press `Ctrl+X` or close its window.
+
 ### Application
 
 | Key | Action |
@@ -259,7 +263,7 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting and revocation instru
 - **`Token expired or invalid`.** Browser session tokens expire when your web session ends. Log in to `twitch.tv` in your browser if needed and re-run `ttv-tui login --from-browser` or `ttv-tui login --import twt`.
 - **Orphaned player prompt on startup (`A player from a previous session is still running...`).** If a previous `ttv-tui` process was killed abruptly with `SIGKILL`, its `streamlink` and `mpv` process group may still be playing. On the next launch, `ttv-tui` verifies the recorded PID and socket in `~/.local/state/ttv-tui/players/` and prompts `[Y/n]` to stop the leftover player before opening the UI.
 - **Chat is hidden.** `ttv-tui` hides the right-hand chat panel when the terminal width is below 80 columns. Resize your terminal window or tmux pane to at least 80 columns.
-- **No video window or no audio from `mpv`.** `ttv-tui` launches `mpv` with `--no-config --force-window=immediate --hwdec=auto-safe`. Verify that your Wayland or X11 display session (`DISPLAY` or `WAYLAND_DISPLAY`) and audio server (PipeWire / PulseAudio) are running, and check that `Volume` in the status bar is not `vol 0` (press `+` to raise volume). Press `?` after a player failure to view the `Last player error` line reported by `streamlink` or `mpv`.
+- **No video window or no audio from `mpv`.** `ttv-tui` launches `mpv` with `--no-config --no-input-default-bindings --volume-max=100 --force-window=immediate --hwdec=auto-safe`. Verify that your Wayland or X11 display session (`DISPLAY` or `WAYLAND_DISPLAY`) and audio server (PipeWire / PulseAudio) are running, and check that `Volume` in the status bar is not `vol 0` (press `+` to raise volume). Press `?` after a player failure to view the `Last player error` line reported by `streamlink` or `mpv`.
 
 ## Development
 
@@ -286,6 +290,7 @@ TMPDIR=/tmp go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.
 | Persistent state (`state.json`: favorites and up to 50 recent channels) | `$XDG_STATE_HOME/ttv-tui/state.json` | `~/.local/state/ttv-tui/state.json` |
 | Live player registry (orphan detection records) | `$XDG_STATE_HOME/ttv-tui/players/player-<pid>-<gen>.json` | `~/.local/state/ttv-tui/players/player-<pid>-<gen>.json` |
 | Per-session `mpv` IPC socket (`i`, mode `0700` dir) | `$XDG_RUNTIME_DIR/ttv-tui/<gen>-*/i` | `/tmp/ttv-tui-<pid>-<gen>/i` |
+| Per-session `mpv` key bindings (`mpv-input.conf`, mode `0600`) | `$XDG_RUNTIME_DIR/ttv-tui/<gen>-*/mpv-input.conf` | `/tmp/ttv-tui-<pid>-<gen>/mpv-input.conf` |
 
 If `state.json` is corrupted, `ttv-tui` backs it up to `state.json.bak` and starts with empty favorites and recents.
 
