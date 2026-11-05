@@ -63,9 +63,9 @@ O script verifica SHA-256, instala em `%LOCALAPPDATA%\Programs\ttv-tui\bin` e ad
 
 ### Homebrew (macOS) e Scoop (Windows)
 
-A [fórmula Homebrew](../packaging/homebrew/README.md) é provisória, fixa um commit antigo e permanece provisória até a atualização após a release; ela ainda não foi publicada nem validada no macOS. Após atualizar versão/hash e publicar o tap, o comando previsto é `brew install pedrosatin/tap/ttv-tui`. As dependências podem ser instaladas hoje com `brew install mpv streamlink`.
+A [fórmula Homebrew](../packaging/homebrew/README.md) usa a release v0.2.0 para macOS em Apple Silicon e Intel. Ela ainda não foi publicada nem validada no macOS. Após publicar o tap, o comando previsto é `brew install pedrosatin/tap/ttv-tui`. As dependências podem ser instaladas com `brew install mpv streamlink`.
 
-O [manifesto Scoop](../packaging/scoop/ttv-tui.json) ainda aponta para a v0.1.9 e tem SHA-256 zerado. A versão, a URL e o hash precisam ser atualizados após a publicação do zip Windows da v0.2.0; a instalação por esse manifesto não funciona até então. Para as dependências, use `scoop bucket add extras` e `scoop install extras/mpv extras/streamlink`. Não ignore a verificação de hash.
+O [manifesto Scoop](../packaging/scoop/ttv-tui.json) usa a release v0.2.0 para Windows amd64 e seu SHA-256. Para as dependências, use `scoop bucket add extras` e `scoop install extras/mpv extras/streamlink`.
 
 ### Binário da release (v0.2.0)
 
