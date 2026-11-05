@@ -89,37 +89,41 @@ func (m Model) chatHiddenByWidth() bool {
 	return m.width > 0 && m.width < minChatColumns
 }
 
-func (m Model) showSideBySideChat() bool {
-	return m.width >= minChatColumns && m.hasChatPanel()
-}
-
 // panelWidths returns the visual column widths (listWidth, chatWidth) when rendering
-// at m.width. When chat is not shown side-by-side, chatWidth is 0.
+// at m.width. A zero width means that panel is hidden by layout or by terminal size.
 func (m Model) panelWidths() (int, int) {
 	if m.width <= 0 {
 		return 0, 0
 	}
-	if !m.showSideBySideChat() {
-		return m.width, 0
-	}
-	usable := m.width - panelSepWidth
-	if usable < 20 {
-		return m.width, 0
-	}
-	var listW, chatW int
-	if m.width >= fullChatColumns {
-		// ~40% list, ~60% chat
-		listW = (usable * 2) / 5
-		chatW = usable - listW
-	} else {
-		// Between 80 and 99 columns: chat reduces so list stays roomy while chat remains readable.
-		chatW = (usable * 9) / 20
-		if chatW < 34 {
-			chatW = 34
+	listOn := m.showList
+	chatOn := m.showChat && m.hasChatPanel() && m.width >= minChatColumns
+	switch {
+	case listOn && chatOn:
+		usable := m.width - panelSepWidth
+		if usable < 20 {
+			return m.width, 0
 		}
-		listW = usable - chatW
+		var listW, chatW int
+		if m.width >= fullChatColumns {
+			// ~40% list, ~60% chat
+			listW = (usable * 2) / 5
+			chatW = usable - listW
+		} else {
+			// Between 80 and 99 columns: chat reduces so list stays roomy while chat remains readable.
+			chatW = (usable * 9) / 20
+			if chatW < 34 {
+				chatW = 34
+			}
+			listW = usable - chatW
+		}
+		return listW, chatW
+	case listOn:
+		return m.width, 0
+	case chatOn:
+		return 0, m.width
+	default:
+		return 0, 0
 	}
-	return listW, chatW
 }
 
 // View implements tea.Model.
@@ -137,12 +141,17 @@ func (m Model) View() string {
 
 	// Unsized fallback (m.width <= 0 and m.height <= 0): used by unit tests that don't send WindowSizeMsg.
 	if m.width <= 0 && m.height <= 0 {
-		bodyLines := m.renderBodyLines(0)
-		if m.chatHiddenByWidth() && m.hasChatPanel() {
+		var bodyLines []string
+		if m.showList {
+			bodyLines = m.renderBodyLines(0)
+		}
+		if m.shouldShowNarrowChatNotice() {
 			bodyLines = append(bodyLines, m.narrowChatNoticeLines(0)...)
-		} else {
+		} else if m.showChat {
 			chatLines := m.renderChatLines(defaultChatPreviewLines, 0)
 			bodyLines = append(bodyLines, chatLines...)
+		} else if !m.showList {
+			bodyLines = append(bodyLines, m.focusModeHintLines(0)...)
 		}
 		bodyLines = append(bodyLines, filterMenuLines...)
 		bodyLines = append(bodyLines, helpLines...)
@@ -159,7 +168,8 @@ func (m Model) View() string {
 
 	listW, chatW := m.panelWidths()
 
-	if chatW > 0 {
+	// Side-by-side split.
+	if listW > 0 && chatW > 0 {
 		chatLines := m.renderChatLines(available, chatW)
 		listLines := m.renderBodyLines(listW)
 		rows := available
@@ -190,10 +200,63 @@ func (m Model) View() string {
 		return strings.Join(combined, "\n") + "\n" + status
 	}
 
-	// Single panel (either no chat open, or width < 80 so chat is hidden with notice).
+	// Chat-only layout: full width chat column.
+	if listW == 0 && chatW > 0 {
+		bodyLines := m.renderChatLines(available, chatW)
+		if m.height <= 0 {
+			bodyLines = append(bodyLines, filterMenuLines...)
+			bodyLines = append(bodyLines, helpLines...)
+			for i := range bodyLines {
+				bodyLines[i] = padOrTruncateVisual(bodyLines[i], chatW)
+			}
+			return strings.Join(bodyLines, "\n") + "\n" + status
+		}
+		for len(bodyLines) < available {
+			bodyLines = append(bodyLines, "")
+		}
+		if len(bodyLines) > available {
+			bodyLines = bodyLines[:available]
+		}
+		for i := range bodyLines {
+			bodyLines[i] = padOrTruncateVisual(bodyLines[i], chatW)
+		}
+		if len(filterMenuLines) > 0 {
+			bodyLines = m.overlayHelpLines(bodyLines, filterMenuLines, chatW, available)
+		} else {
+			bodyLines = m.overlayHelpLines(bodyLines, helpLines, chatW, available)
+		}
+		return strings.Join(bodyLines, "\n") + "\n" + status
+	}
+
+	// Focus mode: both panels hidden — only a short hint and the status bar.
+	if listW == 0 && chatW == 0 {
+		bodyLines := m.focusModeHintLines(m.width)
+		if m.height <= 0 {
+			bodyLines = append(bodyLines, filterMenuLines...)
+			bodyLines = append(bodyLines, helpLines...)
+			return strings.Join(bodyLines, "\n") + "\n" + status
+		}
+		for len(bodyLines) < available {
+			bodyLines = append(bodyLines, "")
+		}
+		if len(bodyLines) > available {
+			bodyLines = bodyLines[:available]
+		}
+		for i := range bodyLines {
+			bodyLines[i] = padOrTruncateVisual(bodyLines[i], m.width)
+		}
+		if len(filterMenuLines) > 0 {
+			bodyLines = m.overlayHelpLines(bodyLines, filterMenuLines, m.width, available)
+		} else {
+			bodyLines = m.overlayHelpLines(bodyLines, helpLines, m.width, available)
+		}
+		return strings.Join(bodyLines, "\n") + "\n" + status
+	}
+
+	// List-only (or chat hidden by width with optional narrow notice).
 	bodyLines := m.renderBodyLines(listW)
 	var noticeLines []string
-	if m.chatHiddenByWidth() && m.hasChatPanel() {
+	if m.shouldShowNarrowChatNotice() {
 		noticeLines = m.narrowChatNoticeLines(listW)
 	}
 
@@ -239,6 +302,12 @@ func (m Model) View() string {
 	return strings.Join(bodyLines, "\n") + "\n" + status
 }
 
+// focusModeHintLines explains how to leave total-focus layout.
+func (m Model) focusModeHintLines(maxWidth int) []string {
+	rows := wrapChatRow("  ", m.t("layout.focus_hint"), maxWidth)
+	return rows
+}
+
 // narrowChatNoticeLines explains why the chat is hidden. It wraps instead of
 // truncating, so the whole sentence (and the way out) stays readable.
 func (m Model) narrowChatNoticeLines(maxWidth int) []string {
@@ -265,6 +334,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		"  " + m.t("help.categories"),
 		"  " + m.t("help.search"),
 		"  " + m.t("help.channel_filter"),
+		"  " + m.t("help.layout"),
 		"  " + m.t("help.player"),
 		"  " + m.t("help.chat"),
 		"  " + m.t("help.app"),
@@ -336,7 +406,7 @@ func (m Model) headerLine() string {
 		title = m.t("categories.title")
 	}
 
-	if m.hasChatPanel() {
+	if m.chatColumnVisible() && m.listVisible() {
 		if m.Focus() == FocusList {
 			return "▸ " + title + " " + m.t("focus.active_tag")
 		}
@@ -358,7 +428,7 @@ func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
 
 func (m Model) renderBodyLines(maxWidth int) []string {
 	header := fitListRow(m.headerLine(), maxWidth)
-	if m.hasChatPanel() && m.Focus() == FocusList {
+	if m.chatColumnVisible() && m.listVisible() && m.Focus() == FocusList {
 		header = styleFocus(header)
 	}
 
@@ -542,7 +612,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	if m.loading && !isSearch {
 		budget--
 	}
-	if m.chatHiddenByWidth() && m.hasChatPanel() {
+	if m.shouldShowNarrowChatNotice() {
 		budget--
 	}
 	if budget < 1 {

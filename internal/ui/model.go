@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -187,6 +188,22 @@ func WithCorruptNotice(notice string) Option {
 	}
 }
 
+// WithStatusNotice initializes the Model with a one-time status-bar notice
+// (for example when optional window control is configured but unavailable).
+func WithStatusNotice(notice string) Option {
+	return func(m *Model) {
+		m.statusNotice = notice
+	}
+}
+
+// WithWindowController attaches an optional compositor bridge that places the
+// mpv window when the TUI layout changes.
+func WithWindowController(ctrl WindowController) Option {
+	return func(m *Model) {
+		m.windowCtrl = ctrl
+	}
+}
+
 // Model is the Bubble Tea model for ttv-tui.
 type Model struct {
 	catalog     *i18n.Catalog
@@ -273,9 +290,15 @@ type Model struct {
 	chatPanel            chatPanel
 	composing            bool
 	composeDraft         string
-	width                int
-	height               int
-	quitting             bool
+	// showList / showChat are the session layout flags (ticket 02). Both start
+	// true (split). Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag
+	// independently. Layout is not persisted to disk.
+	showList   bool
+	showChat   bool
+	windowCtrl WindowController
+	width      int
+	height     int
+	quitting   bool
 }
 
 // New creates a new UI Model backed by the given i18n catalog and options.
@@ -304,6 +327,8 @@ func New(catalog *i18n.Catalog, opts ...Option) Model {
 		chatPanel:    newChatPanel(),
 		favorites:    make([]twitch.Channel, 0),
 		recents:      make([]twitch.Channel, 0),
+		showList:     true,
+		showChat:     true,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -372,20 +397,22 @@ func (m Model) Mode() Mode {
 }
 
 // Focus returns the currently effective focused panel (FocusList or FocusChat).
-// When the terminal is narrower than 80 columns, the chat panel is hidden and
-// effective focus degrades to FocusList while preserving the underlying focus
-// state when the terminal widens again.
+// When chat is hidden by width or layout, effective focus degrades to the
+// remaining panel while preserving the underlying focus for when it returns.
 func (m Model) Focus() Focus {
 	if m.focus == "" {
 		return FocusList
 	}
-	if m.chatHiddenByWidth() {
+	listOn := m.listVisible()
+	chatOn := m.chatColumnVisible()
+	switch {
+	case listOn && chatOn:
+		return m.focus
+	case chatOn:
+		return FocusChat
+	default:
 		return FocusList
 	}
-	if !m.hasChatPanel() {
-		return FocusList
-	}
-	return m.focus
 }
 
 // HelpVisible reports whether the keyboard shortcuts help view is currently open.
@@ -643,6 +670,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Volume > 0 || msg.State == PlayerStatePlaying || msg.State == PlayerStatePaused || msg.State == PlayerStateBreak {
 			m.playerVolume = clampPlayerVolume(msg.Volume)
+		}
+		return m, nil
+
+	case WindowControlMsg:
+		if msg.Err != nil {
+			m.statusNotice = fmt.Sprintf(m.t("wm.apply_failed"), sanitizeChatText(msg.Err.Error()))
 		}
 		return m, nil
 

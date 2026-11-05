@@ -306,15 +306,40 @@ func (m Model) chatChannelRef() string {
 	return fmt.Sprintf(m.t("status.channel_ref"), ch)
 }
 
-// focusStatusText names the focused panel when the chat column is visible.
+// focusStatusText names the focused panel when both panels are visible.
 func (m Model) focusStatusText() string {
-	if !m.hasChatPanel() || m.chatHiddenByWidth() {
+	if !m.listVisible() || !m.chatColumnVisible() {
 		return ""
 	}
 	if m.Focus() == FocusChat {
 		return m.t("status.focus_chat")
 	}
 	return m.t("status.focus_list")
+}
+
+// layoutStatusText is the compact layout token for the status bar.
+func (m Model) layoutStatusText() string {
+	return fmt.Sprintf(m.t("status.layout"), string(m.LayoutMode()))
+}
+
+// includeLayoutStatus reports when the layout token may join secondaries.
+// Default split is omitted (the two-panel chrome already implies it). Non-default
+// modes always announce themselves. Filter/search/error/notice leads stay clear
+// so marks like "500+", "Connected to #ch", and "detalhe:" keep their columns.
+func (m Model) includeLayoutStatus() bool {
+	if m.LayoutMode() == LayoutSplit {
+		return false
+	}
+	if m.err != nil || m.channelFilterMenu || m.searching || m.filtering {
+		return false
+	}
+	if m.playerState == PlayerStateError {
+		return false
+	}
+	if m.ctrlCNotice != "" || m.authNotice != "" || m.corruptNotice != "" || m.copyNotice != "" || m.statusNotice != "" {
+		return false
+	}
+	return true
 }
 
 // StatusBar renders the status bar containing the active language, channel/category/viewers,
@@ -336,7 +361,8 @@ func (m Model) StatusBar() string {
 	quitHint := m.t("status.quit_hint")
 	// Focus lives in the chrome (with help/quit), not in the state message, so
 	// Tab always has a stable place to announce the active panel. Skip it while
-	// an error detail needs the columns.
+	// an error detail needs the columns. Layout is a high-priority secondary in
+	// the state text so it stays visible without crowding the chrome.
 	focusHint := ""
 	if m.err == nil {
 		focusHint = m.focusStatusText()
@@ -347,6 +373,11 @@ func (m Model) StatusBar() string {
 	}
 
 	primary, secondary := m.statusParts()
+	// Non-default layouts lead the secondaries so "layout: chat|list|focus" is
+	// visible; default split omits the token (see includeLayoutStatus).
+	if m.includeLayoutStatus() {
+		secondary = append([]string{m.layoutStatusText()}, secondary...)
+	}
 	sep := " · "
 
 	layouts := []struct{ left, right string }{

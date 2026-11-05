@@ -21,6 +21,23 @@ type Config struct {
 	// MinViewers is the minimum audience for channel lists. 0 means no floor.
 	// TOML key: min_viewers.
 	MinViewers int
+	// WindowControl selects an optional compositor bridge for placing the mpv
+	// window when the TUI layout changes. Empty / "off" / "none" disables it.
+	// "hyprland" enables hyprctl placement when the binary is on PATH.
+	// TOML key: window_control.
+	WindowControl string
+}
+
+// NormalizeWindowControl lowercases and maps aliases to "" (off) or "hyprland".
+func NormalizeWindowControl(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "off", "none", "disabled", "false", "0":
+		return ""
+	case "hyprland", "hypr":
+		return "hyprland"
+	default:
+		return strings.ToLower(strings.TrimSpace(raw))
+	}
 }
 
 // Default returns a Config initialized with in-memory defaults.
@@ -144,6 +161,7 @@ func Save(cfg Config) error {
 func SaveTo(path string, cfg Config) error {
 	cfg.AccessToken = NormalizeToken(cfg.AccessToken)
 	cfg.FilterLanguages = normalizeFilterLanguages(cfg.FilterLanguages)
+	cfg.WindowControl = NormalizeWindowControl(cfg.WindowControl)
 	if cfg.MinViewers < 0 {
 		cfg.MinViewers = 0
 	}
@@ -210,6 +228,9 @@ func formatTOML(cfg Config) string {
 	}
 	if cfg.MinViewers > 0 {
 		fmt.Fprintf(&b, "min_viewers = %d\n", cfg.MinViewers)
+	}
+	if wc := NormalizeWindowControl(cfg.WindowControl); wc != "" {
+		fmt.Fprintf(&b, "window_control = %s\n", quoteTOML(wc))
 	}
 	return b.String()
 }
@@ -331,12 +352,19 @@ func parseTOML(input string) (Config, error) {
 				n = 0
 			}
 			cfg.MinViewers = n
+		case "window_control", "player.window_control", "ui.window_control":
+			val, err := unquoteTOML(rawVal)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+			}
+			cfg.WindowControl = NormalizeWindowControl(val)
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return Config{}, fmt.Errorf("scan config: %w", err)
 	}
 	cfg.FilterLanguages = normalizeFilterLanguages(cfg.FilterLanguages)
+	cfg.WindowControl = NormalizeWindowControl(cfg.WindowControl)
 	return cfg, nil
 }
 

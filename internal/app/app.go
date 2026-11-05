@@ -20,6 +20,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/store"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
+	"github.com/pedrosatin/ttv-tui/internal/wm"
 )
 
 // Options configures a single invocation of the application.
@@ -188,6 +189,13 @@ func Run(opts Options) error {
 	}
 	if corruptNotice != "" {
 		uiOpts = append(uiOpts, ui.WithCorruptNotice(corruptNotice))
+	}
+	if config.NormalizeWindowControl(cfg.WindowControl) == "hyprland" {
+		if ctrl, err := wm.NewHyprland(); err != nil {
+			uiOpts = append(uiOpts, ui.WithStatusNotice(catalog.T("wm.hyprctl_missing")))
+		} else {
+			uiOpts = append(uiOpts, ui.WithWindowController(hyprWindowBridge{ctrl: ctrl}))
+		}
 	}
 	if cfg.AccessToken != "" {
 		validateFn := opts.Validate

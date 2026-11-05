@@ -246,6 +246,65 @@ func TestChannelFilterRoundTrip(t *testing.T) {
 	})
 }
 
+func TestWindowControlRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	want := Config{
+		Language:      "en",
+		WindowControl: "hyprland",
+	}
+	if err := SaveTo(path, want); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(raw), `window_control = "hyprland"`) {
+		t.Fatalf("missing window_control in %q", raw)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	assertConfigEqual(t, got, want)
+
+	if err := os.WriteFile(path, []byte("window_control = \"Hypr\"\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err = LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom alias: %v", err)
+	}
+	assertConfigEqual(t, got, Config{WindowControl: "hyprland"})
+
+	if err := os.WriteFile(path, []byte("window_control = \"off\"\n"), 0o600); err != nil {
+		t.Fatalf("write off: %v", err)
+	}
+	got, err = LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom off: %v", err)
+	}
+	assertConfigEqual(t, got, Config{})
+}
+
+func TestNormalizeWindowControl(t *testing.T) {
+	cases := map[string]string{
+		"":         "",
+		"off":      "",
+		"NONE":     "",
+		"hyprland": "hyprland",
+		"Hypr":     "hyprland",
+		"sway":     "sway",
+	}
+	for in, want := range cases {
+		if got := NormalizeWindowControl(in); got != want {
+			t.Errorf("NormalizeWindowControl(%q)=%q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestNormalizeToken(t *testing.T) {
 	cases := []struct {
 		in   string

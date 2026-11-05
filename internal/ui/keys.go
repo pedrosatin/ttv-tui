@@ -33,6 +33,9 @@ type keyMap struct {
 	Help          key.Binding
 	HelpGlobal    key.Binding
 	Favorite      key.Binding
+	CycleLayout   key.Binding
+	ToggleList    key.Binding
+	ToggleChat    key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -117,6 +120,18 @@ func defaultKeyMap() keyMap {
 		),
 		Favorite: key.NewBinding(
 			key.WithKeys("f"),
+		),
+		// Layout keys (ticket 02): Ctrl+W cycles named modes; Ctrl+H / Ctrl+L
+		// toggle list and chat independently. Bubble Tea maps these to distinct
+		// KeyCtrl* types (Ctrl+H is BS, Backspace is DEL).
+		CycleLayout: key.NewBinding(
+			key.WithKeys("ctrl+w"),
+		),
+		ToggleList: key.NewBinding(
+			key.WithKeys("ctrl+h"),
+		),
+		ToggleChat: key.NewBinding(
+			key.WithKeys("ctrl+l"),
 		),
 	}
 }
@@ -223,6 +238,20 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.chat.Reconnect()
 	}
 
+	// Layout controls work from any mode (compose, help, search, filter).
+	if key.Matches(msg, m.keys.CycleLayout) {
+		m.cycleLayout()
+		return m, m.applyWindowLayoutCmd()
+	}
+	if key.Matches(msg, m.keys.ToggleList) {
+		m.toggleListPanel()
+		return m, m.applyWindowLayoutCmd()
+	}
+	if key.Matches(msg, m.keys.ToggleChat) {
+		m.toggleChatPanel()
+		return m, m.applyWindowLayoutCmd()
+	}
+
 	if m.searching {
 		return m.updateSearchingKey(msg)
 	}
@@ -251,7 +280,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if m.composing && !m.chatHiddenByWidth() {
+	if m.composing && m.showChat && !m.chatHiddenByWidth() {
 		return m.updateComposingKey(msg)
 	}
 
@@ -406,9 +435,10 @@ func isSwitchFocusKey(msg tea.KeyMsg, keys keyMap) bool {
 }
 
 // switchPanelFocus toggles list ↔ chat. It leaves composition without clearing
-// the draft, and closes help so the new focus marker is visible.
+// the draft, and closes help so the new focus marker is visible. When layout
+// hides either panel, Tab is a no-op.
 func (m Model) switchPanelFocus() Model {
-	if !m.hasChatPanel() || m.chatHiddenByWidth() {
+	if !m.listVisible() || !m.chatColumnVisible() {
 		return m
 	}
 	m.helpVisible = false
@@ -424,7 +454,7 @@ func (m Model) switchPanelFocus() Model {
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {
-	if m.chatHiddenByWidth() {
+	if !m.showChat || m.chatHiddenByWidth() {
 		return m, nil
 	}
 	if !m.chatHasToken() && (m.chat != nil || m.chatPanel.channel != "") {

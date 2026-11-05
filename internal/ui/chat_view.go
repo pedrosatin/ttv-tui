@@ -85,8 +85,11 @@ func (m Model) chatHeaderState() string {
 }
 
 func (m Model) renderChatHeaderLines(maxWidth int) []string {
+	// Focus chrome only when both panels share the screen (split). Chat-only
+	// and focus layouts have a single panel, so the caret would be noise.
+	showFocusChrome := m.listVisible() && m.chatColumnVisible() && m.Focus() == FocusChat
 	focusMarker := "  "
-	if m.Focus() == FocusChat {
+	if showFocusChrome {
 		focusMarker = "▸ "
 	}
 	title := fmt.Sprintf(m.t("chat.title"), m.chatPanel.channel)
@@ -94,7 +97,7 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 	modes := m.chatRoomModesSummary()
 
 	head := focusMarker + title
-	if m.Focus() == FocusChat {
+	if showFocusChrome {
 		head += " " + m.t("focus.active_tag")
 	}
 
@@ -134,7 +137,7 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 
 	for i, line := range headerLines {
 		line = TruncateVisual(line, maxWidth)
-		if m.Focus() == FocusChat {
+		if showFocusChrome {
 			line = styleFocus(line)
 		}
 		headerLines[i] = line
