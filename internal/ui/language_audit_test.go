@@ -198,7 +198,7 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 // languages and ties its layout line to the labels the status bar uses.
 func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 	helpKeys := []string{
-		"help.title", "help.nav", "help.esc", "help.categories", "help.search",
+		"help.title", "help.close", "help.nav", "help.esc", "help.categories", "help.search",
 		"help.channel_filter", "help.layout", "help.player", "help.chat", "help.app",
 		"help.nocolor", "help.colors",
 	}

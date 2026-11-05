@@ -12,6 +12,7 @@ type keyMap struct {
 	Up            key.Binding
 	Down          key.Binding
 	PageUp        key.Binding
+	PageDown      key.Binding
 	Home          key.Binding
 	GoLive        key.Binding
 	Select        key.Binding
@@ -32,6 +33,7 @@ type keyMap struct {
 	CopyMessage   key.Binding
 	Help          key.Binding
 	HelpGlobal    key.Binding
+	CloseHelp     key.Binding
 	Favorite      key.Binding
 	CycleLayout   key.Binding
 	ToggleList    key.Binding
@@ -48,6 +50,9 @@ func defaultKeyMap() keyMap {
 		),
 		PageUp: key.NewBinding(
 			key.WithKeys("pgup"),
+		),
+		PageDown: key.NewBinding(
+			key.WithKeys("pgdown"),
 		),
 		Home: key.NewBinding(
 			key.WithKeys("home"),
@@ -117,6 +122,10 @@ func defaultKeyMap() keyMap {
 		),
 		HelpGlobal: key.NewBinding(
 			key.WithKeys("f1"),
+		),
+		// q only means something inside the help; quitting stays on Ctrl+Q.
+		CloseHelp: key.NewBinding(
+			key.WithKeys("q"),
 		),
 		Favorite: key.NewBinding(
 			key.WithKeys("f"),
@@ -207,13 +216,19 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// F1 toggles keyboard help at any time, even while typing.
+	// Help is modal: past this point no key reaches the list, chat, filter or
+	// search behind it. Only the app-level Ctrl+Q and Ctrl+C above outrank it.
+	if m.helpOpen() {
+		return m.updateHelpKey(msg)
+	}
+
+	// F1 opens keyboard help at any time, even while typing.
 	if key.Matches(msg, m.keys.HelpGlobal) {
-		m.helpVisible = !m.helpVisible
+		m.toggleHelp()
 		return m, nil
 	}
 
-	// Ctrl+R returns to categories from anywhere, including compose and help.
+	// Ctrl+R returns to categories from anywhere, including compose.
 	if key.Matches(msg, m.keys.Categories) {
 		return m.returnToCategories()
 	}
@@ -238,7 +253,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.chat.Reconnect()
 	}
 
-	// Layout controls work from any mode (compose, help, search, filter).
+	// Layout controls work from any mode (compose, search, filter).
 	if key.Matches(msg, m.keys.CycleLayout) {
 		m.cycleLayout()
 		return m, nil
@@ -265,19 +280,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Tab switches list ↔ chat in every panel state: list focus, chat focus,
-	// composing, and with help open. It never sends or clears the draft. When
-	// help is open, Tab closes it so the new focus marker is visible (Esc and
-	// ? still only dismiss help, without switching panels).
+	// and composing. It never sends or clears the draft.
 	if isSwitchFocusKey(msg, m.keys) {
 		return m.switchPanelFocus(), nil
-	}
-
-	// When help overlay is visible, ? or Esc closes it without changing focus.
-	if m.helpVisible {
-		if key.Matches(msg, m.keys.Help) || key.Matches(msg, m.keys.Clear) {
-			m.helpVisible = false
-			return m, nil
-		}
 	}
 
 	if m.composing && m.showChat && !m.chatHiddenByWidth() {
@@ -298,7 +303,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openChannelFilterMenu(), nil
 
 	case key.Matches(msg, m.keys.Help):
-		m.helpVisible = !m.helpVisible
+		m.toggleHelp()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Clear):
@@ -435,13 +440,11 @@ func isSwitchFocusKey(msg tea.KeyMsg, keys keyMap) bool {
 }
 
 // switchPanelFocus toggles list ↔ chat. It leaves composition without clearing
-// the draft, and closes help so the new focus marker is visible. When layout
-// hides either panel, Tab is a no-op.
+// the draft. When layout hides either panel, Tab is a no-op.
 func (m Model) switchPanelFocus() Model {
 	if !m.listVisible() || !m.chatColumnVisible() {
 		return m
 	}
-	m.helpVisible = false
 	m.composing = false
 	if m.focus == FocusChat {
 		m.focus = FocusList
@@ -449,6 +452,39 @@ func (m Model) switchPanelFocus() Model {
 		m.focus = FocusChat
 	}
 	return m
+}
+
+// toggleHelp opens or closes the help, always at the top.
+func (m *Model) toggleHelp() {
+	m.helpVisible = !m.helpVisible
+	m.helpScroll = 0
+}
+
+// updateHelpKey consumes every key while the help is open: it closes, scrolls,
+// or does nothing. Nothing here may touch the state behind the help.
+func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	total := len(m.renderHelpLines(m.width))
+	page := max(m.helpPageRows(total)-1, 1)
+	offset := m.helpOffset(total)
+	switch {
+	case key.Matches(msg, m.keys.Help, m.keys.Clear, m.keys.CloseHelp):
+		m.toggleHelp()
+		return m, nil
+	case key.Matches(msg, m.keys.Up):
+		offset--
+	case key.Matches(msg, m.keys.Down):
+		offset++
+	case key.Matches(msg, m.keys.PageUp):
+		offset -= page
+	case key.Matches(msg, m.keys.PageDown):
+		offset += page
+	case key.Matches(msg, m.keys.Home):
+		offset = 0
+	case key.Matches(msg, m.keys.GoLive):
+		offset = total
+	}
+	m.helpScroll = offset
+	return m, nil
 }
 
 // enterCompose focuses the chat panel and opens the message input when sending

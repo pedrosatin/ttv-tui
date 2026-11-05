@@ -113,7 +113,7 @@ Press `?` or `F1` to open the keyboard shortcuts reference at the bottom of the 
 
 ![Keyboard shortcuts overlay](img/help.svg)
 
-Press `?`, `F1`, or `Esc` to close the help overlay.
+While the help is open it takes every key: `↑/↓`, `PgUp/PgDn` and `Home/End` scroll it when it does not fit, and `?`, `F1`, `Esc` or `q` close it.
 
 ## 7. Narrow terminals (< 80 columns)
 

@@ -139,8 +139,11 @@ func (m Model) View() (view string) {
 		return status
 	}
 
-	helpLines := m.renderHelpLines(m.width)
-	filterMenuLines := m.renderChannelFilterMenuLines(m.width)
+	// Help is modal, so it wins over the filter menu it may have opened on.
+	overlayLines := m.helpViewLines()
+	if len(overlayLines) == 0 {
+		overlayLines = m.renderChannelFilterMenuLines(m.width)
+	}
 
 	// Unsized fallback (m.width <= 0 and m.height <= 0): used by unit tests that don't send WindowSizeMsg.
 	if m.width <= 0 && m.height <= 0 {
@@ -156,8 +159,7 @@ func (m Model) View() (view string) {
 		} else if !m.showList {
 			bodyLines = append(bodyLines, m.focusModeHintLines(0)...)
 		}
-		bodyLines = append(bodyLines, filterMenuLines...)
-		bodyLines = append(bodyLines, helpLines...)
+		bodyLines = append(bodyLines, overlayLines...)
 		if len(bodyLines) == 0 {
 			return status
 		}
@@ -195,11 +197,7 @@ func (m Model) View() (view string) {
 			rightCell := padOrTruncateVisual(right, chatW)
 			combined = append(combined, leftCell+panelSeparator+rightCell)
 		}
-		if len(filterMenuLines) > 0 {
-			combined = m.overlayHelpLines(combined, filterMenuLines, m.width, available)
-		} else {
-			combined = m.overlayHelpLines(combined, helpLines, m.width, available)
-		}
+		combined = m.overlayHelpLines(combined, overlayLines, m.width, available)
 		return strings.Join(combined, "\n") + "\n" + status
 	}
 
@@ -207,8 +205,7 @@ func (m Model) View() (view string) {
 	if listW == 0 && chatW > 0 {
 		bodyLines := m.renderChatLines(available, chatW)
 		if m.height <= 0 {
-			bodyLines = append(bodyLines, filterMenuLines...)
-			bodyLines = append(bodyLines, helpLines...)
+			bodyLines = append(bodyLines, overlayLines...)
 			for i := range bodyLines {
 				bodyLines[i] = padOrTruncateVisual(bodyLines[i], chatW)
 			}
@@ -223,11 +220,7 @@ func (m Model) View() (view string) {
 		for i := range bodyLines {
 			bodyLines[i] = padOrTruncateVisual(bodyLines[i], chatW)
 		}
-		if len(filterMenuLines) > 0 {
-			bodyLines = m.overlayHelpLines(bodyLines, filterMenuLines, chatW, available)
-		} else {
-			bodyLines = m.overlayHelpLines(bodyLines, helpLines, chatW, available)
-		}
+		bodyLines = m.overlayHelpLines(bodyLines, overlayLines, chatW, available)
 		return strings.Join(bodyLines, "\n") + "\n" + status
 	}
 
@@ -235,8 +228,7 @@ func (m Model) View() (view string) {
 	if listW == 0 && chatW == 0 {
 		bodyLines := m.focusModeHintLines(m.width)
 		if m.height <= 0 {
-			bodyLines = append(bodyLines, filterMenuLines...)
-			bodyLines = append(bodyLines, helpLines...)
+			bodyLines = append(bodyLines, overlayLines...)
 			return strings.Join(bodyLines, "\n") + "\n" + status
 		}
 		for len(bodyLines) < available {
@@ -248,11 +240,7 @@ func (m Model) View() (view string) {
 		for i := range bodyLines {
 			bodyLines[i] = padOrTruncateVisual(bodyLines[i], m.width)
 		}
-		if len(filterMenuLines) > 0 {
-			bodyLines = m.overlayHelpLines(bodyLines, filterMenuLines, m.width, available)
-		} else {
-			bodyLines = m.overlayHelpLines(bodyLines, helpLines, m.width, available)
-		}
+		bodyLines = m.overlayHelpLines(bodyLines, overlayLines, m.width, available)
 		return strings.Join(bodyLines, "\n") + "\n" + status
 	}
 
@@ -265,8 +253,7 @@ func (m Model) View() (view string) {
 
 	if m.height <= 0 {
 		bodyLines = append(bodyLines, noticeLines...)
-		bodyLines = append(bodyLines, filterMenuLines...)
-		bodyLines = append(bodyLines, helpLines...)
+		bodyLines = append(bodyLines, overlayLines...)
 		if listW > 0 {
 			for i := range bodyLines {
 				bodyLines[i] = padOrTruncateVisual(bodyLines[i], listW)
@@ -297,11 +284,7 @@ func (m Model) View() (view string) {
 			bodyLines[i] = padOrTruncateVisual(bodyLines[i], listW)
 		}
 	}
-	if len(filterMenuLines) > 0 {
-		bodyLines = m.overlayHelpLines(bodyLines, filterMenuLines, listW, available)
-	} else {
-		bodyLines = m.overlayHelpLines(bodyLines, helpLines, listW, available)
-	}
+	bodyLines = m.overlayHelpLines(bodyLines, overlayLines, listW, available)
 	return strings.Join(bodyLines, "\n") + "\n" + status
 }
 
@@ -321,6 +304,50 @@ func (m Model) narrowChatNoticeLines(maxWidth int) []string {
 	return rows
 }
 
+// helpOpen reports whether the help is on screen and owns the keyboard. A
+// one-row terminal draws only the status bar, and a help nobody can see must
+// not eat keys.
+func (m Model) helpOpen() bool {
+	return m.helpVisible && m.height != 1
+}
+
+// helpPageRows returns how many of the total help rows are drawn at once. On
+// overflow one row goes to the position indicator, unless it is the only row.
+func (m Model) helpPageRows(total int) int {
+	available := m.height - 1
+	if m.height <= 0 || total <= available {
+		return total
+	}
+	return max(available-1, 1)
+}
+
+// helpOffset returns helpScroll within the current bounds. A resize or a new
+// player error can change them while the help stays open.
+func (m Model) helpOffset(total int) int {
+	return min(max(m.helpScroll, 0), total-m.helpPageRows(total))
+}
+
+// helpViewLines returns the help rows to draw: all of them when they fit, else
+// the scrolled window and, when there is room for it, the position indicator.
+func (m Model) helpViewLines() []string {
+	lines := m.renderHelpLines(m.width)
+	total := len(lines)
+	rows := m.helpPageRows(total)
+	if rows == total {
+		return lines
+	}
+	offset := m.helpOffset(total)
+	window := lines[offset : offset+rows]
+	if m.height > 2 {
+		position := fmt.Sprintf("%d/%d", offset+rows, total)
+		pad := max(m.width-ansi.StringWidth(position), 0)
+		window = append(window, strings.Repeat(" ", pad)+position)
+	}
+	return window
+}
+
+// renderHelpLines returns the whole help, wrapped at maxWidth. Rows are never
+// truncated: what does not fit the height is reached by scrolling.
 func (m Model) renderHelpLines(maxWidth int) []string {
 	if !m.helpVisible {
 		return nil
@@ -329,27 +356,26 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 	if m.Focus() == FocusChat {
 		focusPanel = m.t("help.panel_chat")
 	}
-	raw := []string{
-		"=== " + m.t("help.title") + " ===",
-		"  " + fmt.Sprintf(m.t("help.focus_now"), focusPanel),
-		"  " + m.t("help.nav"),
-		"  " + m.t("help.esc"),
-		"  " + m.t("help.categories"),
-		"  " + m.t("help.search"),
-		"  " + m.t("help.channel_filter"),
-		"  " + m.t("help.layout"),
-		"  " + m.t("help.player"),
-		"  " + m.t("help.chat"),
-		"  " + m.t("help.app"),
-		"  " + m.t("help.nocolor"),
-	}
-	out := make([]string, 0, len(raw)+4)
-	for _, line := range raw {
-		out = append(out, TruncateVisual(line, maxWidth))
+	out := wrapChatRow("", "=== "+m.t("help.title")+" ===", maxWidth)
+	for _, line := range []string{
+		m.t("help.close"),
+		fmt.Sprintf(m.t("help.focus_now"), focusPanel),
+		m.t("help.nav"),
+		m.t("help.esc"),
+		m.t("help.categories"),
+		m.t("help.search"),
+		m.t("help.channel_filter"),
+		m.t("help.layout"),
+		m.t("help.player"),
+		m.t("help.chat"),
+		m.t("help.app"),
+		m.t("help.nocolor"),
+	} {
+		out = append(out, wrapChatRow("  ", line, maxWidth)...)
 	}
 	out = append(out, m.renderHelpColorLines(maxWidth)...)
 	if line := m.playerErrorLine(); line != "" {
-		out = append(out, TruncateVisual("  "+fmt.Sprintf(m.t("help.player_error"), line), maxWidth))
+		out = append(out, wrapChatRow("  ", fmt.Sprintf(m.t("help.player_error"), line), maxWidth)...)
 	}
 	return out
 }
@@ -357,17 +383,11 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 // renderHelpColorLines returns the color legend, wrapped at maxWidth (never
 // truncated) with each palette term painted in its own color.
 func (m Model) renderHelpColorLines(maxWidth int) []string {
-	legend := m.t("help.colors")
-	plain := "  " + legend
-	if maxWidth <= 0 {
-		return []string{colorizeHelpLegend(plain)}
+	rows := wrapChatRow("  ", m.t("help.colors"), maxWidth)
+	for i, row := range rows {
+		rows[i] = colorizeHelpLegend(row)
 	}
-	wrapped := strings.Split(ansi.Wrap(plain, maxWidth, ""), "\n")
-	out := make([]string, 0, len(wrapped))
-	for _, line := range wrapped {
-		out = append(out, colorizeHelpLegend(line))
-	}
-	return out
+	return rows
 }
 
 func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int, available int) []string {
@@ -385,6 +405,9 @@ func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int
 		return out
 	}
 	start := len(lines) - len(helpLines)
+	if start > 0 {
+		lines[start-1] = padOrTruncateVisual("", maxWidth)
+	}
 	for i, hl := range helpLines {
 		lines[start+i] = padOrTruncateVisual(hl, maxWidth)
 	}

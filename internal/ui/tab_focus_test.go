@@ -46,7 +46,7 @@ func TestTabSwitchesFocusInFourStatesAndPreservesDraft(t *testing.T) {
 			name: "composing", focus: FocusChat, composing: true, wantFocus: FocusList, wantCompose: false,
 		},
 		{
-			name: "help_open_on_list", focus: FocusList, helpOpen: true, wantFocus: FocusChat, wantHelp: false,
+			name: "help_open_on_list", focus: FocusList, helpOpen: true, wantFocus: FocusList, wantHelp: true,
 		},
 	}
 
@@ -161,11 +161,18 @@ func TestTabNeverDropsTypedDraftAcrossCombinations(t *testing.T) {
 			t.Fatalf("typed draft=%q, want %q", m.ComposeDraft(), draft)
 		}
 
-		// Help open while composing, Tab closes help and moves to list.
+		// Help open while composing: Tab belongs to the help, nothing moves.
 		m.helpVisible = true
 		m = pressTab(m)
-		if m.HelpVisible() || m.Focus() != FocusList || m.Composing() || m.ComposeDraft() != draft {
+		if !m.HelpVisible() || m.Focus() != FocusChat || !m.Composing() || m.ComposeDraft() != draft {
 			t.Fatalf("help+Tab: help=%v focus=%q composing=%v draft=%q", m.HelpVisible(), m.Focus(), m.Composing(), m.ComposeDraft())
+		}
+
+		// Help closed, Tab leaves composition and moves to list.
+		m = sendKeys(m, keyEsc)
+		m = pressTab(m)
+		if m.HelpVisible() || m.Focus() != FocusList || m.Composing() || m.ComposeDraft() != draft {
+			t.Fatalf("Tab after help: help=%v focus=%q composing=%v draft=%q", m.HelpVisible(), m.Focus(), m.Composing(), m.ComposeDraft())
 		}
 
 		// Tab to chat, Enter into compose, Esc out, Tab around again.
@@ -208,7 +215,7 @@ func TestHelpAndStatusShowFocusedPanel(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyF1})
 	m = updated.(Model)
 	view := ansi.Strip(m.View())
-	want := "Focused: chat — Tab switches panels, keeps draft, closes help"
+	want := "Focused: chat — after closing help, Tab switches panels and keeps draft"
 	if !strings.Contains(view, want) {
 		t.Fatalf("help missing current focus line %q:\n%s", want, view)
 	}

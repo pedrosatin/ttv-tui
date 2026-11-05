@@ -94,6 +94,7 @@ var allowedExceptions = map[string]bool{
 	"up":     true,
 	"down":   true,
 	"pgup":   true,
+	"pgdown": true,
 	"home":   true,
 	"end":    true,
 	"enter":  true,
@@ -114,6 +115,7 @@ var allowedExceptions = map[string]bool{
 	"?":      true,
 	"f1":     true,
 	"f":      true,
+	"q":      true,
 	"j":      true,
 	"k":      true,
 	"l":      true,
@@ -165,6 +167,7 @@ var allowedExceptions = map[string]bool{
 	"0":                     true,
 	"moderation":            true,
 	"%7s":                   true,
+	"%d/%d":                 true,
 	// help.colors legend term matching (not user-facing copy; paints i18n text)
 	"amarelo":  true,
 	"vermelho": true,

@@ -110,7 +110,7 @@ func TestFilterWithMatchesDoesNotSuggestSearch(t *testing.T) {
 }
 
 func TestHelpExplainsEscAndCtrlRWithoutTruncation(t *testing.T) {
-	keys := []string{"help.nav", "help.esc", "help.categories", "help.search", "help.channel_filter", "help.player", "help.chat", "help.app", "help.nocolor", "help.colors"}
+	keys := []string{"help.close", "help.nav", "help.esc", "help.categories", "help.search", "help.channel_filter", "help.player", "help.chat", "help.app", "help.nocolor", "help.colors"}
 	for _, lang := range orientationLangs {
 		for _, width := range []int{80, 120} {
 			t.Run(fmt.Sprintf("%s/%d", lang, width), func(t *testing.T) {

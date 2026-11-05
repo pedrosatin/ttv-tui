@@ -204,6 +204,7 @@ type Model struct {
 	mode        Mode
 	focus       Focus
 	helpVisible bool
+	helpScroll  int // first help row on screen; clamped by helpOffset
 	generation  uint64
 	hydrateGen  uint64
 	loading     bool
