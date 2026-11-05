@@ -356,7 +356,18 @@ func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth, selectedIdx
 	}
 	var rows []string
 	for i := len(msgs) - 1; i >= 0 && len(rows) < budget; i-- {
-		lead, content := m.formatChatMessageParts(msgs[i], i == selectedIdx)
+		msg := msgs[i]
+		lead, content := m.formatChatMessageParts(msg, i == selectedIdx)
+		limit := maxWidth
+		if limit > 1 && hasWideRune(lead+content) {
+			limit--
+		}
+		// Drop the secondary author badge before it would force content to wrap.
+		// Reformat a local copy so the stored IRC metadata remains intact.
+		if maxWidth > 0 && m.authorBadge(msg.Badges) != "" && ansi.StringWidth(lead+content) > limit {
+			msg.Badges = nil
+			lead, content = m.formatChatMessageParts(msg, i == selectedIdx)
+		}
 		rows = append(wrapChatRow(lead, content, maxWidth), rows...)
 	}
 	if len(rows) > budget {
@@ -513,6 +524,9 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 	// Nicks use only blue/white ANSI slots so they never collide with the
 	// semantic palette (live/error/pause/focus).
 	renderedName := styleNick(name, msg.Color)
+	if badge := m.authorBadge(msg.Badges); badge != "" {
+		renderedName = badge + " " + renderedName
+	}
 
 	deliveryBadge := m.formatDeliveryBadge(msg)
 	suffix := ""
@@ -552,6 +566,26 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 		return lead, fmt.Sprintf("%s %s", renderedName, body+suffix)
 	}
 	return selLead, fmt.Sprintf("%s: %s%s", renderedName, body, suffix)
+}
+
+// authorBadge uses technical abbreviations shared by EN and PT-BR. Match the
+// IRC badge name, ignoring its version, and keep only the highest-priority role.
+func (m Model) authorBadge(badges []string) string {
+	best, rank := "", 0
+	for _, badge := range badges {
+		name, _, _ := strings.Cut(badge, "/")
+		switch name {
+		case "moderator":
+			return m.t("chat.author.mod")
+		case "broadcaster":
+			best, rank = m.t("chat.author.streamer"), 2
+		case "vip":
+			if rank < 1 {
+				best, rank = m.t("chat.author.vip"), 1
+			}
+		}
+	}
+	return best
 }
 
 // systemMsgIDModeration marks CLEARCHAT/CLEARMSG lines so the chat view can

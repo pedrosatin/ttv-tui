@@ -13,6 +13,9 @@ import (
 // must be added here on purpose (and an entry that stops being identical must
 // leave), so an English string pasted into pt-BR cannot pass unnoticed.
 var identicalInBothLanguages = map[string]string{
+	"chat.author.mod":      "sigla técnica MOD, maiúscula para distinguir do evento [mod]",
+	"chat.author.streamer": "sigla técnica STR, com largura de cinco células",
+	"chat.author.vip":      "sigla técnica VIP, igual nos dois idiomas",
 	// Proper name.
 	"app.title": "nome do programa",
 	// Symbols and formats with no words.

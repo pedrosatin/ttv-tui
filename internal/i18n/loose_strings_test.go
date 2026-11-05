@@ -128,6 +128,10 @@ var allowedExceptions = map[string]bool{
 	"focus": true,
 
 	// Twitch, IRC, browser, and external tool protocols / tokens
+	// IRC badge identifiers; displayed labels come from chat.author.*.
+	"moderator":             true,
+	"broadcaster":           true,
+	"vip":                   true,
 	"#":                     true,
 	"chat_login":            true,
 	"chat:read":             true,
