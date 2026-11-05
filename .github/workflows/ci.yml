@@ -70,6 +70,26 @@ jobs:
           echo "TMPDIR=/tmp" >> "$GITHUB_ENV"
           echo "XDG_RUNTIME_DIR=/tmp" >> "$GITHUB_ENV"
 
+      - name: Parse Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'packaging/install.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
+
+      - name: Check Windows installer dry run
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $output = & ./packaging/install.ps1 -DryRun -Version 0.2.0 6>&1 | Out-String
+          Write-Host $output
+          if ($output -notmatch 'Plan: version 0\.2\.0' -or
+              $output -notmatch 'ttv-tui_0\.2\.0_windows_amd64\.zip' -or
+              $output -notmatch 'checksums\.txt' -or
+              $output -notmatch 'Verify SHA-256') { throw 'Unexpected installer dry run output' }
+
       - name: Build packages
         run: go build ./...
 
