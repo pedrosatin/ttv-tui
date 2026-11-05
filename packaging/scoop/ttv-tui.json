@@ -1,0 +1,30 @@
+{
+    "version": "0.1.9",
+    "description": "Terminal UI for Twitch",
+    "homepage": "https://github.com/pedrosatin/ttv-tui",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.9/ttv-tui_0.1.9_windows_amd64.zip",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+    },
+    "bin": "ttv-tui.exe",
+    "depends": [
+        "extras/mpv",
+        "extras/streamlink"
+    ],
+    "checkver": {
+        "github": "https://github.com/pedrosatin/ttv-tui"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/pedrosatin/ttv-tui/releases/download/v$version/ttv-tui_$version_windows_amd64.zip"
+            }
+        },
+        "hash": {
+            "url": "$baseurl/checksums.txt"
+        }
+    }
+}
