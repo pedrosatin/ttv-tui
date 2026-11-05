@@ -377,9 +377,15 @@ func (s *Session) superviseIPC(ctx context.Context) {
 		if errors.Is(err, errIPCWaitAborted) {
 			return
 		}
+		var last string
 		s.mu.Lock()
-		last := s.lastLine
-		s.failHint = FailureTimeout
+		if errors.Is(err, errIPCNoListener) {
+			// The endpoint exists but mpv never listened on it: not a timeout.
+			last = "mpv did not open its control channel"
+		} else {
+			last = s.lastLine
+			s.failHint = FailureTimeout
+		}
 		s.mu.Unlock()
 		if last == "" {
 			last = "mpv IPC socket did not appear"

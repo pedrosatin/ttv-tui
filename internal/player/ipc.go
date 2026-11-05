@@ -44,6 +44,11 @@ const (
 	// attempts while the endpoint is not accepting connections yet.
 	ipcDialAttemptTimeout = 500 * time.Millisecond
 	ipcDialRetry          = 50 * time.Millisecond
+	// ipcRefusedGrace is how long a connection refused by an endpoint that
+	// already exists is tolerated. It only has to cover the gap between mpv
+	// creating the socket file and starting to listen on it (two consecutive
+	// calls, microseconds apart); past it, nobody is going to listen.
+	ipcRefusedGrace = 2 * time.Second
 )
 
 var (
@@ -53,6 +58,9 @@ var (
 	// errIPCWaitTimeout means the endpoint never accepted a connection before
 	// the deadline.
 	errIPCWaitTimeout = errors.New("player: ipc endpoint did not accept connections")
+	// errIPCNoListener means the endpoint exists but kept refusing connections
+	// for ipcRefusedGrace: mpv never opened its control channel.
+	errIPCNoListener = errors.New("player: ipc endpoint exists but nothing listens on it")
 )
 
 // dialIPCOnce makes one attempt to connect to the endpoint.
@@ -67,9 +75,12 @@ func dialIPCOnce(endpoint string, timeout time.Duration) (net.Conn, error) {
 // dial itself, never the existence of a file: that is the only test that works
 // the same for a socket file and a named pipe. It gives up with
 // errIPCWaitTimeout once deadline passes, or with errIPCWaitAborted when ctx is
-// done or gone is closed.
+// done or gone is closed. An endpoint that is absent (or busy) is waited for
+// until deadline; one that is present but keeps refusing connections fails
+// with errIPCNoListener after ipcRefusedGrace instead.
 func dialIPCUntil(ctx context.Context, gone <-chan struct{}, endpoint string, deadline time.Time) (net.Conn, error) {
 	var last error
+	var refusedSince time.Time // zero while the endpoint is not present-and-refusing
 	for {
 		select {
 		case <-ctx.Done():
@@ -88,6 +99,16 @@ func dialIPCUntil(ctx context.Context, gone <-chan struct{}, endpoint string, de
 			return conn, nil
 		}
 		last = err
+
+		if ipcEndpointRefused(endpoint, err) {
+			if refusedSince.IsZero() {
+				refusedSince = time.Now()
+			} else if time.Since(refusedSince) >= ipcRefusedGrace {
+				return nil, fmt.Errorf("%w: %s: %v", errIPCNoListener, endpoint, last)
+			}
+		} else {
+			refusedSince = time.Time{}
+		}
 
 		left := time.Until(deadline)
 		if left <= 0 {

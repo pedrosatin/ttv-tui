@@ -539,6 +539,8 @@ func runPlayerHelper() {
 			fmt.Println("[stream.hls][info] Resuming stream output")
 		}()
 		helperPlay(socket, login, false, helperIPCOptions{})
+	case "socket-no-listener":
+		helperSocketNoListener(socket)
 	case "idle-child":
 		// Stays until signalled, with the default reaction to SIGTERM.
 		time.Sleep(time.Hour)
@@ -1523,4 +1525,30 @@ func TestFallbackNotWritableReturnsError(t *testing.T) {
 	if !strings.Contains(ev.LastLine, expectedPath) {
 		t.Fatalf("LastLine %q missing attempted path %q", ev.LastLine, expectedPath)
 	}
+}
+
+// helperSocketNoListener leaves a socket file behind with nobody listening on
+// it, and a descendant in the same process group, then waits to be signalled.
+func helperSocketNoListener(socket string) {
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
+		os.Exit(1)
+	}
+	if ul, ok := ln.(*net.UnixListener); ok {
+		ul.SetUnlinkOnClose(false)
+	}
+	_ = ln.Close() // the file stays, the listener is gone: connect gets ECONNREFUSED
+
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = append(os.Environ(), "TTV_PLAYER_HELPER_MODE=idle-child")
+	if err := cmd.Start(); err == nil {
+		defer func() {
+			_ = cmd.Process.Kill()
+			_, _ = cmd.Process.Wait()
+		}()
+	}
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+	<-sig
 }

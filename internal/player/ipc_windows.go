@@ -12,3 +12,10 @@ package player
 func platformIPCPeerGone(error) bool {
 	return false
 }
+
+// ipcEndpointRefused is always false on Windows: the endpoint is a named pipe,
+// not a file, so there is no "present but nobody listens" state to tell apart
+// from a pipe that is merely busy or not created yet.
+func ipcEndpointRefused(string, error) bool {
+	return false
+}
