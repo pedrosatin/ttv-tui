@@ -18,7 +18,7 @@ Twitch no terminal para Linux, macOS e Windows. Navegue por categorias e canais 
 | macOS Intel (darwin/amd64) | Experimental; compila, sem compromisso de suporte |
 | Windows ARM (windows/arm64) | Experimental; compila, sem compromisso de suporte |
 
-A matriz define os alvos da v1.8. Compilação cruzada não comprova reprodução, áudio, login, clipboard ou encerramento em máquina real. A release v0.1.9 citada abaixo contém binários Linux; arquivos macOS/Windows dependem de uma release que os publique.
+A matriz define os alvos da v1.8. Compilação cruzada não comprova reprodução, áudio, login, clipboard ou encerramento em máquina real. A release v0.2.0 inclui arquivos para os três sistemas operacionais.
 
 Navegação, busca, favoritos locais, chat IRC e vídeo externo com pausa/volume compõem o escopo nos alvos suportados. Use um terminal com Unicode e cores ANSI, com pelo menos 80 colunas para o chat. No Linux, vídeo exige uma sessão gráfica e áudio configurados. No Windows, use Windows Terminal; testes automatizados de ConPTY ficam fora desta versão.
 
@@ -29,66 +29,56 @@ Navegação, busca, favoritos locais, chat IRC e vídeo externo com pausa/volume
 O script [`packaging/install.sh`](../packaging/install.sh) baixa o tarball da release e o arquivo `checksums.txt`, valida o hash SHA-256 com `sha256sum` ou `shasum -a 256` e instala o binário em `~/.local/bin/ttv-tui`, o atalho `.desktop` em `~/.local/share/applications/ttv-tui.desktop` e o ícone em `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
 
 ```bash
-# Instalar a release mais recente ou informar uma versão como 0.1.9
+# Instalar a release mais recente ou informar uma versão como 0.2.0
 ./packaging/install.sh
-./packaging/install.sh 0.1.9
+./packaging/install.sh 0.2.0
 
 # Exibir o plano de instalação sem baixar arquivos nem alterar o sistema
-./packaging/install.sh --dry-run 0.1.9
+./packaging/install.sh --dry-run 0.2.0
 
 # Instalar em um prefixo personalizado
-./packaging/install.sh --prefix "$HOME/.local" 0.1.9
+./packaging/install.sh --prefix "$HOME/.local" 0.2.0
 ```
 
 Também é possível executar o script diretamente do GitHub:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.1.9
+curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.2.0
 ```
 
-No macOS, o script instala apenas o binário em `~/.local/bin`; atalho e ícone são exclusivos do Linux. Use uma versão com arquivo `darwin_arm64`. Binários sem notarização baixados pelo navegador podem exigir liberação em Ajustes do Sistema → Privacidade e Segurança (Gatekeeper), após conferir origem e checksum. Não há notarização paga. Downloads pelo script/Homebrew não aplicam a quarentena do navegador.
+No macOS, o script instala apenas o binário em `~/.local/bin`; atalho e ícone são exclusivos do Linux. Use o arquivo `darwin_arm64` para Apple Silicon. Binários sem notarização baixados pelo navegador podem exigir liberação em Ajustes do Sistema → Privacidade e Segurança (Gatekeeper), após conferir origem e checksum. Não há notarização paga. Downloads pelo script/Homebrew não aplicam a quarentena do navegador.
 
 ### Windows x64: PowerShell
 
-Em um checkout, instale uma versão que publique o zip Windows:
+Em um checkout, instale a versão 0.2.0:
 
 ```powershell
 .\packaging\install.ps1 -DryRun
-.\packaging\install.ps1 -Version <versao-com-zip-windows>
+.\packaging\install.ps1 -Version 0.2.0
 winget install --id shinchiro.mpv -e
 winget install --id streamlink.streamlink -e
 ```
 
-O script verifica SHA-256, instala em `%LOCALAPPDATA%\Programs\ttv-tui\bin` e adiciona esse diretório ao PATH do usuário. Abra um novo terminal. Não instale o zip v0.1.9 como se ele já existisse.
+O script verifica SHA-256, instala em `%LOCALAPPDATA%\Programs\ttv-tui\bin` e adiciona esse diretório ao PATH do usuário. Abra um novo terminal.
 
 ### Homebrew (macOS) e Scoop (Windows)
 
-A [fórmula Homebrew](../packaging/homebrew/README.md) é provisória, fixa um commit antigo e ainda não foi publicada nem validada no macOS. Após atualizar versão/hash e publicar o tap, o comando previsto é `brew install pedrosatin/tap/ttv-tui`. As dependências podem ser instaladas hoje com `brew install mpv streamlink`.
+A [fórmula Homebrew](../packaging/homebrew/README.md) é provisória, fixa um commit antigo e permanece provisória até a atualização após a release; ela ainda não foi publicada nem validada no macOS. Após atualizar versão/hash e publicar o tap, o comando previsto é `brew install pedrosatin/tap/ttv-tui`. As dependências podem ser instaladas hoje com `brew install mpv streamlink`.
 
-O [manifesto Scoop](../packaging/scoop/ttv-tui.json) ainda tem SHA-256 zerado e aponta para um zip Windows ausente na v0.1.9. Só após atualizar URL/hash e publicar o arquivo, use `scoop install .\packaging\scoop\ttv-tui.json` em um checkout. As dependências usam `scoop bucket add extras` e `scoop install extras/mpv extras/streamlink`. Não ignore a verificação de hash.
+O [manifesto Scoop](../packaging/scoop/ttv-tui.json) ainda aponta para a v0.1.9 e tem SHA-256 zerado. A versão, a URL e o hash precisam ser atualizados após a publicação do zip Windows da v0.2.0; a instalação por esse manifesto não funciona até então. Para as dependências, use `scoop bucket add extras` e `scoop install extras/mpv extras/streamlink`. Não ignore a verificação de hash.
 
-### Binário da release (v0.1.9, Linux amd64 / arm64)
+### Binário da release (v0.2.0)
 
-Baixe o tarball da sua arquitetura (`linux_amd64` ou `linux_arm64`) e o arquivo `checksums.txt` da [release v0.1.9](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.9), confira o hash SHA-256 e instale o binário em `~/.local/bin`:
+Baixe o arquivo do seu sistema e arquitetura e o `checksums.txt` da [release v0.2.0](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.2.0). Exemplos: `ttv-tui_0.2.0_linux_amd64.tar.gz`, `ttv-tui_0.2.0_darwin_arm64.tar.gz` e `ttv-tui_0.2.0_windows_amd64.zip`. Linux e macOS também têm a outra arquitetura em tar.gz; Windows arm64 está disponível em zip. Consulte a matriz de suporte acima.
 
-```bash
-ARCH=amd64 # ou arm64
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.9/ttv-tui_0.1.9_linux_${ARCH}.tar.gz"
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.9/checksums.txt"
-sha256sum --ignore-missing -c checksums.txt
-
-mkdir -p ~/.local/bin
-tar -xzf "ttv-tui_0.1.9_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
-```
-
-Confirme que `~/.local/bin` está no seu `PATH`.
+Confira o SHA-256 do arquivo com a entrada correspondente em `checksums.txt` antes de extraí-lo. No Linux use `sha256sum`, no macOS `shasum -a 256` ou, no PowerShell do Windows, `Get-FileHash -Algorithm SHA256`. Extraia `ttv-tui` (ou `ttv-tui.exe` no Windows) e coloque-o em um diretório no `PATH`.
 
 ### Com `go install`
 
 Requer Go 1.27 ou superior:
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.9
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.2.0
 ```
 
 ### Arch Linux (AUR)
@@ -107,7 +97,7 @@ Requer Go 1.27:
 ```bash
 git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.9" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.2.0" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
 ### Atalho de desktop
