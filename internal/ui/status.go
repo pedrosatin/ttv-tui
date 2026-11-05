@@ -324,7 +324,7 @@ func (m Model) focusStatusText() string {
 
 // layoutStatusText is the compact layout token for the status bar.
 func (m Model) layoutStatusText() string {
-	return fmt.Sprintf(m.t("status.layout"), string(m.LayoutMode()))
+	return fmt.Sprintf(m.t("status.layout"), m.layoutModeLabel(m.LayoutMode()))
 }
 
 // includeLayoutStatus reports when the layout token may join secondaries.
@@ -378,10 +378,12 @@ func (m Model) StatusBar() string {
 	}
 
 	primary, secondary := m.statusParts()
-	// Non-default layouts lead the secondaries so "layout: chat|list|focus" is
-	// visible; default split omits the token (see includeLayoutStatus).
+	// Non-default layouts lead the secondaries so the layout token is visible;
+	// default split omits it (see includeLayoutStatus). The volume stays ahead
+	// of it: the mpv window can change volume with no other place to show it,
+	// and at 80 columns the token must not push it out.
 	if m.includeLayoutStatus() {
-		secondary = append([]string{m.layoutStatusText()}, secondary...)
+		secondary = insertAfterVolume(secondary, m.playerVolumeText(), m.layoutStatusText())
 	}
 	sep := " · "
 
@@ -394,10 +396,28 @@ func (m Model) StatusBar() string {
 	chosen := layouts[0]
 	if m.width > 0 {
 		chosen = layouts[len(layouts)-1]
-		for _, l := range layouts {
-			if ansi.StringWidth(l.left+primary+l.right) <= m.width {
-				chosen = l
+		// The volume and the layout token are the secondaries the operator must
+		// not lose: the app title yields before they do.
+		lead := primary
+		volume, layoutToken := m.playerVolumeText(), m.layoutStatusText()
+		for _, s := range secondary {
+			if s != "" && (s == volume || s == layoutToken) {
+				lead += sep + s
+			}
+		}
+		fitted := false
+		for _, l := range layouts[:2] {
+			if ansi.StringWidth(l.left+lead+l.right) <= m.width {
+				chosen, fitted = l, true
 				break
+			}
+		}
+		if !fitted {
+			for _, l := range layouts {
+				if ansi.StringWidth(l.left+primary+l.right) <= m.width {
+					chosen = l
+					break
+				}
 			}
 		}
 	}
@@ -469,3 +489,20 @@ func (m Model) StatusBar() string {
 // minSecondaryCut is the narrowest room in which a truncated secondary part
 // is still worth showing in the status bar.
 const minSecondaryCut = 12
+
+// insertAfterVolume puts token right after the volume entry of parts, or first
+// when the volume is not a secondary (it leads, or there is no player).
+func insertAfterVolume(parts []string, volume, token string) []string {
+	out := make([]string, 0, len(parts)+1)
+	if volume == "" {
+		return append(append(out, token), parts...)
+	}
+	for i, p := range parts {
+		if p == volume {
+			out = append(out, parts[:i+1]...)
+			out = append(out, token)
+			return append(out, parts[i+1:]...)
+		}
+	}
+	return append(append(out, token), parts...)
+}

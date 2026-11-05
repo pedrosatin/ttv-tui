@@ -37,10 +37,18 @@ type Options struct {
 	Log io.Writer
 }
 
+// earlyCatalog serves errors raised before the config is read and the final
+// language is known: the language comes from the environment alone. A nil
+// catalog is safe (T returns the key), so a broken embed never panics here.
+func earlyCatalog() *i18n.Catalog {
+	cat, _ := i18n.New(i18n.Resolve("", "", i18n.EnvLocale()))
+	return cat
+}
+
 // Run composes config, i18n, Source, player, chat, and the UI model and runs the TUI program.
 func Run(opts Options) error {
 	if opts.Lang != "" && !i18n.IsSupportedFlag(opts.Lang) {
-		return fmt.Errorf("unsupported --lang %q (want %q or %q)", opts.Lang, i18n.LangEN, i18n.LangPTBR)
+		return fmt.Errorf(earlyCatalog().T("app.err_unsupported_lang"), opts.Lang, i18n.LangEN, i18n.LangPTBR)
 	}
 
 	var (
@@ -53,7 +61,7 @@ func Run(opts Options) error {
 		cfg, err = config.Load()
 	}
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return fmt.Errorf(earlyCatalog().T("app.err_load_config"), err)
 	}
 
 	cfgPath := opts.ConfigPath
@@ -64,7 +72,8 @@ func Run(opts Options) error {
 	resolvedLang := i18n.Resolve(opts.Lang, cfg.Language, i18n.EnvLocale())
 	catalog, err := i18n.New(resolvedLang)
 	if err != nil {
-		return fmt.Errorf(catalog.T("app.err_init_catalog"), err)
+		// No catalog exists to localize this one: the embedded files failed to load.
+		return fmt.Errorf("initialize i18n catalog: %w", err)
 	}
 
 	if opts.Lang != "" {
@@ -73,7 +82,7 @@ func Run(opts Options) error {
 			cfg.Language = norm
 			if cfgPath != "" {
 				if err := config.SaveTo(cfgPath, cfg); err != nil {
-					return fmt.Errorf("persist language to config: %w", err)
+					return fmt.Errorf(catalog.T("app.err_persist_lang"), err)
 				}
 			}
 		}
@@ -89,7 +98,7 @@ func Run(opts Options) error {
 		var err error
 		statePath, err = store.DefaultPath()
 		if err != nil {
-			return fmt.Errorf("resolve state path: %w", err)
+			return fmt.Errorf(catalog.T("app.err_resolve_state_path"), err)
 		}
 	}
 	registryDir := playerRegistryDir(statePath)
@@ -230,7 +239,7 @@ func Run(opts Options) error {
 		return &SignalError{Signal: sig}
 	}
 	if runErr != nil {
-		return fmt.Errorf("run tui: %w", runErr)
+		return fmt.Errorf(catalog.T("app.err_run_tui"), runErr)
 	}
 	return nil
 }

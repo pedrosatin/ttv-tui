@@ -1,7 +1,7 @@
 package ui
 
-// LayoutMode names the visible TUI panel arrangement for the status bar.
-// Values match the ticket tokens exactly.
+// LayoutMode names the visible TUI panel arrangement. The values are internal
+// identifiers; the screen shows the localized label (layoutModeLabel).
 type LayoutMode string
 
 const (
@@ -22,6 +22,22 @@ func (m Model) LayoutMode() LayoutMode {
 		return LayoutList
 	default:
 		return LayoutFocus
+	}
+}
+
+// layoutModeLabel is the localized name of a layout mode, the same word the
+// help line (help.layout) uses. The LayoutMode values stay language-neutral
+// identifiers; only the catalog label reaches the screen.
+func (m Model) layoutModeLabel(mode LayoutMode) string {
+	switch mode {
+	case LayoutSplit:
+		return m.t("layout.mode.split")
+	case LayoutChat:
+		return m.t("layout.mode.chat")
+	case LayoutList:
+		return m.t("layout.mode.list")
+	default:
+		return m.t("layout.mode.focus")
 	}
 }
 

@@ -123,7 +123,7 @@ var allowedExceptions = map[string]bool{
 	"G":      true,
 	"=":      true,
 	"_":      true,
-	// Layout mode tokens shown in status as layout: split|chat|list|focus
+	// LayoutMode identifiers (internal; the screen shows layout.mode.* labels)
 	"split": true,
 	"focus": true,
 
@@ -217,6 +217,10 @@ var allowedExceptions = map[string]bool{
 	"unknown":            true,
 	"dev":                true,
 
+	// Raised when the embedded catalogs themselves fail to load: no catalog
+	// exists to localize it.
+	"initialize i18n catalog: %w": true,
+
 	// Auth error operation names
 	"validate": true,
 	"find":     true,
@@ -249,7 +253,10 @@ func TestNoLooseStringsInUIAndLogin(t *testing.T) {
 	// 2. internal/app/login.go
 	targetFiles = append(targetFiles, filepath.Join(repoRoot, "internal", "app", "login.go"))
 
-	// 3. cmd/ttv-tui/main.go
+	// 3. internal/app/app.go (errors that reach the terminal)
+	targetFiles = append(targetFiles, filepath.Join(repoRoot, "internal", "app", "app.go"))
+
+	// 4. cmd/ttv-tui/main.go
 	targetFiles = append(targetFiles, filepath.Join(repoRoot, "cmd", "ttv-tui", "main.go"))
 
 	fset := token.NewFileSet()

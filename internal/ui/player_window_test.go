@@ -75,7 +75,7 @@ func TestPauseFromMPVWindowDismissesWindowNotice(t *testing.T) {
 func TestInputConfWarningShownOncePerPlayback(t *testing.T) {
 	for lang, want := range map[string]string{
 		i18n.LangEN:   "mpv window has no keys: use Space and +/- in the terminal",
-		i18n.LangPTBR: "Janela do mpv sem teclas: use Space e +/- no terminal",
+		i18n.LangPTBR: "Janela do mpv sem teclas: use Espaço e +/- no terminal",
 	} {
 		t.Run(lang, func(t *testing.T) {
 			m := playingModel(t, lang, &fakePlayback{})

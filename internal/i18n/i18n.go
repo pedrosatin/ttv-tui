@@ -94,6 +94,16 @@ func (c *Catalog) T(key string) string {
 	return key
 }
 
+// Has reports whether key has a non-empty message in the active language
+// itself, with no fallback to English. T hides a missing translation behind the
+// English text; Has is how tests and audits see it.
+func (c *Catalog) Has(key string) bool {
+	if c == nil {
+		return false
+	}
+	return c.messages[c.lang][key] != ""
+}
+
 // Resolve determines the active language using precedence:
 // flagLang > configLang > envLocale > "en".
 func Resolve(flagLang, configLang, envLocale string) string {

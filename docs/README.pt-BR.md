@@ -183,14 +183,14 @@ Pressione `?` ou `F1` para abrir ou fechar o quadro de atalhos no aplicativo. As
 | `Ctrl+H` | Mostrar ou ocultar o painel da lista |
 | `Ctrl+L` | Mostrar ou ocultar o painel do chat |
 
-O layout vale para a sessão: a barra indica o ativo (`layout: chat`) e ocultar o
+O layout vale para a sessão: a barra indica o ativo (`layout: chat`, `layout: lista` ou `layout: foco`) e ocultar o
 chat nunca dispara o aviso de terminal estreito.
 
 ### Player de vídeo (janela do `mpv`)
 
 | Tecla | Ação |
 | --- | --- |
-| `Space` | Pausar ou retomar a reprodução do vídeo |
+| `Espaço` | Pausar ou retomar a reprodução do vídeo |
 | `+` / `=` | Aumentar o volume do `mpv` em 5% |
 | `-` / `_` | Diminuir o volume do `mpv` em 5% |
 | `Ctrl+X` | Encerrar a reprodução de vídeo sem sair do aplicativo |

@@ -378,7 +378,7 @@ func TestRunLogin_DistinctActionableErrors(t *testing.T) {
 		{
 			name:     "keyring locked or unavailable",
 			err:      auth.ErrKeyringUnavailable,
-			wantSub:  "keyring bloqueado ou ausente",
+			wantSub:  "chaveiro bloqueado ou ausente",
 			wantSent: auth.ErrKeyringUnavailable,
 		},
 		{
@@ -408,7 +408,7 @@ func TestRunLogin_DistinctActionableErrors(t *testing.T) {
 		{
 			name:     "validation timeout",
 			err:      auth.ErrValidateTimeout,
-			wantSub:  "timeout ao validar token",
+			wantSub:  "tempo esgotado ao validar token",
 			wantSent: auth.ErrValidateTimeout,
 		},
 	}
