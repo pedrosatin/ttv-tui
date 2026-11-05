@@ -4,12 +4,12 @@ package player
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pedrosatin/ttv-tui/internal/config"
 )
 
 // State is a playback lifecycle state. Values match the product vocabulary.
@@ -97,7 +97,8 @@ type Options struct {
 	// production writer; a failure never stops playback.
 	WriteInputConf func(path string) error
 	// RuntimeDir is the parent for per-playback private directories.
-	// Nil/empty uses $XDG_RUNTIME_DIR/ttv-tui, falling back to os.TempDir()/ttv-tui.
+	// Empty uses config.RuntimeDir: $XDG_RUNTIME_DIR/ttv-tui, else the OS convention
+	// (see there), ending in os.TempDir()/ttv-tui.
 	RuntimeDir string
 	// SocketWait is how long to wait, after spawn, for the mpv IPC endpoint to
 	// accept a connection.
@@ -502,9 +503,5 @@ func isShlexSafe(c byte) bool {
 }
 
 func defaultRuntimeDir() string {
-	base := os.Getenv("XDG_RUNTIME_DIR")
-	if base == "" {
-		base = os.TempDir()
-	}
-	return filepath.Join(base, "ttv-tui")
+	return config.RuntimeDir()
 }

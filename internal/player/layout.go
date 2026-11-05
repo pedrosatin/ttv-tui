@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 )
@@ -21,9 +22,32 @@ type sessionLayout struct {
 	Endpoint string
 }
 
-// maxSocketPathLen bounds a Unix socket path: sun_path holds 104 bytes on
-// macOS and 108 on Linux. Windows named pipes have no such limit.
-const maxSocketPathLen = 100
+// sun_path sizes, in bytes and counting the terminating NUL, per OS.
+const (
+	sunPathSizeLinux  = 108
+	sunPathSizeDarwin = 104
+	// The other Unix systems this builds for (the BSDs) follow Darwin.
+	sunPathSizeOtherUnix = 104
+)
+
+// maxSocketPathLenFor bounds a Unix socket path on goos: sun_path less its NUL.
+// Zero means no limit: Windows IPC is a named pipe, not a path.
+func maxSocketPathLenFor(goos string) int {
+	switch goos {
+	case "windows":
+		return 0
+	case "linux":
+		return sunPathSizeLinux - 1
+	case "darwin":
+		return sunPathSizeDarwin - 1
+	default:
+		return sunPathSizeOtherUnix - 1
+	}
+}
+
+// maxSocketPathLen is the bound for the running OS. Only the Unix endpoint
+// compares against it.
+var maxSocketPathLen = maxSocketPathLenFor(runtime.GOOS)
 
 // socketFileName is the Unix socket's name inside the session directory.
 const socketFileName = "i"

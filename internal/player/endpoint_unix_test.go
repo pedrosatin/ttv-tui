@@ -59,3 +59,17 @@ func TestFallbackDropsStaleEndpoint(t *testing.T) {
 		t.Fatalf("stale endpoint not removed: %v", err)
 	}
 }
+
+func TestEndpointInDirSocketLimitBoundary(t *testing.T) {
+	// "<dir>/i" is len(dir)+2 bytes; the limit is the running OS's sun_path less the NUL.
+	fits := "/" + strings.Repeat("d", maxSocketPathLen-3)
+	if got, err := endpointInDir(fits); err != nil || len(got) != maxSocketPathLen {
+		t.Fatalf("endpointInDir(len %d) = %q, %v; want a %d-byte socket path", len(fits), got, err, maxSocketPathLen)
+	}
+	if _, err := endpointInDir(fits + "d"); err == nil {
+		t.Fatalf("a socket path of %d bytes must be refused", maxSocketPathLen+1)
+	}
+	if err := checkRuntimeDirFits(strings.Repeat("r", maxSocketPathLen), 1); err == nil {
+		t.Fatal("checkRuntimeDirFits must refuse a runtime dir that cannot hold the socket")
+	}
+}

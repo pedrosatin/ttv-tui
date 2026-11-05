@@ -132,7 +132,7 @@ func (s *State) IsFavorite(ch Channel) bool {
 	return false
 }
 
-// DefaultPath resolves the default state file path (~/.local/state/ttv-tui/state.json).
+// DefaultPath resolves the default state file path (state.json in config.DefaultStateDir).
 func DefaultPath() (string, error) {
 	dir, err := config.DefaultStateDir()
 	if err != nil {

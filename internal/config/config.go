@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Config represents the user configuration stored at ~/.config/ttv-tui/config.toml.
+// Config represents the user configuration stored in config.toml under DefaultPath's directory (~/.config/ttv-tui on Linux).
 type Config struct {
 	Language    string
 	AccessToken string
@@ -37,40 +37,33 @@ func NormalizeToken(raw string) string {
 	return s
 }
 
-// DefaultPath resolves the default configuration file path (~/.config/ttv-tui/config.toml).
+// DefaultPath resolves the default configuration file path: config.toml in
+// $XDG_CONFIG_HOME/ttv-tui when set, otherwise ~/.config/ttv-tui (Linux),
+// ~/Library/Application Support/ttv-tui (macOS) or %APPDATA%\ttv-tui (Windows).
 func DefaultPath() (string, error) {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "ttv-tui", "config.toml"), nil
-	}
-	home, err := os.UserHomeDir()
+	dir, err := osPathEnv().configDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve user home dir: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".config", "ttv-tui", "config.toml"), nil
+	return filepath.Join(dir, "config.toml"), nil
 }
 
-// DefaultTwtPath resolves the default twitch-tui (twt) configuration file path (~/.config/twt/config.toml).
+// DefaultTwtPath resolves the default twitch-tui (twt) configuration file path,
+// config.toml in the "twt" directory beside ours (see DefaultPath).
 func DefaultTwtPath() (string, error) {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "twt", "config.toml"), nil
-	}
-	home, err := os.UserHomeDir()
+	dir, err := osPathEnv().twtDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve user home dir: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".config", "twt", "config.toml"), nil
+	return filepath.Join(dir, "config.toml"), nil
 }
 
-// DefaultStateDir resolves the default state directory path (~/.local/state/ttv-tui).
+// DefaultStateDir resolves the default state directory: $XDG_STATE_HOME/ttv-tui
+// when set, otherwise ~/.local/state/ttv-tui (Linux),
+// ~/Library/Application Support/ttv-tui/state (macOS) or %LOCALAPPDATA%\ttv-tui
+// (Windows).
 func DefaultStateDir() (string, error) {
-	if xdg := os.Getenv("XDG_STATE_HOME"); xdg != "" {
-		return filepath.Join(xdg, "ttv-tui"), nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user home dir: %w", err)
-	}
-	return filepath.Join(home, ".local", "state", "ttv-tui"), nil
+	return osPathEnv().stateDir()
 }
 
 // Load reads the configuration from DefaultPath. If the file does not exist,
@@ -100,7 +93,7 @@ func LoadFrom(path string) (Config, error) {
 	return cfg, nil
 }
 
-// LoadTwt reads and normalizes credentials from the default twitch-tui config (~/.config/twt/config.toml).
+// LoadTwt reads and normalizes credentials from the default twitch-tui config (see DefaultTwtPath).
 func LoadTwt() (Config, error) {
 	path, err := DefaultTwtPath()
 	if err != nil {
