@@ -14,7 +14,7 @@ func TestDefaultSessionCommandTakesInputConfFromDirNotEndpoint(t *testing.T) {
 	joined := strings.Join(cmd.Args, " ")
 	for _, want := range []string{
 		"--input-ipc-server=ttv-tui-pipe",
-		"--input-conf=/data/sess/mpv-input.conf",
+		quotePlayerArg("--input-conf=" + inputConfPath("/data/sess")),
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args %q missing %q", joined, want)
@@ -46,6 +46,7 @@ func TestPipeNameHasNoSeparators(t *testing.T) {
 // the directory, the command must get the endpoint as given, and cleanup must
 // remove the directory and the endpoint without touching the endpoint's parent.
 func TestSessionKeepsDirAndEndpointSeparate(t *testing.T) {
+	skipWithoutSessionIPC(t)
 	dir := filepath.Join(t.TempDir(), "sd")
 	epRoot := filepath.Join(t.TempDir(), "ep")
 	for _, d := range []string{dir, epRoot} {

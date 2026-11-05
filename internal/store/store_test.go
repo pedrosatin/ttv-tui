@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
@@ -58,7 +59,8 @@ func TestStore_RoundTripAtomicAndPermissions0600(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat saved file: %v", err)
 	}
-	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
+	// Windows has no mode bits: Go reports 0666 whatever the ACL says.
+	if gotPerm := info.Mode().Perm(); runtime.GOOS != "windows" && gotPerm != 0o600 {
 		t.Fatalf("got file perm %#o, want 0600", gotPerm)
 	}
 

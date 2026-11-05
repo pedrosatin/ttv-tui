@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -40,8 +41,33 @@ func helperCommand(mode string) CommandFunc {
 	}
 }
 
+// fakeMPVModes are the helper modes that listen on the IPC endpoint.
+var fakeMPVModes = map[string]bool{
+	"play":                       true,
+	"play-child":                 true,
+	"play-control":               true,
+	"ad-then-play":               true,
+	"socket-no-listener":         true,
+	"ignore-term":                true,
+	"socket-eof":                 true,
+	"exit-after-play":            true,
+	"term-parent-stubborn-child": true,
+}
+
+// skipWithoutSessionIPC skips a test that needs a session to reach the fake mpv:
+// on Windows the endpoint is a pipe name that dialIPCOnce cannot dial yet.
+func skipWithoutSessionIPC(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("session IPC needs the named-pipe dial (v1.8 ticket 08)")
+	}
+}
+
 func newTestManager(t *testing.T, mode string, opts Options) *Manager {
 	t.Helper()
+	if fakeMPVModes[mode] {
+		skipWithoutSessionIPC(t)
+	}
 	opts.Command = helperCommand(mode)
 	if opts.RuntimeDir == "" {
 		opts.RuntimeDir = t.TempDir()
@@ -140,23 +166,23 @@ func TestChannelSwitchABCLeavesOnlyC(t *testing.T) {
 	// Allow A/B teardown to finish.
 	time.Sleep(400 * time.Millisecond)
 
-	if err := syscall.Kill(pid, 0); err != nil {
-		t.Fatalf("channel C process not alive: %v", err)
+	if !pidExists(pid) {
+		t.Fatalf("channel C process %d not alive", pid)
 	}
 
 	// No other helper processes for A/B should remain under our runtime dir naming;
 	// verify process group of C has living members, then Stop and ensure gone.
-	pgid, err := syscall.Getpgid(pid)
+	pgid, err := groupOfPid(pid)
 	if err != nil {
 		t.Fatalf("Getpgid: %v", err)
 	}
 	mgr.Stop()
 	time.Sleep(300 * time.Millisecond)
 
-	if err := syscall.Kill(pid, 0); err == nil {
+	if pidExists(pid) {
 		t.Fatalf("pid %d still alive after Stop", pid)
 	}
-	if err := syscall.Kill(-pgid, 0); err == nil {
+	if groupExists(pgid) {
 		t.Fatalf("process group %d still reachable after Stop", pgid)
 	}
 	_ = genA
@@ -186,7 +212,7 @@ func TestSIGTERMIgnoredEscalatesToSIGKILL(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("Stop did not return after SIGKILL escalation")
 	}
-	if err := syscall.Kill(pid, 0); err == nil {
+	if pidExists(pid) {
 		t.Fatalf("pid %d still alive after Kill escalation", pid)
 	}
 }
@@ -1225,7 +1251,7 @@ func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
 		t.Fatalf("socket still present: %v", err)
 	}
 	if pid > 0 {
-		if err := syscall.Kill(pid, 0); err == nil {
+		if pidExists(pid) {
 			t.Fatalf("pid %d still alive", pid)
 		}
 	}
@@ -1349,8 +1375,8 @@ func TestRealStreamlinkSmoke(t *testing.T) {
 	}
 	mgr.mu.Unlock()
 	if pid > 0 {
-		if err := syscall.Kill(pid, 0); err != nil {
-			t.Fatalf("process not alive while playing: %v", err)
+		if !pidExists(pid) {
+			t.Fatalf("process %d not alive while playing", pid)
 		}
 	}
 
@@ -1375,7 +1401,7 @@ func TestRealStreamlinkSmoke(t *testing.T) {
 	_ = waitForState(t, mgr.Events(), gen, StateEnded, 10*time.Second)
 	time.Sleep(500 * time.Millisecond)
 	if pid > 0 {
-		if err := syscall.Kill(pid, 0); err == nil {
+		if pidExists(pid) {
 			t.Fatalf("pid %d still alive after Stop", pid)
 		}
 	}
@@ -1439,6 +1465,7 @@ func TestLongRuntimeDirFallsBackAndCleansUp(t *testing.T) {
 }
 
 func TestLongRuntimeDirDefaultEnvFallsBack(t *testing.T) {
+	skipWithoutSessionIPC(t)
 	longDir := filepath.Join(t.TempDir(), strings.Repeat("xdg-long/", 25))
 	if len(longDir) < 200 {
 		t.Fatalf("expected longDir >= 200 bytes, got %d", len(longDir))
@@ -1486,6 +1513,7 @@ func TestLongRuntimeDirDefaultEnvFallsBack(t *testing.T) {
 }
 
 func TestFallbackNotWritableReturnsError(t *testing.T) {
+	skipWithoutSessionIPC(t)
 	roBase, err := os.MkdirTemp("/tmp", "ro-fallback-*")
 	if err != nil {
 		t.Fatalf("create roBase: %v", err)

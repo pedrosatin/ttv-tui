@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -67,7 +68,7 @@ func TestInputConfVolumeOSDHasNoWords(t *testing.T) {
 }
 
 func TestInputConfPathIsInSessionDir(t *testing.T) {
-	if got, want := inputConfPath("/run/user/1000/ttv-tui/1-x"), "/run/user/1000/ttv-tui/1-x/mpv-input.conf"; got != want {
+	if got, want := inputConfPath("/run/user/1000/ttv-tui/1-x"), filepath.FromSlash("/run/user/1000/ttv-tui/1-x/mpv-input.conf"); got != want {
 		t.Fatalf("inputConfPath = %q, want %q", got, want)
 	}
 }
@@ -81,7 +82,17 @@ func privateDir(t *testing.T) string {
 	return dir
 }
 
+// skipWithoutDirPrivacy skips a test that needs writeInputConf to succeed: on
+// Windows checkDirPrivacy refuses every directory until it can read the ACL.
+func skipWithoutDirPrivacy(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the privacy check is a stub on Windows (v1.8 tickets 08/09)")
+	}
+}
+
 func TestWriteInputConfCreatesPrivateFile(t *testing.T) {
+	skipWithoutDirPrivacy(t)
 	path := filepath.Join(privateDir(t), inputConfName)
 	if err := writeInputConf(path); err != nil {
 		t.Fatalf("writeInputConf: %v", err)
@@ -123,6 +134,7 @@ func TestWriteInputConfFailsOnMissingDir(t *testing.T) {
 }
 
 func TestWriteInputConfDoesNotWriteThroughSymlink(t *testing.T) {
+	skipWithoutDirPrivacy(t)
 	dir := privateDir(t)
 	target := filepath.Join(t.TempDir(), "victim")
 	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
@@ -148,6 +160,7 @@ func TestWriteInputConfDoesNotWriteThroughSymlink(t *testing.T) {
 }
 
 func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
+	skipWithoutSessionIPC(t)
 	type seen struct {
 		dir     string
 		content string

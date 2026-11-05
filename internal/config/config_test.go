@@ -6,9 +6,22 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// assertPrivateMode checks the 0600 mode. Windows has no such bits: Go reports
+// 0666 there whatever the file's ACL says.
+func assertPrivateMode(t *testing.T, info os.FileInfo) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
+		t.Fatalf("got file permissions %#o, want 0600", gotPerm)
+	}
+}
 
 func assertConfigEqual(t *testing.T, got, want Config) {
 	t.Helper()
@@ -74,9 +87,7 @@ func TestSaveToNewWithoutTokenPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat saved config: %v", err)
 	}
-	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
-		t.Fatalf("got file permissions %#o, want 0600", gotPerm)
-	}
+	assertPrivateMode(t, info)
 	if out, err := exec.Command("stat", "-c", "%a", path).Output(); err == nil {
 		t.Logf("stat -c %%a %s: %s", filepath.Base(path), strings.TrimSpace(string(out)))
 	}
@@ -113,9 +124,7 @@ func TestSaveToPreexistingLoosePermissionsTightenedWithoutToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat saved config: %v", err)
 	}
-	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
-		t.Fatalf("got file permissions %#o, want 0600", gotPerm)
-	}
+	assertPrivateMode(t, info)
 	if after, err := exec.Command("stat", "-c", "%a", path).Output(); err == nil {
 		t.Logf("after SaveTo stat -c %%a %s: %s", filepath.Base(path), strings.TrimSpace(string(after)))
 	}
@@ -144,9 +153,7 @@ func TestSaveToNewWithTokenPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat saved config: %v", err)
 	}
-	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
-		t.Fatalf("got file permissions %#o, want 0600", gotPerm)
-	}
+	assertPrivateMode(t, info)
 
 	got, err := LoadFrom(path)
 	if err != nil {
@@ -183,9 +190,7 @@ func TestSaveToAtomicRoundTripAndTokenPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat saved config: %v", err)
 	}
-	if gotPerm := info.Mode().Perm(); gotPerm != 0o600 {
-		t.Fatalf("got file permissions %#o, want 0600", gotPerm)
-	}
+	assertPrivateMode(t, info)
 
 	// Ensure no leftover temporary files remain in directory.
 	entries, err := os.ReadDir(filepath.Dir(path))

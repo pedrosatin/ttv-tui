@@ -48,6 +48,7 @@ func TestIsIPCPeerGone(t *testing.T) {
 // The endpoint does not exist when the wait starts: readiness is the dial
 // succeeding, not a file showing up first.
 func TestDialIPCUntilWaitsForLateListener(t *testing.T) {
+	skipWithoutSessionIPC(t)
 	endpoint := filepath.Join(t.TempDir(), "late")
 	if _, err := os.Lstat(endpoint); !os.IsNotExist(err) {
 		t.Fatalf("endpoint exists before the wait: %v", err)

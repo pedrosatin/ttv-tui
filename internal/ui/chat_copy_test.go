@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -97,6 +98,9 @@ func runCmdWithTimeout(t *testing.T, cmd tea.Cmd) tea.Msg {
 
 func writeExecScript(t *testing.T, dir, name, body string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake helpers are #!/bin/sh scripts")
+	}
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
 		t.Fatalf("write %s: %v", name, err)

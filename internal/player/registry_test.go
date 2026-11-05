@@ -96,14 +96,14 @@ func TestStopKillsDescendantIgnoringTERMAfterParentExits(t *testing.T) {
 	}
 	_ = waitForState(t, mgr.Events(), gen, StateStarting, 3*time.Second)
 	childPid := waitPidFile(t, pidFile, 5*time.Second)
-	t.Cleanup(func() { _ = syscall.Kill(childPid, syscall.SIGKILL) })
+	t.Cleanup(func() { killPid(childPid) })
 
 	mgr.mu.Lock()
 	parentPid := mgr.session.Pid()
 	mgr.mu.Unlock()
-	pgid, err := syscall.Getpgid(childPid)
+	pgid, err := groupOfPid(childPid)
 	if err != nil {
-		t.Fatalf("Getpgid(child): %v", err)
+		t.Fatalf("group of child: %v", err)
 	}
 	if pgid != parentPid {
 		t.Fatalf("child pgid = %d, want parent's group %d", pgid, parentPid)

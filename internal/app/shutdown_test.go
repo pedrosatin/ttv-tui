@@ -1,3 +1,5 @@
+//go:build unix
+
 package app
 
 import (
@@ -15,12 +17,12 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
+	"golang.org/x/sys/unix"
 )
 
 // These tests re-execute the test binary in helper roles selected by
@@ -211,19 +213,6 @@ func waitPid(t *testing.T, path string, timeout time.Duration) int {
 	return 0
 }
 
-// alive treats zombies as dead: they no longer run or play audio.
-func alive(pid int) bool {
-	if err := syscall.Kill(pid, 0); err != nil {
-		return false
-	}
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-	if err != nil {
-		return false
-	}
-	i := bytes.LastIndexByte(data, ')')
-	return i < 0 || i+2 >= len(data) || data[i+2] != 'Z'
-}
-
 func groupHasMembers(pgid int) bool {
 	err := syscall.Kill(-pgid, 0)
 	return err == nil || err == syscall.EPERM
@@ -235,54 +224,18 @@ func records(t *testing.T, dir string) []string {
 	return m
 }
 
-// --- PTY plumbing (stdlib only) ---
-
-type winsize struct{ Row, Col, X, Y uint16 }
-
-func ioctl(fd, req uintptr, arg unsafe.Pointer) error {
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, req, uintptr(arg)); errno != 0 {
-		return errno
-	}
-	return nil
-}
-
-func openPTY(t *testing.T) (master, slave *os.File) {
-	t.Helper()
-	fd, err := syscall.Open("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_CLOEXEC|syscall.O_NONBLOCK, 0)
-	if err != nil {
-		t.Skipf("no /dev/ptmx: %v", err)
-	}
-	var n uint32
-	if err := ioctl(uintptr(fd), syscall.TIOCGPTN, unsafe.Pointer(&n)); err != nil {
-		_ = syscall.Close(fd)
-		t.Fatalf("TIOCGPTN: %v", err)
-	}
-	var unlock int32
-	if err := ioctl(uintptr(fd), syscall.TIOCSPTLCK, unsafe.Pointer(&unlock)); err != nil {
-		_ = syscall.Close(fd)
-		t.Fatalf("TIOCSPTLCK: %v", err)
-	}
-	// Non-blocking fd: os.File uses the poller, so Close interrupts the reader.
-	master = os.NewFile(uintptr(fd), "/dev/ptmx")
-	setSize(t, master, 30, 100)
-	slave, err = os.OpenFile(fmt.Sprintf("/dev/pts/%d", n), os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
-		_ = master.Close()
-		t.Fatalf("open slave: %v", err)
-	}
-	return master, slave
-}
+// --- PTY plumbing (openPTY and alive live in pty_<goos>_test.go) ---
 
 func setSize(t *testing.T, f *os.File, rows, cols uint16) {
 	t.Helper()
-	ws := winsize{Row: rows, Col: cols}
+	ws := unix.Winsize{Row: rows, Col: cols}
 	sc, err := f.SyscallConn()
 	if err != nil {
 		t.Fatalf("SyscallConn: %v", err)
 	}
 	var ioErr error
 	if err := sc.Control(func(fd uintptr) {
-		ioErr = ioctl(fd, syscall.TIOCSWINSZ, unsafe.Pointer(&ws))
+		ioErr = unix.IoctlSetWinsize(int(fd), unix.TIOCSWINSZ, &ws)
 	}); err != nil || ioErr != nil {
 		t.Fatalf("TIOCSWINSZ: %v %v", err, ioErr)
 	}
@@ -332,6 +285,11 @@ func startTUIOnPTY(t *testing.T, extraEnv ...string) *ptyTUI {
 				p.out.Write(buf[:n])
 				p.mu.Unlock()
 				answerTerminalQueries(master, buf[:n])
+			}
+			if errors.Is(err, syscall.EAGAIN) {
+				// Only a master kept off the poller gets here (pty_darwin_test.go).
+				time.Sleep(5 * time.Millisecond)
+				continue
 			}
 			if err != nil {
 				return

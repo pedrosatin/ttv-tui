@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -87,7 +86,7 @@ func TestOfflineLineFailsFastAndEndsProcess(t *testing.T) {
 		t.Fatal("no session pid recorded")
 	}
 	deadline := time.Now().Add(3 * time.Second)
-	for syscall.Kill(-p, 0) == nil {
+	for groupExists(p) {
 		if time.Now().After(deadline) {
 			t.Fatalf("process group %d still alive after offline failure", p)
 		}

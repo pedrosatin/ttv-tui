@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -472,7 +473,8 @@ func assertFileMode0600AndNoTmp(t *testing.T, cfgPath string) {
 	if err != nil {
 		t.Fatalf("stat %s: %v", cfgPath, err)
 	}
-	if perm := st.Mode().Perm(); perm != 0o600 {
+	// Windows has no mode bits: Go reports 0666 whatever the ACL says.
+	if perm := st.Mode().Perm(); runtime.GOOS != "windows" && perm != 0o600 {
 		t.Fatalf("config permissions = %#o, want 0600", perm)
 	}
 	entries, err := os.ReadDir(filepath.Dir(cfgPath))
