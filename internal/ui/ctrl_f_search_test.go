@@ -10,8 +10,8 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
-// Ticket 10: Ctrl+F is the primary global-search key; Ctrl+S stays as an alias
-// for terminals that disable software flow control (stty -ixon).
+// Ticket 10: Ctrl+F is the primary global-search key; Ctrl+S is an alias.
+// Both are delivered because the app runs the terminal in raw mode.
 func TestCtrlFAndCtrlSOpenSearchFromList(t *testing.T) {
 	for _, tc := range []struct {
 		name string

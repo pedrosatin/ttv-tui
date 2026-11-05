@@ -71,7 +71,7 @@ On startup, `ttv-tui` fetches the top live categories on Twitch sorted by concur
 ![Live categories view](img/categories.svg)
 
 - Use `↑` / `↓` or `j` / `k` to move the selection cursor (`▸`). Moving down to the end of the list automatically loads the next page.
-- Press `/` to filter the loaded categories by name, or `Ctrl+F` to search for a channel across all of Twitch (`Ctrl+S` is an alias when the terminal is not using software flow control).
+- Press `/` to filter the loaded categories by name, or `Ctrl+F` to search for a channel across all of Twitch (`Ctrl+S` is an alias and works the same way).
 - Press `Enter` on a highlighted category (for example, `League of Legends`) to load its live channels.
 
 ## 4. Watch your first channel

@@ -65,9 +65,9 @@ func defaultKeyMap() keyMap {
 		Filter: key.NewBinding(
 			key.WithKeys("/"),
 		),
-		// Ctrl+F is the primary search key. Ctrl+S remains an alias for
-		// terminals with software flow control disabled (stty -ixon); with
-		// ixon on, the terminal consumes Ctrl+S as XOFF before the app sees it.
+		// Ctrl+F is the primary search key; Ctrl+S is an alias. The app runs
+		// the terminal in raw mode, which disables software flow control, so
+		// the terminal forwards Ctrl+S instead of using it to pause output.
 		Search: key.NewBinding(
 			key.WithKeys("ctrl+f", "ctrl+s"),
 		),

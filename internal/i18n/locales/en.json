@@ -152,6 +152,7 @@
   "help.player": "Player (TUI and mpv): Space pause · +/- volume · Ctrl+X stop (TUI only)",
   "help.chat": "Chat: ↑/PgUp/Home scroll · End/G live · y copy · i write · Ctrl+T reconnect",
   "help.app": "App: Ctrl+Q quit · ? or F1 toggle help",
+  "help.nocolor": "No color: NO_COLOR disables color · symbols ▸ ★ ● still show state",
   "layout.focus_hint": "Focus mode — Ctrl+H list · Ctrl+L chat · Ctrl+W cycle layouts",
   "help.colors": "Colors: green = ●/[live] and viewers · yellow = pause and ★ favorite · cyan = focus · red = error/[offline] · magenta = system · mention with underline",
   "section.favorites": "Favorites",

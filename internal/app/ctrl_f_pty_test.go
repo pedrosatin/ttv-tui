@@ -9,8 +9,8 @@ import (
 )
 
 // TestCtrlFOpensSearchPrompt_PTY drives the real TUI over a PTY and confirms
-// Ctrl+F (0x06) opens the global search prompt. Ticket 10: Ctrl+S is XOFF on
-// terminals with ixon, so Ctrl+F is the primary binding.
+// Ctrl+F (0x06) opens the global search prompt. Ticket 10: Ctrl+F is the primary
+// binding; Ctrl+S is an alias that raw mode also delivers.
 func TestCtrlFOpensSearchPrompt_PTY(t *testing.T) {
 	p := startTUIOnPTY(t, "TTV_APP_SEARCH_ESC=1", "LANG=en_US.UTF-8", "LC_ALL=", "LC_MESSAGES=")
 

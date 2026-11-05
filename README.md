@@ -182,7 +182,7 @@ Press `?` or `F1` to toggle the in-app shortcuts overlay. The tables below list 
 | `f` | Toggle the highlighted channel in Favorites |
 | `/` | Filter the current list locally (`Enter` keeps filter, `Esc` clears) |
 | `Ctrl+F` | Search channels across Twitch, reusing active `/` filter text if present |
-| `Ctrl+S` | Same as `Ctrl+F` (alias). Many terminals enable software flow control (`ixon`), so Ctrl+S is XOFF and never reaches the app unless you run `stty -ixon` |
+| `Ctrl+S` | Same as `Ctrl+F` (alias). Works in any terminal: `ttv-tui` runs in raw mode, which disables the terminal's software flow control |
 | `r` | Retry loading the current list or retry a failed video playback |
 | `Esc` | Clear active filter, or step back from channels / search results to categories |
 | `Ctrl+R` | Return to Live Categories from anywhere, even while typing |
@@ -231,7 +231,7 @@ Pause and volume work in both windows, the TUI and the `mpv` window, and the sta
 | `?` or `F1` | Toggle the keyboard shortcuts overlay (`F1` works even while typing) |
 | `Ctrl+Q` | Stop active playback, disconnect chat, and quit |
 
-With software flow control (`ixon`) enabled, the terminal may treat Ctrl+S as XOFF and Ctrl+Q as XON before the app sees them. Prefer `Ctrl+F` for search. The TUI runs in raw mode, so `Ctrl+Q` normally still quits; if a terminal still swallows it, disable `ixon` with `stty -ixon`.
+`Ctrl+S` and `Ctrl+Q` reach the app because `ttv-tui` runs the terminal in raw mode, which disables software flow control: the terminal no longer intercepts `Ctrl+S` to pause output or `Ctrl+Q` to resume it. No extra setup is needed. `Ctrl+F` remains the primary search binding.
 
 ## Layout
 
@@ -298,6 +298,7 @@ Run `ttv-tui doctor --lang en` (or `--lang pt-BR`) before reporting a failure. I
 - **Orphaned player prompt on startup (`A player from a previous session is still running...`).** If a previous `ttv-tui` process was killed abruptly with `SIGKILL`, its `streamlink` and `mpv` process group may still be playing. On the next launch, `ttv-tui` verifies the recorded PID and socket in `~/.local/state/ttv-tui/players/` and prompts `[Y/n]` to stop the leftover player before opening the UI.
 - **Chat is hidden.** `ttv-tui` hides the right-hand chat panel when the terminal width is below 80 columns. Resize your terminal window or tmux pane to at least 80 columns.
 - **No video window or no audio from `mpv`.** `ttv-tui` launches `mpv` with `--no-config --no-input-default-bindings --no-osc --volume-max=100 --force-window=immediate --hwdec=auto-safe`. Verify that your Wayland or X11 display session (`DISPLAY` or `WAYLAND_DISPLAY`) and audio server (PipeWire / PulseAudio) are running, and check that `Volume` in the status bar is not `vol 0` (press `+` to raise volume). Press `?` after a player failure to view the `Last player error` line reported by `streamlink` or `mpv`.
+- **Colors and `NO_COLOR`.** Set `NO_COLOR` to any non-empty value in the terminal environment (for example `NO_COLOR=1 ttv-tui`) to turn color off without changing anything else; `TERM=dumb` and `CLICOLOR=0` have the same effect. No color SGR sequence is emitted (bold, reverse, and underline remain), so symbols keep carrying the state: the selection stays on `▸`, favorites keep `★`, live channels keep `●` and `[live]`, and offline channels keep `[offline]`. `NO_COLOR` is an environment variable, not a `config.toml` key.
 
 ## Development
 

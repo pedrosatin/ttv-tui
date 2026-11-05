@@ -200,7 +200,7 @@ func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 	helpKeys := []string{
 		"help.title", "help.nav", "help.esc", "help.categories", "help.search",
 		"help.channel_filter", "help.layout", "help.player", "help.chat", "help.app",
-		"help.colors",
+		"help.nocolor", "help.colors",
 	}
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		t.Run(lang, func(t *testing.T) {

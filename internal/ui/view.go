@@ -341,6 +341,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		"  " + m.t("help.player"),
 		"  " + m.t("help.chat"),
 		"  " + m.t("help.app"),
+		"  " + m.t("help.nocolor"),
 	}
 	out := make([]string, 0, len(raw)+4)
 	for _, line := range raw {
