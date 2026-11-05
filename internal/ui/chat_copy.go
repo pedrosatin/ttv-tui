@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/term"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 )
 
@@ -25,11 +26,12 @@ const (
 	// copyPreviewRunes is the max runes shown after the em dash in the notice.
 	copyPreviewRunes = 40
 
+	clipboardMethodTmux   = "tmux"
 	clipboardMethodWlCopy = "wl-copy"
 	clipboardMethodXclip  = "xclip"
 	clipboardMethodOSC52  = "OSC 52"
 
-	// clipboardHelperTimeout bounds wl-copy/xclip so a stuck helper cannot
+	// clipboardHelperTimeout bounds clipboard helpers so a stuck helper cannot
 	// freeze the yank path; the next clipboard path is then tried.
 	clipboardHelperTimeout = 3 * time.Second
 )
@@ -139,32 +141,49 @@ func (m Model) CopyNotice() string {
 	return m.copyNotice
 }
 
-// writeClipboard copies plaintext using the first working path:
-//  1. wl-copy when WAYLAND_DISPLAY is set and wl-copy is on PATH
-//  2. xclip -selection clipboard when DISPLAY is set and xclip is on PATH
-//  3. OSC 52 on osc52Out (stderr in production)
-//
-// A failed attempt (non-zero exit, missing binary at run time, write error)
-// advances to the next path. The returned method is the one that succeeded.
+// writeClipboard tries tmux first, then local display helpers outside SSH,
+// then OSC 52. Helper exit zero confirms a copy; OSC 52 only confirms sending.
+// Failed helpers advance to the next path.
 func writeClipboard(plaintext string) (string, error) {
+	if clipboardGetenv("TMUX") != "" {
+		if _, err := clipboardLookPath(clipboardMethodTmux); err == nil {
+			if err := runStdinClipboard(clipboardMethodTmux, []string{"load-buffer", "-w", "-"}, plaintext); err == nil {
+				return clipboardMethodTmux, nil
+			}
+		}
+	}
+	if clipboardGetenv("SSH_TTY") == "" && clipboardGetenv("SSH_CONNECTION") == "" {
+		if method := writeDisplayClipboard(plaintext); method != "" {
+			return method, nil
+		}
+	}
+	// A redirected stderr cannot deliver OSC 52 to the terminal. Non-file
+	// writers are injected by tests.
+	if f, ok := osc52Out.(*os.File); ok && !term.IsTerminal(f.Fd()) {
+		return "", os.ErrInvalid
+	}
+	if _, err := io.WriteString(osc52Out, osc52Sequence(plaintext)); err != nil {
+		return "", err
+	}
+	return clipboardMethodOSC52, nil
+}
+
+func writeDisplayClipboard(plaintext string) string {
 	if clipboardGetenv("WAYLAND_DISPLAY") != "" {
 		if _, err := clipboardLookPath(clipboardMethodWlCopy); err == nil {
 			if err := runStdinClipboard(clipboardMethodWlCopy, nil, plaintext); err == nil {
-				return clipboardMethodWlCopy, nil
+				return clipboardMethodWlCopy
 			}
 		}
 	}
 	if clipboardGetenv("DISPLAY") != "" {
 		if _, err := clipboardLookPath(clipboardMethodXclip); err == nil {
 			if err := runStdinClipboard(clipboardMethodXclip, []string{"-selection", "clipboard"}, plaintext); err == nil {
-				return clipboardMethodXclip, nil
+				return clipboardMethodXclip
 			}
 		}
 	}
-	if _, err := io.WriteString(osc52Out, osc52Sequence(plaintext)); err != nil {
-		return "", err
-	}
-	return clipboardMethodOSC52, nil
+	return ""
 }
 
 func runStdinClipboard(name string, args []string, plaintext string) error {
@@ -223,6 +242,9 @@ func (m Model) applyCopyResult(msg copyResultMsg) (Model, tea.Cmd) {
 
 func (m Model) formatCopyNotice(msg ChatMessage, plaintext, method string) string {
 	preview := truncateRunes(plaintext, copyPreviewRunes)
+	if method == clipboardMethodOSC52 {
+		return fmt.Sprintf(m.t("chat.copy.sent_terminal"), preview)
+	}
 	name := strings.TrimSpace(sanitizeChatText(msg.DisplayName))
 	if name == "" {
 		name = strings.TrimSpace(sanitizeChatText(msg.User))
