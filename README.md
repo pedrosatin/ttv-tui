@@ -15,35 +15,35 @@ Terminal UI for Twitch on Linux. Browse live categories and channels, watch stre
 [`packaging/install.sh`](packaging/install.sh) downloads the release archive and `checksums.txt`, verifies the SHA-256 digest with `sha256sum`, and installs the binary in `~/.local/bin/ttv-tui`, the desktop entry in `~/.local/share/applications/ttv-tui.desktop`, and the icon in `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
 
 ```bash
-# Install the latest release (or pass a specific version such as 0.1.7)
+# Install the latest release (or pass a specific version such as 0.1.8)
 ./packaging/install.sh
-./packaging/install.sh 0.1.7
+./packaging/install.sh 0.1.8
 
 # Preview the installation plan without downloading or modifying files
-./packaging/install.sh --dry-run 0.1.7
+./packaging/install.sh --dry-run 0.1.8
 
 # Install into a custom prefix
-./packaging/install.sh --prefix "$HOME/.local" 0.1.7
+./packaging/install.sh --prefix "$HOME/.local" 0.1.8
 ```
 
 You can also run the script directly from GitHub:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.1.7
+curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.1.8
 ```
 
-### Release binary (v0.1.7, Linux amd64 / arm64)
+### Release binary (v0.1.8, Linux amd64 / arm64)
 
-Download the archive for your architecture (`linux_amd64` or `linux_arm64`) and `checksums.txt` from the [v0.1.7 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.7), verify the SHA-256 digest, and place the binary in `~/.local/bin`:
+Download the archive for your architecture (`linux_amd64` or `linux_arm64`) and `checksums.txt` from the [v0.1.8 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.8), verify the SHA-256 digest, and place the binary in `~/.local/bin`:
 
 ```bash
 ARCH=amd64 # or arm64
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.7/ttv-tui_0.1.7_linux_${ARCH}.tar.gz"
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.7/checksums.txt"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.8/ttv-tui_0.1.8_linux_${ARCH}.tar.gz"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.8/checksums.txt"
 sha256sum --ignore-missing -c checksums.txt
 
 mkdir -p ~/.local/bin
-tar -xzf "ttv-tui_0.1.7_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
+tar -xzf "ttv-tui_0.1.8_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
 ```
 
 Ensure `~/.local/bin` is in your `PATH`.
@@ -53,7 +53,7 @@ Ensure `~/.local/bin` is in your `PATH`.
 Requires Go 1.27 or newer:
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.7
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.8
 ```
 
 ### Arch Linux (AUR)
@@ -72,7 +72,7 @@ Requires Go 1.27:
 ```bash
 git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.7" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.8" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
 ### Desktop shortcut
@@ -282,7 +282,7 @@ Architecture Decision Records are documented in [`docs/adr/`](docs/adr/).
 
 ## Limitations and roadmap
 
-Current limitations in `v0.1.7`:
+Current limitations in `v0.1.8`:
 
 - **Linux only.** Process-group supervision (`/proc` checks, `Setpgid`), keyring lookup (`secret-tool`), and browser cookie paths target Linux.
 - **No chat moderation commands.** Deleting messages, timeouts, and bans are not implemented.
