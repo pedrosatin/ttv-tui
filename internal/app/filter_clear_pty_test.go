@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/store"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
@@ -65,46 +64,20 @@ func seedFilterClearFavorite(statePath string) error {
 func TestFilterClearsOnChannelOpen_PTY(t *testing.T) {
 	p := startTUIOnPTY(t, "TTV_APP_FILTER_CLEAR=1", "LANG=en_US.UTF-8", "LC_ALL=", "LC_MESSAGES=")
 
-	deadline := time.Now().Add(10 * time.Second)
-	for !strings.Contains(p.screenSince(0), "Favorite One") || !strings.Contains(p.screenSince(0), "FilterCat") {
-		if time.Now().After(deadline) {
-			t.Fatalf("initial categories missing favorite or category:\n%s", p.screenSince(0))
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	p.waitScreen(0, "Favorite One", "FilterCat")
 	// Favorites render above categories; move onto FilterCat before Enter.
 	p.sendAndWait([]byte("j"), "▸")
 	p.sendAndWait([]byte("\r"), "AlphaChan")
-	deadline = time.Now().Add(10 * time.Second)
-	for !strings.Contains(p.screenSince(0), "Peere") || !strings.Contains(p.screenSince(0), "Favorite O") {
-		if time.Now().After(deadline) {
-			t.Fatalf("channel list incomplete before filter:\n%s", p.screenSince(0))
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	p.waitScreen(0, "Peere", "Favorite O")
 
 	p.sendAndWait([]byte("/"), "Filter:")
 	p.sendAndWait([]byte("peere"), "Filter: peere")
 
 	openOff := p.mark()
 	p.sendAndWait([]byte("\r"), "Chat — #peere")
-	deadline = time.Now().Add(10 * time.Second)
-	for {
-		// Only redraws after Enter: filter prompt must be gone and the full
-		// list (favorite + both channels) must be visible again. The favorite
-		// display name may truncate before [unverified] on the ~43-col list pane.
-		screen := p.screenSince(openOff)
-		noFilterPrompt := !strings.Contains(screen, "Filter:")
-		hasFav := strings.Contains(screen, "Favorite O") && strings.Contains(screen, "Favorites")
-		hasAlpha := strings.Contains(screen, "AlphaChan")
-		hasPeere := strings.Contains(screen, "Peere")
-		if noFilterPrompt && hasFav && hasAlpha && hasPeere {
-			t.Logf("PTY after open channel:\n%s", screen)
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("after opening peere, want full list without filter; screen since open:\n%s", screen)
-		}
-		time.Sleep(20 * time.Millisecond)
+	screen := p.waitScreen(openOff, "Favorite O", "Favorites", "AlphaChan", "Peere")
+	if strings.Contains(screen, "Filter:") {
+		t.Fatalf("after opening peere, filter prompt remains; screen since open:\n%s", screen)
 	}
+	t.Logf("PTY after open channel:\n%s", screen)
 }
