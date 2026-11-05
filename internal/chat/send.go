@@ -221,6 +221,18 @@ func FormatPrivMsg(channel, nonce, body string) string {
 	return fmt.Sprintf("PRIVMSG #%s :%s\r\n", ch, clean)
 }
 
+// IsBlockedCommand reports whether body would be published as plain text instead
+// of running as a command. Twitch dropped chat commands over IRC: only /me still
+// works, so /ban and friends reach the whole channel as an ordinary message.
+// Only the start of the message counts, judged on the text that goes on the wire.
+func IsBlockedCommand(body string) bool {
+	clean := sanitizeOutboundBody(body)
+	if !strings.HasPrefix(clean, "/") {
+		return false
+	}
+	return strings.Fields(clean)[0] != "/me"
+}
+
 func sanitizeOutboundBody(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))

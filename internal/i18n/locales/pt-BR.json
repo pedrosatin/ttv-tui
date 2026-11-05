@@ -122,6 +122,7 @@
   "chat.warn.channel_switched": "Canal alterado: envio pendente descartado",
   "chat.warn.no_token": "Envio desabilitado: rode 'ttv-tui login --from-browser' para entrar",
   "chat.warn.too_long": "Mensagem longa demais (máx. 500 caracteres) — encurte antes de enviar",
+  "chat.warn.command_blocked": "Não enviado: comandos de moderação com barra não funcionam por IRC (só /me). Rascunho mantido.",
   "chat.scroll.new": "%d novas ↓",
   "chat.copy.done": "Copiado: %s — %s",
   "chat.copy.done_text": "Copiado: %s",

@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/chat"
 )
 
 type keyMap struct {
@@ -525,43 +526,45 @@ func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
 		m.composeDraft = trimLastRune(m.composeDraft)
-		m.clearComposeTooLongWarning()
+		m.clearResolvedComposeWarning()
 		return m, nil
 
 	case msg.Type == tea.KeySpace, key.Matches(msg, m.keys.Pause):
 		m.composeDraft += " "
-		m.clearComposeTooLongWarning()
+		m.clearResolvedComposeWarning()
 		return m, nil
 
 	case key.Matches(msg, m.keys.VolUp):
 		m.composeDraft += "+"
-		m.clearComposeTooLongWarning()
+		m.clearResolvedComposeWarning()
 		return m, nil
 
 	case key.Matches(msg, m.keys.VolDown):
 		m.composeDraft += "-"
-		m.clearComposeTooLongWarning()
+		m.clearResolvedComposeWarning()
 		return m, nil
 
 	case msg.Type == tea.KeyRunes:
 		m.composeDraft += sanitizeChatText(string(msg.Runes))
-		m.clearComposeTooLongWarning()
+		m.clearResolvedComposeWarning()
 		return m, nil
 	}
 	return m, nil
 }
 
-// clearComposeTooLongWarning drops the length warning once the draft fits again,
-// so the footer stops claiming the message is too long while the user edits.
-func (m *Model) clearComposeTooLongWarning() {
-	if m.chatPanel.sendWarning == "" {
-		return
-	}
-	if m.chatPanel.sendWarning != m.t("chat.warn.too_long") {
-		return
-	}
-	if !m.composeDraftOverLimit() {
-		m.chatPanel.sendWarning = ""
+// clearResolvedComposeWarning drops a warning about the draft once the edit fixed
+// it, so the footer stops describing a problem the draft no longer has.
+func (m *Model) clearResolvedComposeWarning() {
+	switch m.chatPanel.sendWarning {
+	case "":
+	case m.t("chat.warn.too_long"):
+		if !m.composeDraftOverLimit() {
+			m.chatPanel.sendWarning = ""
+		}
+	case m.t("chat.warn.command_blocked"):
+		if !chat.IsBlockedCommand(m.composeDraft) {
+			m.chatPanel.sendWarning = ""
+		}
 	}
 }
 

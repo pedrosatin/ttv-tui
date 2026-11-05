@@ -122,6 +122,7 @@
   "chat.warn.channel_switched": "Channel changed: pending message discarded",
   "chat.warn.no_token": "Sending disabled: run 'ttv-tui login --from-browser' to sign in",
   "chat.warn.too_long": "Message too long (max 500 characters) — shorten before sending",
+  "chat.warn.command_blocked": "Not sent: moderation slash commands don't work over IRC (only /me does). Your draft was kept.",
   "chat.scroll.new": "%d new ↓",
   "chat.copy.done": "Copied: %s — %s",
   "chat.copy.done_text": "Copied: %s",

@@ -149,7 +149,7 @@ func TestComposeSendBlockedWhenOverLimit(t *testing.T) {
 	// Exact limit sends the full body — no silent truncation.
 	exact := strings.Repeat("z", twitchMessageRuneLimit)
 	m.composeDraft = exact
-	m.clearComposeTooLongWarning()
+	m.clearResolvedComposeWarning()
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if cmd == nil {

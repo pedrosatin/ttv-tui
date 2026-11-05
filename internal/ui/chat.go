@@ -172,6 +172,12 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if chat.IsBlockedCommand(body) {
+		// Keep the draft and stay in compose mode: sending would publish it.
+		m.chatPanel.sendWarning = m.t("chat.warn.command_blocked")
+		return m, nil
+	}
+
 	if utf8.RuneCountInString(body) > twitchMessageRuneLimit {
 		// Keep the draft and stay in compose mode; never truncate on send.
 		m.chatPanel.sendWarning = m.t("chat.warn.too_long")
