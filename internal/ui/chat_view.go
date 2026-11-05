@@ -488,7 +488,7 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 		return selLead, styleNotice(fmt.Sprintf("%s %s", prefix, body))
 	}
 	if msg.Kind == chat.MessageSystem {
-		prefix := m.t("chat.system_prefix")
+		prefix := m.systemLinePrefix(msg)
 		return selLead, styleSystem(fmt.Sprintf("%s %s", prefix, body))
 	}
 
@@ -497,13 +497,9 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 		name = sanitizeChatText(msg.User)
 	}
 
-	nameStyle := lipgloss.NewStyle().Bold(true)
-	// Twitch nick hex is truecolor; only paint it when orientation colors are on
-	// so NO_COLOR stays free of foreground SGR.
-	if colorsEnabled() && msg.Color != "" {
-		nameStyle = nameStyle.Foreground(lipgloss.Color(msg.Color))
-	}
-	renderedName := nameStyle.Render(name)
+	// Nicks use only blue/white ANSI slots so they never collide with the
+	// semantic palette (live/error/pause/focus).
+	renderedName := styleNick(name, msg.Color)
 
 	deliveryBadge := m.formatDeliveryBadge(msg)
 	suffix := ""
@@ -525,12 +521,12 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 		}
 		head := styleTag(tag) + " " + renderedName
 		if mentions && !msg.Highlighted {
-			// Whole line carries the mention style; tag stays in the plain text.
-			text := fmt.Sprintf("%s %s: %s", tag, name, body)
+			// Tag + underline carry the mention; nick stays on the nick palette.
+			text := styleMention(tag) + " " + renderedName + ": " + styleMention(body)
 			if deliveryBadge != "" {
-				return lead, styleMention(text) + " " + deliveryBadge
+				return lead, text + " " + deliveryBadge
 			}
-			return lead, styleMention(text)
+			return lead, text
 		}
 		return lead, fmt.Sprintf("%s: %s%s", head, body, suffix)
 	}
@@ -543,6 +539,17 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 		return lead, fmt.Sprintf("%s %s", renderedName, body+suffix)
 	}
 	return selLead, fmt.Sprintf("%s: %s%s", renderedName, body, suffix)
+}
+
+// systemMsgIDModeration marks CLEARCHAT/CLEARMSG lines so the chat view can
+// show [mod] instead of the generic [sistema]/[system] prefix.
+const systemMsgIDModeration = "moderation"
+
+func (m Model) systemLinePrefix(msg ChatMessage) string {
+	if msg.MsgID == systemMsgIDModeration {
+		return m.t("chat.mod_prefix")
+	}
+	return m.t("chat.system_prefix")
 }
 
 func (m Model) formatDeliveryBadge(msg ChatMessage) string {

@@ -132,6 +132,19 @@ func TestHelpExplainsEscAndCtrlRWithoutTruncation(t *testing.T) {
 				}
 				for _, k := range keys {
 					line := m.t(k)
+					if k == "help.colors" {
+						// Legend may wrap across lines; the full phrase must survive.
+						help := ansi.Strip(strings.Join(m.renderHelpLines(width), "\n"))
+						if !helpContainsLegend(help, line) {
+							t.Errorf("help line %s missing from wrapped legend: %q\n%s", k, line, help)
+						}
+						for _, hl := range strings.Split(help, "\n") {
+							if w := ansi.StringWidth(hl); w > width {
+								t.Errorf("wrapped help line wider than %d: %d %q", width, w, hl)
+							}
+						}
+						continue
+					}
 					if w := ansi.StringWidth("  " + line); w > 80 {
 						t.Errorf("%s is %d cells, must fit 80 columns", k, w)
 					}

@@ -755,14 +755,16 @@ func TestChatUserNotice_ResubWithAndWithoutText(t *testing.T) {
 	}
 
 	view := m.View()
-	if !strings.Contains(view, "CoolSub resubscribed (15 months): Great stream -- keep it up!") {
-		t.Fatalf("View missing resub with text:\n%s", view)
-	}
-	if !strings.Contains(view, "TWW2 resubscribed (6 months)") {
-		t.Fatalf("View missing resub without text:\n%s", view)
-	}
-	if !strings.Contains(view, "[mod]") {
-		t.Fatalf("View missing system prefix:\n%s", view)
+	for _, want := range []string{
+		"CoolSub resubscribed (15 months)",
+		"Great stream -- keep it",
+		"up!",
+		"TWW2 resubscribed (6 months)",
+		"[system]",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("View missing %q:\n%s", want, view)
+		}
 	}
 }
 
@@ -777,13 +779,13 @@ func TestChatUserNotice_I18nENAndPTBR(t *testing.T) {
 			lang:         i18n.LangEN,
 			withText:     "CoolSub resubscribed (15 months): Great stream!",
 			withoutText:  "TWW2 resubscribed (6 months)",
-			systemPrefix: "[mod]",
+			systemPrefix: "[system]",
 		},
 		{
 			lang:         i18n.LangPTBR,
 			withText:     "CoolSub renovou a inscrição (15 meses): Great stream!",
 			withoutText:  "TWW2 renovou a inscrição (6 meses)",
-			systemPrefix: "[mod]",
+			systemPrefix: "[sistema]",
 		},
 	}
 	for _, tc := range cases {
@@ -814,10 +816,10 @@ func TestChatUserNotice_I18nENAndPTBR(t *testing.T) {
 			})
 			m = updated.(Model)
 
-			view := m.View()
+			view := strings.Join(strings.Fields(m.View()), " ")
 			for _, want := range []string{tc.withText, tc.withoutText, tc.systemPrefix} {
 				if !strings.Contains(view, want) {
-					t.Fatalf("View() missing %q:\n%s", want, view)
+					t.Fatalf("View() missing %q:\n%s", want, m.View())
 				}
 			}
 			bodies := map[string]bool{}
@@ -876,7 +878,7 @@ func TestChatUserNotice_PTYEvidence(t *testing.T) {
 	if !strings.Contains(view, "TWW2 renovou a inscrição (6 meses)") {
 		t.Fatalf("PTY capture missing resub without text:\n%s", view)
 	}
-	if !strings.Contains(view, "[mod]") {
-		t.Fatalf("PTY capture missing [mod] prefix:\n%s", view)
+	if !strings.Contains(view, "[sistema]") {
+		t.Fatalf("PTY capture missing [sistema] prefix:\n%s", view)
 	}
 }

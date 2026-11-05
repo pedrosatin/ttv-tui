@@ -18,6 +18,14 @@ var (
 	sgrFgRe    = regexp.MustCompile(`\x1b\[(?:\d+;)*?(3[1-7]|9[0-7])m`)
 )
 
+// helpContainsLegend reports whether the (possibly wrapped) help text still
+// carries every field of the legend phrase.
+func helpContainsLegend(help, legend string) bool {
+	compact := strings.Join(strings.Fields(help), " ")
+	want := strings.Join(strings.Fields(legend), " ")
+	return strings.Contains(compact, want)
+}
+
 func TestOrientationColorsPlayerStatesEmitExpectedSGR(t *testing.T) {
 	forceOrientationColorsForTest(true)
 	defer forceOrientationColorsForTest(false)
@@ -27,7 +35,7 @@ func TestOrientationColorsPlayerStatesEmitExpectedSGR(t *testing.T) {
 		state PlayerState
 		want  string // substring of SGR params, e.g. "32" green
 	}{
-		{"starting", PlayerStateStarting, "90"}, // bright black / dim gray
+		{"starting", PlayerStateStarting, "90"}, // bright black, no dim
 		{"playing", PlayerStatePlaying, "32"},
 		{"paused", PlayerStatePaused, "33"},
 		{"break", PlayerStateBreak, "36"},
@@ -50,23 +58,12 @@ func TestOrientationColorsPlayerStatesEmitExpectedSGR(t *testing.T) {
 			if !strings.Contains(bar, "\x1b[") {
 				t.Fatalf("expected ANSI in status bar for %s:\n%q", tc.name, bar)
 			}
-			if !strings.Contains(bar, tc.want+"m") && !strings.Contains(bar, ";"+tc.want+"m") && !strings.Contains(bar, tc.want+";") {
-				// Accept combined SGR such as "1;32m" or "2;90m".
-				re := regexp.MustCompile(`\x1b\[[0-9;]*` + tc.want + `[0-9;]*m`)
-				if !re.MatchString(bar) {
-					t.Fatalf("status for %s missing SGR %s:\n%q", tc.name, tc.want, bar)
-				}
+			re := regexp.MustCompile(`\x1b\[[0-9;]*` + tc.want + `[0-9;]*m`)
+			if !re.MatchString(bar) {
+				t.Fatalf("status for %s missing SGR %s:\n%q", tc.name, tc.want, bar)
 			}
-			plain := ansi.Strip(bar)
-			base := m.playerStatusBase()
-			if tc.state == PlayerStateError {
-				base = m.playerFailureText()
-			}
-			if !strings.Contains(plain, ansi.Strip(base)) && !strings.Contains(plain, strings.TrimSpace(ansi.Strip(base))) {
-				// playerStatusBase may be truncated; at least the state word must remain.
-				if plain == "" {
-					t.Fatalf("empty status for %s", tc.name)
-				}
+			if tc.name == "starting" && strings.Contains(bar, "\x1b[2;") {
+				t.Fatalf("starting must not use dim (SGR 2):\n%q", bar)
 			}
 		})
 	}
@@ -88,8 +85,8 @@ func TestOrientationColorsAvailabilityAndFocus(t *testing.T) {
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
 	m.playerLogin = "favlive"
 	m.playerState = PlayerStatePlaying
-	// No chat panel: keep the full width for the list so offline/unverified rows stay visible.
 	m.focus = FocusList
+	m.highlightedID = "f1"
 	if items := m.VisibleItems(); len(items) < 3 {
 		t.Fatalf("VisibleItems=%d, want favorites+recents", len(items))
 	}
@@ -101,24 +98,27 @@ func TestOrientationColorsAvailabilityAndFocus(t *testing.T) {
 		m.t("channels.offline_tag"),
 		m.t("channels.unverified_tag"),
 		m.t("section.favorites"),
+		"●",
+		"★",
+		"▸",
 	} {
 		if !strings.Contains(plain, label) {
 			t.Fatalf("plain view missing label %q:\n%s", label, plain)
 		}
 	}
-	// Playing channel forces the live label into the viewers column.
-	if !strings.Contains(plain, m.t("channels.live_label")) && !strings.Contains(plain, "FavLive") {
-		t.Fatalf("playing/live row missing:\n%s", plain)
-	}
 	if !sgrFgRe.MatchString(view) {
 		t.Fatalf("expected foreground SGR in colored view:\n%q", view)
 	}
-	// Playing/live → green 32; offline → red 31; favorite → yellow 33.
-	for _, code := range []string{"32", "31", "33"} {
+	// Live marker/viewers → green 32; offline tag → red 31; favorite ★ → yellow 33; focus ▸ → cyan 96.
+	for _, code := range []string{"32", "31", "33", "96"} {
 		re := regexp.MustCompile(`\x1b\[[0-9;]*` + code + `[0-9;]*m`)
 		if !re.MatchString(view) {
 			t.Errorf("view missing SGR %s:\n%q", code, view)
 		}
+	}
+	// Favorite must not paint the whole row yellow: identity stays uncolored.
+	if strings.Contains(view, "\x1b[33mFavLive") || strings.Contains(view, "\x1b[33m★ FavLive") {
+		t.Fatalf("favorite must not color the whole row yellow:\n%q", view)
 	}
 }
 
@@ -133,13 +133,14 @@ func TestOrientationColorsChatSystemRejectMention(t *testing.T) {
 	m.chatPanel.username = "pedrosatin"
 	m.focus = FocusChat
 	m.chatPanel.buf.Append(ChatMessage{Kind: chat.MessageSystem, Body: "slow mode on"})
+	m.chatPanel.buf.Append(ChatMessage{Kind: chat.MessageSystem, MsgID: systemMsgIDModeration, Body: "spammer timed out"})
 	m.chatPanel.buf.Append(ChatMessage{Kind: chat.MessageNotice, Body: "followers-only"})
 	m.chatPanel.buf.Append(ChatMessage{
-		Kind: chat.MessageChat, User: "alice", DisplayName: "Alice",
+		Kind: chat.MessageChat, User: "alice", DisplayName: "Alice", Color: "#FF0000",
 		Body: "hey @pedrosatin check this",
 	})
 	m.chatPanel.buf.Append(ChatMessage{
-		Kind: chat.MessageChat, User: "bob", DisplayName: "Bob", Body: "hello",
+		Kind: chat.MessageChat, User: "bob", DisplayName: "Bob", Body: "hello", Color: "#00FF00",
 		Delivery: chat.DeliveryRejected, RejectReason: chat.RejectSlowMode,
 	})
 
@@ -148,20 +149,51 @@ func TestOrientationColorsChatSystemRejectMention(t *testing.T) {
 	if !strings.Contains(plain, m.t("chat.system_prefix")) {
 		t.Fatalf("missing system prefix:\n%s", plain)
 	}
+	if !strings.Contains(plain, m.t("chat.mod_prefix")) {
+		t.Fatalf("missing mod prefix:\n%s", plain)
+	}
 	if !strings.Contains(plain, m.t("chat.mention_tag")) {
 		t.Fatalf("missing mention tag:\n%s", plain)
 	}
 	if !strings.Contains(plain, "[rejected:") && !strings.Contains(plain, m.t("chat.reject.slow_mode")) {
-		// rejected format embeds the reason.
 		rej := fmt.Sprintf(m.t("chat.send.rejected"), m.t("chat.reject.slow_mode"))
 		if !strings.Contains(plain, ansi.Strip(rej)) && !strings.Contains(plain, "rejected") {
 			t.Fatalf("missing rejection label:\n%s", plain)
 		}
 	}
-	for _, code := range []string{"35", "31", "93"} { // magenta, red, bright yellow
+	// Magenta system, red reject, underline mention (4), nick blues/whites only.
+	for _, code := range []string{"35", "31"} {
 		re := regexp.MustCompile(`\x1b\[[0-9;]*` + code + `[0-9;]*m`)
 		if !re.MatchString(view) {
 			t.Errorf("chat view missing SGR %s:\n%q", code, view)
+		}
+	}
+	if !strings.Contains(view, "\x1b[4m") && !strings.Contains(view, ";4m") && !strings.Contains(view, "4;") {
+		t.Fatalf("mention must use underline:\n%q", view)
+	}
+	// Nicks must not reuse semantic red/green from Twitch hex.
+	if strings.Contains(view, "\x1b[38;2;") || strings.Contains(view, "\x1b[38;5;") {
+		t.Fatalf("nicks must not use truecolor/256 from Twitch hex:\n%q", view)
+	}
+}
+
+func TestOrientationColorsNickPaletteOnly(t *testing.T) {
+	forceOrientationColorsForTest(true)
+	defer forceOrientationColorsForTest(false)
+
+	for _, name := range []string{"Alice", "Bob", "carol", "xQc", "gaules", "PedRo"} {
+		styled := styleNick(name, "#FF0000")
+		plain := ansi.Strip(styled)
+		if plain != name {
+			t.Fatalf("styleNick(%q) plain=%q", name, plain)
+		}
+		reBad := regexp.MustCompile(`\x1b\[[0-9;]*(3[12356]|9[12356])[0-9;]*m`)
+		if reBad.MatchString(styled) {
+			t.Fatalf("nick %q used semantic SGR: %q", name, styled)
+		}
+		reOK := regexp.MustCompile(`\x1b\[[0-9;]*(34|94|37|97)[0-9;]*m`)
+		if !reOK.MatchString(styled) {
+			t.Fatalf("nick %q missing blue/white SGR: %q", name, styled)
 		}
 	}
 }
@@ -187,22 +219,22 @@ func TestOrientationColorsDisabledNoForegroundSGR(t *testing.T) {
 		t.Fatalf("NO_COLOR/disabled must not emit color SGR:\n%q", view)
 	}
 	plain := ansi.Strip(view)
-	// States remain distinguishable by labels/symbols without color.
 	for _, want := range []string{
 		m.t("channels.offline_tag"),
 		m.t("section.favorites"),
 		"▸",
+		"★",
+		"●",
 	} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("without color, missing %q:\n%s", want, plain)
 		}
 	}
 	help := ansi.Strip(strings.Join(m.renderHelpLines(100), "\n"))
-	if !strings.Contains(help, m.t("help.colors")) {
+	if !helpContainsLegend(help, m.t("help.colors")) {
 		t.Fatalf("help legend missing without color:\n%s", help)
 	}
 
-	// List error path: labels stay, still no color SGR.
 	m.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: fmt.Errorf("boom")}
 	errView := m.View()
 	if sgrColorRe.MatchString(errView) {
@@ -211,6 +243,53 @@ func TestOrientationColorsDisabledNoForegroundSGR(t *testing.T) {
 	if !strings.Contains(ansi.Strip(errView), m.t("error.action_retry")) {
 		t.Fatalf("error retry label missing without color:\n%s", ansi.Strip(errView))
 	}
+}
+
+func TestOrientationColorsCLICOLORZeroDisablesEvenWithForce(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR", "0")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("TERM", "xterm-256color")
+	resetOrientationColorsForTest()
+	defer forceOrientationColorsForTest(true)
+
+	if colorsEnabled() {
+		t.Fatal("CLICOLOR=0 must disable colors even when CLICOLOR_FORCE=1")
+	}
+
+	m := New(mustCatalog(t, i18n.LangEN),
+		WithFavorites([]twitch.Channel{
+			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(12), Availability: twitch.AvailabilityLive},
+		}),
+	)
+	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
+	m.playerState = PlayerStatePlaying
+	m.playerLogin = "gaules"
+	view := m.View()
+	if sgrColorRe.MatchString(view) {
+		t.Fatalf("CLICOLOR=0 must not emit color SGR:\n%q", view)
+	}
+}
+
+func TestOrientationColorsTERMDumbAndNOCOLOR(t *testing.T) {
+	for _, env := range []struct {
+		name string
+		set  map[string]string
+	}{
+		{"NO_COLOR", map[string]string{"NO_COLOR": "1", "CLICOLOR": "1", "CLICOLOR_FORCE": "", "TERM": "xterm-256color"}},
+		{"TERM_dumb", map[string]string{"NO_COLOR": "", "CLICOLOR": "1", "CLICOLOR_FORCE": "", "TERM": "dumb"}},
+	} {
+		t.Run(env.name, func(t *testing.T) {
+			for k, v := range env.set {
+				t.Setenv(k, v)
+			}
+			resetOrientationColorsForTest()
+			if colorsEnabled() {
+				t.Fatalf("%s must disable colors", env.name)
+			}
+		})
+	}
+	forceOrientationColorsForTest(true)
 }
 
 func TestOrientationColorsHelpLegendAndWidths(t *testing.T) {
@@ -227,20 +306,21 @@ func TestOrientationColorsHelpLegendAndWidths(t *testing.T) {
 			view := m.View()
 			plain := ansi.Strip(view)
 			legend := m.t("help.colors")
-			if w := ansi.StringWidth("  " + legend); w > 80 {
-				t.Fatalf("help.colors is %d cells, must fit 80", w)
-			}
-			// Overlay may truncate the legend on very short panels; the raw help
-			// lines must still carry it, and the visible view must show a prefix.
 			help := strings.Join(m.renderHelpLines(width), "\n")
-			if !strings.Contains(ansi.Strip(help), legend) {
-				t.Fatalf("renderHelpLines missing legend:\n%s", help)
+			helpPlain := ansi.Strip(help)
+			if !helpContainsLegend(helpPlain, legend) {
+				t.Fatalf("renderHelpLines missing full legend:\n%s", helpPlain)
 			}
-			prefix := legend
-			if runes := []rune(legend); len(runes) > 20 {
-				prefix = string(runes[:20])
+			for _, line := range strings.Split(helpPlain, "\n") {
+				if w := ansi.StringWidth(line); width > 0 && w > width {
+					t.Fatalf("legend line wider than %d: %d %q", width, w, line)
+				}
 			}
-			if !strings.Contains(plain, prefix) {
+			prefix := "Cores:"
+			if width > 0 && !strings.Contains(legend, "Cores:") {
+				prefix = "Colors:"
+			}
+			if !strings.Contains(plain, prefix) && !strings.Contains(helpPlain, prefix) {
 				t.Fatalf("help legend prefix missing at width %d:\n%s", width, plain)
 			}
 			for _, line := range strings.Split(plain, "\n") {
@@ -253,7 +333,49 @@ func TestOrientationColorsHelpLegendAndWidths(t *testing.T) {
 			if !re.MatchString(bar) {
 				t.Fatalf("paused status missing yellow SGR:\n%q", bar)
 			}
+			if !strings.Contains(help, "\x1b[") {
+				t.Fatalf("colored help legend missing SGR:\n%q", help)
+			}
 		})
+	}
+}
+
+func TestAvailabilityTagsNeverTruncatedAt80(t *testing.T) {
+	forceOrientationColorsForTest(false)
+	defer forceOrientationColorsForTest(true)
+
+	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
+		cat := mustCatalog(t, lang)
+		m := New(cat,
+			WithFavorites([]twitch.Channel{
+				{ID: "f-1", Login: "gaules", DisplayName: "GaulesNomeBemLongoParaForcar", Availability: twitch.AvailabilityUnknown},
+			}),
+			WithRecents([]twitch.Channel{
+				{ID: "r-1", Login: "offline_guy", DisplayName: "OfflineNomeBemLongoParaForcar", Availability: twitch.AvailabilityOffline},
+				{ID: "r-2", Login: "liveguy", DisplayName: "LiveNomeBemLongo", Viewers: nil, Availability: twitch.AvailabilityLive},
+			}),
+		)
+		m.playerLogin = "liveguy"
+		m.playerState = PlayerStatePlaying
+		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+		plain := ansi.Strip(m.View())
+		for _, tag := range []string{
+			cat.T("channels.offline_tag"),
+			cat.T("channels.unverified_tag"),
+			cat.T("channels.live_label"),
+		} {
+			if !strings.Contains(plain, tag) {
+				t.Fatalf("%s: missing intact tag %q at 80 cols:\n%s", lang, tag, plain)
+			}
+			if strings.Contains(plain, tag+"…") || strings.Contains(plain, strings.TrimSuffix(tag, "]")+"…") {
+				t.Fatalf("%s: tag %q was truncated:\n%s", lang, tag, plain)
+			}
+		}
+		for i, line := range strings.Split(plain, "\n") {
+			if w := ansi.StringWidth(line); w > 80 {
+				t.Fatalf("%s line %d width %d > 80: %q", lang, i, w, line)
+			}
+		}
 	}
 }
 
@@ -292,14 +414,36 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 	m.playerState = PlayerStatePlaying
 	m.playerLogin = "gaules"
 	m.helpVisible = true
+	m.highlightedID = "f1"
 	view := m.View()
 	bar := m.StatusBar()
 	t.Logf("RAW_VIEW=%q", view)
 	t.Logf("RAW_BAR=%q", bar)
+	plain := ansi.Strip(view)
+	t.Logf("PLAIN_VIEW=%s", plain)
 	re := regexp.MustCompile(`\x1b\[[0-9;]*(3[1-7]|90|9[1-7]|38;5;\d+)[0-9;]*m`)
 	hits := re.FindAllString(view+"\n"+bar, -1)
 	if len(hits) == 0 {
 		t.Fatal("expected color SGR in PTY dump")
 	}
 	t.Logf("SGR_HITS=%q", hits)
+
+	forceOrientationColorsForTest(false)
+	resetOrientationColorsForTest()
+	t.Setenv("NO_COLOR", "1")
+	configureOrientationColors()
+	m2 := New(mustCatalog(t, i18n.LangPTBR),
+		WithFavorites([]twitch.Channel{
+			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(1200), Availability: twitch.AvailabilityLive},
+		}),
+	)
+	m2, _ = pressKeyMsg(m2, tea.WindowSizeMsg{Width: 100, Height: 24})
+	m2.playerState = PlayerStatePlaying
+	m2.playerLogin = "gaules"
+	m2.helpVisible = true
+	noColorView := m2.View()
+	t.Logf("NO_COLOR_VIEW=%q", noColorView)
+	if sgrColorRe.MatchString(noColorView) {
+		t.Fatalf("NO_COLOR PTY dump still has color SGR:\n%q", noColorView)
+	}
 }

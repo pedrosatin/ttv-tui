@@ -364,6 +364,7 @@ func (m Model) moderationClearChatMessage(msg ChatEventMsg) ChatMessage {
 	return ChatMessage{
 		Generation: gen,
 		Kind:       chat.MessageSystem,
+		MsgID:      systemMsgIDModeration,
 		Body:       body,
 	}
 }
@@ -383,6 +384,7 @@ func (m Model) moderationClearMsgMessage(msg ChatEventMsg) ChatMessage {
 	return ChatMessage{
 		Generation: gen,
 		Kind:       chat.MessageSystem,
+		MsgID:      systemMsgIDModeration,
 		Body:       body,
 	}
 }

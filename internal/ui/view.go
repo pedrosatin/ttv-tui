@@ -256,14 +256,30 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		"  " + m.t("help.player"),
 		"  " + m.t("help.chat"),
 		"  " + m.t("help.app"),
-		"  " + m.t("help.colors"),
 	}
+	out := make([]string, 0, len(raw)+4)
+	for _, line := range raw {
+		out = append(out, TruncateVisual(line, maxWidth))
+	}
+	out = append(out, m.renderHelpColorLines(maxWidth)...)
 	if line := m.playerErrorLine(); line != "" {
-		raw = append(raw, "  "+fmt.Sprintf(m.t("help.player_error"), line))
+		out = append(out, TruncateVisual("  "+fmt.Sprintf(m.t("help.player_error"), line), maxWidth))
 	}
-	out := make([]string, len(raw))
-	for i, line := range raw {
-		out[i] = TruncateVisual(line, maxWidth)
+	return out
+}
+
+// renderHelpColorLines returns the color legend, wrapped at maxWidth (never
+// truncated) with each palette term painted in its own color.
+func (m Model) renderHelpColorLines(maxWidth int) []string {
+	legend := m.t("help.colors")
+	plain := "  " + legend
+	if maxWidth <= 0 {
+		return []string{colorizeHelpLegend(plain)}
+	}
+	wrapped := strings.Split(ansi.Wrap(plain, maxWidth, ""), "\n")
+	out := make([]string, 0, len(wrapped))
+	for _, line := range wrapped {
+		out = append(out, colorizeHelpLegend(line))
 	}
 	return out
 }
@@ -429,13 +445,9 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 
 	var allRows []rowEntry
 
-	addSectionHeader := func(title string, favorite bool) {
+	addSectionHeader := func(title string) {
 		text := fitListRow(fmt.Sprintf("── %s ──", title), maxWidth)
-		if favorite {
-			text = styleFavorite(text)
-		} else {
-			text = sectionStyle.Render(text)
-		}
+		text = sectionStyle.Render(text)
 		allRows = append(allRows, rowEntry{
 			isHeader: true,
 			text:     text,
@@ -449,47 +461,38 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 			currentSection = it.Type
 			switch it.Type {
 			case ItemTypeFavorite:
-				addSectionHeader(m.t("section.favorites"), true)
+				addSectionHeader(m.t("section.favorites"))
 			case ItemTypeRecent:
-				addSectionHeader(m.t("section.recents"), false)
+				addSectionHeader(m.t("section.recents"))
 			case ItemTypeCategory:
 				if isSearch {
-					addSectionHeader(m.t("search.section_categories"), false)
+					addSectionHeader(m.t("search.section_categories"))
 				} else {
-					addSectionHeader(m.t("categories.title"), false)
+					addSectionHeader(m.t("categories.title"))
 				}
 			case ItemTypeChannel:
 				if isSearch {
-					addSectionHeader(m.t("search.section_channels"), false)
+					addSectionHeader(m.t("search.section_channels"))
 				} else if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-					addSectionHeader(fmt.Sprintf(m.t("channels.title_category"), sanitizeChatText(m.selectedCategory.Name)), false)
+					addSectionHeader(fmt.Sprintf(m.t("channels.title_category"), sanitizeChatText(m.selectedCategory.Name)))
 				} else {
-					addSectionHeader(m.t("channels.title"), false)
+					addSectionHeader(m.t("channels.title"))
 				}
 			}
 		}
 
-		marker := "  "
-		if it.ID() == m.highlightedID {
-			marker = "▸ "
-		}
+		highlighted := it.ID() == m.highlightedID
+		favorite := it.Type == ItemTypeFavorite
+		marker := listRowMarker(highlighted, favorite)
 
 		var row string
 		switch it.Type {
 		case ItemTypeCategory:
 			cat := *it.Category
-			row = m.formatCategoryRow(marker, cat, isSearch)
+			row = m.formatCategoryRow(marker, cat, isSearch, maxWidth)
 		default: // ItemTypeChannel, ItemTypeFavorite, ItemTypeRecent
 			ch := *it.Channel
-			row = m.formatChannelRow(marker, ch, it.Availability)
-		}
-
-		row = fitListRow(row, maxWidth)
-		row = m.styleChannelListRow(row, it)
-		if it.ID() == m.highlightedID {
-			// Highlight keeps the semantic color and adds bold/cyan on top of the
-			// plain text so selection stays visible without color alone (▸ marker).
-			row = styleHighlight(ansi.Strip(row))
+			row = m.formatChannelRow(marker, ch, it.Availability, maxWidth)
 		}
 
 		allRows = append(allRows, rowEntry{
@@ -566,78 +569,153 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	return lines
 }
 
-func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.Availability) string {
+// listRowMarker returns the 2-cell lead for a list row. Focus paints only the
+// caret; favorite paints only the ★ — never the rest of the row.
+func listRowMarker(highlighted, favorite bool) string {
+	switch {
+	case highlighted && favorite:
+		return styleHighlight("▸") + styleFavorite("★")
+	case highlighted:
+		return styleHighlight("▸" + " ")
+	case favorite:
+		return styleFavorite("★" + " ")
+	default:
+		return "  "
+	}
+}
+
+func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.Availability, maxWidth int) string {
 	displayName := sanitizeChatText(ch.DisplayName)
 	login := sanitizeChatText(ch.Login)
 	identity := fmt.Sprintf("%s (%s)", displayName, login)
+	playing := m.isPlayingChannel(ch)
 	titleText := ""
 	if ch.Title != nil && strings.TrimSpace(*ch.Title) != "" {
 		titleText = sanitizeChatText(strings.TrimSpace(*ch.Title))
 	}
+
 	switch avail {
 	case twitch.AvailabilityOffline:
-		// Only explicit evidence of no broadcast earns the offline tag.
-		suffix := ""
-		if titleText != "" {
-			suffix = " — " + titleText
-		}
-		return fmt.Sprintf("%s %7s  %s — %s%s", marker, m.t("channels.viewers_unknown"), identity, m.t("channels.offline_tag"), suffix)
+		viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
+		tag := styleOffline(m.t("channels.offline_tag"))
+		return fitChannelRow(marker, viewers, identity, tag, titleText, playing, maxWidth)
 	case twitch.AvailabilityLive:
 		if ch.Viewers == nil {
-			// Live without a count (e.g. the channel playing now): the label takes
-			// the viewers column so the row reads "ao vivo  Nome (login)".
-			row := fmt.Sprintf("%s %7s  %s", marker, m.t("channels.live_label"), identity)
-			if titleText != "" {
-				row += " — " + titleText
-			}
-			return row
+			// Live without a count (playing now): [ao vivo]/[live] in the viewers
+			// column, green only on that marker.
+			live := styleLive(fmt.Sprintf("%7s", m.t("channels.live_label")))
+			return fitChannelRow(marker, live, identity, "", titleText, playing, maxWidth)
 		}
-		viewersText := m.formatViewers(ch.Viewers)
+		viewersText := styleLive(formatLiveViewersCell(m.formatViewers(ch.Viewers)))
 		if titleText == "" {
 			titleText = m.t("channels.title_unknown")
 		}
-		return fmt.Sprintf("%s %7s  %s — %s", marker, viewersText, identity, titleText)
+		return fitChannelRow(marker, viewersText, identity, "", titleText, playing, maxWidth)
 	default:
-		// No evidence either way: say so, never guess offline.
-		suffix := ""
-		if titleText != "" {
-			suffix = " — " + titleText
-		}
-		return fmt.Sprintf("%s %7s  %s — %s%s", marker, m.t("channels.viewers_unknown"), identity, m.t("channels.unverified_tag"), suffix)
+		viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
+		tag := styleUnverified(m.t("channels.unverified_tag"))
+		return fitChannelRow(marker, viewers, identity, tag, titleText, playing, maxWidth)
 	}
 }
 
-// styleChannelListRow applies availability / favorite / playing colors. Labels
-// and markers stay in the plain text so the row stays readable without color.
-func (m Model) styleChannelListRow(row string, it ListItem) string {
-	if it.Channel == nil {
+// formatLiveViewersCell packs ● + right-aligned viewers into 7 cells.
+func formatLiveViewersCell(viewers string) string {
+	const cell = 7
+	dot := "●"
+	room := cell - ansi.StringWidth(dot)
+	if room < 1 {
+		return TruncateVisual(dot+viewers, cell)
+	}
+	if ansi.StringWidth(viewers) > room {
+		viewers = TruncateVisual(viewers, room)
+	}
+	pad := room - ansi.StringWidth(viewers)
+	if pad < 0 {
+		pad = 0
+	}
+	return dot + strings.Repeat(" ", pad) + viewers
+}
+
+// fitChannelRow builds "marker viewers  identity[ — tag][ — title]" and never
+// truncates status tags ([offline]/[não verificado]/[ao vivo]). Title goes
+// first when space is short; then identity.
+func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, maxWidth int) string {
+	gap := " "
+	mid := "  "
+	sep := " — "
+	prefix := marker + gap + viewers + mid
+	styleID := func(id string) string {
+		if playing {
+			return stylePlayingChannel(ansi.Strip(id))
+		}
+		return id
+	}
+	build := func(id, tg, tit string) string {
+		row := prefix + styleID(id)
+		if tg != "" {
+			row += sep + tg
+		}
+		if tit != "" {
+			row += sep + tit
+		}
 		return row
 	}
-	if m.isPlayingChannel(*it.Channel) {
-		return stylePlayingChannel(row)
+	row := build(identity, tag, title)
+	if maxWidth <= 0 || ansi.StringWidth(ansi.Strip(row)) <= maxWidth {
+		return fitListRow(row, maxWidth)
 	}
-	switch it.Availability {
-	case twitch.AvailabilityOffline:
-		return styleOffline(row)
-	case twitch.AvailabilityLive:
-		if it.Type == ItemTypeFavorite {
-			return styleFavorite(row)
+
+	// Drop / shrink title first.
+	for title != "" {
+		next := ansi.StringWidth(title) - 1
+		if next < 1 {
+			title = ""
+		} else {
+			title = TruncateVisual(title, next)
+			if title == "…" || title == "..." {
+				title = ""
+			}
 		}
-		return styleLive(row)
-	default:
-		if it.Type == ItemTypeFavorite {
-			return styleFavorite(row)
+		row = build(identity, tag, title)
+		if ansi.StringWidth(ansi.Strip(row)) <= maxWidth {
+			return fitListRow(row, maxWidth)
 		}
-		return styleUnverified(row)
 	}
+
+	// Keep the protected tag intact; shrink identity next.
+	if tag != "" {
+		fixed := ansi.StringWidth(ansi.Strip(prefix + sep + tag))
+		room := maxWidth - fixed
+		if room < 1 {
+			room = 1
+		}
+		identity = TruncateVisual(ansi.Strip(identity), room)
+		return fitListRow(build(identity, tag, ""), maxWidth)
+	}
+
+	fixed := ansi.StringWidth(ansi.Strip(prefix))
+	room := maxWidth - fixed
+	if room < 1 {
+		room = 1
+	}
+	identity = TruncateVisual(ansi.Strip(identity), room)
+	return fitListRow(build(identity, "", ""), maxWidth)
 }
 
-func (m Model) formatCategoryRow(marker string, cat twitch.Category, inSearch bool) string {
+func (m Model) formatCategoryRow(marker string, cat twitch.Category, inSearch bool, maxWidth int) string {
 	name := sanitizeChatText(cat.Name)
 	if inSearch && categoryNoBroadcast(cat) {
-		return fmt.Sprintf("%s %7s  %s — %s", marker, m.t("categories.viewers_unknown"), name, m.t("categories.no_stream"))
+		row := fmt.Sprintf("%s %7s  %s — %s", marker, m.t("categories.viewers_unknown"), name, m.t("categories.no_stream"))
+		return fitListRow(row, maxWidth)
 	}
-	return fmt.Sprintf("%s %7s  %s", marker, m.formatViewers(cat.Viewers), name)
+	viewers := m.formatViewers(cat.Viewers)
+	if cat.Viewers != nil && *cat.Viewers > 0 {
+		viewers = styleLive(fmt.Sprintf("%7s", viewers))
+	} else {
+		viewers = fmt.Sprintf("%7s", viewers)
+	}
+	row := marker + " " + viewers + "  " + name
+	return fitListRow(row, maxWidth)
 }
 
 func categoryNoBroadcast(cat twitch.Category) bool {

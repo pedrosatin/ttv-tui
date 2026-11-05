@@ -74,7 +74,7 @@ func TestFilterClearsOnChannelOpen_PTY(t *testing.T) {
 	p.sendAndWait([]byte("j"), "▸")
 	p.sendAndWait([]byte("\r"), "AlphaChan")
 	deadline = time.Now().Add(10 * time.Second)
-	for !strings.Contains(p.screenSince(0), "Peere") || !strings.Contains(p.screenSince(0), "Favorite One") {
+	for !strings.Contains(p.screenSince(0), "Peere") || !strings.Contains(p.screenSince(0), "Favorite O") {
 		if time.Now().After(deadline) {
 			t.Fatalf("channel list incomplete before filter:\n%s", p.screenSince(0))
 		}
@@ -89,10 +89,11 @@ func TestFilterClearsOnChannelOpen_PTY(t *testing.T) {
 	deadline = time.Now().Add(10 * time.Second)
 	for {
 		// Only redraws after Enter: filter prompt must be gone and the full
-		// list (favorite + both channels) must be visible again.
+		// list (favorite + both channels) must be visible again. The favorite
+		// display name may truncate before [unverified] on the ~43-col list pane.
 		screen := p.screenSince(openOff)
 		noFilterPrompt := !strings.Contains(screen, "Filter:")
-		hasFav := strings.Contains(screen, "Favorite One")
+		hasFav := strings.Contains(screen, "Favorite O") && strings.Contains(screen, "Favorites")
 		hasAlpha := strings.Contains(screen, "AlphaChan")
 		hasPeere := strings.Contains(screen, "Peere")
 		if noFilterPrompt && hasFav && hasAlpha && hasPeere {

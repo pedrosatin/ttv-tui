@@ -364,7 +364,7 @@ func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 		if strings.Contains(plain, "[offline]") {
 			t.Fatalf("state %q: playing channel shown offline:\n%s", st, plain)
 		}
-		if !strings.Contains(plain, "ao vivo  ESLCS (eslcs)") {
+		if !strings.Contains(plain, "[ao vivo]") || !strings.Contains(plain, "ESLCS (eslcs)") {
 			t.Fatalf("state %q: playing channel must read as live:\n%s", st, plain)
 		}
 	}
@@ -457,20 +457,19 @@ func TestAvailabilityLabelsFitIn120And80Columns(t *testing.T) {
 					t.Fatalf("%s %d cols: line %d too wide (%d): %q", lang, width, i, w, line)
 				}
 			}
-			// At 80 columns with chat the list pane is ~43 columns: the identity
-			// and the start of the label must survive; at 120 the whole label does.
-			unverifiedShown := unverified
-			if width < 100 {
-				unverifiedShown = "[" + string([]rune(unverified)[1:5])
-			}
+			// Status tags stay intact at 80 columns; the identity/title truncates first.
 			for _, want := range []string{
-				"Gaules (gaules) — " + unverifiedShown,
-				live + "  ESLCS (eslcs)",
-				"gaulestv (gaulestv) — [offline]",
+				unverified,
+				live,
+				"ESLCS (eslcs)",
+				"[offline]",
 			} {
 				if !strings.Contains(plain, want) {
 					t.Fatalf("%s %d cols: missing %q:\n%s", lang, width, want, plain)
 				}
+			}
+			if strings.Contains(plain, unverified+"…") || strings.Contains(plain, "[offlin…") {
+				t.Fatalf("%s %d cols: status tag truncated:\n%s", lang, width, plain)
 			}
 		}
 	}
@@ -620,10 +619,10 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 			t.Fatalf("%s: liveLine missing viewers or title: %q", lang, liveLine)
 		}
 
-		// All three lines share the exact same format: [marker:2] [viewers:7]  [identity] — [tag or title]
-		lineRe := regexp.MustCompile(`^[ ▸] \s*(\S+)\s{2}(\S+ \(\S+\)) — (.+)$`)
+		// All three lines share the same columns: [marker ▸/★] [viewers/●]  [identity] — [tag or title]
+		lineRe := regexp.MustCompile(`^[ ▸★]{1,2}\s+(\S+(?:\s+\S+)?)\s{2}(\S+ \(\S+\)) — (.+)$`)
 		for name, line := range map[string]string{"favorite": favLine, "recent": recLine, "live": liveLine} {
-			if !lineRe.MatchString(line) {
+			if !lineRe.MatchString(strings.TrimRight(line, " ")) {
 				t.Fatalf("%s: %s line does not match consistent row format: %q", lang, name, line)
 			}
 		}
