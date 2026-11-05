@@ -1,15 +1,12 @@
 package player
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -43,9 +40,23 @@ const (
 	groupPoll     = 20 * time.Millisecond
 )
 
+// What the registry asks the OS, answered in registry_<goos>.go. An error means
+// "cannot tell", which is not "gone": a record is only removed on a real answer.
+// They are variables so a test on any OS can take the unsupported path.
+var (
+	// procStartTime returns the start time of pid, or 0 when pid is gone.
+	procStartTime = osProcStartTime
+	// groupHasArg reports whether a live member of the group carries arg in its
+	// command line.
+	groupHasArg = osGroupHasArg
+)
+
 // selfStart is the start time of this process, used to tell a live owner from a
-// recycled PID.
-var selfStart = procStartTime(os.Getpid())
+// recycled PID. It stays 0 where the OS cannot answer.
+var selfStart = func() uint64 {
+	start, _ := osProcStartTime(os.Getpid())
+	return start
+}()
 
 func recordPath(dir string, ownerPID int, gen uint64) string {
 	return filepath.Join(dir, fmt.Sprintf("%s%d-%d%s", recordPrefix, ownerPID, gen, recordSuffix))
@@ -84,7 +95,8 @@ func writeRecord(dir string, rec Record) (string, error) {
 // FindOrphans scans the registry dir for players left alive by a previous run.
 // Records whose player is already gone are removed silently. Records owned by a
 // ttv-tui process that is still running are left untouched: that player is not
-// orphaned. A missing dir yields no orphans.
+// orphaned. So are records the OS cannot judge, which may belong to a live
+// instance. A missing dir yields no orphans.
 func FindOrphans(dir string) ([]Orphan, error) {
 	if dir == "" {
 		return nil, nil
@@ -112,10 +124,15 @@ func FindOrphans(dir string) ([]Orphan, error) {
 			_ = os.Remove(path)
 			continue
 		}
-		if ownerAlive(rec) {
+		owned, err := ownerAlive(rec)
+		if err != nil || owned {
 			continue
 		}
-		if !groupIsPlayer(rec.PGID, rec.Socket) {
+		isPlayer, err := groupIsPlayer(rec.PGID, rec.Socket)
+		if err != nil {
+			continue
+		}
+		if !isPlayer {
 			removeStaleFiles(rec)
 			_ = os.Remove(path)
 			continue
@@ -127,13 +144,19 @@ func FindOrphans(dir string) ([]Orphan, error) {
 
 // Terminate stops the orphaned process group (SIGTERM, then SIGKILL after wait)
 // and removes its socket and record. It re-checks the group identity first so a
-// recycled process group is never signalled.
+// recycled process group is never signalled, and it stops without touching
+// anything when the OS cannot confirm that identity.
 func (o Orphan) Terminate(wait time.Duration) error {
-	if groupIsPlayer(o.PGID, o.Socket) {
-		_ = syscall.Kill(-o.PGID, syscall.SIGTERM)
-		if !waitGroupGone(o.PGID, nil, wait) {
-			_ = syscall.Kill(-o.PGID, syscall.SIGKILL)
-			if !waitGroupGone(o.PGID, nil, groupKillWait) {
+	isPlayer, err := groupIsPlayer(o.PGID, o.Socket)
+	if err != nil {
+		return fmt.Errorf("player: orphan group %d: %w", o.PGID, err)
+	}
+	if isPlayer {
+		group := recordedGroup(o.PGID)
+		_ = group.terminate()
+		if !waitGroupGone(group, nil, wait) {
+			_ = group.kill()
+			if !waitGroupGone(group, nil, groupKillWait) {
 				return fmt.Errorf("player: orphan group %d survived SIGKILL", o.PGID)
 			}
 		}
@@ -157,26 +180,25 @@ func removeStaleFiles(rec Record) {
 	_ = os.Remove(rec.Dir)
 }
 
-func ownerAlive(rec Record) bool {
+// ownerAlive reports whether the ttv-tui process that wrote rec still runs. An
+// error means the OS cannot tell.
+func ownerAlive(rec Record) (bool, error) {
 	if rec.OwnerPID <= 0 {
-		return false
+		return false, nil
 	}
 	if rec.OwnerPID == os.Getpid() {
-		return rec.OwnerStart == selfStart
+		return rec.OwnerStart == selfStart, nil
 	}
-	st := procStartTime(rec.OwnerPID)
-	return st != 0 && st == rec.OwnerStart
-}
-
-// groupAlive reports whether any process is still a member of pgid.
-func groupAlive(pgid int) bool {
-	err := syscall.Kill(-pgid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
+	st, err := procStartTime(rec.OwnerPID)
+	if err != nil {
+		return false, err
+	}
+	return st != 0 && st == rec.OwnerStart, nil
 }
 
 // waitGroupGone polls until leaderDone is closed (nil means "no leader to wait
-// for") and the process group has no members left, or until d elapses.
-func waitGroupGone(pgid int, leaderDone <-chan struct{}, d time.Duration) bool {
+// for") and the group has no members left, or until d elapses.
+func waitGroupGone(group processGroup, leaderDone <-chan struct{}, d time.Duration) bool {
 	deadline := time.NewTimer(d)
 	defer deadline.Stop()
 	tick := time.NewTicker(groupPoll)
@@ -189,7 +211,7 @@ func waitGroupGone(pgid int, leaderDone <-chan struct{}, d time.Duration) bool {
 			default:
 			}
 		}
-		if leaderDone == nil && !groupAlive(pgid) {
+		if leaderDone == nil && !group.alive() {
 			return true
 		}
 		select {
@@ -205,61 +227,10 @@ func waitGroupGone(pgid int, leaderDone <-chan struct{}, d time.Duration) bool {
 // groupIsPlayer reports whether a live member of pgid carries the recorded IPC
 // socket path in its command line. The socket lives in a random private dir, so
 // a match proves the group is the player we spawned and not a recycled group id.
-func groupIsPlayer(pgid int, socket string) bool {
-	if pgid <= 1 || socket == "" || !groupAlive(pgid) {
-		return false
+// An error means the OS cannot tell.
+func groupIsPlayer(pgid int, socket string) (bool, error) {
+	if pgid <= 1 || socket == "" || !recordedGroup(pgid).alive() {
+		return false, nil
 	}
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		return false
-	}
-	needle := []byte(socket)
-	for _, e := range entries {
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil {
-			continue
-		}
-		fields := procStatFields(pid)
-		if len(fields) < 3 || fields[0] == "Z" {
-			continue
-		}
-		if pgrp, err := strconv.Atoi(fields[2]); err != nil || pgrp != pgid {
-			continue
-		}
-		cmdline, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
-		if err != nil {
-			continue
-		}
-		if bytes.Contains(cmdline, needle) {
-			return true
-		}
-	}
-	return false
-}
-
-// procStatFields returns /proc/<pid>/stat fields starting at field 3 (state),
-// skipping the parenthesised comm which may contain spaces.
-func procStatFields(pid int) []string {
-	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
-	if err != nil {
-		return nil
-	}
-	i := bytes.LastIndexByte(data, ')')
-	if i < 0 || i+2 > len(data) {
-		return nil
-	}
-	return strings.Fields(string(data[i+2:]))
-}
-
-// procStartTime returns field 22 (starttime, clock ticks since boot), or 0.
-func procStartTime(pid int) uint64 {
-	fields := procStatFields(pid)
-	if len(fields) < 20 {
-		return 0
-	}
-	v, err := strconv.ParseUint(fields[19], 10, 64)
-	if err != nil {
-		return 0
-	}
-	return v
+	return groupHasArg(pgid, socket)
 }

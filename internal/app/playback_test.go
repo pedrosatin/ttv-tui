@@ -3,7 +3,6 @@ package app
 import (
 	"bytes"
 	"errors"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -42,7 +41,7 @@ func TestLogInputConfErr(t *testing.T) {
 			mgr := player.New(player.Options{
 				RuntimeDir:     t.TempDir(),
 				StopWait:       100 * time.Millisecond,
-				Command:        func(string, string) *exec.Cmd { return exec.Command("sleep", "30") },
+				Command:        helperPlayerCommand(t.TempDir()),
 				WriteInputConf: func(string) error { return errors.New("disk full") },
 			})
 			defer mgr.Close()

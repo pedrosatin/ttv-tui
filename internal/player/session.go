@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -49,6 +48,8 @@ type Session struct {
 	dir    string
 	socket string
 	cmd    *exec.Cmd
+	// group is set right after cmd starts; read it only once cmd.Process exists.
+	group  processGroup
 	record string
 	// inputConfErr is why the session runs without its input.conf; set once
 	// before the session starts, then only read.
@@ -247,7 +248,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		cancel()
 		return nil, fmt.Errorf("player: command factory returned nil")
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	configureProcessGroup(cmd)
 	if cmd.Stdout != nil || cmd.Stderr != nil {
 		s.cleanupFiles()
 		cancel()
@@ -290,6 +291,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		cancel()
 		return nil, fmt.Errorf("player: start: %w", err)
 	}
+	s.group = startedGroup(cmd)
 
 	if cfg.RegistryDir != "" {
 		path, err := writeRecord(cfg.RegistryDir, Record{
@@ -359,11 +361,10 @@ func (s *Session) terminateProcessGroup() {
 	if s.cmd == nil || s.cmd.Process == nil {
 		return
 	}
-	pgid := s.cmd.Process.Pid
-	_ = syscall.Kill(-pgid, syscall.SIGTERM)
-	if !waitGroupGone(pgid, s.waitDone, s.cfg.StopWait) {
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		_ = waitGroupGone(pgid, s.waitDone, groupKillWait)
+	_ = s.group.terminate()
+	if !waitGroupGone(s.group, s.waitDone, s.cfg.StopWait) {
+		_ = s.group.kill()
+		_ = waitGroupGone(s.group, s.waitDone, groupKillWait)
 	}
 	<-s.waitDone
 }
@@ -993,7 +994,7 @@ func (s *Session) cleanupFiles() {
 	}
 	// Keep the record while any group member lives, so a later run can still
 	// find the player if this process dies before Stop.
-	if s.record != "" && (s.cmd == nil || s.cmd.Process == nil || !groupAlive(s.cmd.Process.Pid)) {
+	if s.record != "" && (s.cmd == nil || s.cmd.Process == nil || !s.group.alive()) {
 		_ = os.Remove(s.record)
 	}
 }

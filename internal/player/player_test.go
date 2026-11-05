@@ -539,6 +539,9 @@ func runPlayerHelper() {
 			fmt.Println("[stream.hls][info] Resuming stream output")
 		}()
 		helperPlay(socket, login, false, helperIPCOptions{})
+	case "idle-child":
+		// Stays until signalled, with the default reaction to SIGTERM.
+		time.Sleep(time.Hour)
 	case "ignore-term":
 		helperIgnoreTerm(socket)
 	case "exit-error":
@@ -633,8 +636,8 @@ func helperPlay(socket, login string, withChild bool, opts helperIPCOptions) {
 
 	var child *os.Process
 	if withChild {
-		cmd := exec.Command("sleep", "120")
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: false}
+		cmd := exec.Command(os.Args[0])
+		cmd.Env = append(os.Environ(), "TTV_PLAYER_HELPER_MODE=idle-child")
 		if err := cmd.Start(); err == nil {
 			child = cmd.Process
 			defer func() {

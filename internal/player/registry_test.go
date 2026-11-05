@@ -1,6 +1,7 @@
 package player
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -83,15 +84,6 @@ func waitPidFile(t *testing.T, path string, timeout time.Duration) int {
 	return 0
 }
 
-// processAlive treats zombies as dead: they no longer run or play audio.
-func processAlive(pid int) bool {
-	if err := syscall.Kill(pid, 0); err != nil {
-		return false
-	}
-	fields := procStatFields(pid)
-	return len(fields) > 0 && fields[0] != "Z"
-}
-
 func TestStopKillsDescendantIgnoringTERMAfterParentExits(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child.pid")
 	t.Setenv("TTV_PLAYER_HELPER_CHILD_PIDFILE", pidFile)
@@ -127,7 +119,7 @@ func TestStopKillsDescendantIgnoringTERMAfterParentExits(t *testing.T) {
 	if processAlive(parentPid) {
 		t.Fatalf("parent %d still alive after Stop", parentPid)
 	}
-	if groupAlive(pgid) {
+	if recordedGroup(pgid).alive() {
 		t.Fatalf("process group %d still has members after Stop", pgid)
 	}
 	if elapsed < stopWait {
@@ -176,114 +168,6 @@ func deadPid(t *testing.T) int {
 	return cmd.Process.Pid
 }
 
-func TestFindOrphansDetectsAndTerminatesLeftoverPlayer(t *testing.T) {
-	base := t.TempDir()
-	regDir := filepath.Join(base, "players")
-	sockDir := filepath.Join(base, "7-orphan")
-	if err := os.Mkdir(sockDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	socket := filepath.Join(sockDir, "i")
-	pidFile := filepath.Join(base, "child.pid")
-
-	// A player left behind by a run that died: its own process group, a parent
-	// that obeys SIGTERM and a descendant that ignores it.
-	cmd := exec.Command(os.Args[0], "--", "orphaned", socket)
-	cmd.Env = append(os.Environ(),
-		"TTV_PLAYER_HELPER=1",
-		"TTV_PLAYER_HELPER_MODE=term-parent-stubborn-child",
-		"TTV_PLAYER_HELPER_CHILD_PIDFILE="+pidFile,
-	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start orphan: %v", err)
-	}
-	// Reap the leader promptly, as init would for a real orphan.
-	go func() { _ = cmd.Wait() }()
-	pgid := cmd.Process.Pid
-	childPid := waitPidFile(t, pidFile, 5*time.Second)
-	t.Cleanup(func() { _ = syscall.Kill(-pgid, syscall.SIGKILL) })
-
-	if _, err := writeRecord(regDir, Record{
-		OwnerPID:   deadPid(t),
-		OwnerStart: 1,
-		PGID:       pgid,
-		Socket:     socket,
-		Dir:        sockDir,
-		Login:      "orphaned",
-		Generation: 7,
-		StartedAt:  time.Now(),
-	}); err != nil {
-		t.Fatalf("writeRecord: %v", err)
-	}
-
-	orphans, err := FindOrphans(regDir)
-	if err != nil {
-		t.Fatalf("FindOrphans: %v", err)
-	}
-	if len(orphans) != 1 || orphans[0].PGID != pgid || orphans[0].Login != "orphaned" {
-		t.Fatalf("orphans = %+v, want the leftover group %d", orphans, pgid)
-	}
-
-	if err := orphans[0].Terminate(300 * time.Millisecond); err != nil {
-		t.Fatalf("Terminate: %v", err)
-	}
-	if processAlive(childPid) || groupAlive(pgid) {
-		t.Fatalf("orphan group %d (descendant %d) survived Terminate", pgid, childPid)
-	}
-	if _, err := os.Stat(orphans[0].path); !os.IsNotExist(err) {
-		t.Fatalf("record not removed after Terminate: %v", err)
-	}
-	if _, err := os.Stat(sockDir); !os.IsNotExist(err) {
-		t.Fatalf("socket dir not removed after Terminate: %v", err)
-	}
-	if again, _ := FindOrphans(regDir); len(again) != 0 {
-		t.Fatalf("orphans after Terminate = %+v, want none", again)
-	}
-}
-
-func TestFindOrphansIgnoresStaleRecycledAndLiveOwner(t *testing.T) {
-	regDir := t.TempDir()
-	dead := deadPid(t)
-
-	// Player group already gone: stale record, removed silently.
-	stale, err := writeRecord(regDir, Record{OwnerPID: dead, OwnerStart: 1, PGID: dead, Socket: "/nonexistent/a/i", Generation: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Group id alive but recycled (our own test group, no member mentions the
-	// socket): must not be reported, and must never be signalled.
-	recycled, err := writeRecord(regDir, Record{OwnerPID: dead, OwnerStart: 1, PGID: syscall.Getpgrp(), Socket: "/nonexistent/b/i", Generation: 2})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Owner still running (this process): not an orphan, record kept.
-	live, err := writeRecord(regDir, Record{OwnerPID: os.Getpid(), OwnerStart: selfStart, PGID: syscall.Getpgrp(), Socket: "/nonexistent/c/i", Generation: 3})
-	if err != nil {
-		t.Fatal(err)
-	}
-	corrupt := filepath.Join(regDir, recordPrefix+"0-9"+recordSuffix)
-	if err := os.WriteFile(corrupt, []byte("{not json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	orphans, err := FindOrphans(regDir)
-	if err != nil {
-		t.Fatalf("FindOrphans: %v", err)
-	}
-	if len(orphans) != 0 {
-		t.Fatalf("orphans = %+v, want none", orphans)
-	}
-	for _, p := range []string{stale, recycled, corrupt} {
-		if _, err := os.Stat(p); !os.IsNotExist(err) {
-			t.Fatalf("record %s should have been removed", filepath.Base(p))
-		}
-	}
-	if _, err := os.Stat(live); err != nil {
-		t.Fatalf("live owner's record removed: %v", err)
-	}
-}
-
 func TestRemoveStaleFilesRemovesInputConfAndDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "session")
 	if err := os.Mkdir(dir, 0o700); err != nil {
@@ -298,5 +182,98 @@ func TestRemoveStaleFilesRemovesInputConfAndDir(t *testing.T) {
 	removeStaleFiles(Record{Dir: dir, Socket: socket})
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("orphan session directory left behind: %v", err)
+	}
+}
+
+// startIdleGroup spawns a process in its own group, with socket in its argv like
+// mpv's --input-ipc-server, and reaps it once it dies.
+func startIdleGroup(t *testing.T, socket string) *exec.Cmd {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], "--", "idle", socket)
+	cmd.Env = append(os.Environ(), "TTV_PLAYER_HELPER=1", "TTV_PLAYER_HELPER_MODE=idle-child")
+	configureProcessGroup(cmd)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start idle group: %v", err)
+	}
+	reaped := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(reaped)
+	}()
+	t.Cleanup(func() {
+		_ = startedGroup(cmd).kill()
+		<-reaped
+	})
+	return cmd
+}
+
+// cannotInspect makes the registry behave as on an OS with no process inspection.
+func cannotInspect(t *testing.T) {
+	t.Helper()
+	origStart, origArg := procStartTime, groupHasArg
+	t.Cleanup(func() { procStartTime, groupHasArg = origStart, origArg })
+	procStartTime = func(int) (uint64, error) { return 0, errors.ErrUnsupported }
+	groupHasArg = func(int, string) (bool, error) { return false, errors.ErrUnsupported }
+}
+
+// A second instance on such an OS must not take a live session for a stale one:
+// that is how it would delete the first instance's socket.
+func TestFindOrphansKeepsWhatItCannotJudge(t *testing.T) {
+	base := t.TempDir()
+	regDir := filepath.Join(base, "players")
+	sockDir := filepath.Join(base, "1-other")
+	if err := os.Mkdir(sockDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(sockDir, "i")
+	if err := os.WriteFile(socket, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := startIdleGroup(t, socket)
+	path, err := writeRecord(regDir, Record{
+		OwnerPID:   deadPid(t),
+		OwnerStart: 1,
+		PGID:       cmd.Process.Pid,
+		Socket:     socket,
+		Dir:        sockDir,
+		Generation: 1,
+	})
+	if err != nil {
+		t.Fatalf("writeRecord: %v", err)
+	}
+	cannotInspect(t)
+
+	orphans, err := FindOrphans(regDir)
+	if err != nil {
+		t.Fatalf("FindOrphans: %v", err)
+	}
+	if len(orphans) != 0 {
+		t.Fatalf("orphans = %+v, want none when nothing can be verified", orphans)
+	}
+	for _, p := range []string{path, socket} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("%s removed without proof the player is gone: %v", filepath.Base(p), err)
+		}
+	}
+}
+
+func TestTerminateRefusesWhatItCannotJudge(t *testing.T) {
+	base := t.TempDir()
+	socket := filepath.Join(base, "i")
+	if err := os.WriteFile(socket, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := startIdleGroup(t, socket)
+	orphan := Orphan{Record: Record{PGID: cmd.Process.Pid, Socket: socket, Dir: base}}
+	cannotInspect(t)
+
+	if err := orphan.Terminate(50 * time.Millisecond); !errors.Is(err, errors.ErrUnsupported) {
+		t.Fatalf("Terminate = %v, want ErrUnsupported", err)
+	}
+	if !processAlive(cmd.Process.Pid) {
+		t.Fatal("unverified process was signalled")
+	}
+	if _, err := os.Stat(socket); err != nil {
+		t.Fatalf("socket removed without proof the player is gone: %v", err)
 	}
 }

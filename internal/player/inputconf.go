@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // inputConfName is the mpv input.conf written next to the IPC socket.
@@ -79,11 +78,5 @@ func checkPrivateDir(dir string) error {
 	if !fi.IsDir() {
 		return fmt.Errorf("player: session directory %q is not a directory", dir)
 	}
-	if fi.Mode().Perm()&0o077 != 0 {
-		return fmt.Errorf("player: session directory %q is not private (mode %o)", dir, fi.Mode().Perm())
-	}
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Geteuid() {
-		return fmt.Errorf("player: session directory %q has another owner", dir)
-	}
-	return nil
+	return checkDirPrivacy(dir, fi)
 }
