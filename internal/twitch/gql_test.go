@@ -614,6 +614,9 @@ func TestChannelsSuccessAndEmptyFixtures(t *testing.T) {
 		if first.CategoryID == nil || *first.CategoryID != "509658" {
 			t.Fatalf("first.CategoryID = %v, want 509658", first.CategoryID)
 		}
+		if first.CategoryName == nil || *first.CategoryName != "Just Chatting" {
+			t.Fatalf("first.CategoryName = %v, want Just Chatting", first.CategoryName)
+		}
 
 		second := page.Items[1]
 		if second.ID != "nobru" || second.Login != "nobru" || second.DisplayName != "Nobru" {
@@ -1119,9 +1122,12 @@ func TestSearchStreamFieldDrivesAvailability(t *testing.T) {
 		if !strings.Contains(req.Query, "stream {") {
 			t.Errorf("search query must request stream to prove availability, got: %s", req.Query)
 		}
+		if !strings.Contains(req.Query, "game") {
+			t.Errorf("search stream must request game { id name }, got: %s", req.Query)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":{"searchFor":{"channels":{"cursor":"","edges":[
-			{"item":{"id":"1","login":"live_one","displayName":"Live One","stream":{"id":"s1","viewersCount":327,"title":"  Lobby   ao vivo "}}},
+			{"item":{"id":"1","login":"live_one","displayName":"Live One","stream":{"id":"s1","viewersCount":327,"title":"  Lobby   ao vivo ","game":{"id":"509658","name":"Just Chatting"}}}},
 			{"item":{"id":"2","login":"off_one","displayName":"Off One","stream":null}},
 			{"item":{"id":"3","login":"unknown_one","displayName":"Unknown One"}}
 		]}}}}`))
@@ -1146,6 +1152,12 @@ func TestSearchStreamFieldDrivesAvailability(t *testing.T) {
 	}
 	if live.Title == nil || *live.Title != "Lobby ao vivo" {
 		t.Fatalf("live.Title = %v, want normalized title", live.Title)
+	}
+	if live.CategoryID == nil || *live.CategoryID != "509658" {
+		t.Fatalf("live.CategoryID = %v, want 509658", live.CategoryID)
+	}
+	if live.CategoryName == nil || *live.CategoryName != "Just Chatting" {
+		t.Fatalf("live.CategoryName = %v, want Just Chatting", live.CategoryName)
 	}
 
 	if off := page.Items[1]; off.Availability != AvailabilityOffline || off.Viewers != nil {
@@ -1324,8 +1336,11 @@ func TestChannelsByLoginsLiveOfflineAndAbsent(t *testing.T) {
 		}
 		gotLogins = req.Variables["logins"]
 		w.Header().Set("Content-Type", "application/json")
+		if !strings.Contains(req.Query, "game") {
+			t.Errorf("usersByLogins stream must request game { id name }, got: %s", req.Query)
+		}
 		_, _ = w.Write([]byte(`{"data":{"users":[
-			{"id":"1","login":"live_one","displayName":"Live One","stream":{"id":"s1","viewersCount":327,"title":"  Lobby   ao vivo "}},
+			{"id":"1","login":"live_one","displayName":"Live One","stream":{"id":"s1","viewersCount":327,"title":"  Lobby   ao vivo ","game":{"id":"509658","name":"Just Chatting"}}},
 			{"id":"2","login":"off_one","displayName":"Off One","stream":null},
 			null
 		]}}`))
@@ -1360,6 +1375,12 @@ func TestChannelsByLoginsLiveOfflineAndAbsent(t *testing.T) {
 	}
 	if live.Title == nil || *live.Title != "Lobby ao vivo" {
 		t.Fatalf("live.Title = %v, want normalized title", live.Title)
+	}
+	if live.CategoryID == nil || *live.CategoryID != "509658" {
+		t.Fatalf("live.CategoryID = %v, want 509658", live.CategoryID)
+	}
+	if live.CategoryName == nil || *live.CategoryName != "Just Chatting" {
+		t.Fatalf("live.CategoryName = %v, want Just Chatting", live.CategoryName)
 	}
 
 	off := got[1]

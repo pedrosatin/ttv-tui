@@ -94,15 +94,29 @@ func (m Model) activeContextSummary() string {
 		if chText != "" {
 			parts = append(parts, chText)
 		}
+		// Category of the playing/selected channel — never the last list visited.
+		if cat := channelCategoryName(m.selectedChannel); cat != "" {
+			parts = append(parts, cat)
+		}
+		return strings.Join(parts, " · ")
 	}
 	if m.selectedCategory != nil && m.selectedCategory.Name != "" {
 		catText := sanitizeChatText(m.selectedCategory.Name)
-		if m.selectedChannel == nil && m.selectedCategory.Viewers != nil {
+		if m.selectedCategory.Viewers != nil {
 			catText += " (" + m.formatViewers(m.selectedCategory.Viewers) + ")"
 		}
 		parts = append(parts, catText)
 	}
 	return strings.Join(parts, " · ")
+}
+
+// channelCategoryName returns the sanitized category label carried by ch, or
+// empty when unknown so the status bar can omit it.
+func channelCategoryName(ch *twitch.Channel) string {
+	if ch == nil || ch.CategoryName == nil {
+		return ""
+	}
+	return sanitizeChatText(strings.TrimSpace(*ch.CategoryName))
 }
 
 // statusParts splits the status text into the main message for the current
@@ -182,8 +196,8 @@ func (m Model) statusParts() (string, []string) {
 		if m.selectedChannel.Viewers != nil {
 			primary += " " + m.formatChannelViewers(m.selectedChannel.Viewers)
 		}
-		if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-			context = append(context, m.selectedCategory.Name)
+		if cat := channelCategoryName(m.selectedChannel); cat != "" {
+			context = append(context, cat)
 		}
 	case m.Mode() == ModeSearch && m.searchQuery != "":
 		primary = fmt.Sprintf(m.t("search.title_query"), m.searchQuery)

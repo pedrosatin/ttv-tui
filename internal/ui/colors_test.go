@@ -35,7 +35,7 @@ func TestOrientationColorsPlayerStatesEmitExpectedSGR(t *testing.T) {
 		state PlayerState
 		want  string // substring of SGR params, e.g. "32" green
 	}{
-		{"starting", PlayerStateStarting, "90"}, // bright black, no dim
+		{"starting", PlayerStateStarting, "37"}, // white + bold (ticket 14)
 		{"playing", PlayerStatePlaying, "32"},
 		{"paused", PlayerStatePaused, "33"},
 		{"break", PlayerStateBreak, "36"},
@@ -62,8 +62,17 @@ func TestOrientationColorsPlayerStatesEmitExpectedSGR(t *testing.T) {
 			if !re.MatchString(bar) {
 				t.Fatalf("status for %s missing SGR %s:\n%q", tc.name, tc.want, bar)
 			}
-			if tc.name == "starting" && strings.Contains(bar, "\x1b[2;") {
-				t.Fatalf("starting must not use dim (SGR 2):\n%q", bar)
+			if tc.name == "starting" {
+				if strings.Contains(bar, "\x1b[2;") || strings.Contains(bar, "\x1b[2m") {
+					t.Fatalf("starting must not use dim (SGR 2):\n%q", bar)
+				}
+				boldRe := regexp.MustCompile(`\x1b\[[0-9;]*1[0-9;]*m`)
+				if !boldRe.MatchString(bar) {
+					t.Fatalf("starting must use bold (SGR 1):\n%q", bar)
+				}
+				if regexp.MustCompile(`\x1b\[[0-9;]*90[0-9;]*m`).MatchString(bar) {
+					t.Fatalf("starting must not use bright black (SGR 90):\n%q", bar)
+				}
 			}
 		})
 	}
@@ -109,12 +118,18 @@ func TestOrientationColorsAvailabilityAndFocus(t *testing.T) {
 	if !sgrFgRe.MatchString(view) {
 		t.Fatalf("expected foreground SGR in colored view:\n%q", view)
 	}
-	// Live marker/viewers → green 32; offline tag → red 31; favorite ★ → yellow 33; focus ▸ → cyan 96.
-	for _, code := range []string{"32", "31", "33", "96"} {
+	// Live marker/viewers → green 32; offline tag → red 31; favorite ★ → yellow 33; focus ▸ → cyan 36 + bold.
+	for _, code := range []string{"32", "31", "33", "36"} {
 		re := regexp.MustCompile(`\x1b\[[0-9;]*` + code + `[0-9;]*m`)
 		if !re.MatchString(view) {
 			t.Errorf("view missing SGR %s:\n%q", code, view)
 		}
+	}
+	if !regexp.MustCompile(`\x1b\[[0-9;]*1[0-9;]*m`).MatchString(view) {
+		t.Errorf("focus/highlight must use bold (SGR 1):\n%q", view)
+	}
+	if regexp.MustCompile(`\x1b\[[0-9;]*96[0-9;]*m`).MatchString(view) {
+		t.Errorf("focus must not use bright cyan (SGR 96):\n%q", view)
 	}
 	// Favorite must not paint the whole row yellow: identity stays uncolored.
 	if strings.Contains(view, "\x1b[33mFavLive") || strings.Contains(view, "\x1b[33m★ FavLive") {

@@ -25,8 +25,10 @@ const (
 )
 
 // Channel represents a Twitch channel with stable identity fields.
-// Viewers, Title, and CategoryID are optional metadata. Availability is
-// AvailabilityUnknown unless the source had evidence of the stream state.
+// Viewers, Title, CategoryID, and CategoryName are optional metadata.
+// Availability is AvailabilityUnknown unless the source had evidence of the
+// stream state. CategoryName is the display name of the game/topic the
+// channel is (or was) streaming; when unknown the status bar omits it.
 type Channel struct {
 	ID           string
 	Login        string
@@ -34,6 +36,7 @@ type Channel struct {
 	Viewers      *int
 	Title        *string
 	CategoryID   *string
+	CategoryName *string
 	Availability Availability
 }
 

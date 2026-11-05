@@ -89,6 +89,10 @@ const searchQuery = `query($q: String!) {
               id
               viewersCount
               title
+              game {
+                id
+                name
+              }
             }
           }
         }
@@ -126,6 +130,10 @@ const usersByLoginsQuery = `query($logins: [String!]!) {
       id
       viewersCount
       title
+      game {
+        id
+        name
+      }
     }
   }
 }`
@@ -377,9 +385,10 @@ type gqlSearchUser struct {
 }
 
 type gqlSearchStream struct {
-	ID           string  `json:"id"`
-	ViewersCount *int    `json:"viewersCount"`
-	Title        *string `json:"title"`
+	ID           string         `json:"id"`
+	ViewersCount *int           `json:"viewersCount"`
+	Title        *string        `json:"title"`
+	Game         *gqlSearchGame `json:"game"`
 }
 
 type gqlUsersByLoginsResponse struct {
@@ -956,6 +965,10 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 	if resolvedCatID == "" {
 		resolvedCatID = fallbackCategoryID
 	}
+	resolvedCatName := strings.TrimSpace(gqlResp.Data.Game.Name)
+	if resolvedCatName == "" && resolvedCatID != "" {
+		resolvedCatName = s.lookupCategoryName(resolvedCatID)
+	}
 
 	edges := gqlResp.Data.Game.Streams.Edges
 	items := make([]Channel, 0, len(edges))
@@ -1004,13 +1017,19 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 			catCopy := resolvedCatID
 			catIDPtr = &catCopy
 		}
+		var catNamePtr *string
+		if resolvedCatName != "" {
+			nameCopy := resolvedCatName
+			catNamePtr = &nameCopy
+		}
 		items = append(items, Channel{
-			ID:          id,
-			Login:       login,
-			DisplayName: displayName,
-			Viewers:     viewers,
-			Title:       title,
-			CategoryID:  catIDPtr,
+			ID:           id,
+			Login:        login,
+			DisplayName:  displayName,
+			Viewers:      viewers,
+			Title:        title,
+			CategoryID:   catIDPtr,
+			CategoryName: catNamePtr,
 			// Game streams list only active broadcasts.
 			Availability: AvailabilityLive,
 		})
@@ -1411,9 +1430,10 @@ func cloneChannelPage(p Page[Channel]) Page[Channel] {
 	items := make([]Channel, len(p.Items))
 	for i, ch := range p.Items {
 		items[i] = Channel{
-			ID:          ch.ID,
-			Login:       ch.Login,
-			DisplayName: ch.DisplayName,
+			ID:           ch.ID,
+			Login:        ch.Login,
+			DisplayName:  ch.DisplayName,
+			Availability: ch.Availability,
 		}
 		if ch.Viewers != nil {
 			v := *ch.Viewers
@@ -1426,6 +1446,10 @@ func cloneChannelPage(p Page[Channel]) Page[Channel] {
 		if ch.CategoryID != nil {
 			c := *ch.CategoryID
 			items[i].CategoryID = &c
+		}
+		if ch.CategoryName != nil {
+			n := *ch.CategoryName
+			items[i].CategoryName = &n
 		}
 	}
 	return Page[Channel]{
@@ -1459,6 +1483,14 @@ func applySearchStream(ch *Channel, raw json.RawMessage) error {
 		t := strings.Join(strings.Fields(*st.Title), " ")
 		if t != "" {
 			ch.Title = &t
+		}
+	}
+	if st.Game != nil {
+		if id := strings.TrimSpace(st.Game.ID); id != "" {
+			ch.CategoryID = &id
+		}
+		if name := strings.TrimSpace(st.Game.Name); name != "" {
+			ch.CategoryName = &name
 		}
 	}
 	return nil

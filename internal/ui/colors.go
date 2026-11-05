@@ -20,10 +20,8 @@ const (
 	ansiMagenta      = lipgloss.ANSIColor(5)
 	ansiCyan         = lipgloss.ANSIColor(6)
 	ansiWhite        = lipgloss.ANSIColor(7)
-	ansiBrightBlack  = lipgloss.ANSIColor(8) // gray on most themes
 	ansiBrightYellow = lipgloss.ANSIColor(11)
 	ansiBrightBlue   = lipgloss.ANSIColor(12)
-	ansiBrightCyan   = lipgloss.ANSIColor(14)
 	ansiBrightWhite  = lipgloss.ANSIColor(15)
 )
 
@@ -114,11 +112,13 @@ func withForeground(style lipgloss.Style, color lipgloss.TerminalColor) lipgloss
 }
 
 func styleFocus(s string) string {
-	return withForeground(lipgloss.NewStyle().Bold(true), ansiBrightCyan).Render(s)
+	// Cyan (36) + bold stays readable on light and dark themes; bright cyan
+	// (96) washes out on light backgrounds (ticket 14).
+	return withForeground(lipgloss.NewStyle().Bold(true), ansiCyan).Render(s)
 }
 
 func styleHighlight(s string) string {
-	return withForeground(lipgloss.NewStyle().Bold(true), ansiBrightCyan).Render(s)
+	return withForeground(lipgloss.NewStyle().Bold(true), ansiCyan).Render(s)
 }
 
 func styleFavorite(s string) string {
@@ -138,7 +138,8 @@ func styleOffline(s string) string {
 }
 
 func styleUnverified(s string) string {
-	return withForeground(lipgloss.NewStyle(), ansiBrightBlack).Render(s)
+	// White (37) replaces bright black (90), which disappears on light themes.
+	return withForeground(lipgloss.NewStyle(), ansiWhite).Render(s)
 }
 
 func styleWarning(s string) string {
@@ -195,7 +196,8 @@ func stylePlayerState(state PlayerState, s string) string {
 	}
 	switch state {
 	case PlayerStateStarting:
-		return withForeground(lipgloss.NewStyle(), ansiBrightBlack).Render(s)
+		// White (37) + bold: bright black (90) vanishes on light themes.
+		return withForeground(lipgloss.NewStyle().Bold(true), ansiWhite).Render(s)
 	case PlayerStatePlaying:
 		return withForeground(lipgloss.NewStyle(), ansiGreen).Render(s)
 	case PlayerStatePaused:
@@ -230,7 +232,7 @@ func (m Model) styleStatusPrimary(primary string) string {
 	case m.playerState != PlayerStateNone && m.playerState != PlayerStateEnded:
 		return stylePlayerState(m.playerState, primary)
 	case m.playerState == PlayerStateEnded:
-		return withForeground(lipgloss.NewStyle(), ansiBrightBlack).Render(primary)
+		return withForeground(lipgloss.NewStyle().Bold(true), ansiWhite).Render(primary)
 	default:
 		return primary
 	}

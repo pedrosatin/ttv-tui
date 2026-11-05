@@ -366,8 +366,9 @@ func (m *Model) markChannelOffline(login string) {
 
 // refreshSavedAvailability copies the stream state of freshly loaded channels
 // into the matching favorites and recents, so the evidence survives leaving the
-// listing. Identity is preserved; only availability, viewers and title change.
-// Channels absent from the listing keep what they had: absence is not evidence.
+// listing. Identity is preserved; availability, viewers, title and category
+// change. Channels absent from the listing keep what they had: absence is not
+// evidence.
 func (m *Model) refreshSavedAvailability(loaded []twitch.Channel) {
 	m.favorites = m.withLoadedAvailability(m.favorites, loaded)
 	m.recents = m.withLoadedAvailability(m.recents, loaded)
@@ -394,6 +395,12 @@ func (m Model) withLoadedAvailability(saved, loaded []twitch.Channel) []twitch.C
 			out[i].Availability = avail
 			out[i].Viewers = c.Viewers
 			out[i].Title = c.Title
+			if c.CategoryID != nil {
+				out[i].CategoryID = c.CategoryID
+			}
+			if c.CategoryName != nil {
+				out[i].CategoryName = c.CategoryName
+			}
 			if avail == twitch.AvailabilityOffline {
 				out[i].Viewers = nil
 			}
@@ -684,6 +691,13 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		selected := *it.Channel
+		// Stamp the open category onto a category-listing row so the status bar
+		// shows the channel's game. Favorites, recents and search hits keep
+		// whatever CategoryName the Source already set; unknown stays empty and
+		// the bar omits it (never the last list visited).
+		if it.Type == ItemTypeChannel && m.Mode() == ModeChannels {
+			stampChannelCategory(&selected, m.selectedCategory)
+		}
 		m.selectedChannel = &selected
 		// Opening a channel drops the local filter so favorites and the rest of
 		// the list are visible again; the user did not ask to stay filtered.
@@ -694,6 +708,22 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg {
 			return ChannelSelectedMsg{Channel: selected}
 		}
+	}
+}
+
+// stampChannelCategory fills CategoryID/CategoryName from the open category
+// when the channel itself does not already carry them (category listing rows).
+func stampChannelCategory(ch *twitch.Channel, cat *twitch.Category) {
+	if ch == nil || cat == nil {
+		return
+	}
+	if (ch.CategoryName == nil || strings.TrimSpace(*ch.CategoryName) == "") && strings.TrimSpace(cat.Name) != "" {
+		name := cat.Name
+		ch.CategoryName = &name
+	}
+	if (ch.CategoryID == nil || strings.TrimSpace(*ch.CategoryID) == "") && strings.TrimSpace(cat.ID) != "" {
+		id := cat.ID
+		ch.CategoryID = &id
 	}
 }
 
