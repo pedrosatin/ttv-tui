@@ -86,6 +86,19 @@ func helperSessionOwner() {
 		fmt.Fprintf(os.Stderr, "start session: %v\n", err)
 		os.Exit(1)
 	}
+	// A descendant can publish its PID before Start has assigned the job and
+	// committed the record. Signal those steps separately from child readiness.
+	if path := os.Getenv("TTV_PLAYER_HELPER_OWNER_READY"); path != "" {
+		tmp := path + ".tmp"
+		if err := os.WriteFile(tmp, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "write owner readiness: %v\n", err)
+			os.Exit(1)
+		}
+		if err := os.Rename(tmp, path); err != nil {
+			fmt.Fprintf(os.Stderr, "publish owner readiness: %v\n", err)
+			os.Exit(1)
+		}
+	}
 	time.Sleep(time.Hour)
 }
 

@@ -106,6 +106,7 @@ func TestAbruptOwnerDeathEndsTreeAndLeavesOnlyResidue(t *testing.T) {
 	regDir := filepath.Join(base, "players")
 	runtimeDir := filepath.Join(base, "run")
 	pidFile := filepath.Join(base, "child.pid")
+	readyFile := filepath.Join(base, "owner.ready")
 
 	owner := exec.Command(os.Args[0])
 	owner.Env = append(os.Environ(),
@@ -114,6 +115,7 @@ func TestAbruptOwnerDeathEndsTreeAndLeavesOnlyResidue(t *testing.T) {
 		"TTV_PLAYER_HELPER_RUNTIME="+runtimeDir,
 		"TTV_PLAYER_HELPER_REGISTRY="+regDir,
 		"TTV_PLAYER_HELPER_CHILD_PIDFILE="+pidFile,
+		"TTV_PLAYER_HELPER_OWNER_READY="+readyFile,
 	)
 	if err := owner.Start(); err != nil {
 		t.Fatalf("start owner: %v", err)
@@ -133,18 +135,50 @@ func TestAbruptOwnerDeathEndsTreeAndLeavesOnlyResidue(t *testing.T) {
 	t.Cleanup(func() { killPid(childPid) })
 	child := openProcess(t, childPid)
 
+	logState := func(phase string, rec Record) {
+		t.Helper()
+		for _, pid := range []int{owner.Process.Pid, rec.PGID, childPid} {
+			if pid > 0 {
+				alive, err := pidRunning(pid)
+				t.Logf("%s: pid=%d alive=%v err=%v", phase, pid, alive, err)
+			}
+		}
+		if err := filepath.WalkDir(base, func(path string, entry os.DirEntry, err error) error {
+			t.Logf("%s: path=%s entry=%v err=%v", phase, path, entry, err)
+			return err
+		}); err != nil {
+			t.Logf("%s: list files: %v", phase, err)
+		}
+	}
+	var rec Record
+	t.Cleanup(func() {
+		if t.Failed() {
+			logState("failure before process cleanup", rec)
+		}
+	})
+	// child.pid proves only that the descendant started. Wait for Start to
+	// return before asserting that its owner has committed the registry record.
+	if readyPID := waitPidFile(t, readyFile, exitWait); readyPID != owner.Process.Pid {
+		t.Fatalf("ready owner PID = %d, want %d", readyPID, owner.Process.Pid)
+	}
+	logState("owner ready, before reading record", rec)
 	records, err := filepath.Glob(filepath.Join(regDir, recordPrefix+"*"+recordSuffix))
 	if err != nil || len(records) != 1 {
 		t.Fatalf("records = %v, %v, want exactly one", records, err)
 	}
-	rec := readRecord(t, records[0])
+	rec = readRecord(t, records[0])
+	if rec.OwnerPID != owner.Process.Pid {
+		t.Fatalf("record owner PID = %d, want %d", rec.OwnerPID, owner.Process.Pid)
+	}
 	parent := openProcess(t, rec.PGID)
+	logState("before live-owner scan", rec)
 	if orphans, err := FindOrphans(regDir); err != nil || len(orphans) != 0 {
 		t.Fatalf("FindOrphans with the owner alive = %+v, %v", orphans, err)
 	}
 	if _, err := os.Stat(records[0]); err != nil {
 		t.Fatalf("record of a live owner removed: %v", err)
 	}
+	logState("after live-owner scan, before killing owner", rec)
 
 	if err := owner.Process.Kill(); err != nil {
 		t.Fatalf("kill owner: %v", err)
@@ -152,11 +186,11 @@ func TestAbruptOwnerDeathEndsTreeAndLeavesOnlyResidue(t *testing.T) {
 	waitExit(t, ownerHandle, "owner")
 	waitExit(t, parent, "streamlink's stand-in")
 	waitExit(t, child, "mpv's stand-in")
+	logState("all three handles signaled, before residue scan", rec)
 
-	if _, err := os.Stat(filepath.Join(rec.Dir, inputConfName)); err != nil {
-		t.Fatalf("abrupt death should leave the session's files behind: %v", err)
-	}
+	assertResidueKept(t, records[0], rec.Dir)
 	orphans, err := FindOrphans(regDir)
+	logState("after residue scan", rec)
 	if err != nil {
 		t.Fatalf("FindOrphans: %v", err)
 	}
