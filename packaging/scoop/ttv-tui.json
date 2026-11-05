@@ -1,12 +1,12 @@
 {
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "Terminal UI for Twitch",
     "homepage": "https://github.com/pedrosatin/ttv-tui",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/pedrosatin/ttv-tui/releases/download/v0.2.0/ttv-tui_0.2.0_windows_amd64.zip",
-            "hash": "e2added34ea81c388b981eade102156fae21517b0a9d70f4abe19960656c5946"
+            "url": "https://github.com/pedrosatin/ttv-tui/releases/download/v0.2.1/ttv-tui_0.2.1_windows_amd64.zip",
+            "hash": "2a30b2c40c2c39fb2aeb367a23a77a2908a9b677bd3b8b00e73bdc62b100b81c"
         }
     },
     "bin": "ttv-tui.exe",
