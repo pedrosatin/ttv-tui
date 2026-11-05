@@ -289,8 +289,10 @@ O `ttv-tui` armazena configuração, estado persistente e sockets de execução 
 | Configuração (`config.toml`, modo `0600`) | `$XDG_CONFIG_HOME/ttv-tui/config.toml` | `~/.config/ttv-tui/config.toml` |
 | Estado persistente (`state.json`: favoritos e até 50 canais recentes) | `$XDG_STATE_HOME/ttv-tui/state.json` | `~/.local/state/ttv-tui/state.json` |
 | Registro de players ativos (detecção de processos órfãos) | `$XDG_STATE_HOME/ttv-tui/players/player-<pid>-<gen>.json` | `~/.local/state/ttv-tui/players/player-<pid>-<gen>.json` |
-| Socket IPC do `mpv` por sessão (`i`, diretório modo `0700`) | `$XDG_RUNTIME_DIR/ttv-tui/<gen>-*/i` | `/tmp/ttv-tui-<pid>-<gen>/i` |
-| Atalhos do `mpv` por sessão (`mpv-input.conf`, modo `0600`) | `$XDG_RUNTIME_DIR/ttv-tui/<gen>-*/mpv-input.conf` | `/tmp/ttv-tui-<pid>-<gen>/mpv-input.conf` |
+| Socket IPC do `mpv` por sessão (`i`, diretório modo `0700`; no Windows é um named pipe, sem arquivo) | `$XDG_RUNTIME_DIR/ttv-tui/<gen>-*/i` | `<temp do SO>/ttv-tui/<gen>-*/i` (macOS: `$TMPDIR/ttv-tui/<gen>-*/i`) |
+| Atalhos do `mpv` por sessão (`mpv-input.conf`, modo `0600`) | `$XDG_RUNTIME_DIR/ttv-tui/<gen>-*/mpv-input.conf` | `<temp do SO>/ttv-tui/<gen>-*/mpv-input.conf` (macOS: `$TMPDIR/ttv-tui/<gen>-*/mpv-input.conf`; Windows: `%LOCALAPPDATA%\ttv-tui\run\<gen>-*\mpv-input.conf`) |
+
+Se esse diretório de sessão não puder ser usado (caminho longo demais para o socket, sem permissão de escrita), a sessão vai para `<temp do SO>/ttv-tui-<pid>-<gen>/`.
 
 Se `state.json` estiver corrompido, o `ttv-tui` salva uma cópia em `state.json.bak` e inicia com listas de favoritos e recentes vazias.
 

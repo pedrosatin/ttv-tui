@@ -13,7 +13,9 @@ import (
 // Record is the on-disk registration of one live playback. A session writes it
 // right after spawning the player and removes it once the whole process group is
 // gone, so a record left behind by a run that died abruptly (SIGKILL, crash)
-// points at a player that may still be playing.
+// points at a player that may still be playing. On Windows the kernel ends that
+// player with its owner, so such a record only marks files to clean up, and PGID
+// is the PID of the spawned process: no group id exists there.
 type Record struct {
 	OwnerPID   int       `json:"owner_pid"`
 	OwnerStart uint64    `json:"owner_start"`
@@ -172,15 +174,15 @@ func (o Orphan) Terminate(wait time.Duration) error {
 	return nil
 }
 
-// removeStaleFiles deletes the socket, the input.conf and their private dir, only
-// when the record describes the Unix layout the session created (the socket file
-// inside the dir) and the dir is empty after. Other layouts, such as a pipe name,
-// are left alone until their OS has its own cleanup.
+// removeStaleFiles deletes the endpoint, the input.conf and their private dir,
+// only when the record describes the layout a session of this OS creates and the
+// dir is empty after. Any other layout is left alone: nothing proves the dir is
+// ours.
 func removeStaleFiles(rec Record) {
-	if rec.Dir == "" || !filepath.IsAbs(rec.Dir) || rec.Socket != filepath.Join(rec.Dir, socketFileName) {
+	if rec.Dir == "" || !filepath.IsAbs(rec.Dir) || !recordIsOurLayout(rec) {
 		return
 	}
-	_ = os.Remove(rec.Socket)
+	removeEndpoint(rec.Socket)
 	_ = os.Remove(filepath.Join(rec.Dir, inputConfName))
 	_ = os.Remove(rec.Dir)
 }

@@ -5,6 +5,7 @@ package player
 import (
 	"crypto/rand"
 	"os"
+	"strings"
 )
 
 // checkRuntimeDirFits always accepts: a named pipe is not a path inside the
@@ -28,6 +29,12 @@ func endpointInDir(dir string) (string, error) {
 
 // pipeSuffixLen is 40 bits of rand.Text.
 const pipeSuffixLen = 8
+
+// recordIsOurLayout reports whether rec's pipe name is the one endpointInDir builds
+// for its directory and owner. The random suffix proves nothing and is not checked.
+func recordIsOurLayout(rec Record) bool {
+	return strings.HasPrefix(rec.Socket, pipeName(rec.Dir, rec.OwnerPID)+"-")
+}
 
 // removeEndpoint does nothing: a named pipe disappears with its last handle and
 // leaves no file to delete.

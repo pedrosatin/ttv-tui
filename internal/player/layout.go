@@ -49,9 +49,6 @@ func maxSocketPathLenFor(goos string) int {
 // compares against it.
 var maxSocketPathLen = maxSocketPathLenFor(runtime.GOOS)
 
-// socketFileName is the Unix socket's name inside the session directory.
-const socketFileName = "i"
-
 // pipeName is the named-pipe endpoint for a session directory. It is only the
 // name, with no separators: streamlink splits --player-args with shlex and mpv
 // prefixes `\\.\pipe\` itself, so a name containing slashes would be taken as a

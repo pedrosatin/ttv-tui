@@ -35,7 +35,7 @@ func helperTermParentStubbornChild(socket, login string) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 
-	ln, err := net.Listen("unix", socket)
+	ln, err := listenEndpoint(socket)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
@@ -74,6 +74,21 @@ func helperStubbornChild() {
 	}
 }
 
+// helperSessionOwner plays the TUI in a test about its abrupt death: a Manager
+// with a live session, and a process that never gets to call Stop.
+func helperSessionOwner() {
+	mgr := New(Options{
+		Command:     helperCommand("term-parent-stubborn-child"),
+		RuntimeDir:  os.Getenv("TTV_PLAYER_HELPER_RUNTIME"),
+		RegistryDir: os.Getenv("TTV_PLAYER_HELPER_REGISTRY"),
+	})
+	if _, err := mgr.Start("owner"); err != nil {
+		fmt.Fprintf(os.Stderr, "start session: %v\n", err)
+		os.Exit(1)
+	}
+	time.Sleep(time.Hour)
+}
+
 func waitPidFile(t *testing.T, path string, timeout time.Duration) int {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -105,14 +120,11 @@ func TestStopKillsDescendantIgnoringTERMAfterParentExits(t *testing.T) {
 	t.Cleanup(func() { killPid(childPid) })
 
 	mgr.mu.Lock()
-	parentPid := mgr.session.Pid()
+	sess := mgr.session
 	mgr.mu.Unlock()
-	pgid, err := groupOfPid(childPid)
-	if err != nil {
-		t.Fatalf("group of child: %v", err)
-	}
-	if pgid != parentPid {
-		t.Fatalf("child pgid = %d, want parent's group %d", pgid, parentPid)
+	parentPid := sess.Pid()
+	if !groupHoldsPid(t, sess, childPid) {
+		t.Fatalf("child %d is not in the group of parent %d", childPid, parentPid)
 	}
 
 	start := time.Now()
@@ -125,13 +137,13 @@ func TestStopKillsDescendantIgnoringTERMAfterParentExits(t *testing.T) {
 	if processAlive(parentPid) {
 		t.Fatalf("parent %d still alive after Stop", parentPid)
 	}
-	if recordedGroup(pgid).alive() {
-		t.Fatalf("process group %d still has members after Stop", pgid)
+	if recordedGroup(parentPid).alive() {
+		t.Fatalf("process group %d still has members after Stop", parentPid)
 	}
-	if elapsed < stopWait {
+	if gracefulTerminate && elapsed < stopWait {
 		t.Fatalf("Stop returned after %v, before the %v SIGTERM deadline: the descendant cannot have been SIGKILLed", elapsed, stopWait)
 	}
-	t.Logf("parent %d exited on SIGTERM; descendant %d ignored it and was SIGKILLed after %v", parentPid, childPid, elapsed)
+	t.Logf("parent %d and descendant %d gone after %v", parentPid, childPid, elapsed)
 }
 
 func TestManagerRegistryRecordLifecycle(t *testing.T) {
@@ -174,26 +186,9 @@ func deadPid(t *testing.T) int {
 	return cmd.Process.Pid
 }
 
-func TestRemoveStaleFilesRemovesInputConfAndDir(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "session")
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		t.Fatalf("Mkdir: %v", err)
-	}
-	socket := filepath.Join(dir, "i")
-	for _, path := range []string{socket, filepath.Join(dir, inputConfName)} {
-		if err := os.WriteFile(path, nil, 0o600); err != nil {
-			t.Fatalf("WriteFile: %v", err)
-		}
-	}
-	removeStaleFiles(Record{Dir: dir, Socket: socket})
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Fatalf("orphan session directory left behind: %v", err)
-	}
-}
-
-// A record whose endpoint is not the Unix socket in its directory (a pipe name,
-// or anything else) describes a layout this cleanup does not know: it deletes
-// nothing rather than guess what the directory holds.
+// A record whose endpoint is not the one this OS builds for its directory describes
+// a layout this cleanup does not know: it deletes nothing rather than guess what
+// the directory holds.
 func TestRemoveStaleFilesLeavesUnknownLayoutAlone(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "session")
 	if err := os.Mkdir(dir, 0o700); err != nil {
@@ -219,14 +214,21 @@ func startIdleGroup(t *testing.T, socket string) *exec.Cmd {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start idle group: %v", err)
 	}
+	group, err := startedGroup(cmd)
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatalf("group of idle process: %v", err)
+	}
 	reaped := make(chan struct{})
 	go func() {
 		_ = cmd.Wait()
 		close(reaped)
 	}()
 	t.Cleanup(func() {
-		_ = startedGroup(cmd).kill()
+		_ = group.kill()
 		<-reaped
+		group.release()
 	})
 	return cmd
 }

@@ -193,7 +193,16 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		cancel()
 		return nil, fmt.Errorf("player: start: %w", err)
 	}
-	s.group = startedGroup(cmd)
+	s.group, err = startedGroup(cmd)
+	if err != nil {
+		// Nothing could stop this process later, so it does not get to play.
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		closeFiles(stdout, stderr)
+		s.cleanupFiles()
+		cancel()
+		return nil, err
+	}
 
 	if cfg.RegistryDir != "" {
 		path, err := writeRecord(cfg.RegistryDir, Record{
@@ -221,7 +230,8 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	return s, nil
 }
 
-// Stop terminates the process group (SIGTERM, then SIGKILL), waits, and removes the session directory and endpoint.
+// Stop terminates the process group (SIGTERM, then SIGKILL; on Windows the Job
+// Object at once), waits, and removes the session directory and endpoint.
 func (s *Session) Stop() {
 	s.mu.Lock()
 	if s.stopped {
@@ -238,6 +248,7 @@ func (s *Session) Stop() {
 	s.terminateProcessGroup()
 	<-s.waitDone
 	s.cleanupFiles()
+	s.group.release()
 
 	if intentional {
 		s.transition(StateEnded, EndReasonStopped, "")

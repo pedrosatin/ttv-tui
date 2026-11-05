@@ -61,8 +61,12 @@ func TestOSGroupHasArgIgnoresEnvironment(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
+	group, err := startedGroup(cmd)
+	if err != nil {
+		t.Fatalf("group: %v", err)
+	}
 	t.Cleanup(func() {
-		_ = startedGroup(cmd).kill()
+		_ = group.kill()
 		_ = cmd.Wait()
 	})
 

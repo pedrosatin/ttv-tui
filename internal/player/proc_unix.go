@@ -20,9 +20,10 @@ func configureProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-// startedGroup returns the group of cmd, after a successful Start.
-func startedGroup(cmd *exec.Cmd) processGroup {
-	return processGroup{pgid: cmd.Process.Pid}
+// startedGroup returns the group of cmd, after a successful Start. The group
+// already exists by then, so this cannot fail on Unix.
+func startedGroup(cmd *exec.Cmd) (processGroup, error) {
+	return processGroup{pgid: cmd.Process.Pid}, nil
 }
 
 // recordedGroup rebuilds a group from the id kept in a registry Record.
@@ -45,3 +46,6 @@ func (g processGroup) alive() bool {
 	err := syscall.Kill(-g.pgid, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
+
+// release has nothing to free: a process group holds no resource of ours.
+func (g processGroup) release() {}

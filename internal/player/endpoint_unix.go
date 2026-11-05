@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 )
 
+// socketFileName is the Unix socket's name inside the session directory.
+const socketFileName = "i"
+
 // checkRuntimeDirFits refuses a runtime directory that cannot hold the session
 // socket, before anything is created: runtimeDir + "/" + "<gen>-" + the "i"
 // socket is the shortest path the layout can produce.
@@ -27,6 +30,11 @@ func endpointInDir(dir string) (string, error) {
 		return "", fmt.Errorf("socket path %q too long (%d > %d bytes)", socket, len(socket), maxSocketPathLen)
 	}
 	return socket, nil
+}
+
+// recordIsOurLayout reports whether rec has the socket file inside its directory.
+func recordIsOurLayout(rec Record) bool {
+	return rec.Socket == filepath.Join(rec.Dir, socketFileName)
 }
 
 // removeEndpoint deletes the socket file an endpoint names, if there is one.

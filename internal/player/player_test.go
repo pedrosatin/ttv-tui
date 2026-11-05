@@ -43,14 +43,6 @@ func helperCommand(mode string) CommandFunc {
 	}
 }
 
-// processTreeModes are the helper modes whose test is about descendants of the
-// spawned process. Windows only stops that one process until the Job Object
-// exists, so they wait for it.
-var processTreeModes = map[string]bool{
-	"play-child":                 true,
-	"term-parent-stubborn-child": true,
-}
-
 // skipWithoutSocketFile skips a test about the endpoint being a path: the socket
 // file's length limit, its place in a directory. A named pipe has neither.
 func skipWithoutSocketFile(t *testing.T) {
@@ -62,9 +54,6 @@ func skipWithoutSocketFile(t *testing.T) {
 
 func newTestManager(t *testing.T, mode string, opts Options) *Manager {
 	t.Helper()
-	if processTreeModes[mode] && runtime.GOOS == "windows" {
-		t.Skip("needs the Job Object to see descendants (v1.8 ticket 09)")
-	}
 	opts.Command = helperCommand(mode)
 	if opts.RuntimeDir == "" {
 		opts.RuntimeDir = t.TempDir()
@@ -609,6 +598,8 @@ func runPlayerHelper() {
 		helperTermParentStubbornChild(socket, login)
 	case "stubborn-child":
 		helperStubbornChild()
+	case "session-owner":
+		helperSessionOwner()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown helper mode %q\n", mode)
 		os.Exit(2)
