@@ -10,18 +10,18 @@ Twitch no terminal para Linux. Navegue por categorias e canais ao vivo, assista 
 
 ## Instalação
 
-### Binário da release (v0.1.6, Linux amd64 / arm64)
+### Binário da release (v0.1.7, Linux amd64 / arm64)
 
-Baixe o tarball da sua arquitetura (`linux_amd64` ou `linux_arm64`) e o arquivo `checksums.txt` da [release v0.1.6](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.6), confira o hash SHA-256 e instale o binário em `~/.local/bin`:
+Baixe o tarball da sua arquitetura (`linux_amd64` ou `linux_arm64`) e o arquivo `checksums.txt` da [release v0.1.7](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.7), confira o hash SHA-256 e instale o binário em `~/.local/bin`:
 
 ```bash
 ARCH=amd64 # ou arm64
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.6/ttv-tui_0.1.6_linux_${ARCH}.tar.gz"
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.6/checksums.txt"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.7/ttv-tui_0.1.7_linux_${ARCH}.tar.gz"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.7/checksums.txt"
 sha256sum --ignore-missing -c checksums.txt
 
 mkdir -p ~/.local/bin
-tar -xzf "ttv-tui_0.1.6_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
+tar -xzf "ttv-tui_0.1.7_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
 ```
 
 Confirme que `~/.local/bin` está no seu `PATH`.
@@ -31,7 +31,7 @@ Confirme que `~/.local/bin` está no seu `PATH`.
 Requer Go 1.27 ou superior:
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.6
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.7
 ```
 
 ### Arch Linux (AUR)
@@ -50,7 +50,7 @@ Requer Go 1.27:
 ```bash
 git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.6" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.7" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
 ## Requisitos
@@ -248,7 +248,7 @@ As decisões de arquitetura (ADRs) estão documentadas em [`docs/adr/`](adr/).
 
 ## Limitações e próximos passos
 
-Limitações atuais na versão `v0.1.6`:
+Limitações atuais na versão `v0.1.7`:
 
 - **Apenas Linux.** A supervisão de grupos de processos (verificações em `/proc`, `Setpgid`), a consulta ao keyring (`secret-tool`) e os caminhos de cookies dos navegadores são voltados para Linux.
 - **Sem comandos de moderação no chat.** Exclusão de mensagens, timeouts e banimentos não estão implementados.
