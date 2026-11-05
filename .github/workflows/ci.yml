@@ -123,12 +123,26 @@ jobs:
         if: runner.os == 'Windows' && steps.mpv.outcome == 'success'
         timeout-minutes: 3
         run: |
-          if mpv --version; then
-            export TTV_TEST_REAL_MPV=1
-            go test -count=1 -v -run '^TestRealMPVHandshake$' ./internal/player
-          else
-            echo "::warning::mpv is not runnable on this runner; the real-mpv handshake was NOT run"
-          fi
+          choco_root="${ChocolateyInstall:-C:\\ProgramData\\chocolatey}"
+          root="$(cygpath -u "$choco_root")"
+          candidates=("$root/lib/mpvio.install/tools/mpv.exe" "$root/bin/mpv.exe")
+          while IFS= read -r found; do
+            candidates+=("$found")
+          done < <(find "$root/lib" -iname mpv.exe -type f 2>/dev/null)
+          for candidate in "${candidates[@]}"; do
+            [ -f "$candidate" ] || continue
+            export PATH="$(dirname "$candidate"):$PATH"
+            echo "Checking $candidate --version"
+            if "$candidate" --version; then
+              export TTV_TEST_REAL_MPV=1
+              go test -count=1 -v -run '^TestRealMPVHandshake$' ./internal/player
+              exit $?
+            else
+              status=$?
+              echo "::warning::mpv at $candidate failed --version (exit $status); trying the next candidate"
+            fi
+          done
+          echo "::warning::No runnable mpv.exe found under $choco_root; the real-mpv handshake was NOT run"
 
       # go test hides t.Logf of a passing test, so this step prints what the kernel
       # answered whether the run above passed or not.
