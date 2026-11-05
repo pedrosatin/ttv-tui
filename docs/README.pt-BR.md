@@ -15,35 +15,35 @@ Twitch no terminal para Linux. Navegue por categorias e canais ao vivo, assista 
 O script [`packaging/install.sh`](../packaging/install.sh) baixa o tarball da release e o arquivo `checksums.txt`, valida o hash SHA-256 com `sha256sum` e instala o binário em `~/.local/bin/ttv-tui`, o atalho `.desktop` em `~/.local/share/applications/ttv-tui.desktop` e o ícone em `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
 
 ```bash
-# Instalar a release mais recente ou informar uma versão como 0.1.8
+# Instalar a release mais recente ou informar uma versão como 0.1.9
 ./packaging/install.sh
-./packaging/install.sh 0.1.8
+./packaging/install.sh 0.1.9
 
 # Exibir o plano de instalação sem baixar arquivos nem alterar o sistema
-./packaging/install.sh --dry-run 0.1.8
+./packaging/install.sh --dry-run 0.1.9
 
 # Instalar em um prefixo personalizado
-./packaging/install.sh --prefix "$HOME/.local" 0.1.8
+./packaging/install.sh --prefix "$HOME/.local" 0.1.9
 ```
 
 Também é possível executar o script diretamente do GitHub:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.1.8
+curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.1.9
 ```
 
-### Binário da release (v0.1.8, Linux amd64 / arm64)
+### Binário da release (v0.1.9, Linux amd64 / arm64)
 
-Baixe o tarball da sua arquitetura (`linux_amd64` ou `linux_arm64`) e o arquivo `checksums.txt` da [release v0.1.8](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.8), confira o hash SHA-256 e instale o binário em `~/.local/bin`:
+Baixe o tarball da sua arquitetura (`linux_amd64` ou `linux_arm64`) e o arquivo `checksums.txt` da [release v0.1.9](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.9), confira o hash SHA-256 e instale o binário em `~/.local/bin`:
 
 ```bash
 ARCH=amd64 # ou arm64
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.8/ttv-tui_0.1.8_linux_${ARCH}.tar.gz"
-curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.8/checksums.txt"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.9/ttv-tui_0.1.9_linux_${ARCH}.tar.gz"
+curl -LO "https://github.com/pedrosatin/ttv-tui/releases/download/v0.1.9/checksums.txt"
 sha256sum --ignore-missing -c checksums.txt
 
 mkdir -p ~/.local/bin
-tar -xzf "ttv-tui_0.1.8_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
+tar -xzf "ttv-tui_0.1.9_linux_${ARCH}.tar.gz" -C ~/.local/bin ttv-tui
 ```
 
 Confirme que `~/.local/bin` está no seu `PATH`.
@@ -53,7 +53,7 @@ Confirme que `~/.local/bin` está no seu `PATH`.
 Requer Go 1.27 ou superior:
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.8
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.1.9
 ```
 
 ### Arch Linux (AUR)
@@ -72,7 +72,7 @@ Requer Go 1.27:
 ```bash
 git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.8" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.9" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
 ### Atalho de desktop
@@ -174,6 +174,17 @@ Pressione `?` ou `F1` para abrir ou fechar o quadro de atalhos no aplicativo. As
 | `Enter` | Enviar a mensagem escrita para o chat |
 | `Esc` | Sair do campo de mensagem preservando o rascunho ou devolver o foco para a lista |
 | `Ctrl+T` | Reconectar ao chat IRC do canal atual |
+
+### Layout
+
+| Tecla | Ação |
+| --- | --- |
+| `Ctrl+W` | Alternar layouts: lista + chat → só chat → só lista → foco (ambos ocultos) |
+| `Ctrl+H` | Mostrar ou ocultar o painel da lista |
+| `Ctrl+L` | Mostrar ou ocultar o painel do chat |
+
+O layout vale para a sessão: a barra indica o ativo (`layout: chat`) e ocultar o
+chat nunca dispara o aviso de terminal estreito.
 
 ### Player de vídeo (janela do `mpv`)
 
@@ -282,7 +293,7 @@ As decisões de arquitetura (ADRs) estão documentadas em [`docs/adr/`](adr/).
 
 ## Limitações e próximos passos
 
-Limitações atuais na versão `v0.1.8`:
+Limitações atuais na versão `v0.1.9`:
 
 - **Apenas Linux.** A supervisão de grupos de processos (verificações em `/proc`, `Setpgid`), a consulta ao keyring (`secret-tool`) e os caminhos de cookies dos navegadores são voltados para Linux.
 - **Sem comandos de moderação no chat.** Exclusão de mensagens, timeouts e banimentos não estão implementados.
