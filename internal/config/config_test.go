@@ -5,9 +5,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func assertConfigEqual(t *testing.T, got, want Config) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("config mismatch:\n got %+v\nwant %+v", got, want)
+	}
+}
 
 func TestLoadNonExistentReturnsDefaultsWithoutCreatingFile(t *testing.T) {
 	dir := t.TempDir()
@@ -17,9 +25,7 @@ func TestLoadNonExistentReturnsDefaultsWithoutCreatingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFrom non-existent file returned error: %v", err)
 	}
-	if cfg != Default() {
-		t.Fatalf("got %+v, want default %+v", cfg, Default())
-	}
+	assertConfigEqual(t, cfg, Default())
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("expected file not to exist on disk, got stat err: %v", err)
 	}
@@ -79,9 +85,7 @@ func TestSaveToNewWithoutTokenPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFrom saved config: %v", err)
 	}
-	if got != want {
-		t.Fatalf("round-trip mismatch: got %+v, want %+v", got, want)
-	}
+	assertConfigEqual(t, got, want)
 }
 
 func TestSaveToPreexistingLoosePermissionsTightenedWithoutToken(t *testing.T) {
@@ -120,9 +124,7 @@ func TestSaveToPreexistingLoosePermissionsTightenedWithoutToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFrom saved config: %v", err)
 	}
-	if got != want {
-		t.Fatalf("round-trip mismatch: got %+v, want %+v", got, want)
-	}
+	assertConfigEqual(t, got, want)
 }
 
 func TestSaveToNewWithTokenPermissions(t *testing.T) {
@@ -150,9 +152,7 @@ func TestSaveToNewWithTokenPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFrom saved config: %v", err)
 	}
-	if got != want {
-		t.Fatalf("round-trip mismatch: got %+v, want %+v", got, want)
-	}
+	assertConfigEqual(t, got, want)
 }
 
 func TestSaveToAtomicRoundTripAndTokenPermissions(t *testing.T) {
@@ -200,9 +200,50 @@ func TestSaveToAtomicRoundTripAndTokenPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFrom saved config: %v", err)
 	}
-	if got != want {
-		t.Fatalf("round-trip mismatch: got %+v, want %+v", got, want)
+	assertConfigEqual(t, got, want)
+}
+
+func TestChannelFilterRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	want := Config{
+		Language:        "en",
+		FilterLanguages: []string{"pt", "en"},
+		MinViewers:      500,
 	}
+	if err := SaveTo(path, want); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, `languages = ["pt", "en"]`) {
+		t.Fatalf("missing languages array in %q", text)
+	}
+	if !strings.Contains(text, "min_viewers = 500") {
+		t.Fatalf("missing min_viewers in %q", text)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	assertConfigEqual(t, got, want)
+
+	// Load also accepts uppercase codes and normalizes them.
+	if err := os.WriteFile(path, []byte("languages = [\"PT\", \"es\"]\nmin_viewers = 1000\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err = LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom uppercase: %v", err)
+	}
+	assertConfigEqual(t, got, Config{
+		FilterLanguages: []string{"pt", "es"},
+		MinViewers:      1000,
+	})
 }
 
 func TestNormalizeToken(t *testing.T) {

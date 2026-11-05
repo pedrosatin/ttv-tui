@@ -148,6 +148,11 @@ func (m Model) statusParts() (string, []string) {
 		primary = m.listErrorAction()
 		// The technical detail goes last: it is the first thing to drop.
 		trailing = m.listErrorDetail()
+	case m.channelFilterMenu:
+		primary = m.t("channel_filter.status_open")
+		if summary := m.activeChannelFilterSummary(); summary != "" {
+			secondary = append(secondary, summary)
+		}
 	case m.searching:
 		primary = fmt.Sprintf(m.t("search.prompt"), m.searchInput)
 	case m.filtering:
@@ -208,6 +213,13 @@ func (m Model) statusParts() (string, []string) {
 		}
 	}
 
+	if summary := m.activeChannelFilterSummary(); summary != "" && !m.channelFilterMenu {
+		// Keep active prefs visible without stealing the lead message.
+		if !strings.Contains(primary, summary) {
+			secondary = append([]string{summary}, secondary...)
+		}
+	}
+
 	chatStatus := ""
 	if m.err == nil {
 		if s := m.chatStatusSummary(); s != "" && !strings.Contains(primary, s) {
@@ -249,7 +261,7 @@ func (m Model) statusParts() (string, []string) {
 // chat channel. Player actions, errors, search/filter and one-shot notices keep
 // the lead (ticket 07 / orientation).
 func (m Model) softStatusPrimary() bool {
-	if m.err != nil || m.searching || m.filtering || m.loading {
+	if m.err != nil || m.searching || m.filtering || m.channelFilterMenu || m.loading {
 		return false
 	}
 	if m.authNotice != "" || m.corruptNotice != "" || m.copyNotice != "" || m.statusNotice != "" || m.ctrlCNotice != "" {

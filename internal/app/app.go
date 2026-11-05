@@ -175,6 +175,17 @@ func Run(opts Options) error {
 		ui.WithFavorites(store.ToTwitchChannels(st.Favorites)),
 		ui.WithRecents(store.ToTwitchChannels(st.Recents)),
 	}
+	if cfgPath != "" {
+		persistPath := cfgPath
+		persistCfg := cfg
+		uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, func(languages []string, minViewers int) error {
+			persistCfg.FilterLanguages = languages
+			persistCfg.MinViewers = minViewers
+			return config.SaveTo(persistPath, persistCfg)
+		}))
+	} else if len(cfg.FilterLanguages) > 0 || cfg.MinViewers > 0 {
+		uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, nil))
+	}
 	if corruptNotice != "" {
 		uiOpts = append(uiOpts, ui.WithCorruptNotice(corruptNotice))
 	}

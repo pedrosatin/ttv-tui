@@ -216,18 +216,27 @@ type Model struct {
 	searchQuery      string
 	// searchOrigin is the list mode active when the current search started
 	// (ModeChannels or ModeCategories). Esc returns there; Ctrl+R ignores it.
-	searchOrigin     Mode
-	highlightedID    string
-	highlightedLogin string // secondary channel identity when upstream IDs churn between loads
-	highlightIndex   int    // VisibleItems index; nearest-neighbor fallback after refresh
-	focusResults     bool   // next channel/search load highlights its first result; see settleHighlightAfterLoad
-	selectedCategory *twitch.Category
-	selectedChannel  *twitch.Channel
-	tokenCheck       TokenCheckFunc
-	invalidTokenInit bool
-	authNotice       string
-	corruptNotice    string
-	statusNotice     string
+	searchOrigin Mode
+	// filterLanguages / filterMinViewers are channel preference filters (ticket 01).
+	// Empty languages and min 0 mean no preference filter. Unknown-language
+	// channels stay visible when languages are selected (marked in the row).
+	filterLanguages        []string
+	filterMinViewers       int
+	filterPersist          ChannelFilterPersistFunc
+	channelFilterMenu      bool
+	channelFilterMenuIndex int
+	channelFilterMenuItems []channelFilterMenuItem
+	highlightedID          string
+	highlightedLogin       string // secondary channel identity when upstream IDs churn between loads
+	highlightIndex         int    // VisibleItems index; nearest-neighbor fallback after refresh
+	focusResults           bool   // next channel/search load highlights its first result; see settleHighlightAfterLoad
+	selectedCategory       *twitch.Category
+	selectedChannel        *twitch.Channel
+	tokenCheck             TokenCheckFunc
+	invalidTokenInit       bool
+	authNotice             string
+	corruptNotice          string
+	statusNotice           string
 	// ctrlCNotice is the transient "To quit use Ctrl+Q" status after Ctrl+C.
 	// It outranks filter/search prompts so the hint stays visible in every mode.
 	ctrlCNotice string

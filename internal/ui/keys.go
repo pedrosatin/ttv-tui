@@ -18,6 +18,7 @@ type keyMap struct {
 	SwitchFocus   key.Binding
 	Filter        key.Binding
 	Search        key.Binding
+	ChannelFilter key.Binding
 	Categories    key.Binding
 	Retry         key.Binding
 	Clear         key.Binding
@@ -66,6 +67,10 @@ func defaultKeyMap() keyMap {
 		// ixon on, the terminal consumes Ctrl+S as XOFF before the app sees it.
 		Search: key.NewBinding(
 			key.WithKeys("ctrl+f", "ctrl+s"),
+		),
+		// l opens the channel language/audience filter menu (ticket 01).
+		ChannelFilter: key.NewBinding(
+			key.WithKeys("l"),
 		),
 		Categories: key.NewBinding(
 			key.WithKeys("ctrl+r"),
@@ -226,6 +231,10 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateFilteringKey(msg)
 	}
 
+	if m.channelFilterMenu {
+		return m.updateChannelFilterMenuKey(msg)
+	}
+
 	// Tab switches list ↔ chat in every panel state: list focus, chat focus,
 	// composing, and with help open. It never sends or clears the draft. When
 	// help is open, Tab closes it so the new focus marker is visible (Esc and
@@ -252,6 +261,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.toggleFavoriteHighlighted()
+
+	case key.Matches(msg, m.keys.ChannelFilter):
+		if m.Focus() == FocusChat {
+			return m, nil
+		}
+		return m.openChannelFilterMenu(), nil
 
 	case key.Matches(msg, m.keys.Help):
 		m.helpVisible = !m.helpVisible

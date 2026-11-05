@@ -1,6 +1,9 @@
 package twitch
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Category represents a live Twitch category (game or topic) with a stable ID.
 // Viewers is optional because not every upstream adapter provides viewer counts.
@@ -25,10 +28,12 @@ const (
 )
 
 // Channel represents a Twitch channel with stable identity fields.
-// Viewers, Title, CategoryID, and CategoryName are optional metadata.
+// Viewers, Title, CategoryID, CategoryName, and Language are optional metadata.
 // Availability is AvailabilityUnknown unless the source had evidence of the
 // stream state. CategoryName is the display name of the game/topic the
 // channel is (or was) streaming; when unknown the status bar omits it.
+// Language is the stream language code normalized to lowercase (pt, en, es);
+// nil or empty means the source did not report one.
 type Channel struct {
 	ID           string
 	Login        string
@@ -37,7 +42,23 @@ type Channel struct {
 	Title        *string
 	CategoryID   *string
 	CategoryName *string
+	Language     *string
 	Availability Availability
+}
+
+// NormalizeLanguage trims and lowercases a Twitch stream language code
+// (API returns "PT", "EN", "ES"). Empty input yields "".
+func NormalizeLanguage(raw string) string {
+	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+// LanguagePtr normalizes raw and returns a pointer, or nil when empty.
+func LanguagePtr(raw string) *string {
+	norm := NormalizeLanguage(raw)
+	if norm == "" {
+		return nil
+	}
+	return &norm
 }
 
 // PageRequest describes the pagination parameters for a Source query.

@@ -64,6 +64,7 @@ const channelsQuery = `query($id: ID, $name: String, $n: Int!, $after: Cursor) {
             login
             displayName
           }
+          language
           viewersCount
           title
         }
@@ -87,6 +88,7 @@ const searchQuery = `query($q: String!) {
             displayName
             stream {
               id
+              language
               viewersCount
               title
               game {
@@ -128,6 +130,7 @@ const usersByLoginsQuery = `query($logins: [String!]!) {
     displayName
     stream {
       id
+      language
       viewersCount
       title
       game {
@@ -328,6 +331,7 @@ type gqlStreamEdge struct {
 type gqlStreamNode struct {
 	ID           string          `json:"id"`
 	Broadcaster  *gqlBroadcaster `json:"broadcaster"`
+	Language     *string         `json:"language"`
 	ViewersCount *int            `json:"viewersCount"`
 	Title        *string         `json:"title"`
 }
@@ -386,6 +390,7 @@ type gqlSearchUser struct {
 
 type gqlSearchStream struct {
 	ID           string         `json:"id"`
+	Language     *string        `json:"language"`
 	ViewersCount *int           `json:"viewersCount"`
 	Title        *string        `json:"title"`
 	Game         *gqlSearchGame `json:"game"`
@@ -1022,6 +1027,10 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 			nameCopy := resolvedCatName
 			catNamePtr = &nameCopy
 		}
+		var language *string
+		if edge.Node.Language != nil {
+			language = LanguagePtr(*edge.Node.Language)
+		}
 		items = append(items, Channel{
 			ID:           id,
 			Login:        login,
@@ -1030,6 +1039,7 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 			Title:        title,
 			CategoryID:   catIDPtr,
 			CategoryName: catNamePtr,
+			Language:     language,
 			// Game streams list only active broadcasts.
 			Availability: AvailabilityLive,
 		})
@@ -1451,6 +1461,10 @@ func cloneChannelPage(p Page[Channel]) Page[Channel] {
 			n := *ch.CategoryName
 			items[i].CategoryName = &n
 		}
+		if ch.Language != nil {
+			l := *ch.Language
+			items[i].Language = &l
+		}
 	}
 	return Page[Channel]{
 		Items:   items,
@@ -1475,6 +1489,9 @@ func applySearchStream(ch *Channel, raw json.RawMessage) error {
 		return fmt.Errorf("decode stream: %w", err)
 	}
 	ch.Availability = AvailabilityLive
+	if st.Language != nil {
+		ch.Language = LanguagePtr(*st.Language)
+	}
 	if st.ViewersCount != nil {
 		v := *st.ViewersCount
 		ch.Viewers = &v

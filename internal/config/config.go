@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +15,12 @@ type Config struct {
 	Language    string
 	AccessToken string
 	Username    string
+	// FilterLanguages are preferred stream language codes (lowercase: pt, en).
+	// Empty means no language filter. TOML key: languages.
+	FilterLanguages []string
+	// MinViewers is the minimum audience for channel lists. 0 means no floor.
+	// TOML key: min_viewers.
+	MinViewers int
 }
 
 // Default returns a Config initialized with in-memory defaults.
@@ -136,6 +143,10 @@ func Save(cfg Config) error {
 // even when overwriting an existing file with looser permissions.
 func SaveTo(path string, cfg Config) error {
 	cfg.AccessToken = NormalizeToken(cfg.AccessToken)
+	cfg.FilterLanguages = normalizeFilterLanguages(cfg.FilterLanguages)
+	if cfg.MinViewers < 0 {
+		cfg.MinViewers = 0
+	}
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -194,7 +205,46 @@ func formatTOML(cfg Config) string {
 	if cfg.AccessToken != "" {
 		fmt.Fprintf(&b, "access_token = %s\n", quoteTOML(cfg.AccessToken))
 	}
+	if langs := normalizeFilterLanguages(cfg.FilterLanguages); len(langs) > 0 {
+		fmt.Fprintf(&b, "languages = %s\n", formatTOMLStringArray(langs))
+	}
+	if cfg.MinViewers > 0 {
+		fmt.Fprintf(&b, "min_viewers = %d\n", cfg.MinViewers)
+	}
 	return b.String()
+}
+
+func formatTOMLStringArray(vals []string) string {
+	parts := make([]string, len(vals))
+	for i, v := range vals {
+		parts[i] = quoteTOML(v)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// normalizeFilterLanguages lowercases, trims, drops empties and duplicates
+// (first occurrence wins), preserving order.
+func normalizeFilterLanguages(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		lang := strings.ToLower(strings.TrimSpace(raw))
+		if lang == "" {
+			continue
+		}
+		if _, ok := seen[lang]; ok {
+			continue
+		}
+		seen[lang] = struct{}{}
+		out = append(out, lang)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func quoteTOML(s string) string {
@@ -266,12 +316,96 @@ func parseTOML(input string) (Config, error) {
 				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
 			}
 			cfg.Username = val
+		case "languages", "filters.languages", "channel.languages":
+			vals, err := parseTOMLStringArray(rawVal)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+			}
+			cfg.FilterLanguages = normalizeFilterLanguages(vals)
+		case "min_viewers", "filters.min_viewers", "channel.min_viewers":
+			n, err := parseTOMLInt(rawVal)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+			}
+			if n < 0 {
+				n = 0
+			}
+			cfg.MinViewers = n
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return Config{}, fmt.Errorf("scan config: %w", err)
 	}
+	cfg.FilterLanguages = normalizeFilterLanguages(cfg.FilterLanguages)
 	return cfg, nil
+}
+
+func parseTOMLInt(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, errors.New("expected integer value")
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("expected integer value: %w", err)
+	}
+	return n, nil
+}
+
+func parseTOMLStringArray(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if len(raw) < 2 || raw[0] != '[' || raw[len(raw)-1] != ']' {
+		return nil, errors.New("expected string array value")
+	}
+	inner := strings.TrimSpace(raw[1 : len(raw)-1])
+	if inner == "" {
+		return nil, nil
+	}
+	var out []string
+	for len(inner) > 0 {
+		inner = strings.TrimSpace(inner)
+		if inner == "" {
+			break
+		}
+		if inner[0] != '"' && inner[0] != '\'' {
+			return nil, errors.New("expected quoted string in array")
+		}
+		quote := inner[0]
+		end := -1
+		escaped := false
+		for i := 1; i < len(inner); i++ {
+			c := inner[i]
+			if escaped {
+				escaped = false
+				continue
+			}
+			if quote == '"' && c == '\\' {
+				escaped = true
+				continue
+			}
+			if c == quote {
+				end = i
+				break
+			}
+		}
+		if end < 0 {
+			return nil, errors.New("unclosed string in array")
+		}
+		val, err := unquoteTOML(inner[:end+1])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, val)
+		inner = strings.TrimSpace(inner[end+1:])
+		if inner == "" {
+			break
+		}
+		if inner[0] != ',' {
+			return nil, errors.New("expected comma between array values")
+		}
+		inner = strings.TrimSpace(inner[1:])
+	}
+	return out, nil
 }
 
 func stripTOMLComment(line string) string {

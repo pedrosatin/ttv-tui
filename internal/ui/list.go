@@ -101,14 +101,19 @@ func (m Model) Channels() []twitch.Channel {
 	return out
 }
 
-// VisibleChannels returns the channels matching the current filter.
+// VisibleChannels returns the channels matching the text filter and the
+// language/audience preference filters.
 func (m Model) VisibleChannels() []twitch.Channel {
 	q := strings.ToLower(strings.TrimSpace(m.filter))
-	if q == "" {
-		return m.Channels()
-	}
 	out := make([]twitch.Channel, 0, len(m.channels))
 	for _, c := range m.channels {
+		if !m.channelPassesPrefs(c) {
+			continue
+		}
+		if q == "" {
+			out = append(out, c)
+			continue
+		}
 		title := ""
 		if c.Title != nil {
 			title = strings.ToLower(*c.Title)
@@ -219,6 +224,9 @@ func (m Model) VisibleItems() []ListItem {
 		if !matchesFilter(ch.DisplayName, ch.Login, title) {
 			continue
 		}
+		if !m.channelPassesPrefs(ch) {
+			continue
+		}
 		chCopy := ch
 		items = append(items, ListItem{
 			Type:         ItemTypeFavorite,
@@ -239,6 +247,9 @@ func (m Model) VisibleItems() []ListItem {
 			title = *ch.Title
 		}
 		if !matchesFilter(ch.DisplayName, ch.Login, title) {
+			continue
+		}
+		if !m.channelPassesPrefs(ch) {
 			continue
 		}
 		chCopy := ch
@@ -286,6 +297,9 @@ func (m Model) VisibleItems() []ListItem {
 				title = *ch.Title
 			}
 			if !matchesFilter(ch.DisplayName, ch.Login, title) {
+				continue
+			}
+			if !m.channelPassesPrefs(ch) {
 				continue
 			}
 			chCopy := ch
@@ -401,6 +415,9 @@ func (m Model) withLoadedAvailability(saved, loaded []twitch.Channel) []twitch.C
 			if c.CategoryName != nil {
 				out[i].CategoryName = c.CategoryName
 			}
+			if c.Language != nil {
+				out[i].Language = c.Language
+			}
 			if avail == twitch.AvailabilityOffline {
 				out[i].Viewers = nil
 			}
@@ -473,6 +490,7 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.searchOrigin = ""
 	m.filtering = false
 	m.searching = false
+	m.channelFilterMenu = false
 	m.filter = ""
 	m.searchInput = ""
 	m.searchCategories = nil
@@ -516,6 +534,7 @@ func (m Model) returnToChannels() (tea.Model, tea.Cmd) {
 	m.searchOrigin = ""
 	m.filtering = false
 	m.searching = false
+	m.channelFilterMenu = false
 	m.filter = ""
 	m.searchInput = ""
 	m.searchQuery = ""

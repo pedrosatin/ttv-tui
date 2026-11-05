@@ -133,6 +133,7 @@ func (m Model) View() string {
 	}
 
 	helpLines := m.renderHelpLines(m.width)
+	filterMenuLines := m.renderChannelFilterMenuLines(m.width)
 
 	// Unsized fallback (m.width <= 0 and m.height <= 0): used by unit tests that don't send WindowSizeMsg.
 	if m.width <= 0 && m.height <= 0 {
@@ -143,6 +144,7 @@ func (m Model) View() string {
 			chatLines := m.renderChatLines(defaultChatPreviewLines, 0)
 			bodyLines = append(bodyLines, chatLines...)
 		}
+		bodyLines = append(bodyLines, filterMenuLines...)
 		bodyLines = append(bodyLines, helpLines...)
 		if len(bodyLines) == 0 {
 			return status
@@ -180,7 +182,11 @@ func (m Model) View() string {
 			rightCell := padOrTruncateVisual(right, chatW)
 			combined = append(combined, leftCell+panelSeparator+rightCell)
 		}
-		combined = m.overlayHelpLines(combined, helpLines, m.width, available)
+		if len(filterMenuLines) > 0 {
+			combined = m.overlayHelpLines(combined, filterMenuLines, m.width, available)
+		} else {
+			combined = m.overlayHelpLines(combined, helpLines, m.width, available)
+		}
 		return strings.Join(combined, "\n") + "\n" + status
 	}
 
@@ -193,6 +199,7 @@ func (m Model) View() string {
 
 	if m.height <= 0 {
 		bodyLines = append(bodyLines, noticeLines...)
+		bodyLines = append(bodyLines, filterMenuLines...)
 		bodyLines = append(bodyLines, helpLines...)
 		if listW > 0 {
 			for i := range bodyLines {
@@ -224,7 +231,11 @@ func (m Model) View() string {
 			bodyLines[i] = padOrTruncateVisual(bodyLines[i], listW)
 		}
 	}
-	bodyLines = m.overlayHelpLines(bodyLines, helpLines, listW, available)
+	if len(filterMenuLines) > 0 {
+		bodyLines = m.overlayHelpLines(bodyLines, filterMenuLines, listW, available)
+	} else {
+		bodyLines = m.overlayHelpLines(bodyLines, helpLines, listW, available)
+	}
 	return strings.Join(bodyLines, "\n") + "\n" + status
 }
 
@@ -253,6 +264,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		"  " + m.t("help.esc"),
 		"  " + m.t("help.categories"),
 		"  " + m.t("help.search"),
+		"  " + m.t("help.channel_filter"),
 		"  " + m.t("help.player"),
 		"  " + m.t("help.chat"),
 		"  " + m.t("help.app"),
@@ -400,6 +412,12 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 			lines = append(lines,
 				TruncateVisual(m.t("filter.empty"), maxWidth),
 				TruncateVisual(fmt.Sprintf(m.t("filter.search_hint"), sanitizeChatText(strings.TrimSpace(m.filter))), maxWidth),
+			)
+		} else if m.preferenceFilterHidesChannels() {
+			summary := m.activeChannelFilterSummary()
+			lines = append(lines,
+				TruncateVisual(fmt.Sprintf(m.t("channel_filter.empty"), summary), maxWidth),
+				TruncateVisual(m.t("channel_filter.empty_hint"), maxWidth),
 			)
 		} else if (len(m.categories) > 0 || len(m.channels) > 0 || len(m.searchCategories) > 0 || len(m.favorites) > 0 || len(m.recents) > 0) && m.filter != "" {
 			lines = append(lines, TruncateVisual(m.t("filter.empty"), maxWidth))
@@ -593,27 +611,43 @@ func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.A
 	if ch.Title != nil && strings.TrimSpace(*ch.Title) != "" {
 		titleText = sanitizeChatText(strings.TrimSpace(*ch.Title))
 	}
+	// When a language preference is active, channels without language metadata
+	// stay visible and carry an explicit unknown tag (ticket 01 choice).
+	langUnknownTag := ""
+	if len(m.filterLanguages) > 0 && channelLanguageUnknown(ch) {
+		langUnknownTag = m.t("channels.lang_unknown_tag")
+	}
+	mergeTag := func(primary string) string {
+		switch {
+		case primary != "" && langUnknownTag != "":
+			return primary + " " + langUnknownTag
+		case langUnknownTag != "":
+			return langUnknownTag
+		default:
+			return primary
+		}
+	}
 
 	switch avail {
 	case twitch.AvailabilityOffline:
 		viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
-		tag := styleOffline(m.t("channels.offline_tag"))
+		tag := mergeTag(styleOffline(m.t("channels.offline_tag")))
 		return fitChannelRow(marker, viewers, identity, tag, titleText, playing, maxWidth)
 	case twitch.AvailabilityLive:
 		if ch.Viewers == nil {
 			// Live without a count (playing now): [ao vivo]/[live] in the viewers
 			// column, green only on that marker.
 			live := styleLive(fmt.Sprintf("%7s", m.t("channels.live_label")))
-			return fitChannelRow(marker, live, identity, "", titleText, playing, maxWidth)
+			return fitChannelRow(marker, live, identity, mergeTag(""), titleText, playing, maxWidth)
 		}
 		viewersText := styleLive(formatLiveViewersCell(m.formatViewers(ch.Viewers)))
 		if titleText == "" {
 			titleText = m.t("channels.title_unknown")
 		}
-		return fitChannelRow(marker, viewersText, identity, "", titleText, playing, maxWidth)
+		return fitChannelRow(marker, viewersText, identity, mergeTag(""), titleText, playing, maxWidth)
 	default:
 		viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
-		tag := styleUnverified(m.t("channels.unverified_tag"))
+		tag := mergeTag(styleUnverified(m.t("channels.unverified_tag")))
 		return fitChannelRow(marker, viewers, identity, tag, titleText, playing, maxWidth)
 	}
 }

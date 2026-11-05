@@ -105,7 +105,7 @@ func runTUIHelper() int {
 		Source:     emptySource{},
 		Player:     mgr,
 	}
-	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" || os.Getenv("TTV_APP_RECENT_ORDER") == "1" || os.Getenv("TTV_APP_SEARCH_ESC") == "1" {
+	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" || os.Getenv("TTV_APP_RECENT_ORDER") == "1" || os.Getenv("TTV_APP_SEARCH_ESC") == "1" || os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" {
 		// Logged-in chat whose dial never reaches the network, so every UI
 		// mode can be entered from the PTY.
 		opts.Source = oneChannelSource{}
@@ -123,6 +123,9 @@ func runTUIHelper() int {
 		}
 		if os.Getenv("TTV_APP_SEARCH_ESC") == "1" {
 			opts.Source = searchEscSource{}
+		}
+		if os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" {
+			opts.Source = channelFilterSource{}
 		}
 		chatMgr := chat.New(chat.Options{
 			Token:    "pty-test-token",

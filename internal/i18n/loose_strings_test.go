@@ -112,6 +112,7 @@ var allowedExceptions = map[string]bool{
 	"f":      true,
 	"j":      true,
 	"k":      true,
+	"l":      true,
 	"i":      true,
 	"y":      true,
 	"r":      true,
