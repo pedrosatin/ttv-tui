@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
@@ -90,6 +91,14 @@ func FromTwitchChannels(channels []twitch.Channel) []Channel {
 type State struct {
 	Favorites []Channel `json:"favorites"`
 	Recents   []Channel `json:"recents"`
+	// snapshot is local bookkeeping, never serialized. Copies share successful-save
+	// acknowledgements because SaveTo accepts State by value.
+	snapshot *favoriteSnapshot
+}
+
+type favoriteSnapshot struct {
+	mu        sync.Mutex
+	favorites []Channel
 }
 
 // AddRecent prepends ch to recents, removing any prior duplicate, and clamps to maxRecents.
@@ -112,6 +121,9 @@ func (s *State) AddRecent(ch Channel, maxRecents int) {
 // ToggleFavorite toggles ch in favorites. If present, removes it and returns false.
 // If absent, appends it and returns true.
 func (s *State) ToggleFavorite(ch Channel) bool {
+	if s.snapshot == nil {
+		s.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), s.Favorites...)}
+	}
 	for i, fav := range s.Favorites {
 		if fav.Matches(ch) {
 			s.Favorites = append(s.Favorites[:i], s.Favorites[i+1:]...)
@@ -154,10 +166,20 @@ func Load() (State, error) {
 // If the file does not exist, an empty State is returned without error.
 // If the file is empty or contains invalid JSON, the file is renamed to path+".bak",
 // an empty State is returned, and ErrCorrupt is returned.
-func LoadFrom(path string) (State, error) {
+func LoadFrom(path string) (st State, err error) {
+	release, err := lockState(path)
+	if err != nil {
+		return State{}, err
+	}
+	defer func() { err = errors.Join(err, release()) }()
+	return loadFrom(path)
+}
+
+func loadFrom(path string) (State, error) {
 	emptyState := State{
 		Favorites: []Channel{},
 		Recents:   []Channel{},
+		snapshot:  &favoriteSnapshot{},
 	}
 
 	data, err := os.ReadFile(path)
@@ -171,14 +193,18 @@ func LoadFrom(path string) (State, error) {
 	trimmed := strings.TrimSpace(string(data))
 	if len(trimmed) == 0 {
 		bakPath := path + ".bak"
-		_ = os.Rename(path, bakPath)
+		if err := os.Rename(path, bakPath); err != nil {
+			return emptyState, fmt.Errorf("back up corrupt state: %w", err)
+		}
 		return emptyState, fmt.Errorf("%w: file is empty, backed up to %s", ErrCorrupt, bakPath)
 	}
 
 	var st State
 	if err := json.Unmarshal(data, &st); err != nil {
 		bakPath := path + ".bak"
-		_ = os.Rename(path, bakPath)
+		if err := os.Rename(path, bakPath); err != nil {
+			return emptyState, fmt.Errorf("back up corrupt state: %w", err)
+		}
 		return emptyState, fmt.Errorf("%w: invalid JSON (%v), backed up to %s", ErrCorrupt, err, bakPath)
 	}
 
@@ -188,6 +214,7 @@ func LoadFrom(path string) (State, error) {
 	if st.Recents == nil {
 		st.Recents = []Channel{}
 	}
+	st.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), st.Favorites...)}
 	return st, nil
 }
 
@@ -200,15 +227,96 @@ func Save(st State) error {
 	return SaveTo(path, st)
 }
 
-// SaveTo writes state atomically to path with 0600 permissions.
+// SaveTo merges state with the latest disk contents under an exclusive lock.
+// Loaded states apply only changes since the last successful load/save, so stale
+// favorites cannot resurrect another pane's removals. Untracked literals add their
+// favorites to disk. Incoming recents precede disk-only recents.
 func SaveTo(path string, st State) error {
-	if st.Favorites == nil {
-		st.Favorites = []Channel{}
-	}
-	if st.Recents == nil {
-		st.Recents = []Channel{}
-	}
+	return saveTo(path, st, DefaultMaxRecents)
+}
 
+func saveTo(path string, st State, maxRecents int) error {
+	if st.snapshot == nil {
+		return mergeTo(path, st, maxRecents, st.Favorites, nil)
+	}
+	st.snapshot.mu.Lock()
+	defer st.snapshot.mu.Unlock()
+	return saveSnapshot(path, st, maxRecents, st.snapshot)
+}
+
+// saveSnapshot acknowledges only the local snapshot, not the merged disk state:
+// channels added by another pane must not become implicit local additions.
+// The caller holds snapshot.mu.
+func saveSnapshot(path string, st State, maxRecents int, snapshot *favoriteSnapshot) error {
+	added := withoutChannels(st.Favorites, snapshot.favorites)
+	removed := withoutChannels(snapshot.favorites, st.Favorites)
+	if err := mergeTo(path, st, maxRecents, added, removed); err != nil {
+		return err
+	}
+	snapshot.favorites = append([]Channel(nil), st.Favorites...)
+	return nil
+}
+
+func mergeTo(path string, st State, maxRecents int, added, removed []Channel) (err error) {
+	release, err := lockState(path)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, release()) }()
+	disk, err := loadFrom(path)
+	if err != nil && !errors.Is(err, ErrCorrupt) {
+		return err
+	}
+	st.Favorites = unionChannels(withoutChannels(disk.Favorites, removed), added)
+	st.Recents = unionChannels(st.Recents, disk.Recents)
+	if len(st.Recents) > maxRecents {
+		st.Recents = st.Recents[:maxRecents]
+	}
+	return writeState(path, st)
+}
+
+// withoutChannels uses the same identity rules for removals and additions.
+func withoutChannels(channels, excluded []Channel) []Channel {
+	out := make([]Channel, 0, len(channels))
+	for _, ch := range channels {
+		matched := false
+		for _, other := range excluded {
+			if ch.Matches(other) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			out = append(out, ch)
+		}
+	}
+	return out
+}
+
+// unionChannels preserves the first occurrence and its metadata, including
+// case-insensitive login and ID aliases recognized by Channel.Matches.
+func unionChannels(first, second []Channel) []Channel {
+	out := make([]Channel, 0, len(first)+len(second))
+	for _, channels := range [][]Channel{first, second} {
+		for _, ch := range channels {
+			found := false
+			for _, existing := range out {
+				if existing.Matches(ch) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				out = append(out, ch)
+			}
+		}
+	}
+	return out
+}
+
+// writeState replaces path with a complete file in the same directory.
+// Its caller must hold the state lock.
+func writeState(path string, st State) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create state dir %s: %w", dir, err)
@@ -255,9 +363,6 @@ func SaveTo(path string, st State) error {
 	}
 	cleanup = false
 
-	if err := os.Chmod(path, 0o600); err != nil {
-		return fmt.Errorf("chmod state %s: %w", path, err)
-	}
 	return nil
 }
 
@@ -265,6 +370,7 @@ func SaveTo(path string, st State) error {
 type Store struct {
 	path       string
 	maxRecents int
+	snapshot   favoriteSnapshot
 }
 
 // New creates a new Store instance for path.
@@ -295,10 +401,18 @@ func (s *Store) SetMaxRecents(max int) {
 
 // Load loads state from the store's path.
 func (s *Store) Load() (State, error) {
-	return LoadFrom(s.path)
+	s.snapshot.mu.Lock()
+	defer s.snapshot.mu.Unlock()
+	st, err := LoadFrom(s.path)
+	if err == nil || errors.Is(err, ErrCorrupt) {
+		s.snapshot.favorites = append([]Channel(nil), st.Favorites...)
+	}
+	return st, err
 }
 
 // Save saves state to the store's path.
 func (s *Store) Save(st State) error {
-	return SaveTo(s.path, st)
+	s.snapshot.mu.Lock()
+	defer s.snapshot.mu.Unlock()
+	return saveSnapshot(s.path, st, s.MaxRecents(), &s.snapshot)
 }

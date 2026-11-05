@@ -1,11 +1,16 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
@@ -284,5 +289,475 @@ func TestChannelWithoutViewersIsNotOffline(t *testing.T) {
 		if tw.Availability != twitch.AvailabilityUnknown {
 			t.Fatalf("channel loaded from store without viewers = %v, want unknown (never offline)", tw.Availability)
 		}
+	}
+}
+
+// The parent loads both snapshots before either child is allowed to save.
+func TestStore_TwoProcesses(t *testing.T) {
+	if os.Getenv("TTV_STORE_HELPER") == "1" {
+		var st State
+		if err := json.Unmarshal([]byte(os.Getenv("TTV_STORE_STATE")), &st); err != nil {
+			t.Fatal(err)
+		}
+		signal := os.Stdin
+		var b [1]byte
+		if _, err := signal.Read(b[:]); err != nil {
+			t.Fatal(err)
+		}
+		_ = signal.Close()
+		if err := SaveTo(os.Getenv("TTV_STORE_PATH"), st); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := SaveTo(path, State{Favorites: []Channel{{Login: "hasanabi"}, {Login: "sodapoppin"}}}); err != nil {
+		t.Fatal(err)
+	}
+	type child struct {
+		cmd   *exec.Cmd
+		start *os.File
+	}
+	children := make([]child, 0, 2)
+	for _, login := range []string{"zackrawrr", "another"} {
+		st, err := LoadFrom(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st.ToggleFavorite(Channel{Login: login})
+		data, err := json.Marshal(st)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(os.Args[0], "-test.run=^TestStore_TwoProcesses$")
+		cmd.Env = append(os.Environ(), "TTV_STORE_HELPER=1", "TTV_STORE_PATH="+path, "TTV_STORE_STATE="+string(data))
+		cmd.Stdin = r
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		_ = r.Close()
+		children = append(children, child{cmd, w})
+	}
+	for _, c := range children {
+		_, err := c.start.Write([]byte{1})
+		_ = c.start.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range children {
+		if err := c.cmd.Wait(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Favorites) != 4 {
+		t.Fatalf("lost concurrent favorite: %+v", st.Favorites)
+	}
+}
+
+func TestStore_ConcurrentSaves(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < 20; i++ {
+		wg.Go(func() {
+			<-start
+			ch := Channel{Login: fmt.Sprintf("channel%d", i)}
+			if err := SaveTo(path, State{Favorites: []Channel{ch}, Recents: []Channel{ch}}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+	st, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Favorites) != 20 || len(st.Recents) != 20 {
+		t.Fatalf("lost entries: %+v", st)
+	}
+}
+
+func TestStore_StaleLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	lock := path + ".lock"
+	if err := os.WriteFile(lock, []byte("abandoned"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(lock, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveTo(path, State{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(lock); !os.IsNotExist(err) {
+		t.Fatalf("lock left behind: %v", err)
+	}
+}
+
+func TestStore_ContendedLockReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path+".lock", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	if err := SaveTo(path, State{}); err == nil {
+		t.Fatal("expected lock error")
+	}
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("lock waited too long: %v", elapsed)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("contended save changed state: %v", err)
+	}
+}
+
+func TestStore_RecentsMerge(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	var disk State
+	for i := 0; i < 60; i++ {
+		disk.AddRecent(Channel{Login: fmt.Sprintf("channel%d", i)}, 50)
+	}
+	if err := SaveTo(path, disk); err != nil {
+		t.Fatal(err)
+	}
+	incoming := State{Recents: []Channel{{Login: "newest"}, {Login: "CHANNEL40"}}}
+	if err := SaveTo(path, incoming); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Recents) != 50 || got.Recents[0].Login != "newest" || got.Recents[1].Login != "CHANNEL40" || got.Recents[2].Login != "channel59" || got.Recents[49].Login != "channel11" {
+		t.Fatalf("bad merged order: %+v", got.Recents)
+	}
+}
+
+func TestStore_WriteFailureCleansTempAndLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	// A nonempty directory cannot be replaced by the temporary JSON file.
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "keep"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	release, err := lockState(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeState(path, State{}); err == nil {
+		t.Error("expected rename error")
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "state.json" {
+		t.Fatalf("orphan file: %v", entries)
+	}
+	// Public SaveTo also returns read errors and releases its lock.
+	if err := SaveTo(path, State{}); err == nil {
+		t.Fatal("expected read error")
+	}
+	if _, err := os.Stat(path + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("lock leaked: %v", err)
+	}
+	if err := os.RemoveAll(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveTo(path, State{}); err != nil {
+		t.Fatalf("save after failure: %v", err)
+	}
+}
+
+func TestStore_SaveCorruptBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	bad := []byte("{broken")
+	if err := os.WriteFile(path, bad, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveTo(path, State{Favorites: []Channel{{Login: "new"}}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path + ".bak")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(bad) {
+		t.Fatalf("backup changed: %q", got)
+	}
+	st, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.IsFavorite(Channel{Login: "new"}) {
+		t.Fatalf("missing favorite: %+v", st)
+	}
+}
+
+func TestStore_FavoritesUnionAndCustomRecentLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	first := State{Favorites: []Channel{{ID: "1", Login: "one"}, {Login: "two"}}, Recents: []Channel{{Login: "old"}, {Login: "older"}}}
+	if err := SaveTo(path, first); err != nil {
+		t.Fatal(err)
+	}
+	s := New(path)
+	s.SetMaxRecents(2)
+	next := State{Favorites: []Channel{{ID: "1", Login: "renamed"}, {Login: "TWO"}, {Login: "three"}}, Recents: []Channel{{Login: "new"}}}
+	if err := s.Save(next); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Favorites) != 3 {
+		t.Fatalf("bad union: %+v", got.Favorites)
+	}
+	if len(got.Recents) != 2 || got.Recents[0].Login != "new" || got.Recents[1].Login != "old" {
+		t.Fatalf("bad recents: %+v", got.Recents)
+	}
+}
+
+func TestStore_RemovalPersists(t *testing.T) {
+	s := New(filepath.Join(t.TempDir(), "state.json"))
+	st := State{Favorites: []Channel{{Login: "alice"}}}
+	if err := s.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	st.Favorites = nil
+	if err := s.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Favorites) != 0 {
+		t.Fatalf("removed favorite returned: %+v", got.Favorites)
+	}
+}
+
+func TestStore_SaveToRemovalPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	var st State
+	ch := Channel{Login: "alice"}
+	st.ToggleFavorite(ch)
+	if err := SaveTo(path, st); err != nil {
+		t.Fatal(err)
+	}
+	st.ToggleFavorite(ch)
+	if err := SaveTo(path, st); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.IsFavorite(ch) {
+		t.Fatal("removed favorite returned")
+	}
+}
+
+func TestStore_RemovalOperationsAcknowledged(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	s := New(path)
+	ch := Channel{ID: "1", Login: "alice"}
+	st := State{Favorites: []Channel{ch}}
+	if err := s.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	st.Favorites = nil
+	// A failed save must leave the removal pending for retry.
+	if err := os.WriteFile(path+".lock", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(st); err == nil {
+		t.Fatal("expected lock error")
+	}
+	if len(s.snapshot.favorites) != 1 {
+		t.Fatal("failed save acknowledged removal")
+	}
+	if err := os.Remove(path + ".lock"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.snapshot.favorites) != 0 {
+		t.Fatal("removed entries retained after save")
+	}
+	// Once acknowledged, a removal must not delete another pane's later re-add.
+	if err := SaveTo(path, State{Favorites: []Channel{ch}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.IsFavorite(ch) {
+		t.Fatal("old removal deleted a later re-add")
+	}
+	if len(withoutChannels(got.snapshot.favorites, got.Favorites)) != 0 {
+		t.Fatal("reload has pending removals")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 2 {
+		t.Fatalf("bookkeeping serialized: %s", data)
+	}
+}
+
+func TestStore_RemoveIdentityAndReAdd(t *testing.T) {
+	for _, alias := range []Channel{{Login: "ALICE"}, {ID: "1", Login: "renamed"}} {
+		t.Run(alias.Login, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.json")
+			ch := Channel{ID: "1", Login: "alice"}
+			if err := SaveTo(path, State{Favorites: []Channel{ch}}); err != nil {
+				t.Fatal(err)
+			}
+			st, err := LoadFrom(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			st.ToggleFavorite(alias)
+			if err := SaveTo(path, st); err != nil {
+				t.Fatal(err)
+			}
+			if len(st.snapshot.favorites) != 0 {
+				t.Fatal("removal retained")
+			}
+			got, err := LoadFrom(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Favorites) != 0 {
+				t.Fatal("alias removal failed")
+			}
+			st.ToggleFavorite(alias)
+			if err := SaveTo(path, st); err != nil {
+				t.Fatal(err)
+			}
+			got, err = LoadFrom(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !got.IsFavorite(alias) {
+				t.Fatal("re-add failed")
+			}
+		})
+	}
+}
+
+func TestStore_TwoProcessOperations(t *testing.T) {
+	if os.Getenv("TTV_STORE_OP_HELPER") == "1" {
+		s := New(os.Getenv("TTV_STORE_PATH"))
+		st, err := s.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		st.ToggleFavorite(Channel{Login: os.Getenv("TTV_STORE_LOGIN")})
+		if _, err := os.Stdout.Write([]byte{1}); err != nil {
+			t.Fatal(err)
+		}
+		var signal [1]byte
+		if _, err := os.Stdin.Read(signal[:]); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Save(st); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	for _, tc := range []struct {
+		name   string
+		remove bool
+		order  []int
+	}{
+		{"add-add", false, []int{0, 1}},
+		{"remove-then-add", true, []int{0, 1}},
+		{"add-then-remove", true, []int{1, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.json")
+			if tc.remove {
+				if err := SaveTo(path, State{Favorites: []Channel{{Login: "x"}}}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			type child struct {
+				cmd   *exec.Cmd
+				start *os.File
+			}
+			var children []child
+			for _, login := range []string{"x", "y"} {
+				r, w, err := os.Pipe()
+				if err != nil {
+					t.Fatal(err)
+				}
+				cmd := exec.Command(os.Args[0], "-test.run=^TestStore_TwoProcessOperations$")
+				cmd.Env = append(os.Environ(), "TTV_STORE_OP_HELPER=1", "TTV_STORE_PATH="+path, "TTV_STORE_LOGIN="+login)
+				cmd.Stdin = r
+				cmd.Stderr = os.Stderr
+				ready, err := cmd.StdoutPipe()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := cmd.Start(); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = cmd.Process.Kill(); _ = w.Close(); _ = ready.Close() })
+				_ = r.Close()
+				var signal [1]byte
+				if _, err := ready.Read(signal[:]); err != nil {
+					t.Fatal(err)
+				}
+				children = append(children, child{cmd, w})
+			}
+			// Both children loaded the same file before either can save.
+			for _, i := range tc.order {
+				c := children[i]
+				if _, err := c.start.Write([]byte{1}); err != nil {
+					t.Fatal(err)
+				}
+				_ = c.start.Close()
+				if err := c.cmd.Wait(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := LoadFrom(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.IsFavorite(Channel{Login: "x"}) == tc.remove || !got.IsFavorite(Channel{Login: "y"}) {
+				t.Fatalf("lost operation: %+v", got.Favorites)
+			}
+		})
 	}
 }
