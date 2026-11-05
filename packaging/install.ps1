@@ -21,7 +21,7 @@ $base = "https://github.com/$repo/releases/download/v$versionNumber"
 if ($DryRun) {
     Write-Host "Plan: version $Version; destination $binDir\ttv-tui.exe"
     if ($versionNumber -eq 'latest') { Write-Host 'Resolve the latest version on GitHub before downloading.' }
-    else { Write-Host "Download $base/$archive e $base/checksums.txt" }
+    else { Write-Host "Download $base/$archive and $base/checksums.txt" }
     Write-Host 'Verify SHA-256, extract the binary, and add the directory to the user PATH if needed.'
     return
 }
