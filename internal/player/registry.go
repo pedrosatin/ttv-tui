@@ -51,6 +51,10 @@ var (
 	groupHasArg = osGroupHasArg
 )
 
+// errOwnerUnproven is the answer for a running PID whose record has no start time
+// to compare: the writer could not read its own, so that PID may well be it.
+var errOwnerUnproven = errors.New("player: record has no owner start time")
+
 // selfStart is the start time of this process, used to tell a live owner from a
 // recycled PID. It stays 0 where the OS cannot answer.
 var selfStart = func() uint64 {
@@ -194,7 +198,13 @@ func ownerAlive(rec Record) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return st != 0 && st == rec.OwnerStart, nil
+	if st == 0 {
+		return false, nil
+	}
+	if rec.OwnerStart == 0 {
+		return false, errOwnerUnproven
+	}
+	return st == rec.OwnerStart, nil
 }
 
 // waitGroupGone polls until leaderDone is closed (nil means "no leader to wait
