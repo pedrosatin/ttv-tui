@@ -85,9 +85,11 @@ if [[ -z "$requested_version" ]]; then
 fi
 
 os_name="$(uname -s)"
-if [[ "$os_name" != "Linux" ]]; then
-  die "sistema operacional não suportado: ${os_name} (ttv-tui requer Linux)"
-fi
+case "$os_name" in
+  Linux) os="linux" ;;
+  Darwin) os="darwin" ;;
+  *) die "sistema operacional não suportado: ${os_name} (suportados: Linux, Darwin)" ;;
+esac
 
 uname_arch="$(uname -m)"
 case "$uname_arch" in
@@ -141,7 +143,7 @@ if [[ -z "$version" || ! "$version" =~ ^[0-9A-Za-z._-]+$ ]]; then
 fi
 
 tag="v${version}"
-tarball="ttv-tui_${version}_linux_${arch}.tar.gz"
+tarball="ttv-tui_${version}_${os}_${arch}.tar.gz"
 release_base_url="${GITHUB_URL}/releases/download/${tag}"
 tarball_url="${release_base_url}/${tarball}"
 checksums_url="${release_base_url}/checksums.txt"
@@ -161,18 +163,35 @@ fi
 local_desktop="${script_dir:+${script_dir}/ttv-tui.desktop}"
 local_icon="${script_dir:+$(cd "${script_dir}/.." && pwd)/assets/ttv-tui.svg}"
 
+if command -v sha256sum >/dev/null 2>&1; then
+  checksum_cmd=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  checksum_cmd=(shasum -a 256)
+else
+  checksum_cmd=()
+fi
+
+warn_path() {
+  case ":${PATH}:" in
+    *":${bin_dir}:"*) ;;
+    *) printf 'Aviso: %s não está no seu PATH atual. Adicione ao seu shell profile:\n' "$bin_dir"
+       printf '  export PATH="%s:$PATH"\n' "$bin_dir" ;;
+  esac
+}
+
 if [[ "$dry_run" == true ]]; then
   info "Plano de instalação (dry-run):"
   printf '  Repositório:   %s\n' "$REPO"
   printf '  Versão:        %s (tag %s)\n' "$version" "$tag"
-  printf '  Arquitetura:   linux/%s (%s)\n' "$arch" "$uname_arch"
+  printf '  Arquitetura:   %s/%s (%s)\n' "$os" "$arch" "$uname_arch"
   printf '  Prefixo:       %s\n' "$prefix"
   printf '\n'
   info "Etapas planejadas:"
   printf '  1. Baixar tarball:   curl -fsSLO "%s"\n' "$tarball_url"
   printf '  2. Baixar checksums: curl -fsSLO "%s"\n' "$checksums_url"
-  printf '  3. Verificar SHA-256 de %s com sha256sum -c\n' "$tarball"
+  printf '  3. Verificar SHA-256 de %s com %s -c\n' "$tarball" "${checksum_cmd[*]:-sha256sum ou shasum -a 256 (não encontrado)}"
   printf '  4. Extrair binário e instalar em: %s (modo 0755)\n' "$bin_target"
+  if [[ "$os" == "linux" ]]; then
   if [[ -n "$local_desktop" && -f "$local_desktop" ]]; then
     printf '  5. Instalar atalho .desktop (do tarball ou %s) em: %s (modo 0644)\n' "$local_desktop" "$desktop_target"
   else
@@ -188,12 +207,15 @@ if [[ "$dry_run" == true ]]; then
   else
     printf '  7. update-desktop-database não encontrado no PATH (etapa será ignorada)\n'
   fi
+  fi
+  warn_path
   exit 0
 fi
 
-for cmd in curl tar sha256sum; do
+for cmd in curl tar; do
   command -v "$cmd" >/dev/null 2>&1 || die "comando obrigatório não encontrado no PATH: ${cmd}"
 done
+[[ ${#checksum_cmd[@]} -gt 0 ]] || die "sha256sum ou shasum é obrigatório"
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -201,7 +223,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-info "Baixando ttv-tui ${tag} para linux/${arch}..."
+info "Baixando ttv-tui ${tag} para ${os}/${arch}..."
 curl -fsSL -o "${tmp_dir}/${tarball}" "$tarball_url"
 curl -fsSL -o "${tmp_dir}/checksums.txt" "$checksums_url"
 
@@ -212,7 +234,7 @@ if [[ -z "$expected_line" ]]; then
 fi
 (
   cd "$tmp_dir"
-  printf '%s\n' "$expected_line" | sha256sum -c -
+  printf '%s\n' "$expected_line" | "${checksum_cmd[@]}" -c -
 )
 
 info "Extraindo arquivo ${tarball}..."
@@ -220,7 +242,7 @@ tar -xzf "${tmp_dir}/${tarball}" -C "$tmp_dir"
 
 [[ -f "${tmp_dir}/ttv-tui" ]] || die "binário ttv-tui não encontrado dentro do arquivo ${tarball}"
 
-mkdir -p "$bin_dir" "$app_dir" "$icon_dir"
+mkdir -p "$bin_dir"
 
 info "Instalando binário em ${bin_target}..."
 install -m 0755 "${tmp_dir}/ttv-tui" "$bin_target"
@@ -244,6 +266,8 @@ resolve_asset() {
   fi
 }
 
+if [[ "$os" == "linux" ]]; then
+mkdir -p "$app_dir" "$icon_dir"
 desktop_tmp="${tmp_dir}/ttv-tui.desktop.out"
 icon_tmp="${tmp_dir}/ttv-tui.svg.out"
 
@@ -261,11 +285,6 @@ if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$app_dir" || true
 fi
 
+fi
 info "ttv-tui ${tag} instalado com sucesso!"
-case ":${PATH}:" in
-  *":${bin_dir}:"*) ;;
-  *)
-    printf 'Aviso: %s não está no seu PATH atual. Adicione ao seu shell profile:\n' "$bin_dir"
-    printf '  export PATH="%s:$PATH"\n' "$bin_dir"
-    ;;
-esac
+warn_path
