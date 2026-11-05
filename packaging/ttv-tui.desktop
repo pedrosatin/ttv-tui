@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ttv-tui
+GenericName=Twitch Terminal Client
+Comment=Browse live Twitch categories and channels, watch streams via streamlink and mpv, and chat in IRC
+# Launches ttv-tui in the user's default terminal via xdg-terminal-exec.
+# Fallback if xdg-terminal-exec is not installed:
+#   - Set Terminal=true and Exec=ttv-tui
+#   - Or invoke your terminal emulator directly, e.g.:
+#     Exec=alacritty --class ttv-tui -e ttv-tui
+#     Exec=kitty --app-id ttv-tui ttv-tui
+Exec=xdg-terminal-exec ttv-tui
+Icon=ttv-tui
+Terminal=false
+Categories=AudioVideo;Player;
+Keywords=twitch;stream;streaming;video;mpv;streamlink;irc;chat;tui;
+StartupWMClass=ttv-tui

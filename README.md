@@ -10,6 +10,28 @@ Terminal UI for Twitch on Linux. Browse live categories and channels, watch stre
 
 ## Install
 
+### Install script
+
+[`packaging/install.sh`](packaging/install.sh) downloads the release archive and `checksums.txt`, verifies the SHA-256 digest with `sha256sum`, and installs the binary in `~/.local/bin/ttv-tui`, the desktop entry in `~/.local/share/applications/ttv-tui.desktop`, and the icon in `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
+
+```bash
+# Install the latest release (or pass a specific version such as 0.1.7)
+./packaging/install.sh
+./packaging/install.sh 0.1.7
+
+# Preview the installation plan without downloading or modifying files
+./packaging/install.sh --dry-run 0.1.7
+
+# Install into a custom prefix
+./packaging/install.sh --prefix "$HOME/.local" 0.1.7
+```
+
+You can also run the script directly from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.1.7
+```
+
 ### Release binary (v0.1.7, Linux amd64 / arm64)
 
 Download the archive for your architecture (`linux_amd64` or `linux_arm64`) and `checksums.txt` from the [v0.1.7 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.7), verify the SHA-256 digest, and place the binary in `~/.local/bin`:
@@ -52,6 +74,18 @@ git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
 CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.7" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
+
+### Desktop shortcut
+
+[`packaging/install.sh`](packaging/install.sh) and [`packaging/PKGBUILD`](packaging/PKGBUILD) install [`packaging/ttv-tui.desktop`](packaging/ttv-tui.desktop) and [`assets/ttv-tui.svg`](assets/ttv-tui.svg) automatically. If you installed the binary with `go install` or `go build`, copy them manually:
+
+```bash
+install -Dm644 packaging/ttv-tui.desktop ~/.local/share/applications/ttv-tui.desktop
+install -Dm644 assets/ttv-tui.svg ~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg
+update-desktop-database ~/.local/share/applications
+```
+
+The desktop entry runs `xdg-terminal-exec ttv-tui` with `Terminal=false` and `StartupWMClass=ttv-tui`. If `xdg-terminal-exec` is not installed on your system, edit `~/.local/share/applications/ttv-tui.desktop` and either set `Terminal=true` with `Exec=ttv-tui` or call your terminal emulator directly, such as `Exec=alacritty --class ttv-tui -e ttv-tui` or `Exec=kitty --app-id ttv-tui ttv-tui`.
 
 ## Requirements
 

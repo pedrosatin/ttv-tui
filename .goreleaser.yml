@@ -29,6 +29,8 @@ archives:
     files:
       - LICENSE
       - README.md
+      - packaging/ttv-tui.desktop
+      - assets/ttv-tui.svg
 
 checksum:
   name_template: "checksums.txt"

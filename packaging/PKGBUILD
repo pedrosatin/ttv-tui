@@ -16,6 +16,7 @@ license=('MIT')
 depends=('streamlink' 'mpv')
 optdepends=(
   'sqlite: necessário apenas para ttv-tui login --from-browser'
+  'xdg-terminal-exec: para abrir pelo atalho de desktop (.desktop)'
 )
 provides=('ttv-tui')
 conflicts=('ttv-tui')
@@ -30,4 +31,12 @@ package() {
   install -Dm755 "${srcdir}/ttv-tui" "${pkgdir}/usr/bin/ttv-tui"
   install -Dm644 "${srcdir}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   install -Dm644 "${srcdir}/README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+
+  local desktop_src="${srcdir}/packaging/ttv-tui.desktop"
+  [[ -f "$desktop_src" ]] || desktop_src="${startdir}/ttv-tui.desktop"
+  install -Dm644 "$desktop_src" "${pkgdir}/usr/share/applications/ttv-tui.desktop"
+
+  local icon_src="${srcdir}/assets/ttv-tui.svg"
+  [[ -f "$icon_src" ]] || icon_src="${startdir}/../assets/ttv-tui.svg"
+  install -Dm644 "$icon_src" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/ttv-tui.svg"
 }

@@ -10,6 +10,28 @@ Twitch no terminal para Linux. Navegue por categorias e canais ao vivo, assista 
 
 ## Instalação
 
+### Script de instalação
+
+O script [`packaging/install.sh`](../packaging/install.sh) baixa o tarball da release e o arquivo `checksums.txt`, valida o hash SHA-256 com `sha256sum` e instala o binário em `~/.local/bin/ttv-tui`, o atalho `.desktop` em `~/.local/share/applications/ttv-tui.desktop` e o ícone em `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
+
+```bash
+# Instalar a release mais recente ou informar uma versão como 0.1.7
+./packaging/install.sh
+./packaging/install.sh 0.1.7
+
+# Exibir o plano de instalação sem baixar arquivos nem alterar o sistema
+./packaging/install.sh --dry-run 0.1.7
+
+# Instalar em um prefixo personalizado
+./packaging/install.sh --prefix "$HOME/.local" 0.1.7
+```
+
+Também é possível executar o script diretamente do GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.1.7
+```
+
 ### Binário da release (v0.1.7, Linux amd64 / arm64)
 
 Baixe o tarball da sua arquitetura (`linux_amd64` ou `linux_arm64`) e o arquivo `checksums.txt` da [release v0.1.7](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.1.7), confira o hash SHA-256 e instale o binário em `~/.local/bin`:
@@ -52,6 +74,18 @@ git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
 CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.1.7" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
+
+### Atalho de desktop
+
+O script [`packaging/install.sh`](../packaging/install.sh) e o [`packaging/PKGBUILD`](../packaging/PKGBUILD) já instalam [`packaging/ttv-tui.desktop`](../packaging/ttv-tui.desktop) e [`assets/ttv-tui.svg`](../assets/ttv-tui.svg). Se você instalou o binário com `go install` ou `go build`, copie os arquivos manualmente:
+
+```bash
+install -Dm644 packaging/ttv-tui.desktop ~/.local/share/applications/ttv-tui.desktop
+install -Dm644 assets/ttv-tui.svg ~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg
+update-desktop-database ~/.local/share/applications
+```
+
+O atalho executa `xdg-terminal-exec ttv-tui` com `Terminal=false` e `StartupWMClass=ttv-tui`. Caso `xdg-terminal-exec` não esteja instalado no sistema, edite `~/.local/share/applications/ttv-tui.desktop` para usar `Terminal=true` com `Exec=ttv-tui`, ou chame o seu emulador de terminal diretamente, como `Exec=alacritty --class ttv-tui -e ttv-tui` ou `Exec=kitty --app-id ttv-tui ttv-tui`.
 
 ## Requisitos
 
