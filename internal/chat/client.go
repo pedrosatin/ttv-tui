@@ -930,22 +930,22 @@ func (m *Manager) connectAndServe(
 				if ev.Channel != "" && !strings.EqualFold(ev.Channel, channel) {
 					continue
 				}
-				// Resub (with or without user text) becomes a system line; other
-				// USERNOTICE kinds are acknowledged but not rendered yet.
-				if IsResubUserNotice(ev.MsgID) {
-					batch = append(batch, Message{
-						Generation:  gen,
-						Kind:        MessageSystem,
-						ID:          ev.ID,
-						User:        ev.User,
-						DisplayName: ev.DisplayName,
-						Color:       ev.Color,
-						Badges:      ev.Badges,
-						MsgID:       ev.MsgID,
-						Body:        ev.Body,
-						Months:      ev.CumulativeMonths,
-					})
-				}
+				// Every kind becomes a system line, including the ones this client
+				// does not know: the UI falls back on msg-id when system-msg is empty.
+				batch = append(batch, Message{
+					Generation:  gen,
+					Kind:        MessageSystem,
+					UserNotice:  true,
+					ID:          ev.ID,
+					User:        ev.User,
+					DisplayName: ev.DisplayName,
+					Color:       ev.Color,
+					Badges:      ev.Badges,
+					MsgID:       ev.MsgID,
+					SystemMsg:   ev.SystemMsg,
+					Body:        ev.Body,
+					Months:      ev.CumulativeMonths,
+				})
 
 			case EventReconnect:
 				flush()

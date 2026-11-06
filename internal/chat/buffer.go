@@ -33,8 +33,13 @@ type Message struct {
 	Highlighted bool
 	Action      bool
 	Body        string
-	// Months carries USERNOTICE msg-param-cumulative-months for resub system lines
-	// before the UI localizes the body; 0 when unknown or not applicable.
+	// UserNotice marks a system line that came from a USERNOTICE and still needs
+	// the UI to render it. Body then holds only the text the user typed, if any.
+	UserNotice bool
+	// SystemMsg is the Twitch-provided system-msg tag, shown verbatim when present.
+	SystemMsg string
+	// Months carries USERNOTICE msg-param-cumulative-months for the local resub
+	// fallback; 0 when unknown or not applicable.
 	Months       int
 	Deleted      bool
 	Self         bool
@@ -45,7 +50,7 @@ type Message struct {
 
 // ByteSize estimates the byte footprint of m for buffer accounting.
 func (m Message) ByteSize() int {
-	n := len(m.ID) + len(m.Nonce) + len(m.User) + len(m.DisplayName) + len(m.Color) + len(m.MsgID) + len(m.Body) + len(m.RejectDetail) + 32
+	n := len(m.ID) + len(m.Nonce) + len(m.User) + len(m.DisplayName) + len(m.Color) + len(m.MsgID) + len(m.Body) + len(m.SystemMsg) + len(m.RejectDetail) + 32
 	for _, b := range m.Badges {
 		n += len(b)
 	}

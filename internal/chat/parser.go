@@ -384,13 +384,34 @@ func populateUserNoticeTags(ev *Event) {
 	}
 }
 
-// IsResubUserNotice reports whether msgID is a resubscribe USERNOTICE kind.
-func IsResubUserNotice(msgID string) bool {
+// UserNoticeKind groups USERNOTICE msg-id values by how the chat presents them.
+type UserNoticeKind string
+
+const (
+	UserNoticeOther        UserNoticeKind = "other"
+	UserNoticeSub          UserNoticeKind = "sub"
+	UserNoticeResub        UserNoticeKind = "resub"
+	UserNoticeGift         UserNoticeKind = "gift"
+	UserNoticeRaid         UserNoticeKind = "raid"
+	UserNoticeAnnouncement UserNoticeKind = "announcement"
+)
+
+// ClassifyUserNotice maps a USERNOTICE msg-id onto a UserNoticeKind. "unraid"
+// stays Other on purpose: a cancelled raid must not read as an incoming one.
+func ClassifyUserNotice(msgID string) UserNoticeKind {
 	switch strings.ToLower(strings.TrimSpace(msgID)) {
+	case "sub":
+		return UserNoticeSub
 	case "resub", "resubscribe":
-		return true
+		return UserNoticeResub
+	case "subgift", "anonsubgift", "submysterygift", "anonsubmysterygift":
+		return UserNoticeGift
+	case "raid":
+		return UserNoticeRaid
+	case "announcement":
+		return UserNoticeAnnouncement
 	default:
-		return false
+		return UserNoticeOther
 	}
 }
 

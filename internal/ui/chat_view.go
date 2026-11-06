@@ -512,6 +512,14 @@ func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, s
 		return selLead, styleNotice(fmt.Sprintf("%s %s", prefix, body))
 	}
 	if msg.Kind == chat.MessageSystem {
+		if chat.ClassifyUserNotice(msg.MsgID) == chat.UserNoticeRaid {
+			// Star and tag carry the meaning; the reverse video only adds to them.
+			lead := "★ "
+			if selected && m.Focus() == FocusChat {
+				lead = "▌★"
+			}
+			return lead, styleChatHighlight(m.t("chat.raid_prefix")) + " " + styleSystem(body)
+		}
 		prefix := m.systemLinePrefix(msg)
 		return selLead, styleSystem(fmt.Sprintf("%s %s", prefix, body))
 	}

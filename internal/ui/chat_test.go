@@ -714,6 +714,7 @@ func TestChatUserNotice_ResubWithAndWithoutText(t *testing.T) {
 				User:        "coolsub",
 				DisplayName: "CoolSub",
 				MsgID:       "resub",
+				UserNotice:  true,
 				Months:      15,
 				Body:        "Great stream -- keep it up!",
 			},
@@ -724,6 +725,7 @@ func TestChatUserNotice_ResubWithAndWithoutText(t *testing.T) {
 				User:        "tww2",
 				DisplayName: "TWW2",
 				MsgID:       "resub",
+				UserNotice:  true,
 				Months:      6,
 				Body:        "",
 			},
@@ -734,7 +736,8 @@ func TestChatUserNotice_ResubWithAndWithoutText(t *testing.T) {
 				User:        "raider",
 				DisplayName: "Raider",
 				MsgID:       "raid",
-				Body:        "should stay raw if somehow injected",
+				UserNotice:  true,
+				SystemMsg:   "5 raiders from Raider have joined!",
 			},
 		},
 	})
@@ -742,7 +745,7 @@ func TestChatUserNotice_ResubWithAndWithoutText(t *testing.T) {
 
 	msgs := m.ChatMessages()
 	if len(msgs) != 4 {
-		t.Fatalf("Len=%d, want 4 (chat + 2 localized resub + untouched raid): %+v", len(msgs), msgs)
+		t.Fatalf("Len=%d, want 4 (chat + 2 localized resub + raid): %+v", len(msgs), msgs)
 	}
 	if msgs[1].Kind != chat.MessageSystem || msgs[1].Body != "CoolSub resubscribed (15 months): Great stream -- keep it up!" {
 		t.Fatalf("resub with text = %+v", msgs[1])
@@ -750,8 +753,8 @@ func TestChatUserNotice_ResubWithAndWithoutText(t *testing.T) {
 	if msgs[2].Kind != chat.MessageSystem || msgs[2].Body != "TWW2 resubscribed (6 months)" {
 		t.Fatalf("resub without text = %+v", msgs[2])
 	}
-	if msgs[3].Body != "should stay raw if somehow injected" {
-		t.Fatalf("unknown USERNOTICE kind should not be rewritten: %+v", msgs[3])
+	if msgs[3].Body != "5 raiders from Raider have joined!" {
+		t.Fatalf("raid = %+v", msgs[3])
 	}
 
 	view := m.View()
@@ -799,6 +802,7 @@ func TestChatUserNotice_I18nENAndPTBR(t *testing.T) {
 						Generation:  1,
 						Kind:        chat.MessageSystem,
 						MsgID:       "resub",
+						UserNotice:  true,
 						User:        "coolsub",
 						DisplayName: "CoolSub",
 						Months:      15,
@@ -808,6 +812,7 @@ func TestChatUserNotice_I18nENAndPTBR(t *testing.T) {
 						Generation:  1,
 						Kind:        chat.MessageSystem,
 						MsgID:       "resub",
+						UserNotice:  true,
 						User:        "tww2",
 						DisplayName: "TWW2",
 						Months:      6,
@@ -853,6 +858,7 @@ func TestChatUserNotice_PTYEvidence(t *testing.T) {
 				User:        "coolsub",
 				DisplayName: "CoolSub",
 				MsgID:       "resub",
+				UserNotice:  true,
 				Months:      15,
 				Body:        "Valeu pela live!",
 			},
@@ -863,6 +869,7 @@ func TestChatUserNotice_PTYEvidence(t *testing.T) {
 				User:        "tww2",
 				DisplayName: "TWW2",
 				MsgID:       "resub",
+				UserNotice:  true,
 				Months:      6,
 			},
 		},

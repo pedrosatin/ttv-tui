@@ -308,7 +308,7 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		if item.Generation == 0 {
 			item.Generation = msg.Generation
 		}
-		if item.Kind == chat.MessageSystem && chat.IsResubUserNotice(item.MsgID) {
+		if item.UserNotice {
 			item = m.userNoticeMessage(item)
 		}
 		beforeLen := m.chatPanel.buf.Len()
@@ -318,27 +318,25 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// userNoticeMessage is the single renderer for USERNOTICE. Twitch's system-msg
+// is content and stays verbatim; the catalog only fills in when it is empty,
+// which is the normal case for announcements. The text the user typed follows
+// either way. Twitch sentences end in punctuation, so they get a dash, not ": ".
 func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 	gen := item.Generation
 	if gen == 0 {
 		gen = m.chatPanel.gen
 	}
-	name := strings.TrimSpace(item.DisplayName)
-	if name == "" {
-		name = strings.TrimSpace(item.User)
-	}
-	if name == "" {
-		name = "?"
-	}
-	var head string
-	if item.Months > 0 {
-		head = fmt.Sprintf(m.t("chat.usernotice.resub_months"), name, item.Months)
-	} else {
-		head = fmt.Sprintf(m.t("chat.usernotice.resub"), name)
-	}
-	body := head
-	if text := strings.TrimSpace(item.Body); text != "" {
-		body = fmt.Sprintf(m.t("chat.usernotice.with_text"), head, text)
+	text := strings.TrimSpace(item.Body)
+	body := strings.TrimSpace(item.SystemMsg)
+	switch {
+	case body == "":
+		body = m.userNoticeFallback(item)
+		if text != "" {
+			body = fmt.Sprintf(m.t("chat.usernotice.with_text"), body, text)
+		}
+	case text != "":
+		body += " — " + text
 	}
 	return ChatMessage{
 		Generation:  gen,
@@ -350,6 +348,35 @@ func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 		Months:      item.Months,
 		Body:        body,
 	}
+}
+
+func (m Model) userNoticeFallback(item ChatMessage) string {
+	name := strings.TrimSpace(item.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(item.User)
+	}
+	if name == "" {
+		name = "?"
+	}
+	switch chat.ClassifyUserNotice(item.MsgID) {
+	case chat.UserNoticeSub:
+		return fmt.Sprintf(m.t("chat.usernotice.sub"), name)
+	case chat.UserNoticeResub:
+		if item.Months > 0 {
+			return fmt.Sprintf(m.t("chat.usernotice.resub_months"), name, item.Months)
+		}
+		return fmt.Sprintf(m.t("chat.usernotice.resub"), name)
+	case chat.UserNoticeGift:
+		return fmt.Sprintf(m.t("chat.usernotice.gift"), name)
+	case chat.UserNoticeRaid:
+		return fmt.Sprintf(m.t("chat.usernotice.raid"), name)
+	case chat.UserNoticeAnnouncement:
+		return fmt.Sprintf(m.t("chat.usernotice.announcement"), name)
+	}
+	if id := strings.TrimSpace(item.MsgID); id != "" {
+		return fmt.Sprintf(m.t("chat.usernotice.event_id"), id)
+	}
+	return m.t("chat.usernotice.event")
 }
 
 func (m Model) moderationClearChatMessage(msg ChatEventMsg) ChatMessage {

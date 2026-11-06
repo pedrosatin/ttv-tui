@@ -202,7 +202,7 @@ func TestParseLine_Table(t *testing.T) {
 				if ev.Channel != "gaules" {
 					t.Fatalf("Channel=%q", ev.Channel)
 				}
-				if ev.MsgID != "resub" || !IsResubUserNotice(ev.MsgID) {
+				if ev.MsgID != "resub" || ClassifyUserNotice(ev.MsgID) != UserNoticeResub {
 					t.Fatalf("MsgID=%q", ev.MsgID)
 				}
 				if ev.User != "coolsub" || ev.DisplayName != "CoolSub" {
@@ -236,15 +236,15 @@ func TestParseLine_Table(t *testing.T) {
 			},
 		},
 		{
-			name:     "USERNOTICE unknown msg-id does not break",
+			name:     "USERNOTICE raid",
 			line:     "@display-name=Raider;login=raider;msg-id=raid;msg-param-viewerCount=5;system-msg=5\\sraiders\\sfrom\\sRaider\\shave\\sjoined! :tmi.twitch.tv USERNOTICE #gaules",
 			wantKind: EventUserNotice,
 			check: func(t *testing.T, ev Event) {
 				if ev.Channel != "gaules" || ev.MsgID != "raid" {
 					t.Fatalf("Channel=%q MsgID=%q", ev.Channel, ev.MsgID)
 				}
-				if IsResubUserNotice(ev.MsgID) {
-					t.Fatal("raid must not be classified as resub")
+				if ClassifyUserNotice(ev.MsgID) != UserNoticeRaid {
+					t.Fatalf("raid classified as %q", ClassifyUserNotice(ev.MsgID))
 				}
 				if ev.User != "raider" || ev.DisplayName != "Raider" {
 					t.Fatalf("User=%q DisplayName=%q", ev.User, ev.DisplayName)
@@ -1356,7 +1356,7 @@ func TestManager_UserNoticeResubWithAndWithoutText(t *testing.T) {
 
 	var got []Message
 	deadline := time.After(3 * time.Second)
-	for len(got) < 4 {
+	for len(got) < 5 {
 		select {
 		case ev := <-mgr.Events():
 			if ev.Generation != gen {
@@ -1368,8 +1368,8 @@ func TestManager_UserNoticeResubWithAndWithoutText(t *testing.T) {
 		}
 	}
 
-	if len(got) != 4 {
-		t.Fatalf("got %d messages, want 4 (2 chat + 2 resub system; raid ignored): %+v", len(got), got)
+	if len(got) != 5 {
+		t.Fatalf("got %d messages, want 5 (2 chat + 2 resub + raid): %+v", len(got), got)
 	}
 	if got[0].Kind != MessageChat || got[0].Body != "hello" {
 		t.Fatalf("msg0 = %+v", got[0])
@@ -1380,8 +1380,11 @@ func TestManager_UserNoticeResubWithAndWithoutText(t *testing.T) {
 	if got[2].Kind != MessageSystem || got[2].MsgID != "resub" || got[2].Body != "" || got[2].Months != 6 || got[2].User != "tww2" {
 		t.Fatalf("resub without text = %+v", got[2])
 	}
-	if got[3].Kind != MessageChat || got[3].Body != "after" {
-		t.Fatalf("msg3 = %+v", got[3])
+	if got[3].Kind != MessageSystem || got[3].MsgID != "raid" || got[3].SystemMsg != "raiders!" {
+		t.Fatalf("raid = %+v", got[3])
+	}
+	if got[4].Kind != MessageChat || got[4].Body != "after" {
+		t.Fatalf("msg4 = %+v", got[4])
 	}
 
 	// Buffer accounting: system lines count once each, same as chat lines.
@@ -1392,7 +1395,7 @@ func TestManager_UserNoticeResubWithAndWithoutText(t *testing.T) {
 			t.Fatalf("Append rejected %+v", m)
 		}
 	}
-	if buf.Len() != 4 {
-		t.Fatalf("buffer Len=%d, want 4", buf.Len())
+	if buf.Len() != 5 {
+		t.Fatalf("buffer Len=%d, want 5", buf.Len())
 	}
 }

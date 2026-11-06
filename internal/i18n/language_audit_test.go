@@ -41,6 +41,7 @@ var identicalInBothLanguages = map[string]string{
 	"chat.title":           "chat é o termo usado em todo o catálogo pt-BR",
 	"help.panel_chat":      "chat é o termo usado em todo o catálogo pt-BR",
 	"chat.mod_prefix":      "[mod] abrevia moderador nas duas línguas",
+	"chat.raid_prefix":     "raid é o termo da Twitch em pt-BR",
 	"channels.offline":     "offline é o termo usado pela Twitch em pt-BR",
 	"channels.offline_tag": "offline é o termo usado pela Twitch em pt-BR",
 	// The word "layout" is a pt-BR loanword (help.layout and the README use it);

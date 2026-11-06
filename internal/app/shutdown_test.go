@@ -129,12 +129,16 @@ func runTUIHelper() int {
 		if os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" {
 			opts.Source = channelFilterSource{}
 		}
+		dial := func(context.Context, string) (net.Conn, error) {
+			return nil, errors.New("offline test")
+		}
+		if os.Getenv("TTV_APP_USERNOTICE") == "1" {
+			dial = dialUserNoticeIRC
+		}
 		chatMgr := chat.New(chat.Options{
 			Token:    "pty-test-token",
 			Username: "tester",
-			Dial: func(context.Context, string) (net.Conn, error) {
-				return nil, errors.New("offline test")
-			},
+			Dial:     dial,
 		})
 		defer chatMgr.Close()
 		opts.Chat = chatMgr
