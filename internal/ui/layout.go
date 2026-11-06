@@ -67,7 +67,7 @@ func (m *Model) warnChatHiddenByWidth() bool {
 	if !m.shouldShowNarrowChatNotice() {
 		return false
 	}
-	m.statusNotice = m.t("chat.hidden_narrow_key")
+	m.warnStatus(m.t("chat.hidden_narrow_key"))
 	return true
 }
 
@@ -75,7 +75,7 @@ func (m *Model) warnChatHiddenByWidth() bool {
 // would draw the same list or nothing, so the panels stay and the bar says why.
 func (m *Model) keepListWithoutChat() {
 	m.showList, m.showChat = true, true
-	m.statusNotice = m.t("layout.no_chat")
+	m.warnStatus(m.t("layout.no_chat"))
 	m.normalizeFocusAfterLayout()
 }
 

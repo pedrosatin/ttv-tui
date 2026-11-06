@@ -245,6 +245,7 @@ type Model struct {
 	authNotice             string
 	corruptNotice          string
 	statusNotice           string
+	statusNoticeWarns      bool
 	// ctrlCNotice is the transient "To quit use Ctrl+Q" status after Ctrl+C.
 	// It outranks filter/search prompts so the hint stays visible in every mode.
 	ctrlCNotice string
@@ -637,6 +638,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.Generation > m.playerGen {
 			m.playerGen = msg.Generation
 		}
+		stateBefore, volumeBefore := m.playerState, m.playerVolume
 		if msg.State != m.playerState {
 			// A pause in the mpv window never reaches the TUI as a key, so the
 			// notice cannot wait for one: the bar needs the room for the state.
@@ -665,7 +667,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.InputConfFailed && msg.Generation != m.playerKeysWarnedGen {
 			// Every event of that playback carries the flag; warn once.
 			m.playerKeysWarnedGen = msg.Generation
-			m.statusNotice = m.t("player.warn.input_conf")
+			m.warnStatus(m.t("player.warn.input_conf"))
 		}
 		if msg.State == PlayerStatePlaying && !m.playerWindowNotified {
 			// mpv opens its own window; someone new to the app may not notice it.
@@ -675,12 +677,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Volume > 0 || msg.State == PlayerStatePlaying || msg.State == PlayerStatePaused || msg.State == PlayerStateBreak {
 			m.playerVolume = clampPlayerVolume(msg.Volume)
 		}
+		if m.playerState != stateBefore || m.playerVolume != volumeBefore {
+			m.clearVolumeLimitNotice()
+		}
 		return m, nil
 
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
 	}
 	return m, nil
+}
+
+// warnStatus leads the bar with a warning until the next key.
+func (m *Model) warnStatus(notice string) {
+	m.statusNotice = notice
+	m.statusNoticeWarns = true
+}
+
+func (m *Model) clearStatusNotice() {
+	m.statusNotice = ""
+	m.statusNoticeWarns = false
+}
+
+// clearVolumeLimitNotice drops a limit notice the player has outdated. A change
+// made in the mpv window reaches no key, so it cannot wait for one.
+func (m *Model) clearVolumeLimitNotice() {
+	if m.statusNotice == m.t("player.vol_max") || m.statusNotice == m.t("player.vol_min") {
+		m.clearStatusNotice()
+	}
 }
 
 func (m Model) t(key string) string {

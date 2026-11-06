@@ -3,9 +3,9 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
@@ -119,21 +119,30 @@ func channelCategoryName(ch *twitch.Channel) string {
 	return sanitizeScreenText(strings.TrimSpace(*ch.CategoryName))
 }
 
-// statusParts splits the status text into the main message for the current
-// state and secondary context, most important first. The main message carries
-// what is happening and the next step; secondaries are what narrow terminals
-// may drop.
+// statusContent is the state half of the bar, grouped by how long each piece
+// survives a narrow terminal.
+type statusContent struct {
+	tone    statusTone
+	primary string
+	// keep outlasts the title, the language and the layout token.
+	keep []string
+	// extra is context, best first. The title yields to the first entry; the
+	// rest only fill the room left.
+	extra []string
+	// detail is the technical line after the message, the first thing to drop.
+	detail string
+}
+
+// statusParts decides what the bar says for the current state. The main message
+// carries what is happening and the next step.
 //
-// Drop order among secondaries: trailing technical detail first, then the
-// least useful of context vs chat. Soft states (ready / category selected)
-// promote a channel-bearing chat status to primary so 80
-// columns keep the name whole. When the lead already names the channel
-// (playing/selected), context outranks the duplicate chat line; otherwise
-// chat outranks context so the name is not cut behind category/viewers.
-func (m Model) statusParts() (string, []string) {
-	var secondary []string
+// Soft states (ready / category selected) promote a channel-bearing chat status
+// to primary so 80 columns keep the name whole. When the lead already names the
+// channel (playing/selected), context outranks the duplicate chat line;
+// otherwise chat outranks context so the name is not cut behind category/viewers.
+func (m Model) statusParts() statusContent {
+	var c statusContent
 	var context []string
-	trailing := ""
 	addContext := func() {
 		if ctx := m.activeContextSummary(); ctx != "" {
 			context = append(context, ctx)
@@ -143,20 +152,17 @@ func (m Model) statusParts() (string, []string) {
 	switch {
 	case m.playerState == PlayerStateError:
 		primary = m.playerFailureText()
-		// The technical detail goes last: it is the first thing to drop.
-		trailing = m.playerErrorDetail()
+		c.tone = toneError
+		c.detail = m.playerErrorDetail()
 	case m.ctrlCNotice != "":
 		// Ctrl+C hint outranks filter/search prompts so every mode shows it.
 		primary = m.ctrlCNotice
 	case m.err != nil:
 		primary = m.listErrorAction()
-		// The technical detail goes last: it is the first thing to drop.
-		trailing = m.listErrorDetail()
+		c.tone = toneError
+		c.detail = m.listErrorDetail()
 	case m.channelFilterMenu:
 		primary = m.t("channel_filter.status_open")
-		if summary := m.activeChannelFilterSummary(); summary != "" {
-			secondary = append(secondary, summary)
-		}
 	case m.searching:
 		primary = fmt.Sprintf(m.t("search.prompt"), m.searchInput)
 	case m.filtering:
@@ -167,26 +173,28 @@ func (m Model) statusParts() (string, []string) {
 		}
 	case m.authNotice != "":
 		primary = m.authNotice
+		c.tone = toneWarning
 	case m.corruptNotice != "":
 		primary = m.corruptNotice
+		c.tone = toneWarning
 	case m.copyNotice != "":
 		primary = m.copyNotice
+		if primary == m.t("chat.copy.failed") {
+			c.tone = toneWarning
+		}
 	case m.statusNotice != "":
 		primary = m.statusNotice
+		if m.statusNoticeWarns {
+			c.tone = toneWarning
+		}
 	case m.playerWindowNoticeShown():
 		primary = m.t("player.window_notice")
-		// The volume rides in the lead: at 80 columns secondaries drop, and a
-		// change made in the mpv window has no other place to show.
-		if vol := m.playerVolumeText(); vol != "" {
-			primary += " · " + vol
-		}
-		secondary = append(secondary, m.playerStatusBase())
+		c.tone = playerTone(m.playerState)
+		context = append(context, m.playerStatusBase())
 		addContext()
 	case m.playerState != PlayerStateNone && m.playerState != PlayerStateEnded:
 		primary = m.playerStatusBase()
-		if vol := m.playerVolumeText(); vol != "" {
-			secondary = append(secondary, vol)
-		}
+		c.tone = playerTone(m.playerState)
 		addContext()
 	case m.loading:
 		switch m.Mode() {
@@ -200,6 +208,7 @@ func (m Model) statusParts() (string, []string) {
 		addContext()
 	case m.playerState == PlayerStateEnded:
 		primary = m.playerStatusText()
+		c.tone = toneEnded
 		addContext()
 	case m.selectedChannel != nil:
 		primary = fmt.Sprintf(m.t("channels.selected"), m.selectedChannel.DisplayName, m.selectedChannel.Login)
@@ -218,10 +227,16 @@ func (m Model) statusParts() (string, []string) {
 		}
 	}
 
-	if summary := m.activeChannelFilterSummary(); summary != "" && !m.channelFilterMenu {
-		// Keep active prefs visible without stealing the lead message.
-		if !strings.Contains(primary, summary) {
-			secondary = append([]string{summary}, secondary...)
+	// The volume and the active filter stay on the bar under any lead: the mpv
+	// window can change the volume with no other place to show it. Only an error
+	// outranks the volume, because its detail needs the columns.
+	volume := m.playerVolumeText()
+	if c.tone == toneError {
+		volume = ""
+	}
+	for _, s := range []string{volume, m.activeChannelFilterSummary()} {
+		if s != "" && !strings.Contains(primary, s) {
+			c.keep = append(c.keep, s)
 		}
 	}
 
@@ -237,7 +252,7 @@ func (m Model) statusParts() (string, []string) {
 	// Soft states yield the lead to a channel-bearing chat status so the name
 	// is not truncated behind category/ready context on narrow terminals.
 	if chatStatus != "" && m.chatStatusHasChannel() && m.softStatusPrimary() && !channelInPrimary {
-		secondary = append([]string{primary}, secondary...)
+		c.extra = append(c.extra, primary)
 		primary = chatStatus
 		chatStatus = ""
 		channelInPrimary = true
@@ -248,18 +263,16 @@ func (m Model) statusParts() (string, []string) {
 	// channel-bearing chat status outranks context so the name is not cut
 	// behind category/viewers.
 	if chatStatus != "" && channelInPrimary {
-		secondary = append(secondary, context...)
-		secondary = append(secondary, chatStatus)
+		c.extra = append(c.extra, context...)
+		c.extra = append(c.extra, chatStatus)
 	} else {
 		if chatStatus != "" {
-			secondary = append(secondary, chatStatus)
+			c.extra = append(c.extra, chatStatus)
 		}
-		secondary = append(secondary, context...)
+		c.extra = append(c.extra, context...)
 	}
-	if trailing != "" {
-		secondary = append(secondary, trailing)
-	}
-	return primary, secondary
+	c.primary = primary
+	return c
 }
 
 // softStatusPrimary reports states whose lead message may yield to a connected
@@ -327,10 +340,10 @@ func (m Model) layoutStatusText() string {
 	return fmt.Sprintf(m.t("status.layout"), m.layoutModeLabel(m.LayoutMode()))
 }
 
-// includeLayoutStatus reports when the layout token may join secondaries.
-// Default split is omitted (the two-panel chrome already implies it). Non-default
-// modes always announce themselves. Filter/search/error/notice leads stay clear
-// so marks like "500+", "Connected to #ch", and "detalhe:" keep their columns.
+// includeLayoutStatus reports when the layout token may join the bar. Default
+// split is omitted (the two-panel chrome already implies it). Filter, search,
+// error and notice leads stay clear so "Connected to #ch" and "detalhe:" keep
+// their columns.
 func (m Model) includeLayoutStatus() bool {
 	if m.LayoutMode() == LayoutSplit {
 		return false
@@ -347,166 +360,175 @@ func (m Model) includeLayoutStatus() bool {
 	return true
 }
 
-// StatusBar renders the status bar containing the active language, channel/category/viewers,
-// player state (with volume), chat state, and key hints.
+// statusChrome is one rung of the cut order: the frame around the state text.
+type statusChrome struct {
+	left, right string
+	layoutToken bool
+}
+
+// statusLadder lists the frames from richest to barest, so walking it down is
+// the cut order: title, language, layout token, focus hint, help hint. The state
+// message, the volume, the active filter and the quit hint outlast all of them.
+func (m Model) statusLadder(lang string) []statusChrome {
+	help, quit := m.t("status.help_hint"), m.t("status.quit_hint")
+	hints := fmt.Sprintf(" | %s · %s ", help, quit)
+	focusHints := hints
+	// Focus lives in the chrome, not in the state message, so Tab has a stable
+	// place to announce the active panel. Skip it while an error detail needs
+	// the columns.
+	if focus := m.focusStatusText(); focus != "" && m.err == nil {
+		focusHints = fmt.Sprintf(" | %s · %s · %s ", focus, help, quit)
+	}
+	return []statusChrome{
+		{fmt.Sprintf(" %s | [%s] ", m.t("app.title"), lang), focusHints, true},
+		{fmt.Sprintf(" [%s] ", lang), focusHints, true},
+		{" ", focusHints, true},
+		{" ", focusHints, false},
+		{" ", hints, false},
+		{" ", " | " + quit + " ", false},
+	}
+}
+
+// StatusBar renders the one-line bar: state on the left, key hints pinned to the
+// right edge so they stay put when the state text changes length.
 //
-// At narrow widths the bar gives things up in this order: secondary context,
-// the app title, the language tag, the help hint. A channel-bearing chat
-// status outranks context: the full connected string is preferred, then the
-// short "#login" ref, and only as a last resort the name is cut with a trailing
-// ellipsis. The main message for the current state and the quit hint are the
-// last to go.
+// The rung is chosen for the message, the volume, the filter and the layout
+// token; the title also needs the main context to fit. What room is left goes to
+// the context, then to the technical detail. A channel-bearing chat status
+// prefers the full string, then the short "#login" ref, then a cut name.
 func (m Model) StatusBar() string {
 	lang := i18n.LangEN
 	if m.catalog != nil {
 		lang = m.catalog.Lang()
 	}
-	title := m.t("app.title")
-	helpHint := m.t("status.help_hint")
-	quitHint := m.t("status.quit_hint")
-	// Focus lives in the chrome (with help/quit), not in the state message, so
-	// Tab always has a stable place to announce the active panel. Skip it while
-	// an error detail needs the columns. Layout is a high-priority secondary in
-	// the state text so it stays visible without crowding the chrome.
-	focusHint := ""
-	if m.err == nil {
-		focusHint = m.focusStatusText()
+	c := m.statusParts()
+	c.primary = normalizeScreenText(c.primary)
+	c.detail = normalizeScreenText(c.detail)
+	for i := range c.keep {
+		c.keep[i] = normalizeScreenText(c.keep[i])
 	}
-	rightHints := fmt.Sprintf(" | %s · %s ", helpHint, quitHint)
-	if focusHint != "" {
-		rightHints = fmt.Sprintf(" | %s · %s · %s ", focusHint, helpHint, quitHint)
+	for i := range c.extra {
+		c.extra[i] = normalizeScreenText(c.extra[i])
 	}
-
-	primary, secondary := m.statusParts()
-	primary = normalizeScreenText(primary)
-	for i := range secondary {
-		secondary[i] = normalizeScreenText(secondary[i])
-	}
-	// Non-default layouts lead the secondaries so the layout token is visible;
-	// default split omits it (see includeLayoutStatus). The volume stays ahead
-	// of it: the mpv window can change volume with no other place to show it,
-	// and at 80 columns the token must not push it out.
+	token := ""
 	if m.includeLayoutStatus() {
-		secondary = insertAfterVolume(secondary, m.playerVolumeText(), m.layoutStatusText())
+		token = m.layoutStatusText()
 	}
-	sep := " · "
+	glyph := c.tone.glyph()
+	if glyph != "" {
+		glyph += " "
+	}
 
-	layouts := []struct{ left, right string }{
-		{fmt.Sprintf(" %s | [%s] ", title, lang), rightHints},
-		{fmt.Sprintf(" [%s] ", lang), rightHints},
-		{" ", rightHints},
-		{" ", " | " + quitHint + " "},
-	}
-	chosen := layouts[0]
-	if m.width > 0 {
-		chosen = layouts[len(layouts)-1]
-		// The volume and the layout token are the secondaries the operator must
-		// not lose: the app title yields before they do.
-		lead := primary
-		volume, layoutToken := m.playerVolumeText(), m.layoutStatusText()
-		for _, s := range secondary {
-			if s != "" && (s == volume || s == layoutToken) {
-				lead += sep + s
-			}
+	ladder := m.statusLadder(lang)
+	essentials := func(ch statusChrome) []string {
+		parts := slices.Clone(c.keep)
+		if ch.layoutToken && token != "" {
+			parts = append(parts, token)
 		}
-		fitted := false
-		for _, l := range layouts[:2] {
-			if ansi.StringWidth(l.left+lead+l.right) <= m.width {
-				chosen, fitted = l, true
+		return parts
+	}
+	chosen := ladder[0]
+	if m.width > 0 {
+		chosen = ladder[len(ladder)-1]
+		for i, ch := range ladder {
+			parts := essentials(ch)
+			if i == 0 {
+				parts = append(parts, c.extra[:min(len(c.extra), 1)]...)
+			}
+			lead := strings.Join(append([]string{glyph + c.primary}, parts...), statusSep)
+			if ansi.StringWidth(ch.left+lead+ch.right) <= m.width {
+				chosen = ch
 				break
 			}
 		}
-		if !fitted {
-			for _, l := range layouts {
-				if ansi.StringWidth(l.left+primary+l.right) <= m.width {
-					chosen = l
-					break
-				}
-			}
-		}
 	}
 
-	// Color the lead before measuring/joining so SGR does not eat column budget.
-	styledPrimary := m.styleStatusPrimary(primary)
-	stateText := styledPrimary
-	plainState := primary
+	rest := slices.Clone(c.extra)
+	if c.detail != "" {
+		rest = append(rest, c.detail)
+	}
+	primary := c.primary
+	var shown []string
 	if m.width <= 0 {
-		for _, s := range secondary {
-			stateText += sep + s
-			plainState += sep + s
-		}
+		shown = append(essentials(chosen), rest...)
 	} else {
-		avail := m.width - ansi.StringWidth(chosen.left) - ansi.StringWidth(chosen.right)
-		if ansi.StringWidth(plainState) > avail {
-			plainState = TruncateVisual(primary, max(avail, 1))
-			stateText = m.styleStatusPrimary(plainState)
+		room := m.width - ansi.StringWidth(chosen.left+chosen.right+glyph)
+		if ansi.StringWidth(primary) > room {
+			primary = TruncateVisual(primary, max(room, 1))
 		} else {
-			for i, s := range secondary {
-				room := avail - ansi.StringWidth(plainState) - ansi.StringWidth(sep)
-				if ansi.StringWidth(s) <= room {
-					stateText += sep + s
-					plainState += sep + s
-					continue
-				}
-				// Channel name outranks remaining secondaries: try the short
-				// "#login" form before cutting or giving up.
-				if ref := m.chatChannelRef(); ref != "" && strings.Contains(s, ref) {
-					if ansi.StringWidth(ref) <= room {
-						stateText += sep + ref
-						plainState += sep + ref
-						break
-					}
-					if i == len(secondary)-1 && room >= minSecondaryCut {
-						cut := TruncateVisual(ref, room)
-						stateText += sep + cut
-						plainState += sep + cut
-					}
-					break
-				}
-				// Only the last secondary may be cut, and only when enough of
-				// it survives to be read; a stub like "vo…" helps nobody.
-				if i == len(secondary)-1 && room >= minSecondaryCut {
-					cut := TruncateVisual(s, room)
-					stateText += sep + cut
-					plainState += sep + cut
-				}
-				break
+			room -= ansi.StringWidth(primary)
+			var complete bool
+			shown, room, complete = m.fitStatusParts(essentials(chosen), room)
+			if complete {
+				more, _, _ := m.fitStatusParts(rest, room)
+				shown = append(shown, more...)
 			}
 		}
 	}
-	line := chosen.left + stateText + chosen.right
 
-	style := lipgloss.NewStyle().Reverse(true)
-	if m.width > 0 {
-		// Pad using the plain visual width so colored SGR does not inflate the bar.
-		plainLine := chosen.left + plainState + chosen.right
-		pad := m.width - ansi.StringWidth(plainLine)
-		if pad > 0 {
-			line += strings.Repeat(" ", pad)
-		} else if pad < 0 {
-			line = padOrTruncateVisual(line, m.width)
-		}
+	tail := ""
+	for _, s := range shown {
+		tail += statusSep + s
 	}
-	return style.Render(fitScreenLines(line, m.width))
+	if m.width > 0 {
+		used := ansi.StringWidth(chosen.left + glyph + primary + tail + chosen.right)
+		tail += strings.Repeat(" ", max(m.width-used, 0))
+	}
+	line := renderStatusRuns(c.tone, chosen.left, primary, tail+chosen.right)
+	if m.width > 0 && ansi.StringWidth(line) > m.width {
+		line = TruncateVisual(line, m.width)
+	}
+	return fitScreenLines(line, m.width)
+}
+
+// renderStatusRuns paints the bar as runs that each carry the reverse. Wrapping
+// an already styled string would not work: the inner reset also ends the outer
+// reverse, leaving the rest of the line without a background. With a glyph the
+// color stays on its cell; a tone without one paints the message.
+func renderStatusRuns(tone statusTone, left, primary, tail string) string {
+	bar := styleStatusBar()
+	glyph := tone.glyph()
+	if glyph == "" {
+		return bar.Render(left) + tone.style().Render(primary) + bar.Render(tail)
+	}
+	return bar.Render(left) + tone.style().Render(glyph) + bar.Render(" "+primary+tail)
+}
+
+// fitStatusParts takes parts in order until one does not fit in room, the columns
+// left after the lead. It returns what fit and, when every part made it, the room
+// still free.
+func (m Model) fitStatusParts(parts []string, room int) ([]string, int, bool) {
+	sepWidth := ansi.StringWidth(statusSep)
+	var shown []string
+	for i, s := range parts {
+		room -= sepWidth
+		if ansi.StringWidth(s) <= room {
+			shown = append(shown, s)
+			room -= ansi.StringWidth(s)
+			continue
+		}
+		// Channel name outranks remaining parts: try the short "#login" form
+		// before cutting or giving up.
+		cut := s
+		if ref := m.chatChannelRef(); ref != "" && strings.Contains(s, ref) {
+			if ansi.StringWidth(ref) <= room {
+				return append(shown, ref), 0, false
+			}
+			cut = ref
+		}
+		// Only the last part may be cut, and only when enough of it survives to
+		// be read; a stub like "vo…" helps nobody.
+		if i == len(parts)-1 && room >= minSecondaryCut {
+			return append(shown, TruncateVisual(cut, room)), 0, false
+		}
+		return shown, 0, false
+	}
+	return shown, room, true
 }
 
 // minSecondaryCut is the narrowest room in which a truncated secondary part
 // is still worth showing in the status bar.
 const minSecondaryCut = 12
 
-// insertAfterVolume puts token right after the volume entry of parts, or first
-// when the volume is not a secondary (it leads, or there is no player).
-func insertAfterVolume(parts []string, volume, token string) []string {
-	out := make([]string, 0, len(parts)+1)
-	if volume == "" {
-		return append(append(out, token), parts...)
-	}
-	for i, p := range parts {
-		if p == volume {
-			out = append(out, parts[:i+1]...)
-			out = append(out, token)
-			return append(out, parts[i+1:]...)
-		}
-	}
-	return append(append(out, token), parts...)
-}
+// statusSep joins the pieces of the state text.
+const statusSep = " · "

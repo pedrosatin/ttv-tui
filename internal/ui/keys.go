@@ -190,7 +190,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	m.authNotice = ""
 	m.corruptNotice = ""
-	m.statusNotice = ""
+	m.clearStatusNotice()
 	m.ctrlCNotice = ""
 	m.copyNotice = ""
 	m.playerWindowNotice = false
@@ -372,16 +372,10 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.playback.TogglePause()
 
 	case key.Matches(msg, m.keys.VolUp):
-		if m.playback == nil || !m.playerControllable() {
-			return m, nil
-		}
-		return m, m.playback.AdjustVolume(5)
+		return m.adjustVolume(5)
 
 	case key.Matches(msg, m.keys.VolDown):
-		if m.playback == nil || !m.playerControllable() {
-			return m, nil
-		}
-		return m, m.playback.AdjustVolume(-5)
+		return m.adjustVolume(-5)
 
 	case key.Matches(msg, m.keys.Up):
 		if m.Focus() == FocusChat {
@@ -519,6 +513,22 @@ func (m Model) playerControllable() bool {
 	default:
 		return false
 	}
+}
+
+// adjustVolume answers a volume key. At a limit the key would change nothing, so
+// the bar says so. The command still goes out: the volume here can lag one in
+// flight, and the player clamps on its own.
+func (m Model) adjustVolume(delta int) (tea.Model, tea.Cmd) {
+	if m.playback == nil || !m.playerControllable() {
+		return m, nil
+	}
+	switch {
+	case delta > 0 && m.playerVolume >= 100:
+		m.warnStatus(m.t("player.vol_max"))
+	case delta < 0 && m.playerVolume <= 0:
+		m.warnStatus(m.t("player.vol_min"))
+	}
+	return m, m.playback.AdjustVolume(delta)
 }
 
 func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

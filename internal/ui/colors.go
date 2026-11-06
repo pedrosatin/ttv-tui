@@ -189,52 +189,81 @@ func styleNick(name, _ string) string {
 	return style.Foreground(color).Render(name)
 }
 
-// stylePlayerState colors a player status string by PlayerState.
-func stylePlayerState(state PlayerState, s string) string {
-	if s == "" {
-		return s
-	}
+// statusTone is what the status bar's lead message reports.
+type statusTone int
+
+const (
+	toneNeutral statusTone = iota
+	toneStarting
+	tonePlaying
+	tonePaused
+	toneBreak
+	toneEnded
+	toneWarning
+	toneError
+)
+
+// playerTone maps an active player state onto its status tone.
+func playerTone(state PlayerState) statusTone {
 	switch state {
 	case PlayerStateStarting:
-		// White (37) + bold: bright black (90) vanishes on light themes.
-		return withForeground(lipgloss.NewStyle().Bold(true), ansiWhite).Render(s)
+		return toneStarting
 	case PlayerStatePlaying:
-		return withForeground(lipgloss.NewStyle(), ansiGreen).Render(s)
+		return tonePlaying
 	case PlayerStatePaused:
-		return withForeground(lipgloss.NewStyle(), ansiYellow).Render(s)
+		return tonePaused
 	case PlayerStateBreak:
-		return withForeground(lipgloss.NewStyle(), ansiCyan).Render(s)
-	case PlayerStateError:
-		return styleError(s)
+		return toneBreak
 	default:
-		return s
+		return toneNeutral
 	}
 }
 
-// styleStatusPrimary colors the status-bar lead message for the active state.
-// The branch order mirrors statusParts so the painted segment matches the lead.
-func (m Model) styleStatusPrimary(primary string) string {
-	switch {
-	case m.ctrlCNotice != "":
-		return primary
-	case m.err != nil:
-		return styleError(primary)
-	case m.searching, m.filtering:
-		return primary
-	case m.authNotice != "", m.corruptNotice != "":
-		return styleWarning(primary)
-	case m.copyNotice != "", m.statusNotice != "":
-		return primary
-	case m.playerWindowNoticeShown():
-		return stylePlayerState(PlayerStatePlaying, primary)
-	case m.playerState == PlayerStateError:
-		return styleError(primary)
-	case m.playerState != PlayerStateNone && m.playerState != PlayerStateEnded:
-		return stylePlayerState(m.playerState, primary)
-	case m.playerState == PlayerStateEnded:
-		return withForeground(lipgloss.NewStyle().Bold(true), ansiWhite).Render(primary)
+// glyph is the shape that tells this state apart without color, or "" when the
+// message's own words already do.
+func (t statusTone) glyph() string {
+	switch t {
+	case tonePlaying:
+		return "▶"
+	case tonePaused:
+		return "‖"
+	case toneWarning:
+		return "!"
+	case toneError:
+		return "✖"
 	default:
-		return primary
+		return ""
+	}
+}
+
+// styleStatusBar is the plain bar. Every run of the bar starts from it.
+func styleStatusBar() lipgloss.Style {
+	return lipgloss.NewStyle().Reverse(true)
+}
+
+// style paints this tone on the bar. It keeps the reverse: a run that dropped it
+// would punch a hole in the background.
+func (t statusTone) style() lipgloss.Style {
+	bar := styleStatusBar()
+	switch t {
+	case toneStarting:
+		// White (37) + bold: bright black (90) vanishes on light themes.
+		return withForeground(bar.Bold(true), ansiWhite)
+	case tonePlaying:
+		return withForeground(bar, ansiGreen)
+	case tonePaused:
+		return withForeground(bar, ansiYellow)
+	case toneBreak:
+		return withForeground(bar, ansiCyan)
+	case toneEnded:
+		return withForeground(bar.Bold(true), ansiWhite)
+	case toneWarning:
+		// Magenta (system family), never yellow: yellow means pause and ★ only.
+		return withForeground(bar.Bold(true), ansiMagenta)
+	case toneError:
+		return withForeground(bar.Bold(true), ansiRed)
+	default:
+		return bar
 	}
 }
 
