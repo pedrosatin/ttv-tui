@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -89,72 +91,139 @@ func recentNamesOrder(screen string) []string {
 	return out
 }
 
+// Bubble Tea starts each alternate-screen flush at home, skips unchanged rows
+// with newlines, and ends with an absolute move to the last row. Apply complete
+// flushes only: screenSince is a write history, not the current terminal screen.
+var recentOrderFlush = regexp.MustCompile(`(?s)\x1b\[H(.*?)\x1b\[([0-9]+);H`)
+
+func recentOrderScreen(output string) string {
+	var rows []string
+	for _, frame := range recentOrderFlush.FindAllStringSubmatch(output, -1) {
+		height, _ := strconv.Atoi(frame[2])
+		for len(rows) < height {
+			rows = append(rows, "")
+		}
+		rows = rows[:height]
+		for i, line := range strings.Split(frame[1], "\n") {
+			if i >= height {
+				break
+			}
+			if line != "" {
+				rows[i] = strings.Trim(ansiSeq.ReplaceAllString(line, ""), "\r")
+			}
+		}
+	}
+	return strings.Join(rows, "\n")
+}
+
+func waitRecentOrderScreen(p *ptyTUI, ready func(string) bool) string {
+	p.t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		screen := recentOrderScreen(p.output())
+		if ready(screen) {
+			return screen
+		}
+		if time.Now().After(deadline) {
+			p.t.Fatalf("recent list did not converge:\n%s", screen)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestRecentOrderScreenAppliesCompleteRedraws(t *testing.T) {
+	// The last navigation redraw may straddle mark(): the output after that
+	// offset starts with Carol even though Carol remains on the third row.
+	initial := "\x1b[H\rAlice\r\nBob\r\n▸ Carol\x1b[3;H"
+	partialNavigation := "\x1b[H\n\n▸ "
+	openFrame := "\x1b[H\rAlice | Chat — #carol\r\nBob\r\n▸ Carol\x1b[3;H"
+	historySinceMark := "Carol\x1b[3;H" + openFrame
+	if got := recentNamesOrder(ansiSeq.ReplaceAllString(historySinceMark, "")); !stringSlicesEqual(got, []string{"Carol", "Alice", "Bob"}) {
+		t.Fatalf("fixture must reproduce the old write-history misreading, got %v", got)
+	}
+	output := initial + partialNavigation
+	if got := recentNamesOrder(recentOrderScreen(output)); !stringSlicesEqual(got, []string{"Alice", "Bob", "Carol"}) {
+		t.Fatalf("incomplete redraw changed screen: %v", got)
+	}
+	output += historySinceMark
+	if got := recentNamesOrder(recentOrderScreen(output)); !stringSlicesEqual(got, []string{"Alice", "Bob", "Carol"}) {
+		t.Fatalf("navigation and open changed screen order: %v", got)
+	}
+	// A sparse flush changes Carol's row only; unchanged rows must survive.
+	output += "\x1b[H\n\n▸ Carol (live)\x1b[3;H"
+	if screen := recentOrderScreen(output); !strings.Contains(screen, "Carol (live)") || !stringSlicesEqual(recentNamesOrder(screen), []string{"Alice", "Bob", "Carol"}) {
+		t.Fatalf("sparse redraw lost rows:\n%s", screen)
+	}
+	// An actual reorder must still be visible to the assertion.
+	output += "\x1b[H\r▸ Carol\r\nAlice\r\nBob\x1b[3;H"
+	if got := recentNamesOrder(recentOrderScreen(output)); !stringSlicesEqual(got, []string{"Carol", "Alice", "Bob"}) {
+		t.Fatalf("refresh reorder was hidden: %v", got)
+	}
+}
+
 // TestOpenChannelDoesNotReorderRecents_PTY opens Carol (third recent) and
 // checks the on-screen recent order stays Alice → Bob → Carol; after refresh
-// it becomes Carol → Alice → Bob.
+// it becomes Carol → Alice → Bob. Opening records the newest recent on disk
+// immediately; only a list reload applies that order to the visible rows.
 func TestOpenChannelDoesNotReorderRecents_PTY(t *testing.T) {
 	p := startTUIOnPTY(t, "TTV_APP_RECENT_ORDER=1", "LANG=en_US.UTF-8", "LC_ALL=", "LC_MESSAGES=")
 
+	initialScreen := waitRecentOrderScreen(p, func(screen string) bool {
+		return strings.Contains(screen, "Alice") && strings.Contains(screen, "Carol") && strings.Contains(screen, "OrderCat")
+	})
+	initial := recentNamesOrder(initialScreen)
+	if want := []string{"Alice", "Bob", "Carol"}; !stringSlicesEqual(initial, want) {
+		t.Fatalf("initial recent order = %v, want %v\n%s", initial, want, initialScreen)
+	}
+
+	// A generic highlight can belong to an earlier redraw. Wait for each target
+	// row before sending the next key, including the final Carol selection.
+	for _, name := range []string{"Alice", "Bob", "Carol"} {
+		p.send([]byte("j"))
+		waitRecentOrderScreen(p, func(screen string) bool {
+			for _, line := range strings.Split(screen, "\n") {
+				if strings.Contains(line, "▸") && strings.Contains(line, name) {
+					return true
+				}
+			}
+			return false
+		})
+	}
+	oldPid := p.playerPid
+	p.send([]byte("\r"))
+	p.followPlayer(oldPid)
+
+	// Save runs asynchronously, independently of chat/player startup. Observe
+	// its actual effect before asserting that persistence left the UI frozen.
+	statePath := filepath.Join(p.dir, "state", "state.json")
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		screen := p.screenSince(0)
-		if strings.Contains(screen, "Alice") && strings.Contains(screen, "Carol") && strings.Contains(screen, "OrderCat") {
+		st, err := store.LoadFrom(statePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(st.Recents) > 0 && st.Recents[0].Login == "carol" {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("initial list missing recents/category:\n%s", screen)
+			t.Fatalf("Carol was not saved as newest recent: %+v", st.Recents)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-
-	initial := recentNamesOrder(p.screenSince(0))
-	if want := []string{"Alice", "Bob", "Carol"}; !stringSlicesEqual(initial, want) {
-		t.Fatalf("initial recent order = %v, want %v\n%s", initial, want, p.screenSince(0))
-	}
-
-	// Favorites first, then Alice (highlight). j → Bob, j → Carol.
-	p.sendAndWait([]byte("j"), "▸")
-	p.sendAndWait([]byte("j"), "▸")
-	p.sendAndWait([]byte("j"), "▸")
-
-	openOff := p.mark()
-	oldPid := p.playerPid
-	p.sendAndWait([]byte("\r"), "Chat — #carol")
-	p.followPlayer(oldPid)
-	deadline = time.Now().Add(10 * time.Second)
-	var afterOpen string
-	for {
-		afterOpen = p.screenSince(openOff)
-		if strings.Contains(afterOpen, "Alice") && strings.Contains(afterOpen, "Carol") && strings.Contains(afterOpen, "Chat — #carol") {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("after open, list/chat incomplete:\n%s", afterOpen)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	afterOpen := waitRecentOrderScreen(p, func(screen string) bool {
+		return strings.Contains(screen, "Chat — #carol")
+	})
 	openedOrder := recentNamesOrder(afterOpen)
 	if want := []string{"Alice", "Bob", "Carol"}; !stringSlicesEqual(openedOrder, want) {
 		t.Fatalf("after opening Carol, recent order = %v, want frozen %v\n%s", openedOrder, want, afterOpen)
 	}
 	t.Logf("PTY after open (no reorder):\n%s", afterOpen)
 
-	refreshOff := p.mark()
 	p.send([]byte("r"))
-	deadline = time.Now().Add(10 * time.Second)
-	var afterRefresh string
-	for {
-		afterRefresh = p.screenSince(refreshOff)
-		order := recentNamesOrder(afterRefresh)
-		if stringSlicesEqual(order, []string{"Carol", "Alice", "Bob"}) {
-			t.Logf("PTY after refresh (new order):\n%s", afterRefresh)
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("after refresh, recent order = %v, want Carol Alice Bob\n%s", order, afterRefresh)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	afterRefresh := waitRecentOrderScreen(p, func(screen string) bool {
+		return stringSlicesEqual(recentNamesOrder(screen), []string{"Carol", "Alice", "Bob"})
+	})
+	t.Logf("PTY after refresh (new order):\n%s", afterRefresh)
 }
 
 func stringSlicesEqual(a, b []string) bool {
