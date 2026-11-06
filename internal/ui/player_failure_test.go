@@ -315,7 +315,7 @@ func TestOfflinePlayFailureMarksChannelOfflineInListFavoritesRecents(t *testing.
 	}
 
 	plain := ansi.Strip(m.View())
-	if !strings.Contains(plain, "xQc (xqc) — [offline]") {
+	if !strings.Contains(strings.Join(strings.Fields(plain), " "), "xQc — Live now [offline]") {
 		t.Fatalf("view must show [offline] without stale viewers:\n%s", plain)
 	}
 	if strings.Contains(plain, "13.0k") || strings.Contains(plain, "13k") {

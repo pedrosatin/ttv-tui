@@ -182,6 +182,7 @@
   "section.recents": "Recentes",
   "channels.offline": "offline",
   "channels.offline_tag": "[offline]",
+  "channels.live_compact": "[vivo]",
   "channels.live_label": "[ao vivo]",
   "channels.unverified_tag": "[não verificado]",
   "favorites.added": "Canal adicionado aos favoritos",

@@ -82,8 +82,8 @@ func TestSearchExactLoginComesBeforeCategories(t *testing.T) {
 	if m.HighlightedID() != "exact" {
 		t.Fatalf("highlight = %q, want exact", m.HighlightedID())
 	}
-	if row := cursorRow(t, m); !strings.Contains(row, "Gaules (gaules)") {
-		t.Fatalf("cursor row = %q, want Gaules (gaules)", row)
+	if row := cursorRow(t, m); !strings.Contains(row, "Gaules") {
+		t.Fatalf("cursor row = %q, want Gaules", row)
 	}
 	view := ansi.Strip(m.View())
 	t.Logf("PTY CAPTURE search gaules:\n%s", view)

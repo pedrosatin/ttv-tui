@@ -89,7 +89,7 @@ func TestSearchExactChannelFirst_PTY(t *testing.T) {
 	p.waitScreen(0, "Search:")
 	off := p.mark()
 	p.send([]byte("gaules\r"))
-	screen := p.waitScreen(off, "▸ ", "Gaules (gaules)", "Exact channel", "Categories")
+	screen := p.waitScreen(off, "▸ ", "Gaules", "Exact channel", "Categories")
 	if strings.Index(screen, "Exact channel") > strings.Index(screen, "── Categories ──") {
 		t.Fatalf("exact section must come before categories:\n%s", screen)
 	}

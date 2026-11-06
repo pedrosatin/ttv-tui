@@ -150,8 +150,8 @@ func TestCategoriesLoadingAndOptionalViewersRender(t *testing.T) {
 	}
 
 	view := m.View()
-	if !strings.Contains(view, "Just Chatting") || !strings.Contains(view, "560.0k") {
-		t.Fatalf("expected Just Chatting and 560.0k in view, got: %q", view)
+	if !strings.Contains(view, "Just Chatting") || !strings.Contains(view, "560k") {
+		t.Fatalf("expected Just Chatting and 560k in view, got: %q", view)
 	}
 	if !strings.Contains(view, "Mystery Game") || !strings.Contains(view, "—") {
 		t.Fatalf("expected Mystery Game with '—' placeholder for nil viewers, got: %q", view)
@@ -468,7 +468,7 @@ func TestOpenCategoryLoadsChannelsAndEnterEmitsChannelSelectedMsg(t *testing.T) 
 	}
 
 	view := m.View()
-	for _, want := range []string{"Counter-Strike", "Gaules", "gaules", "45.2k", "Major CS2 Ao Vivo", "SilentStream", "silentstream", "—"} {
+	for _, want := range []string{"Counter-Strike", "Gaules", "45.2k", "Major CS2 Ao Vivo", "SilentStream", "—"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("expected %q in channels view, got: %q", want, view)
 		}
@@ -656,8 +656,8 @@ func TestCtrlFSearchAndCtrlRReturnsToCategories(t *testing.T) {
 	}
 
 	view := m.View()
-	if !strings.Contains(view, "Gaules (gaules)") || !strings.Contains(view, "Riot Games (riotgames)") {
-		t.Fatalf("expected search view to show both display name and login, got: %q", view)
+	if !strings.Contains(view, "Gaules") || !strings.Contains(view, "Riot Games (riotgames)") {
+		t.Fatalf("expected search view to show login only when distinct, got: %q", view)
 	}
 
 	// Press Ctrl+R to return to categories.

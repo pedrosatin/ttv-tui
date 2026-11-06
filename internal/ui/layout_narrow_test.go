@@ -316,7 +316,7 @@ func TestCtrlWWithChatCyclesFourDistinctScreens(t *testing.T) {
 			t.Fatalf("LayoutMode=%q, want %q", got, step.mode)
 		}
 		body := bodyOf(m)
-		if got := strings.Contains(body, "Gaules (gaules)"); got != step.list {
+		if got := strings.Contains(body, "Gaules"); got != step.list {
 			t.Fatalf("%s: list=%v:\n%s", step.mode, got, body)
 		}
 		if got := strings.Contains(body, "Chat — #gaules"); got != step.chat {

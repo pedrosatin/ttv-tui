@@ -89,7 +89,7 @@ func TestFilterWithoutMatchesSuggestsSearchAndCtrlFRunsIt(t *testing.T) {
 			if len(searched) != 1 || searched[0] != "gaules" {
 				t.Fatalf("searched = %v, want [gaules]", searched)
 			}
-			if !strings.Contains(ansi.Strip(m.View()), "Gaules (gaules)") {
+			if !strings.Contains(ansi.Strip(m.View()), "Gaules") {
 				t.Fatalf("search results not shown:\n%s", ansi.Strip(m.View()))
 			}
 			if m.Filter() != "" || m.Filtering() {

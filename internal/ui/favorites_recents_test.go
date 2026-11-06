@@ -291,7 +291,7 @@ func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
 	if strings.Contains(plain, "[offline]") {
 		t.Fatalf("view must not claim [offline] without evidence:\n%s", plain)
 	}
-	if !strings.Contains(plain, "Offline Guy (offline_guy) — [unverified]") {
+	if !strings.Contains(strings.Join(strings.Fields(plain), " "), "Offline Guy (offline_guy) [unverified]") {
 		t.Fatalf("expected unverified tag for channel without evidence:\n%s", plain)
 	}
 	if !strings.Contains(plain, "1.5k") {
@@ -336,10 +336,10 @@ func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
 	}
 
 	plain = ansi.Strip(m.View())
-	if !strings.Contains(plain, "gaulestv (gaulestv) — [offline]") {
+	if !strings.Contains(strings.Join(strings.Fields(plain), " "), "gaulestv [offline]") {
 		t.Fatalf("expected [offline] for channel with evidence:\n%s", plain)
 	}
-	if strings.Contains(plain, "xQc (xqc) — [offline]") {
+	if strings.Contains(strings.Join(strings.Fields(plain), " "), "xQc [offline]") {
 		t.Fatalf("xqc must not be shown offline without evidence:\n%s", plain)
 	}
 }
@@ -364,7 +364,7 @@ func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 		if strings.Contains(plain, "[offline]") {
 			t.Fatalf("state %q: playing channel shown offline:\n%s", st, plain)
 		}
-		if !strings.Contains(plain, "[ao vivo]") || !strings.Contains(plain, "ESLCS (eslcs)") {
+		if !strings.Contains(plain, "[vivo]") || !strings.Contains(plain, "ESLCS") {
 			t.Fatalf("state %q: playing channel must read as live:\n%s", st, plain)
 		}
 	}
@@ -415,13 +415,13 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 	m.mode = ModeCategories
 	m.channels = nil
 	plain := ansi.Strip(m.View())
-	if !strings.Contains(plain, "12.9k  Gaules (gaules) — Major") {
+	if !strings.Contains(plain, "12.9k  Gaules — Major") {
 		t.Fatalf("favorite should keep live status after leaving category:\n%s", plain)
 	}
-	if !strings.Contains(plain, "30.4k  StRoGo (strogo)") {
+	if !strings.Contains(plain, "30.4k  StRoGo") {
 		t.Fatalf("recent should keep live status after leaving category:\n%s", plain)
 	}
-	if !strings.Contains(plain, "Elsewhere (elsewhere) — [unverified]") || strings.Contains(plain, "[offline]") {
+	if !strings.Contains(strings.Join(strings.Fields(plain), " "), "Elsewhere [unverified]") || strings.Contains(plain, "[offline]") {
 		t.Fatalf("channel outside the listing must be unverified, never offline:\n%s", plain)
 	}
 
@@ -446,7 +446,7 @@ func TestAvailabilityLabelsFitIn120And80Columns(t *testing.T) {
 		m.playerLogin = "eslcs"
 		m.playerState = PlayerStatePlaying
 		unverified := cat.T("channels.unverified_tag")
-		live := cat.T("channels.live_label")
+		live := cat.T("channels.live_compact")
 
 		for _, width := range []int{120, 80} {
 			updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
@@ -461,7 +461,7 @@ func TestAvailabilityLabelsFitIn120And80Columns(t *testing.T) {
 			for _, want := range []string{
 				unverified,
 				live,
-				"ESLCS (eslcs)",
+				"ESLCS",
 				"[offline]",
 			} {
 				if !strings.Contains(plain, want) {
@@ -590,7 +590,7 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 
 		findLine := func(all []string, login string) string {
 			for _, line := range all {
-				if strings.Contains(line, "("+login+")") {
+				if strings.Contains(strings.ToLower(line), login) {
 					return line
 				}
 			}
@@ -619,8 +619,8 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 			t.Fatalf("%s: liveLine missing viewers or title: %q", lang, liveLine)
 		}
 
-		// All three lines share the same columns: [marker ▸/★] [viewers/●]  [identity] — [tag or title]
-		lineRe := regexp.MustCompile(`^[ ▸★]{1,2}\s+(\S+(?:\s+\S+)?)\s{2}(\S+ \(\S+\)) — (.+)$`)
+		// All three lines share the same marker, viewers and identity columns.
+		lineRe := regexp.MustCompile(`^[ ▸★]{1,2}\s+(?:●\s+\S+|—)\s{2}\S+.*$`)
 		for name, line := range map[string]string{"favorite": favLine, "recent": recLine, "live": liveLine} {
 			if !lineRe.MatchString(strings.TrimRight(line, " ")) {
 				t.Fatalf("%s: %s line does not match consistent row format: %q", lang, name, line)

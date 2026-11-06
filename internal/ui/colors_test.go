@@ -118,8 +118,8 @@ func TestOrientationColorsAvailabilityAndFocus(t *testing.T) {
 	if !sgrFgRe.MatchString(view) {
 		t.Fatalf("expected foreground SGR in colored view:\n%q", view)
 	}
-	// Live marker/viewers → green 32; offline tag → red 31; favorite ★ → yellow 33; focus ▸ → cyan 36 + bold.
-	for _, code := range []string{"32", "31", "33", "36"} {
+	// Live marker/viewers → green 32; offline tag → red 31; favorite ★ → yellow 33; selection uses full-row reverse + bold.
+	for _, code := range []string{"32", "31", "33", "7"} {
 		re := regexp.MustCompile(`\x1b\[[0-9;]*` + code + `[0-9;]*m`)
 		if !re.MatchString(view) {
 			t.Errorf("view missing SGR %s:\n%q", code, view)
@@ -377,7 +377,7 @@ func TestAvailabilityTagsNeverTruncatedAt80(t *testing.T) {
 		for _, tag := range []string{
 			cat.T("channels.offline_tag"),
 			cat.T("channels.unverified_tag"),
-			cat.T("channels.live_label"),
+			cat.T("channels.live_compact"),
 		} {
 			if !strings.Contains(plain, tag) {
 				t.Fatalf("%s: missing intact tag %q at 80 cols:\n%s", lang, tag, plain)

@@ -579,6 +579,12 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		})
 	}
 
+	tagWidth := 0
+	for _, it := range items {
+		if it.Channel != nil {
+			tagWidth = max(tagWidth, ansi.StringWidth(m.channelRowTag(*it.Channel, it.Availability)))
+		}
+	}
 	var currentSection ListItemType = ""
 
 	for _, it := range items {
@@ -619,7 +625,15 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 			row = m.formatCategoryRow(marker, cat, isSearch, maxWidth)
 		default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
 			ch := *it.Channel
-			row = m.formatChannelRow(marker, ch, it.Availability, maxWidth)
+			row = m.formatChannelRow(marker, ch, it.Availability, maxWidth, tagWidth)
+		}
+
+		if highlighted {
+			if maxWidth > 0 {
+				row = padOrTruncateVisual(row, maxWidth)
+			}
+			// One reverse run keeps nested SGR resets from breaking selection.
+			row = styleSelectedRow(ansi.Strip(row))
 		}
 
 		allRows = append(allRows, rowEntry{
@@ -696,8 +710,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	return lines
 }
 
-// listRowMarker returns the 2-cell lead for a list row. Focus paints only the
-// caret; favorite paints only the ★ — never the rest of the row.
+// listRowMarker returns the 2-cell lead for a list row.
 func listRowMarker(highlighted, favorite bool) string {
 	switch {
 	case highlighted && favorite:
@@ -711,141 +724,86 @@ func listRowMarker(highlighted, favorite bool) string {
 	}
 }
 
-func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.Availability, maxWidth int) string {
-	displayName := sanitizeScreenText(ch.DisplayName)
-	login := sanitizeScreenText(ch.Login)
-	identity := fmt.Sprintf("%s (%s)", displayName, login)
-	playing := m.isPlayingChannel(ch)
-	titleText := ""
-	if ch.Title != nil && strings.TrimSpace(*ch.Title) != "" {
-		titleText = sanitizeScreenText(strings.TrimSpace(*ch.Title))
-	}
-	// When a language preference is active, channels without language metadata
-	// stay visible and carry an explicit unknown tag (ticket 01 choice).
-	langUnknownTag := ""
-	if len(m.filterLanguages) > 0 && channelLanguageUnknown(ch) {
-		langUnknownTag = m.t("channels.lang_unknown_tag")
-	}
-	mergeTag := func(primary string) string {
-		switch {
-		case primary != "" && langUnknownTag != "":
-			return primary + " " + langUnknownTag
-		case langUnknownTag != "":
-			return langUnknownTag
-		default:
-			return primary
-		}
-	}
-
+// channelRowTag keeps availability and unknown-language evidence together.
+func (m Model) channelRowTag(ch twitch.Channel, avail twitch.Availability) string {
+	var tags []string
 	switch avail {
 	case twitch.AvailabilityOffline:
-		viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
-		tag := mergeTag(styleOffline(m.t("channels.offline_tag")))
-		return fitChannelRow(marker, viewers, identity, tag, titleText, playing, maxWidth)
-	case twitch.AvailabilityLive:
+		tags = append(tags, styleOffline(m.t("channels.offline_tag")))
+	case twitch.AvailabilityUnknown:
+		tags = append(tags, styleUnverified(m.t("channels.unverified_tag")))
+	}
+	if len(m.filterLanguages) > 0 && channelLanguageUnknown(ch) {
+		tags = append(tags, m.t("channels.lang_unknown_tag"))
+	}
+	return strings.Join(tags, " ")
+}
+
+func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.Availability, maxWidth int, tagWidths ...int) string {
+	displayName := sanitizeScreenText(ch.DisplayName)
+	login := sanitizeScreenText(ch.Login)
+	identity := displayName
+	if identity == "" {
+		identity = login
+	} else if login != "" && !strings.EqualFold(displayName, login) {
+		identity += " (" + login + ")"
+	}
+	title := ""
+	if ch.Title != nil {
+		title = sanitizeScreenText(strings.TrimSpace(*ch.Title))
+	}
+	viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
+	if avail == twitch.AvailabilityLive {
 		if ch.Viewers == nil {
-			// Live without a count (playing now): [ao vivo]/[live] in the viewers
-			// column, green only on that marker.
-			live := styleLive(fmt.Sprintf("%7s", m.t("channels.live_label")))
-			return fitChannelRow(marker, live, identity, mergeTag(""), titleText, playing, maxWidth)
+			viewers = styleLive(padOrTruncateVisual(m.t("channels.live_compact"), 7))
+		} else {
+			viewers = styleLive(formatLiveViewersCell(m.formatViewers(ch.Viewers)))
 		}
-		viewersText := styleLive(formatLiveViewersCell(m.formatViewers(ch.Viewers)))
-		if titleText == "" {
-			titleText = m.t("channels.title_unknown")
-		}
-		return fitChannelRow(marker, viewersText, identity, mergeTag(""), titleText, playing, maxWidth)
-	default:
-		viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
-		tag := mergeTag(styleUnverified(m.t("channels.unverified_tag")))
-		return fitChannelRow(marker, viewers, identity, tag, titleText, playing, maxWidth)
 	}
+	tag := m.channelRowTag(ch, avail)
+	tagWidth := ansi.StringWidth(tag)
+	if len(tagWidths) > 0 {
+		tagWidth = max(tagWidth, tagWidths[0])
+	}
+	return fitChannelRow(marker, viewers, identity, tag, title, m.isPlayingChannel(ch), maxWidth, tagWidth)
 }
 
-// formatLiveViewersCell packs ● + right-aligned viewers into 7 cells.
+// formatLiveViewersCell reserves one space after the live dot at every magnitude.
 func formatLiveViewersCell(viewers string) string {
-	const cell = 7
-	dot := "●"
-	room := cell - ansi.StringWidth(dot)
-	if room < 1 {
-		return TruncateVisual(dot+viewers, cell)
-	}
-	if ansi.StringWidth(viewers) > room {
-		viewers = TruncateVisual(viewers, room)
-	}
-	pad := room - ansi.StringWidth(viewers)
-	if pad < 0 {
-		pad = 0
-	}
-	return dot + strings.Repeat(" ", pad) + viewers
+	return "●" + " " + fmt.Sprintf("%5s", viewers)
 }
 
-// fitChannelRow builds "marker viewers  identity[ — tag][ — title]" and never
-// truncates status tags ([offline]/[não verificado]/[ao vivo]). Title goes
-// first when space is short; then identity.
-func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, maxWidth int) string {
+// fitChannelRow reserves a shared, left-aligned status column at the right edge.
+// The identity takes priority over the title when the panel is narrow.
+func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, maxWidth, tagWidth int) string {
+	prefix := marker + " " + viewers + "  "
 	identity = normalizeScreenText(identity)
 	title = normalizeScreenText(title)
 	tag = normalizeScreenText(tag)
-	gap := " "
-	mid := "  "
-	sep := " — "
-	prefix := marker + gap + viewers + mid
-	styleID := func(id string) string {
-		if playing {
-			return stylePlayingChannel(ansi.Strip(id))
-		}
-		return id
+	bodyWidth := maxWidth
+	if maxWidth > 0 && tagWidth > 0 {
+		bodyWidth = max(1, maxWidth-tagWidth-1)
 	}
-	build := func(id, tg, tit string) string {
-		row := prefix + styleID(id)
-		if tg != "" {
-			row += sep + tg
-		}
-		if tit != "" {
-			row += sep + tit
-		}
-		return row
+	row := prefix + identity
+	if title != "" {
+		row += " — " + title
 	}
-	row := build(identity, tag, title)
-	if maxWidth <= 0 || ansi.StringWidth(ansi.Strip(row)) <= maxWidth {
-		return fitListRow(row, maxWidth)
-	}
-
-	// Drop / shrink title first.
-	for title != "" {
-		next := ansi.StringWidth(title) - 1
-		if next < 1 {
-			title = ""
-		} else {
-			title = TruncateVisual(title, next)
-			if title == "…" || title == "..." {
-				title = ""
-			}
-		}
-		row = build(identity, tag, title)
-		if ansi.StringWidth(ansi.Strip(row)) <= maxWidth {
-			return fitListRow(row, maxWidth)
+	row = fitListRow(row, bodyWidth)
+	if playing {
+		// Keep the live/favorite colors outside the identity's bold attribute.
+		idStart := len(prefix)
+		if len(row) >= idStart {
+			row = prefix + stylePlayingChannel(row[idStart:])
 		}
 	}
-
-	// Keep the protected tag intact; shrink identity next.
-	if tag != "" {
-		fixed := ansi.StringWidth(ansi.Strip(prefix + sep + tag))
-		room := maxWidth - fixed
-		if room < 1 {
-			room = 1
+	if tagWidth > 0 {
+		if maxWidth > 0 {
+			row = padOrTruncateVisual(row, bodyWidth)
 		}
-		identity = TruncateVisual(ansi.Strip(identity), room)
-		return fitListRow(build(identity, tag, ""), maxWidth)
+		row += " " + tag
 	}
-
-	fixed := ansi.StringWidth(ansi.Strip(prefix))
-	room := maxWidth - fixed
-	if room < 1 {
-		room = 1
-	}
-	identity = TruncateVisual(ansi.Strip(identity), room)
-	return fitListRow(build(identity, "", ""), maxWidth)
+	row = fitListRow(row, maxWidth)
+	return row
 }
 
 func (m Model) formatCategoryRow(marker string, cat twitch.Category, inSearch bool, maxWidth int) string {
@@ -873,14 +831,21 @@ func (m Model) formatViewers(v *int) string {
 		return m.t("categories.viewers_unknown")
 	}
 	n := *v
-	switch {
-	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
-	case n >= 1_000:
-		return fmt.Sprintf("%.1fk", float64(n)/1_000)
-	default:
+	if n < 1_000 {
 		return fmt.Sprintf("%d", n)
 	}
+	units := [...]rune{'k', 'M', 'B', 'T', 'Q', 'E'}
+	value := float64(n) / 1_000
+	unit := 0
+	// Promote before one-decimal rounding would produce 1000.0 of a unit.
+	for value >= 999.95 && unit < len(units)-1 {
+		value /= 1_000
+		unit++
+	}
+	if value >= 99.95 {
+		return fmt.Sprintf("%d%c", max(100, int(value)), units[unit])
+	}
+	return fmt.Sprintf("%.1f%c", value, units[unit])
 }
 
 func (m Model) formatChannelViewers(v *int) string {

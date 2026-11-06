@@ -121,6 +121,10 @@ func styleHighlight(s string) string {
 	return withForeground(lipgloss.NewStyle().Bold(true), ansiCyan).Render(s)
 }
 
+func styleSelectedRow(s string) string {
+	return lipgloss.NewStyle().Bold(true).Reverse(true).Render(s)
+}
+
 func styleFavorite(s string) string {
 	return withForeground(lipgloss.NewStyle(), ansiYellow).Render(s)
 }

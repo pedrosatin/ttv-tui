@@ -182,6 +182,7 @@
   "section.recents": "Recent",
   "channels.offline": "offline",
   "channels.offline_tag": "[offline]",
+  "channels.live_compact": "[live]",
   "channels.live_label": "[live]",
   "channels.unverified_tag": "[unverified]",
   "favorites.added": "Channel added to favorites",
