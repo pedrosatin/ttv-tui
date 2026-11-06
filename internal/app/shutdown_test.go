@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -307,12 +308,34 @@ func startTUIOnPTY(t *testing.T, extraEnv ...string) *ptyTUI {
 		}
 	}()
 	t.Cleanup(func() {
-		_ = cmd.Process.Kill()
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		select {
+		case <-p.done:
+		case <-time.After(2 * time.Second):
+			_ = cmd.Process.Kill()
+			<-p.done
+		}
 		_ = master.Close()
-		<-p.done
 		for _, pid := range []int{p.playerPid, p.childPid} {
 			if pid > 0 {
 				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+		if runtime.GOOS == "linux" {
+			deadline := time.Now().Add(time.Second)
+			for {
+				pids := playerProcesses(p.dir)
+				if len(pids) == 0 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Errorf("player processes survived cleanup: %v", pids)
+					for _, pid := range pids {
+						_ = syscall.Kill(pid, syscall.SIGKILL)
+					}
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
 			}
 		}
 	})
@@ -555,4 +578,21 @@ func TestHandleOrphansInteractiveAsksFirst(t *testing.T) {
 			t.Fatalf("prompt consumed input past the answer line: left %q", rest[:n])
 		}
 	}
+}
+
+// playerProcesses finds helper players by the unique socket directory in their command line.
+func playerProcesses(dir string) []int {
+	entries, _ := os.ReadDir("/proc")
+	var pids []int
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+		cmdline, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
+		if err == nil && strings.Contains(string(cmdline), dir+"/run/") {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
 }

@@ -118,7 +118,9 @@ func TestOpenChannelDoesNotReorderRecents_PTY(t *testing.T) {
 	p.sendAndWait([]byte("j"), "▸")
 
 	openOff := p.mark()
+	oldPid := p.playerPid
 	p.sendAndWait([]byte("\r"), "Chat — #carol")
+	p.followPlayer(oldPid)
 	deadline = time.Now().Add(10 * time.Second)
 	var afterOpen string
 	for {

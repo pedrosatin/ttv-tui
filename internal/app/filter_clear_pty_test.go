@@ -74,7 +74,9 @@ func TestFilterClearsOnChannelOpen_PTY(t *testing.T) {
 	p.sendAndWait([]byte("peere"), "Filter: peere")
 
 	openOff := p.mark()
+	oldPid := p.playerPid
 	p.sendAndWait([]byte("\r"), "Chat — #peere")
+	p.followPlayer(oldPid)
 	screen := p.waitScreen(openOff, "Favorite O", "Favorites", "AlphaChan", "Peere")
 	if strings.Contains(screen, "Filter:") {
 		t.Fatalf("after opening peere, filter prompt remains; screen since open:\n%s", screen)
