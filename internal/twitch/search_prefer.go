@@ -11,8 +11,10 @@ import (
 // Chosen rule (v1.2 ticket 01):
 //  1. exact login match first (case-insensitive, trimmed query and login),
 //     even when that channel is offline and a clone is live;
-//  2. among the remaining results, live before offline/unknown;
-//  3. otherwise keep the input order (Twitch relevance).
+//  2. then exact display name match, under the same conditions (v1.9 ticket 11:
+//     a localized display name can differ from the login);
+//  3. among the remaining results, live before offline/unknown;
+//  4. otherwise keep the input order (Twitch relevance).
 //
 // Applied by GQLSource.Search before caching/returning, and again by the UI when
 // it handles SearchLoadedMsg, so Enter and settleHighlightAfterLoad see the
@@ -24,10 +26,10 @@ func PreferSearchChannels(query string, items []Channel) []Channel {
 	q := strings.TrimSpace(query)
 	out := append([]Channel(nil), items...)
 	sort.SliceStable(out, func(i, j int) bool {
-		ei := loginEqualsQuery(out[i].Login, q)
-		ej := loginEqualsQuery(out[j].Login, q)
+		ei := exactChannelRank(out[i], q)
+		ej := exactChannelRank(out[j], q)
 		if ei != ej {
-			return ei
+			return ei < ej
 		}
 		li := out[i].Availability == AvailabilityLive
 		lj := out[j].Availability == AvailabilityLive
@@ -71,6 +73,30 @@ func PreferSearchCategories(query string, items []Category) []Category {
 		return false
 	})
 	return out
+}
+
+// ExactChannelMatch reports whether query names ch exactly, by login or display
+// name (case-insensitive, trimmed). The UI lists such a channel ahead of the
+// category hits, because the user typed the channel's own name.
+func ExactChannelMatch(query string, ch Channel) bool {
+	return exactChannelRank(ch, strings.TrimSpace(query)) != exactRankNone
+}
+
+const (
+	exactRankLogin = iota
+	exactRankDisplayName
+	exactRankNone
+)
+
+func exactChannelRank(ch Channel, query string) int {
+	switch {
+	case loginEqualsQuery(ch.Login, query):
+		return exactRankLogin
+	case nameEqualsQuery(ch.DisplayName, query):
+		return exactRankDisplayName
+	default:
+		return exactRankNone
+	}
 }
 
 func loginEqualsQuery(login, query string) bool {

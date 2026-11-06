@@ -218,6 +218,7 @@ var allowedExceptions = map[string]bool{
 	"Canal":         true,
 	"CanalFavorito": true,
 	"CanalRecente":  true,
+	"CanalExato":    true,
 	"iniciando":     true,
 	"tocando":       true,
 	"pausado":       true,

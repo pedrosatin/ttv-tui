@@ -107,7 +107,7 @@ func runTUIHelper() int {
 		Source:     emptySource{},
 		Player:     mgr,
 	}
-	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" || os.Getenv("TTV_APP_RECENT_ORDER") == "1" || os.Getenv("TTV_APP_SEARCH_ESC") == "1" || os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" {
+	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" || os.Getenv("TTV_APP_RECENT_ORDER") == "1" || os.Getenv("TTV_APP_SEARCH_ESC") == "1" || os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" || os.Getenv("TTV_APP_FILTER_SCROLL") == "1" {
 		// Logged-in chat whose dial never reaches the network, so every UI
 		// mode can be entered from the PTY.
 		opts.Source = oneChannelSource{}
@@ -128,6 +128,9 @@ func runTUIHelper() int {
 		}
 		if os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" {
 			opts.Source = channelFilterSource{}
+		}
+		if os.Getenv("TTV_APP_FILTER_SCROLL") == "1" {
+			opts.Source = filterScrollSource{}
 		}
 		dial := func(context.Context, string) (net.Conn, error) {
 			return nil, errors.New("offline test")

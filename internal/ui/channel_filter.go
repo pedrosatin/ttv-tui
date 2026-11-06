@@ -294,23 +294,60 @@ func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// renderChannelFilterMenuLines returns the menu rows to draw: all of them when
+// they fit, else the title and hint, a window centered on the cursor like the
+// list's, and the cursor's position. The window derives from the cursor alone,
+// so a resize can never leave the cursor off screen. On very short terminals the
+// title and hint give way first, and the position next, as in the help.
 func (m Model) renderChannelFilterMenuLines(maxWidth int) []string {
 	if !m.channelFilterMenu {
 		return nil
 	}
-	items := m.channelFilterMenuItems
-	if len(items) == 0 {
-		items = m.buildChannelFilterMenuItems()
+	head, rows, cursor := m.channelFilterMenuRows(maxWidth)
+	available := m.height - 1
+	if m.height <= 0 || len(head)+len(rows) <= available {
+		return append(head, rows...)
 	}
+
+	budget := available
+	if m.height > 2 {
+		budget--
+	}
+	pinned := min(len(head), (budget-1)/2)
+	window := budget - pinned
+	start := max(min(cursor-window/2, len(rows)-window), 0)
+	end := min(start+window, len(rows))
+
+	out := make([]string, 0, available)
+	out = append(out, head[:pinned]...)
+	out = append(out, rows[start:end]...)
+	if m.height > 2 {
+		out = append(out, positionRow(m.channelFilterMenuIndex+1, len(m.channelFilterMenuEntries()), maxWidth))
+	}
+	return out
+}
+
+// channelFilterMenuEntries returns the items the open menu shows.
+func (m Model) channelFilterMenuEntries() []channelFilterMenuItem {
+	if len(m.channelFilterMenuItems) > 0 {
+		return m.channelFilterMenuItems
+	}
+	return m.buildChannelFilterMenuItems()
+}
+
+// channelFilterMenuRows returns the fixed rows of the menu, the rows that
+// scroll, and the index in rows of the one holding the cursor.
+func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor int) {
+	items := m.channelFilterMenuEntries()
 	langCounts := m.languagesInCurrentList()
 	countBy := make(map[string]int, len(langCounts))
 	for _, lc := range langCounts {
 		countBy[lc.Code] = lc.Count
 	}
 
-	raw := []string{
-		"=== " + m.t("channel_filter.title") + " ===",
-		"  " + m.t("channel_filter.hint"),
+	head = []string{
+		TruncateVisual("=== "+m.t("channel_filter.title")+" ===", maxWidth),
+		TruncateVisual("  "+m.t("channel_filter.hint"), maxWidth),
 	}
 	audienceHeaderDone := false
 	unchecked := string([]rune{'[', ' ', ']'})
@@ -319,7 +356,8 @@ func (m Model) renderChannelFilterMenuLines(maxWidth int) []string {
 	radioOn := string([]rune{'(', '•', ')'})
 	for i, item := range items {
 		marker := "  "
-		if i == m.channelFilterMenuIndex {
+		selected := i == m.channelFilterMenuIndex
+		if selected {
 			marker = "▸ "
 		}
 		var line string
@@ -338,7 +376,7 @@ func (m Model) renderChannelFilterMenuLines(maxWidth int) []string {
 			line = marker + box + " " + fmt.Sprintf(m.t("channel_filter.language_count"), strings.ToUpper(item.Language), countBy[item.Language])
 		case filterMenuAudience:
 			if !audienceHeaderDone {
-				raw = append(raw, "  "+m.t("channel_filter.audience_header"))
+				rows = append(rows, TruncateVisual("  "+m.t("channel_filter.audience_header"), maxWidth))
 				audienceHeaderDone = true
 			}
 			radio := radioOff
@@ -351,14 +389,12 @@ func (m Model) renderChannelFilterMenuLines(maxWidth int) []string {
 			}
 			line = marker + radio + " " + label
 		}
-		raw = append(raw, line)
+		if selected {
+			cursor = len(rows)
+		}
+		rows = append(rows, TruncateVisual(line, maxWidth))
 	}
-
-	out := make([]string, 0, len(raw))
-	for _, line := range raw {
-		out = append(out, TruncateVisual(line, maxWidth))
-	}
-	return out
+	return head, rows, cursor
 }
 
 // preferenceFilterHidesChannels reports whether language/audience prefs hid

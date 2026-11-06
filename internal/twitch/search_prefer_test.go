@@ -40,6 +40,28 @@ func TestPreferSearchChannelsExactOfflineBeatsLiveClone(t *testing.T) {
 	}
 }
 
+func TestPreferSearchChannelsExactDisplayNameBeatsLiveClone(t *testing.T) {
+	items := []Channel{
+		{ID: "clone", Login: "fan_page", DisplayName: "fan_page", Availability: AvailabilityLive},
+		{ID: "name", Login: "koreanstreamer", DisplayName: "한글이름", Availability: AvailabilityOffline},
+	}
+	got := PreferSearchChannels(" 한글이름 ", items)
+	if got[0].ID != "name" {
+		t.Fatalf("first = %q, want exact display name", got[0].Login)
+	}
+}
+
+func TestPreferSearchChannelsExactLoginBeatsExactDisplayName(t *testing.T) {
+	items := []Channel{
+		{ID: "name", Login: "someoneelse", DisplayName: "Gaules", Availability: AvailabilityLive},
+		{ID: "login", Login: "gaules", DisplayName: "TheRealOne", Availability: AvailabilityOffline},
+	}
+	got := PreferSearchChannels("gaules", items)
+	if got[0].ID != "login" || got[1].ID != "name" {
+		t.Fatalf("order = %q, %q; want login match then display name", got[0].ID, got[1].ID)
+	}
+}
+
 func TestPreferSearchChannelsLiveBeforeOfflineAmongNonExact(t *testing.T) {
 	items := []Channel{
 		{ID: "a", Login: "foo_off", DisplayName: "foo_off", Availability: AvailabilityOffline},

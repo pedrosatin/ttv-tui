@@ -343,11 +343,16 @@ func (m Model) helpViewLines() []string {
 	offset := m.helpOffset(total)
 	window := lines[offset : offset+rows]
 	if m.height > 2 {
-		position := fmt.Sprintf("%d/%d", offset+rows, total)
-		pad := max(m.width-ansi.StringWidth(position), 0)
-		window = append(window, strings.Repeat(" ", pad)+position)
+		window = append(window, positionRow(offset+rows, total, m.width))
 	}
 	return window
+}
+
+// positionRow is the right-aligned "current/total" row of a scrolled overlay.
+func positionRow(current, total, width int) string {
+	position := fmt.Sprintf("%d/%d", current, total)
+	pad := max(width-ansi.StringWidth(position), 0)
+	return strings.Repeat(" ", pad) + position
 }
 
 // renderHelpLines returns the whole help, wrapped at maxWidth. Rows are never
@@ -551,6 +556,8 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 			if isSearch {
 				hasSearchChannel = true
 			}
+		case ItemTypeExactChannel:
+			hasSearchChannel = true
 		}
 	}
 	showSectionHeaders := hasFavorites || hasRecents || (isSearch && (hasSearchCategory || hasSearchChannel))
@@ -590,6 +597,8 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 				} else {
 					addSectionHeader(m.t("categories.title"))
 				}
+			case ItemTypeExactChannel:
+				addSectionHeader(m.t("search.section_exact"))
 			case ItemTypeChannel:
 				if isSearch {
 					addSectionHeader(m.t("search.section_channels"))
@@ -610,7 +619,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		case ItemTypeCategory:
 			cat := *it.Category
 			row = m.formatCategoryRow(marker, cat, isSearch, maxWidth)
-		default: // ItemTypeChannel, ItemTypeFavorite, ItemTypeRecent
+		default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
 			ch := *it.Channel
 			row = m.formatChannelRow(marker, ch, it.Availability, maxWidth)
 		}

@@ -19,6 +19,9 @@ const (
 	ItemTypeChannel  ListItemType = "Canal"
 	ItemTypeFavorite ListItemType = "CanalFavorito"
 	ItemTypeRecent   ListItemType = "CanalRecente"
+	// ItemTypeExactChannel is a search hit whose login or display name equals
+	// the query. It renders in its own section, ahead of the categories.
+	ItemTypeExactChannel ListItemType = "CanalExato"
 )
 
 // ListItem represents a strongly-typed item in the navigation list.
@@ -261,6 +264,33 @@ func (m Model) VisibleItems() []ListItem {
 		markSeen(ch)
 	}
 
+	addChannel := func(ch twitch.Channel, itemType ListItemType) {
+		if isSeen(ch) {
+			return
+		}
+		title := ""
+		if ch.Title != nil {
+			title = *ch.Title
+		}
+		if !matchesFilter(ch.DisplayName, ch.Login, title) {
+			return
+		}
+		if !m.channelPassesPrefs(ch) {
+			return
+		}
+		chCopy := ch
+		avail := m.listingAvailability(ch)
+		if m.isPlayingChannel(ch) {
+			avail = twitch.AvailabilityLive
+		}
+		items = append(items, ListItem{
+			Type:         itemType,
+			Channel:      &chCopy,
+			Availability: avail,
+		})
+		markSeen(ch)
+	}
+
 	// 3. Conteúdo da tela
 	switch m.Mode() {
 	case ModeCategories:
@@ -275,7 +305,13 @@ func (m Model) VisibleItems() []ListItem {
 			})
 		}
 	case ModeSearch:
-		// Categories section first, then channels (ticket 09).
+		// An exact channel hit first (v1.9 ticket 11), then categories, then the
+		// other channels (ticket 09).
+		for _, ch := range m.channels {
+			if twitch.ExactChannelMatch(m.searchQuery, ch) {
+				addChannel(ch, ItemTypeExactChannel)
+			}
+		}
 		for _, cat := range m.searchCategories {
 			if !matchesFilter(cat.Name, "", "") {
 				continue
@@ -289,30 +325,7 @@ func (m Model) VisibleItems() []ListItem {
 		fallthrough
 	case ModeChannels:
 		for _, ch := range m.channels {
-			if isSeen(ch) {
-				continue
-			}
-			title := ""
-			if ch.Title != nil {
-				title = *ch.Title
-			}
-			if !matchesFilter(ch.DisplayName, ch.Login, title) {
-				continue
-			}
-			if !m.channelPassesPrefs(ch) {
-				continue
-			}
-			chCopy := ch
-			avail := m.listingAvailability(ch)
-			if m.isPlayingChannel(ch) {
-				avail = twitch.AvailabilityLive
-			}
-			items = append(items, ListItem{
-				Type:         ItemTypeChannel,
-				Channel:      &chCopy,
-				Availability: avail,
-			})
-			markSeen(ch)
+			addChannel(ch, ItemTypeChannel)
 		}
 	}
 
@@ -705,7 +718,7 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		m.loading = true
 		return m, m.fetchChannelsCmd(m.generation, selected, "", false)
 
-	default: // ItemTypeChannel, ItemTypeFavorite, ItemTypeRecent
+	default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
 		if it.Channel == nil {
 			return m, nil
 		}
@@ -841,8 +854,8 @@ func (m *Model) reconcileHighlight() {
 // arrives. Right after a category or search is opened, the highlight goes to
 // the first result of that screen, so Enter opens what the user just asked for
 // and not a favorite or recent rendered above it. Search results are preferred
-// by twitch.PreferSearchChannels before this runs (exact login first), so the
-// first row is the intended Enter target. Otherwise (refresh, next page) the
+// by twitch.PreferSearchChannels before this runs (exact login, then exact
+// display name), and firstResultID puts that hit ahead of the categories. Otherwise (refresh, next page) the
 // highlighted item keeps its place by identity, or the nearest neighbor when
 // that identity left the list.
 func (m *Model) settleHighlightAfterLoad() {
@@ -868,15 +881,28 @@ func (m *Model) settleHighlightAfterLoad() {
 }
 
 // firstResultID returns the ID of the first visible row of the loaded listing.
-// For search, categories come first (PreferSearchCategories); otherwise
-// PreferSearchChannels already put the intended Enter target at channels[0]
-// (exact login when present). Highlight that row wherever it renders —
-// including when it was folded into Favorites/Recents and omitted from the
-// search section. For category channels, prefer the listing's own section;
+// For search, a channel named exactly by the query wins, and PreferSearchChannels
+// already put it at channels[0]. Without one, categories come first
+// (PreferSearchCategories), then channels[0]. Highlight the target wherever it
+// renders — including when it was folded into Favorites/Recents and omitted from
+// the search section. An exact hit hidden by the preference filters has no row,
+// so the categories take over. For category channels, prefer the listing's own section;
 // when every loaded channel is already shown as a favorite or recent, fall
 // back to the first loaded channel wherever it renders.
 func (m Model) firstResultID() (string, bool) {
 	items := m.VisibleItems()
+	if m.Mode() == ModeSearch {
+		for _, ch := range m.channels {
+			if !twitch.ExactChannelMatch(m.searchQuery, ch) {
+				continue
+			}
+			for _, it := range items {
+				if it.Channel != nil && channelMatches(*it.Channel, ch) {
+					return it.ID(), true
+				}
+			}
+		}
+	}
 	if m.Mode() == ModeSearch && len(m.searchCategories) > 0 {
 		targetID := m.searchCategories[0].ID
 		for _, it := range items {

@@ -572,7 +572,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cats := twitch.PreferSearchCategories(msg.Query, msg.Categories)
 		m.searchCategories = make([]twitch.Category, len(cats))
 		copy(m.searchCategories, cats)
-		// Prefer exact login then live among clones (twitch.PreferSearchChannels).
+		// Prefer exact login, exact display name, then live among clones
+		// (twitch.PreferSearchChannels).
 		// Lives here so every Source gets the same Enter/highlight target.
 		items := twitch.PreferSearchChannels(msg.Query, msg.Page.Items)
 		m.channels = make([]twitch.Channel, len(items))

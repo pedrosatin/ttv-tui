@@ -27,6 +27,7 @@
   "search.empty": "Nenhum resultado para esta busca.",
   "search.section_categories": "Categorias",
   "search.section_channels": "Canais",
+  "search.section_exact": "Canal exato",
   "filter.prompt": "Filtro: %s",
   "filter.empty": "Nenhum item corresponde ao filtro atual.",
   "filter.search_hint": "Enter ou Ctrl+F busca na Twitch: %s",
