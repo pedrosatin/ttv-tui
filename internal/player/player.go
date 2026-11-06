@@ -442,6 +442,8 @@ func playerCommand(login, endpoint, inputConf string) *exec.Cmd {
 		"--no-config",
 		"--no-input-default-bindings",
 		"--no-osc",
+		"--osd-level=1",
+		"--osd-bar=no",
 		"--volume-max=100",
 		"--input-ipc-server=" + endpoint,
 		"--force-window=immediate",

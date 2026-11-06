@@ -15,7 +15,7 @@ import (
 
 func TestInputConfContentIsExact(t *testing.T) {
 	want := []struct{ key, command string }{
-		{"SPACE", `cycle pause`},
+		{"SPACE", `no-osd cycle pause; show-text "${?pause==yes:‖}${?pause==no:▶}"`},
 		{"+", `no-osd add volume 5; show-text "${volume}%"`},
 		{"=", `no-osd add volume 5; show-text "${volume}%"`},
 		{"-", `no-osd add volume -5; show-text "${volume}%"`},

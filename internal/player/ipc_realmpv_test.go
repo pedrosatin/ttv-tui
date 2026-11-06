@@ -96,6 +96,7 @@ func TestRealMPVHandshake(t *testing.T) {
 	endpoint := testEndpoint(t, "real-mpv")
 	cmd := exec.Command(mpv,
 		"--no-config", "--no-input-default-bindings", "--idle", "--vo=null", "--ao=null",
+		"--no-osc", "--osd-level=1", "--osd-bar=no",
 		"--volume-max=100", "--input-conf="+conf, "--input-ipc-server="+endpoint)
 	var out strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &out
@@ -153,10 +154,37 @@ func TestRealMPVHandshake(t *testing.T) {
 	}
 	var cycle bool
 	for _, b := range bindings {
-		cycle = cycle || (b.Key == "SPACE" && b.Command == "cycle pause")
+		cycle = cycle || (b.Key == "SPACE" && b.Command == "no-osd cycle pause; "+pauseOSD)
 	}
 	if !cycle {
 		t.Fatalf("input.conf at %s not loaded; bindings: %s", filepath.ToSlash(conf), reply.Data)
+	}
+
+	// Exercise the generated bindings, then capture exactly what show-text expands.
+	for i, tc := range []struct{ key, text, want string }{
+		{"SPACE", pauseText, "▶"},
+		{"SPACE", pauseText, "‖"},
+		{"+", "${volume}%", "47%"},
+	} {
+		id := int64(20 + i*2)
+		lines.request(t, id, "keypress", tc.key)
+		lines.waitFor(t, "binding property change", func(m ipcMessage) bool {
+			if m.Event != "property-change" {
+				return false
+			}
+			if tc.key == "SPACE" {
+				paused, ok := parseBoolData(m.Data)
+				return m.Name == "pause" && ok && paused == (tc.want == "‖")
+			}
+			vol, ok := parseVolumeData(m.Data)
+			return m.Name == "volume" && ok && vol == 47
+		})
+		reply := lines.request(t, id+1, "expand-text", tc.text)
+		var got string
+		if err := json.Unmarshal(reply.Data, &got); err != nil || got != tc.want {
+			t.Fatalf("OSD after %s = %s, want %q (decode: %v)", tc.key, reply.Data, tc.want, err)
+		}
+		t.Logf("keypress %s -> show-text %q -> %s", tc.key, tc.text, got)
 	}
 
 	if err := writeIPC(conn, map[string]any{"command": []any{"quit"}}); err != nil {

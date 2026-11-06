@@ -15,12 +15,16 @@ const inputConfName = "mpv-input.conf"
 // no-osd because mpv's own volume OSD is the English "Volume: 50%".
 const volumeOSD = `show-text "${volume}%"`
 
+// pauseOSD uses symbols shared by every app language.
+const pauseText = "${?pause==yes:‖}${?pause==no:▶}"
+const pauseOSD = `show-text "` + pauseText + `"`
+
 // inputBindings is every key the mpv window answers to, mirroring the TUI's
 // player keys. mpv runs with --no-input-default-bindings, so a key left out does
 // nothing. The window's close button does not depend on this list: mpv quits on
 // CLOSE_WIN even with no binding for it.
 var inputBindings = []struct{ key, command string }{
-	{"SPACE", "cycle pause"},
+	{"SPACE", "no-osd cycle pause; " + pauseOSD},
 	{"+", "no-osd add volume 5; " + volumeOSD},
 	{"=", "no-osd add volume 5; " + volumeOSD},
 	{"-", "no-osd add volume -5; " + volumeOSD},

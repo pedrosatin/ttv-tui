@@ -43,6 +43,7 @@ type pendingCommand struct {
 	kind   pendingKind
 	paused bool
 	volume int
+	osd    bool
 }
 
 // Session is one supervised playback (one generation).
@@ -501,6 +502,23 @@ func (s *Session) handleCommandReply(msg ipcMessage) {
 	case pendingVolume:
 		s.applyVolumeFromCommand(pending.volume)
 	}
+	if pending.osd {
+		s.showControlOSD(pending.kind)
+	}
+}
+
+// showControlOSD is called only after a requested control succeeds, never for
+// baseline writes or property observations. OSD failure does not fail playback.
+func (s *Session) showControlOSD(kind pendingKind) {
+	text := "${volume}%"
+	if kind == pendingPause {
+		text = pauseText
+	}
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
+	if s.ipcConn != nil {
+		_ = writeIPC(s.ipcConn, map[string]any{"command": []any{"show-text", text}})
+	}
 }
 
 func (s *Session) applyPauseObservation(paused bool) {
@@ -605,7 +623,7 @@ func (s *Session) applyPlaybackBaseline() {
 	s.desiredPaused = false
 	s.hasDesiredPause = true
 	s.mu.Unlock()
-	_ = s.setVolume(100)
+	_ = s.setVolumeWithOSD(100, false)
 	_ = s.sendCommand([]any{"set_property", "pause", false}, pendingCommand{
 		kind:   pendingPause,
 		paused: false,
@@ -630,6 +648,7 @@ func (s *Session) togglePause() error {
 	return s.sendCommand([]any{"set_property", "pause", want}, pendingCommand{
 		kind:   pendingPause,
 		paused: want,
+		osd:    true,
 	})
 }
 
@@ -645,6 +664,10 @@ func (s *Session) adjustVolume(delta int) error {
 }
 
 func (s *Session) setVolume(v int) error {
+	return s.setVolumeWithOSD(v, true)
+}
+
+func (s *Session) setVolumeWithOSD(v int, osd bool) error {
 	v = clampVolume(v)
 	s.mu.Lock()
 	if s.stopped || s.state == StateEnded || s.state == StateError {
@@ -656,6 +679,7 @@ func (s *Session) setVolume(v int) error {
 	return s.sendCommand([]any{"set_property", "volume", v}, pendingCommand{
 		kind:   pendingVolume,
 		volume: v,
+		osd:    osd,
 	})
 }
 

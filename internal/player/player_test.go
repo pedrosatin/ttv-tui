@@ -918,6 +918,13 @@ func TestPlaybackBaselineSyncsVolumeAndPause(t *testing.T) {
 	// playing with the pause lifted: the helper opened paused.
 	waitCommands(t, cmdLog, 5*time.Second, `["set_property","volume",100]`, `["set_property","pause",false]`)
 	waitCommandsSettled(t, mgr, StatePlaying, 5*time.Second)
+	raw, err := os.ReadFile(cmdLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "show-text") {
+		t.Fatalf("baseline displayed OSD: %s", raw)
+	}
 	drainEvents(mgr)
 
 	// Manual controls still work after the baseline.
@@ -934,6 +941,9 @@ func TestPlaybackBaselineSyncsVolumeAndPause(t *testing.T) {
 		t.Fatalf("AdjustVolume: %v", err)
 	}
 	waitVolume(t, mgr, gen, 95, 3*time.Second)
+	waitCommands(t, cmdLog, 5*time.Second,
+		`["show-text","${?pause==yes:‖}${?pause==no:▶}"]`,
+		`["show-text","${volume}%"]`)
 }
 
 func TestPauseCommandCorrelatesByRequestID(t *testing.T) {
@@ -1356,6 +1366,8 @@ func TestDefaultCommandShape(t *testing.T) {
 		"--no-input-default-bindings",
 		"--input-conf=/run/user/1000/ttv-tui/1/mpv-input.conf",
 		"--no-osc",
+		"--osd-level=1",
+		"--osd-bar=no",
 		"--volume-max=100",
 	} {
 		if !strings.Contains(joined, want) {
