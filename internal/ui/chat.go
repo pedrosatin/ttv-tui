@@ -276,13 +276,6 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		if msg.ClearUser == "" {
 			// Full clear empties the buffer; scroll returns to live.
 			m.resetChatScroll()
-		} else if !m.chatPanel.followLive {
-			// Per-user purge may remove the anchored message; clamp.
-			if n := m.chatPanel.buf.Len(); n == 0 {
-				m.resetChatScroll()
-			} else if m.chatPanel.bottomIdx >= n {
-				m.chatPanel.bottomIdx = n - 1
-			}
 		}
 		beforeLen := m.chatPanel.buf.Len()
 		appended := m.chatPanel.buf.Append(m.moderationClearChatMessage(msg))
@@ -290,13 +283,6 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.ClearMsgID != "" {
 		m.chatPanel.buf.ClearMsg(msg.Generation, msg.ClearMsgID)
-		if !m.chatPanel.followLive {
-			if n := m.chatPanel.buf.Len(); n == 0 {
-				m.resetChatScroll()
-			} else if m.chatPanel.bottomIdx >= n {
-				m.chatPanel.bottomIdx = n - 1
-			}
-		}
 		beforeLen := m.chatPanel.buf.Len()
 		appended := m.chatPanel.buf.Append(m.moderationClearMsgMessage(msg))
 		m.noteChatAppend(beforeLen, appended)

@@ -501,7 +501,16 @@ func isSGRReset(seq string) bool {
 // the styled message text, so wrapping can indent continuation rows.
 // selected marks the scroll highlight (bottom-visible message) when the chat
 // panel holds focus; the lead becomes "▌ " so ticket 05 can point at a row.
+// The deleted tag exists only here, so copy and buffer accounting never see it.
 func (m Model) formatChatMessageParts(msg ChatMessage, selected bool) (string, string) {
+	lead, content := m.formatChatRow(msg, selected)
+	if msg.Deleted {
+		content = styleWarning(m.t("chat.deleted_tag")) + " " + content
+	}
+	return lead, content
+}
+
+func (m Model) formatChatRow(msg ChatMessage, selected bool) (string, string) {
 	selLead := "  "
 	if selected && m.Focus() == FocusChat {
 		selLead = "▌ "

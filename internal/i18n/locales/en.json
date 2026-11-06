@@ -78,6 +78,7 @@
   "chat.notice_prefix": "[notice]",
   "chat.system_prefix": "[system]",
   "chat.mod_prefix": "[mod]",
+  "chat.deleted_tag": "[deleted]",
   "chat.raid_prefix": "[raid]",
   "chat.author.mod": "[MOD]",
   "chat.author.streamer": "[STR]",

@@ -40,7 +40,8 @@ type Message struct {
 	SystemMsg string
 	// Months carries USERNOTICE msg-param-cumulative-months for the local resub
 	// fallback; 0 when unknown or not applicable.
-	Months       int
+	Months int
+	// Deleted marks a message moderation erased on Twitch. Body keeps the text.
 	Deleted      bool
 	Self         bool
 	Delivery     DeliveryStatus
@@ -211,8 +212,10 @@ func (b *Buffer) UpdateDelivery(upd SendStatusUpdate) bool {
 	return true
 }
 
-// ClearChat handles CLEARCHAT: if targetUser is empty, clears the entire buffer;
-// otherwise removes messages sent by targetUser.
+// ClearChat handles CLEARCHAT. An empty targetUser clears the entire buffer.
+// Otherwise every message from targetUser stays in place, text included, marked
+// Deleted: a moderator needs what was said to record the reason. The usual
+// limits still evict them.
 func (b *Buffer) ClearChat(gen uint64, targetUser string) {
 	if b.generation != 0 && gen != b.generation {
 		return
@@ -222,21 +225,15 @@ func (b *Buffer) ClearChat(gen uint64, targetUser string) {
 		b.Clear()
 		return
 	}
-	kept := b.items[:0]
-	total := 0
-	for _, m := range b.items {
-		if strings.EqualFold(m.User, target) || strings.EqualFold(m.DisplayName, target) {
-			continue
+	for i := range b.items {
+		if strings.EqualFold(b.items[i].User, target) || strings.EqualFold(b.items[i].DisplayName, target) {
+			b.items[i].Deleted = true
 		}
-		kept = append(kept, m)
-		total += m.ByteSize()
 	}
-	clear(b.items[len(kept):])
-	b.items = kept
-	b.totalBytes = total
 }
 
-// ClearMsg removes a single message matching targetMsgID for the active generation.
+// ClearMsg marks the message matching targetMsgID as Deleted for the active
+// generation, keeping its text. An ID no longer in the buffer is a no-op.
 func (b *Buffer) ClearMsg(gen uint64, targetMsgID string) {
 	if b.generation != 0 && gen != b.generation {
 		return
@@ -244,18 +241,11 @@ func (b *Buffer) ClearMsg(gen uint64, targetMsgID string) {
 	if targetMsgID == "" {
 		return
 	}
-	kept := b.items[:0]
-	total := 0
-	for _, m := range b.items {
-		if m.ID == targetMsgID {
-			continue
+	for i := range b.items {
+		if b.items[i].ID == targetMsgID {
+			b.items[i].Deleted = true
 		}
-		kept = append(kept, m)
-		total += m.ByteSize()
 	}
-	clear(b.items[len(kept):])
-	b.items = kept
-	b.totalBytes = total
 }
 
 // Messages returns a copy of the buffered messages in chronological order.

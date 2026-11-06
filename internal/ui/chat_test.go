@@ -490,8 +490,8 @@ func TestChatModeration_ClearChatTimeoutBanAndClearMsg(t *testing.T) {
 
 	msgs := m.ChatMessages()
 	for _, msg := range msgs {
-		if strings.EqualFold(msg.User, "baduser") && msg.Kind == chat.MessageChat {
-			t.Fatalf("baduser chat message still in buffer: %+v", msg)
+		if strings.EqualFold(msg.User, "baduser") && msg.Kind == chat.MessageChat && !msg.Deleted {
+			t.Fatalf("baduser chat message not marked: %+v", msg)
 		}
 	}
 	foundTimeout := false
@@ -542,8 +542,8 @@ func TestChatModeration_ClearChatTimeoutBanAndClearMsg(t *testing.T) {
 	})
 	m = updated.(Model)
 	for _, msg := range m.ChatMessages() {
-		if msg.ID == "to-delete" {
-			t.Fatalf("deleted message still present: %+v", msg)
+		if msg.ID == "to-delete" && !msg.Deleted {
+			t.Fatalf("deleted message not marked: %+v", msg)
 		}
 	}
 	foundDeleted := false

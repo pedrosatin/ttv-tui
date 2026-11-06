@@ -361,18 +361,18 @@ func TestBuffer_LimitsAndGenerationIsolation(t *testing.T) {
 		t.Fatal("generation 2 message should be accepted")
 	}
 
-	// CLEARCHAT for specific user removes only that user's messages.
+	// CLEARCHAT for specific user marks only that user's messages.
 	buf.Append(Message{Generation: 2, Kind: MessageChat, ID: "m2", User: "alice", DisplayName: "Alice", Body: "stay"})
 	buf.ClearChat(2, "bob")
 	remaining := buf.Messages()
-	if len(remaining) != 1 || remaining[0].User != "alice" {
-		t.Fatalf("remaining after ClearChat(bob) = %+v, want only alice", remaining)
+	if len(remaining) != 2 || !remaining[0].Deleted || remaining[1].Deleted {
+		t.Fatalf("after ClearChat(bob) = %+v, want bob marked and alice untouched", remaining)
 	}
 
-	// CLEARMSG by message ID removes that specific message.
+	// CLEARMSG by message ID marks that specific message.
 	buf.ClearMsg(2, "m2")
-	if buf.Len() != 0 {
-		t.Fatalf("expected empty buffer after ClearMsg(m2), got %d", buf.Len())
+	if remaining = buf.Messages(); len(remaining) != 2 || !remaining[1].Deleted {
+		t.Fatalf("after ClearMsg(m2) = %+v, want m2 marked", remaining)
 	}
 
 	// CLEARMSG for an ID already outside the buffer is a no-op (does not panic).
