@@ -1,4 +1,7 @@
 {
+  "store.save_failed": "Não salvo: verifique permissões/espaço",
+  "list.empty_action": "Vazio: r tentar de novo · Esc voltar",
+  "player.info": "Informação do player: %s",
   "app.title": "ttv-tui",
   "status.ready": "Pronto",
   "status.loading": "Carregando categorias...",

@@ -210,6 +210,8 @@ func (m Model) statusParts() statusContent {
 		primary = m.playerStatusText()
 		c.tone = toneEnded
 		addContext()
+	case !m.loading && len(m.VisibleItems()) == 0:
+		primary = m.t("list.empty_action")
 	case m.selectedChannel != nil:
 		primary = fmt.Sprintf(m.t("channels.selected"), m.selectedChannel.DisplayName, m.selectedChannel.Login)
 		if m.selectedChannel.Viewers != nil {
@@ -270,6 +272,9 @@ func (m Model) statusParts() statusContent {
 			c.extra = append(c.extra, chatStatus)
 		}
 		c.extra = append(c.extra, context...)
+	}
+	if m.playerState != PlayerStateError && m.playerInfoLine != "" {
+		c.extra = append(c.extra, fmt.Sprintf(m.t("player.info"), m.playerInfoLine))
 	}
 	c.primary = primary
 	return c

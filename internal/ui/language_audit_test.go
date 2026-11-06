@@ -122,8 +122,8 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 		}
 	}
 	scenarios := []scenario{
-		{"ready", func(t *testing.T, lang string) Model { return auditModel(t, lang, 200) }, func() []expectKey {
-			return []expectKey{ek("status.ready"), ek("app.title"), ek("status.help_hint"), ek("status.quit_hint")}
+		{"empty", func(t *testing.T, lang string) Model { return auditModel(t, lang, 200) }, func() []expectKey {
+			return []expectKey{ek("list.empty_action"), ek("app.title"), ek("status.help_hint"), ek("status.quit_hint")}
 		}},
 		{"layout_without_chat", func(t *testing.T, lang string) Model {
 			return auditSend(auditModel(t, lang, 200), tea.KeyMsg{Type: tea.KeyCtrlW})

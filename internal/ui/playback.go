@@ -203,7 +203,11 @@ func (m Model) playerFailureText() string {
 // error, or "" when there is none. Kept after the status bar dismisses the
 // error so help (?) can still show the technical detail.
 func (m Model) playerErrorLine() string {
-	return strings.TrimSpace(sanitizeChatText(m.playerLastLine))
+	line := strings.TrimSpace(sanitizeChatText(m.playerLastLine))
+	if strings.Contains(strings.ToLower(line), "[info]") {
+		return ""
+	}
+	return line
 }
 
 // playerErrorDetail is the technical detail shown after the main message in

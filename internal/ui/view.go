@@ -509,9 +509,6 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	}
 
 	if len(items) == 0 {
-		if m.source == nil && len(m.categories) == 0 && len(m.channels) == 0 && len(m.searchCategories) == 0 && len(m.favorites) == 0 && len(m.recents) == 0 && !m.filtering && !m.searching && m.filter == "" {
-			return nil
-		}
 		lines := []string{header}
 		lines = m.appendPromptLines(lines, maxWidth)
 		if m.filterHasNoMatches() {
@@ -535,6 +532,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		} else {
 			lines = append(lines, TruncateVisual(m.t("categories.empty"), maxWidth))
 		}
+		lines = append(lines, TruncateVisual(m.t("list.empty_action"), maxWidth))
 		return lines
 	}
 

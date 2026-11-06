@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -270,6 +271,7 @@ type Model struct {
 	playerState        PlayerState
 	playerLogin        string
 	playerLastLine     string
+	playerInfoLine     string
 	playerFailure      PlayerFailure
 	playerBreakElapsed time.Duration
 	playerVolume       int
@@ -622,6 +624,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case storeSavedMsg:
+		if msg.Err != nil {
+			m.warnStatus(m.t("store.save_failed"))
+		} else if msg.Notice != "" {
+			m.clearStatusNotice()
+			m.statusNotice = m.t(msg.Notice)
+		}
+		return m, nil
+
 	case ChatEventMsg:
 		return m.handleChatEvent(msg)
 
@@ -648,10 +659,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Login != "" {
 			m.playerLogin = msg.Login
 		}
-		if msg.LastLine != "" {
+		if msg.State == PlayerStateError {
 			m.playerLastLine = msg.LastLine
-		} else if msg.State != PlayerStateError {
+			m.playerInfoLine = ""
+		} else {
 			m.playerLastLine = ""
+			m.playerInfoLine = ""
+			if strings.Contains(strings.ToLower(msg.LastLine), "[info]") {
+				m.playerInfoLine = sanitizeScreenText(strings.TrimSpace(msg.LastLine))
+			}
 		}
 		if msg.State == PlayerStateError {
 			m.playerFailure = msg.Failure

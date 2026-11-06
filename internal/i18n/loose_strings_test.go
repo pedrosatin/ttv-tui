@@ -229,6 +229,8 @@ var allowedExceptions = map[string]bool{
 	"intervalo":     true,
 	"erro":          true,
 	"encerrado":     true,
+	// Streamlink log severity token; protocol data, never localized.
+	"[info]": true,
 	// Player failure classes (mirror internal/player.Failure)
 	"offline":            true,
 	"network":            true,

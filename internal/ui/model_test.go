@@ -90,7 +90,7 @@ func TestStatusBarReflectsCatalogLanguage(t *testing.T) {
 	}
 
 	viewEN := New(catEN).View()
-	if !strings.Contains(viewEN, "[en]") || !strings.Contains(viewEN, "Ready") || !strings.Contains(viewEN, "Ctrl+Q quit") {
+	if !strings.Contains(viewEN, "[en]") || !strings.Contains(viewEN, "Empty: r retry · Esc back") || !strings.Contains(viewEN, "Ctrl+Q quit") {
 		t.Fatalf("unexpected English status bar: %q", viewEN)
 	}
 	if strings.Contains(viewEN, "Ctrl+C") {
@@ -98,7 +98,7 @@ func TestStatusBarReflectsCatalogLanguage(t *testing.T) {
 	}
 
 	viewPT := New(catPT).View()
-	if !strings.Contains(viewPT, "[pt-BR]") || !strings.Contains(viewPT, "Pronto") || !strings.Contains(viewPT, "Ctrl+Q sair") {
+	if !strings.Contains(viewPT, "[pt-BR]") || !strings.Contains(viewPT, "Vazio: r tentar de novo · Esc voltar") || !strings.Contains(viewPT, "Ctrl+Q sair") {
 		t.Fatalf("unexpected Portuguese status bar: %q", viewPT)
 	}
 	if strings.Contains(viewPT, "Ctrl+C") {

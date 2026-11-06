@@ -650,15 +650,23 @@ func (m Model) toStoreState() store.State {
 	}
 }
 
-func (m Model) saveStoreCmd() tea.Cmd {
+type storeSavedMsg struct {
+	Err    error
+	Notice string
+}
+
+func (m Model) saveStoreCmd(notice ...string) tea.Cmd {
 	if m.store == nil {
 		return nil
 	}
 	st := m.toStoreState()
 	s := m.store
+	confirmation := ""
+	if len(notice) > 0 {
+		confirmation = notice[0]
+	}
 	return func() tea.Msg {
-		_ = s.Save(st)
-		return nil
+		return storeSavedMsg{Err: s.Save(st), Notice: confirmation}
 	}
 }
 
@@ -669,17 +677,14 @@ func (m Model) toggleFavoriteHighlighted() (tea.Model, tea.Cmd) {
 	}
 	ch := *it.Channel
 	added := m.ToggleFavorite(ch)
+	notice := "favorites.removed"
 	if added {
-		m.statusNotice = m.t("favorites.added")
-	} else {
-		m.statusNotice = m.t("favorites.removed")
+		notice = "favorites.added"
 	}
-	var cmds []tea.Cmd
-	if m.store != nil {
-		cmds = append(cmds, m.saveStoreCmd())
-	}
+	m.clearStatusNotice()
+	cmd := m.saveStoreCmd(notice)
 	m.reconcileHighlight()
-	return m, tea.Batch(cmds...)
+	return m, cmd
 }
 
 func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {

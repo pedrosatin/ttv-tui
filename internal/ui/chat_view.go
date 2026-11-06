@@ -31,9 +31,9 @@ func (m Model) chatStatusSummary() string {
 		}
 		return fmt.Sprintf(m.t("chat.connected"), ch)
 	case ChatStateReconnecting:
-		return fmt.Sprintf(m.t("chat.reconnecting"), ch)
+		return m.chatConnectionReason(fmt.Sprintf(m.t("chat.reconnecting"), ch))
 	case ChatStateDisconnected:
-		return m.t("chat.disconnected")
+		return m.chatConnectionReason(m.t("chat.disconnected"))
 	case ChatStateError:
 		errText := sanitizeScreenText(m.chatPanel.errText)
 		if errText == "" {
@@ -43,6 +43,13 @@ func (m Model) chatStatusSummary() string {
 	default:
 		return ""
 	}
+}
+
+func (m Model) chatConnectionReason(state string) string {
+	if reason := strings.TrimSpace(sanitizeScreenText(m.chatPanel.errText)); reason != "" {
+		return state + ": " + reason
+	}
+	return state
 }
 
 func (m Model) chatRoomModesSummary() string {
@@ -70,9 +77,9 @@ func (m Model) chatHeaderState() string {
 		}
 		return m.t("chat.state.connected")
 	case ChatStateReconnecting:
-		return m.t("chat.state.reconnecting")
+		return m.chatConnectionReason(m.t("chat.state.reconnecting"))
 	case ChatStateDisconnected:
-		return m.t("chat.disconnected")
+		return m.chatConnectionReason(m.t("chat.disconnected"))
 	case ChatStateError:
 		errText := sanitizeScreenText(m.chatPanel.errText)
 		if errText == "" {
@@ -192,7 +199,7 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 
 	body := make([]string, 0, msgBudget)
 	if len(msgs) == 0 {
-		if msgBudget > 0 {
+		if msgBudget > 0 && m.chatPanel.state == ChatStateConnected {
 			emptyLine := "  " + fmt.Sprintf(m.t("chat.empty"), m.chatPanel.channel)
 			body = append(body, TruncateVisual(emptyLine, maxWidth))
 		}
