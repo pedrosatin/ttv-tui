@@ -174,7 +174,6 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	cmd.Stdout = stdoutW
 	cmd.Stderr = stderrW
 	s.outputs = []*os.File{stdout, stderr}
-	s.cmd = cmd
 
 	s.emit(Event{
 		Generation: cfg.Generation,
@@ -183,7 +182,8 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		Volume:     s.volume,
 	})
 
-	err = startProcess(cmd)
+	cmd, err = startProcess(cmd)
+	s.cmd = cmd
 	// The child holds its own copies of the write ends; ours must go so the
 	// readers see EOF when the process (and its descendants) are done.
 	closeFiles(stdoutW, stderrW)

@@ -144,13 +144,22 @@ func configureProcessGroup(cmd *exec.Cmd) {
 // startCommand is injectable to exercise a runner that refuses breakaway.
 var startCommand = (*exec.Cmd).Start
 
-func startProcess(cmd *exec.Cmd) error {
+func startProcess(cmd *exec.Cmd) (*exec.Cmd, error) {
 	err := startCommand(cmd)
 	if errors.Is(err, windows.ERROR_ACCESS_DENIED) && cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB != 0 {
-		cmd.SysProcAttr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
-		return startCommand(cmd)
+		// Start consumes a Cmd even on failure. Copy only its launch specification,
+		// leaving the attempt's private state and closed internal pipes behind.
+		attr := *cmd.SysProcAttr
+		attr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
+		retry := &exec.Cmd{
+			Path: cmd.Path, Args: cmd.Args, Env: cmd.Env, Dir: cmd.Dir,
+			Stdin: cmd.Stdin, Stdout: cmd.Stdout, Stderr: cmd.Stderr,
+			ExtraFiles: cmd.ExtraFiles, SysProcAttr: &attr,
+			Err: cmd.Err, Cancel: cmd.Cancel, WaitDelay: cmd.WaitDelay,
+		}
+		return retry, startCommand(retry)
 	}
-	return err
+	return cmd, err
 }
 
 // startedGroup puts cmd in a new job, after a successful Start. See processGroup

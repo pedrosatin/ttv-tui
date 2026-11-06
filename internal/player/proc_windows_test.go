@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -270,10 +272,15 @@ func TestStartEndsProcessTheJobRefuses(t *testing.T) {
 
 	runtimeDir, regDir := t.TempDir(), t.TempDir()
 	var started *exec.Cmd
+	originalStart := startCommand
+	t.Cleanup(func() { startCommand = originalStart })
+	startCommand = func(cmd *exec.Cmd) error {
+		started = cmd
+		return originalStart(cmd)
+	}
 	mgr := New(Options{
 		Command: func(login, endpoint string) *exec.Cmd {
-			started = helperCommand("silent-hang")(login, endpoint)
-			return started
+			return helperCommand("silent-hang")(login, endpoint)
 		},
 		RuntimeDir:  runtimeDir,
 		RegistryDir: regDir,
@@ -310,8 +317,12 @@ func TestStartBreakawayRetry(t *testing.T) {
 			original := startCommand
 			t.Cleanup(func() { startCommand = original })
 			calls := 0
+			var first *exec.Cmd
 			startCommand = func(cmd *exec.Cmd) error {
 				calls++
+				if calls == 1 {
+					first = cmd
+				}
 				hasFlag := cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB != 0
 				if calls == 1 && !hasFlag {
 					t.Error("first start did not request breakaway")
@@ -323,7 +334,28 @@ func TestStartBreakawayRetry(t *testing.T) {
 					t.Error("caller flag lost")
 				}
 				if denied && calls == 1 {
-					return windows.ERROR_ACCESS_DENIED
+					// Consume the real Cmd.Start state without depending on the host's
+					// job policy. A bare injected error would allow reusing this Cmd.
+					cmd.Err = windows.ERROR_ACCESS_DENIED
+					err := cmd.Start()
+					cmd.Err = nil
+					return err
+				}
+				if calls == 2 {
+					if cmd == first {
+						t.Fatal("retry reused the consumed command")
+					}
+					if cmd.SysProcAttr == first.SysProcAttr || first.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB == 0 {
+						t.Fatal("retry changed the original process attributes")
+					}
+					attr := *first.SysProcAttr
+					attr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
+					if cmd.Path != first.Path || !reflect.DeepEqual(cmd.Args, first.Args) ||
+						!reflect.DeepEqual(cmd.Env, first.Env) || cmd.Dir != first.Dir ||
+						cmd.Stdin != first.Stdin || cmd.Stdout != first.Stdout || cmd.Stderr != first.Stderr ||
+						!reflect.DeepEqual(cmd.SysProcAttr, &attr) || cmd.WaitDelay != first.WaitDelay {
+						t.Fatal("retry lost the command specification")
+					}
 				}
 				// The actual runner may also forbid breakaway; retry remains exercised
 				// deterministically here, independently from the host's job policy.
@@ -332,8 +364,12 @@ func TestStartBreakawayRetry(t *testing.T) {
 			}
 			mgr := newTestManager(t, "play", Options{})
 			base := mgr.opts.Command
+			dir := t.TempDir()
 			mgr.opts.Command = func(login, endpoint string) *exec.Cmd {
 				cmd := base(login, endpoint)
+				cmd.Dir = dir
+				cmd.Stdin = strings.NewReader("")
+				cmd.WaitDelay = time.Second
 				cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
 				return cmd
 			}
@@ -342,6 +378,9 @@ func TestStartBreakawayRetry(t *testing.T) {
 				t.Fatal(err)
 			}
 			_ = waitForState(t, mgr.Events(), gen, StatePlaying, exitWait)
+			if mgr.session.cmd.Process == nil || (denied && mgr.session.cmd == first) {
+				t.Fatal("session did not retain the started command")
+			}
 			want := 1
 			if denied {
 				want = 2
