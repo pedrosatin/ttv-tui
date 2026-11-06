@@ -16,14 +16,18 @@ import (
 
 func TestMapPlayerEventCarriesWindowVolumeAndKeysWarning(t *testing.T) {
 	msg := mapPlayerEvent(player.Event{
-		Generation:      3,
-		State:           player.StatePlaying,
-		Login:           "gaules",
-		Volume:          35,
-		InputConfFailed: true,
+		Generation:          3,
+		State:               player.StatePlaying,
+		Login:               "gaules",
+		Volume:              35,
+		InputConfFailed:     true,
+		ContainmentDegraded: true,
 	})
 	if msg.State != ui.PlayerStatePlaying || msg.Volume != 35 || msg.Generation != 3 {
 		t.Fatalf("msg = %+v", msg)
+	}
+	if !msg.ContainmentDegraded {
+		t.Fatal("ContainmentDegraded lost in mapping")
 	}
 	if !msg.InputConfFailed {
 		t.Fatal("InputConfFailed lost in the mapping")

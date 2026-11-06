@@ -70,6 +70,7 @@
   "player.error_unknown": "erro desconhecido",
   "player.ended": "Reprodução encerrada",
   "player.window_notice": "O vídeo abriu em outra janela (mpv)",
+  "player.warn.containment": "Windows: se o app cair, o vídeo pode continuar",
   "player.warn.input_conf": "Janela do mpv sem teclas: use Espaço e +/- no terminal",
   "chat.title": "Chat — #%s",
   "chat.connecting": "Conectando em #%s...",

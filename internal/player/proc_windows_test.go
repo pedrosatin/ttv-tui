@@ -2,9 +2,11 @@ package player
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -260,12 +262,11 @@ func TestStartedGroupAcceptsProcessThatAlreadyExited(t *testing.T) {
 	}
 }
 
-// A process outside any job could never be stopped with its tree, so it must not
-// play at all.
+// Errors other than ACCESS_DENIED still abort and reap the process.
 func TestStartEndsProcessTheJobRefuses(t *testing.T) {
 	orig := assignToJob
 	t.Cleanup(func() { assignToJob = orig })
-	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_ACCESS_DENIED }
+	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_INVALID_HANDLE }
 
 	runtimeDir, regDir := t.TempDir(), t.TempDir()
 	var started *exec.Cmd
@@ -279,8 +280,8 @@ func TestStartEndsProcessTheJobRefuses(t *testing.T) {
 	})
 	t.Cleanup(mgr.Close)
 
-	if _, err := mgr.Start("refused"); !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
-		t.Fatalf("Start = %v, want ERROR_ACCESS_DENIED", err)
+	if _, err := mgr.Start("refused"); !errors.Is(err, windows.ERROR_INVALID_HANDLE) {
+		t.Fatalf("Start = %v, want ERROR_INVALID_HANDLE", err)
 	}
 	if started == nil || started.ProcessState == nil {
 		t.Fatal("refused process was not ended and reaped")
@@ -301,4 +302,140 @@ func TestRecordedGroupKillsNothing(t *testing.T) {
 	if !processAlive(cmd.Process.Pid) {
 		t.Fatal("a recorded PID was killed")
 	}
+}
+
+func TestStartBreakawayRetry(t *testing.T) {
+	for _, denied := range []bool{false, true} {
+		t.Run(fmt.Sprint("denied=", denied), func(t *testing.T) {
+			original := startCommand
+			t.Cleanup(func() { startCommand = original })
+			calls := 0
+			startCommand = func(cmd *exec.Cmd) error {
+				calls++
+				hasFlag := cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB != 0
+				if calls == 1 && !hasFlag {
+					t.Error("first start did not request breakaway")
+				}
+				if calls == 2 && hasFlag {
+					t.Error("retry still requests breakaway")
+				}
+				if cmd.SysProcAttr.CreationFlags&windows.CREATE_NEW_PROCESS_GROUP == 0 {
+					t.Error("caller flag lost")
+				}
+				if denied && calls == 1 {
+					return windows.ERROR_ACCESS_DENIED
+				}
+				// The actual runner may also forbid breakaway; retry remains exercised
+				// deterministically here, independently from the host's job policy.
+				cmd.SysProcAttr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
+				return cmd.Start()
+			}
+			mgr := newTestManager(t, "play", Options{})
+			base := mgr.opts.Command
+			mgr.opts.Command = func(login, endpoint string) *exec.Cmd {
+				cmd := base(login, endpoint)
+				cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
+				return cmd
+			}
+			gen, err := mgr.Start("breakaway")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = waitForState(t, mgr.Events(), gen, StatePlaying, exitWait)
+			want := 1
+			if denied {
+				want = 2
+			}
+			if calls != want {
+				t.Fatalf("start calls = %d, want %d", calls, want)
+			}
+			mgr.Stop()
+		})
+	}
+}
+
+func TestAssignAccessDeniedDegradesAndStopKillsTree(t *testing.T) {
+	originalStart := startCommand
+	t.Cleanup(func() { startCommand = originalStart })
+	calls := 0
+	startCommand = func(cmd *exec.Cmd) error {
+		calls++
+		if calls == 1 {
+			return windows.ERROR_ACCESS_DENIED
+		}
+		if cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB != 0 {
+			t.Fatal("breakaway on retry")
+		}
+		return cmd.Start()
+	}
+	original := assignToJob
+	t.Cleanup(func() { assignToJob = original })
+	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_ACCESS_DENIED }
+	pidFile := filepath.Join(t.TempDir(), "child.pid")
+	t.Setenv("TTV_PLAYER_HELPER_CHILD_PIDFILE", pidFile)
+	mgr := newTestManager(t, "term-parent-stubborn-child", Options{})
+	gen, err := mgr.Start("restricted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	childPID := waitPidFile(t, pidFile, exitWait)
+	t.Cleanup(func() { killPid(childPID) })
+	child := openProcess(t, childPID)
+	_ = waitForState(t, mgr.Events(), gen, StateStarting, exitWait)
+	ev := waitForState(t, mgr.Events(), gen, StateStarting, exitWait)
+	if !ev.ContainmentDegraded {
+		t.Fatal("starting without containment warning")
+	}
+	sess := mgr.session
+	parent := openProcess(t, sess.Pid())
+	// Parent may exit before Stop. Its pinned handle must still identify children.
+	if err := sess.cmd.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	<-sess.waitDone
+	mgr.Stop()
+	waitExit(t, parent, "fallback parent")
+	waitExit(t, child, "fallback descendant")
+	if len(sess.group.fallback.members) != 0 {
+		t.Fatal("fallback handles leaked")
+	}
+}
+
+func TestStartDoesNotRetryOtherErrors(t *testing.T) {
+	original := startCommand
+	t.Cleanup(func() { startCommand = original })
+	calls := 0
+	startCommand = func(*exec.Cmd) error { calls++; return windows.ERROR_FILE_NOT_FOUND }
+	mgr := newTestManager(t, "play", Options{})
+	if _, err := mgr.Start("missing"); !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+		t.Fatalf("Start: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("start calls = %d", calls)
+	}
+}
+
+// Force the refusal while the child races toward exit, not only for a long-lived
+// process. This also exercises the fallback's duplicated handle during teardown.
+func TestFastExitAccessDeniedKeepsLastErrorLine(t *testing.T) {
+	original := assignToJob
+	t.Cleanup(func() { assignToJob = original })
+	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_ACCESS_DENIED }
+	TestFastExitKeepsLastErrorLine(t)
+}
+
+func TestAssignAccessDeniedPlaybackContinues(t *testing.T) {
+	original := assignToJob
+	t.Cleanup(func() { assignToJob = original })
+	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_ACCESS_DENIED }
+	mgr := newTestManager(t, "play", Options{})
+	gen, err := mgr.Start("restricted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := waitForState(t, mgr.Events(), gen, StatePlaying, exitWait)
+	if !ev.ContainmentDegraded {
+		t.Fatal("playing without containment warning")
+	}
+	mgr.Stop()
 }

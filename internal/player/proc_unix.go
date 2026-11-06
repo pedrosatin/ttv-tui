@@ -49,3 +49,6 @@ func (g processGroup) alive() bool {
 
 // release has nothing to free: a process group holds no resource of ours.
 func (g processGroup) release() {}
+
+func startProcess(cmd *exec.Cmd) error           { return cmd.Start() }
+func (g processGroup) containmentDegraded() bool { return false }

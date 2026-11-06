@@ -55,6 +55,8 @@ type PlayerStatusMsg struct {
 	// InputConfFailed marks a playback whose mpv window ignores keys because its
 	// key file could not be written. The TUI controls keep working.
 	InputConfFailed bool
+	// ContainmentDegraded means Windows refused Job Object containment.
+	ContainmentDegraded bool
 }
 
 // Playback is the UI→app bridge for starting and stopping video. The app

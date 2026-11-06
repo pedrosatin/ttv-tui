@@ -113,3 +113,36 @@ func TestNoWarningWhenInputConfWorked(t *testing.T) {
 		t.Fatalf("StatusNotice = %q", m.StatusNotice())
 	}
 }
+
+func TestContainmentWarningShownOncePerPlayback(t *testing.T) {
+	for lang, want := range map[string]string{
+		i18n.LangEN:   "Windows: video may keep running if the app crashes",
+		i18n.LangPTBR: "Windows: se o app cair, o vídeo pode continuar",
+	} {
+		t.Run(lang, func(t *testing.T) {
+			m := playingModel(t, lang, &fakePlayback{})
+			msg := PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100, ContainmentDegraded: true}
+			updated, _ := m.Update(msg)
+			m = updated.(Model)
+			if got := ansi.Strip(m.StatusBar()); !strings.Contains(got, want) {
+				t.Fatalf("status bar at 80 columns missing the whole warning: %q", got)
+			}
+
+			// A key dismisses it; later events of the same playback stay quiet.
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
+			m = updated.(Model)
+			updated, _ = m.Update(msg)
+			m = updated.(Model)
+			if got := ansi.Strip(m.StatusBar()); strings.Contains(got, want) {
+				t.Fatalf("warning came back in the same playback: %q", got)
+			}
+
+			msg.Generation = 2
+			updated, _ = m.Update(msg)
+			m = updated.(Model)
+			if got := ansi.Strip(m.StatusBar()); !strings.Contains(got, want) {
+				t.Fatalf("new playback did not warn: %q", got)
+			}
+		})
+	}
+}

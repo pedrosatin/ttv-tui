@@ -55,6 +55,8 @@ type Event struct {
 	// InputConfFailed is true on every event of a session whose mpv input.conf
 	// could not be written: the mpv window ignores keys, the TUI still controls it.
 	InputConfFailed bool
+	// ContainmentDegraded means Windows refused Job Object containment.
+	ContainmentDegraded bool
 }
 
 // CommandFunc builds the process to supervise for a given channel login and IPC

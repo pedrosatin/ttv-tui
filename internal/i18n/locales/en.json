@@ -70,6 +70,7 @@
   "player.error_unknown": "unknown error",
   "player.ended": "Playback ended",
   "player.window_notice": "Video opened in a separate window (mpv)",
+  "player.warn.containment": "Windows: video may keep running if the app crashes",
   "player.warn.input_conf": "mpv window has no keys: use Space and +/- in the terminal",
   "chat.title": "Chat — #%s",
   "chat.connecting": "Connecting to #%s...",

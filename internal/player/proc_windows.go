@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -14,7 +15,8 @@ import (
 
 // processGroup is the set of processes one playback owns: the Job Object its
 // spawned process runs in. Windows has no process group and no SIGHUP, and a
-// child outlives its parent, so only the job reaches mpv through streamlink.
+// child outlives its parent. A job normally reaches mpv through streamlink;
+// fallback uses snapshots and retained handles if Windows refuses assignment.
 //
 // The job has KILL_ON_JOB_CLOSE and this process holds its only handle, which is
 // not inheritable. When this process dies, however abruptly, the kernel closes
@@ -43,7 +45,8 @@ type processGroup struct {
 	pid int
 	// job is nil for a group rebuilt from a record: a job dies with its owner, so
 	// a later run has nothing to open.
-	job *jobObject
+	job      *jobObject
+	fallback *processTree
 }
 
 // jobObject owns the handle of one session's job. Stop and the supervisor can
@@ -130,16 +133,33 @@ func (j *jobObject) release() {
 	}
 }
 
-// configureProcessGroup has nothing to set: the job is attached after Start.
-func configureProcessGroup(*exec.Cmd) {}
+// Preserve caller flags while requesting escape from an inherited job.
+func configureProcessGroup(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.CreationFlags |= windows.CREATE_BREAKAWAY_FROM_JOB
+}
+
+// startCommand is injectable to exercise a runner that refuses breakaway.
+var startCommand = (*exec.Cmd).Start
+
+func startProcess(cmd *exec.Cmd) error {
+	err := startCommand(cmd)
+	if errors.Is(err, windows.ERROR_ACCESS_DENIED) && cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB != 0 {
+		cmd.SysProcAttr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
+		return startCommand(cmd)
+	}
+	return err
+}
 
 // startedGroup puts cmd in a new job, after a successful Start. See processGroup
 // for the race this leaves open.
 //
 // A process that already exited cannot be assigned, and that is no failure: it
 // lived too briefly to create mpv, and the session must report its real outcome.
-// A live process the kernel refuses is one nothing could stop later, so that is
-// an error and the caller must end it.
+// ACCESS_DENIED degrades to handle-based tree termination. Other errors remain
+// fatal. See docs/adr/0009-windows-job-fallback.md for the weaker guarantee.
 func startedGroup(cmd *exec.Cmd) (processGroup, error) {
 	job, err := newJobObject()
 	if err != nil {
@@ -157,6 +177,13 @@ func startedGroup(cmd *exec.Cmd) (processGroup, error) {
 	}
 	if err != nil {
 		job.release()
+		if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+			tree, openErr := newProcessTree(cmd)
+			if openErr == nil {
+				return processGroup{pid: cmd.Process.Pid, fallback: tree}, nil
+			}
+			return processGroup{}, fmt.Errorf("player: open fallback process: %w", openErr)
+		}
 		return processGroup{}, fmt.Errorf("player: assign process %d to job object: %w", cmd.Process.Pid, err)
 	}
 	return processGroup{pid: cmd.Process.Pid, job: job}, nil
@@ -180,9 +207,12 @@ func (g processGroup) terminate() error {
 	return g.kill()
 }
 
-// kill ends every member through TerminateJobObject, and refuses a group without
-// a job: a recorded PID may belong to anyone by now.
+// kill uses the job, or the live session's handle-based fallback. A group
+// rebuilt from a record is refused: its PID may belong to anyone by now.
 func (g processGroup) kill() error {
+	if g.fallback != nil {
+		return g.fallback.kill()
+	}
 	if g.job == nil {
 		return fmt.Errorf("player: kill recorded process %d: %w", g.pid, errors.ErrUnsupported)
 	}
@@ -192,6 +222,9 @@ func (g processGroup) kill() error {
 // alive reports whether any member still runs. A group without a job can only
 // answer for its PID, and an error there counts as running.
 func (g processGroup) alive() bool {
+	if g.fallback != nil {
+		return g.fallback.alive()
+	}
 	if g.job != nil {
 		return g.job.active()
 	}
@@ -202,6 +235,9 @@ func (g processGroup) alive() bool {
 // release closes the job. Anything still in it dies, so the caller does this only
 // after the group was stopped.
 func (g processGroup) release() {
+	if g.fallback != nil {
+		g.fallback.release()
+	}
 	if g.job != nil {
 		g.job.release()
 	}
@@ -225,3 +261,5 @@ func pidRunning(pid int) (bool, error) {
 	}
 	return event == uint32(windows.WAIT_TIMEOUT), nil
 }
+
+func (g processGroup) containmentDegraded() bool { return g.fallback != nil }

@@ -282,11 +282,12 @@ type Model struct {
 	playerWindowNotice   bool
 	// playerKeysWarnedGen is the last generation warned about its mpv window
 	// having no keys.
-	playerKeysWarnedGen uint64
-	chat                Chat
-	chatPanel           chatPanel
-	composing           bool
-	composeDraft        string
+	playerKeysWarnedGen        uint64
+	playerContainmentWarnedGen uint64
+	chat                       Chat
+	chatPanel                  chatPanel
+	composing                  bool
+	composeDraft               string
 	// showList / showChat are the session layout flags (ticket 02). Both start
 	// true (split). Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag
 	// independently. Layout is not persisted to disk.
@@ -680,6 +681,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerFailure = PlayerFailureNone
 		}
 		m.playerBreakElapsed = msg.BreakElapsed
+		if msg.ContainmentDegraded && msg.Generation != m.playerContainmentWarnedGen {
+			m.playerContainmentWarnedGen = msg.Generation
+			m.warnStatus(m.t("player.warn.containment"))
+		}
 		if msg.InputConfFailed && msg.Generation != m.playerKeysWarnedGen {
 			// Every event of that playback carries the flag; warn once.
 			m.playerKeysWarnedGen = msg.Generation

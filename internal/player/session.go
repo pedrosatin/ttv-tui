@@ -183,7 +183,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		Volume:     s.volume,
 	})
 
-	err = cmd.Start()
+	err = startProcess(cmd)
 	// The child holds its own copies of the write ends; ours must go so the
 	// readers see EOF when the process (and its descendants) are done.
 	closeFiles(stdoutW, stderrW)
@@ -202,6 +202,12 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		s.cleanupFiles()
 		cancel()
 		return nil, err
+	}
+
+	if s.group.containmentDegraded() {
+		emit := s.cfg.Emit
+		s.cfg.Emit = func(ev Event) { ev.ContainmentDegraded = true; emit(ev) }
+		s.emit(Event{Generation: cfg.Generation, State: StateStarting, Login: cfg.Login, Volume: s.volume})
 	}
 
 	if cfg.RegistryDir != "" {

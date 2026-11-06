@@ -102,7 +102,8 @@ func mapPlayerEvent(ev player.Event) ui.PlayerStatusMsg {
 		Volume:       ev.Volume,
 		Failure:      ui.PlayerFailure(ev.Failure),
 
-		InputConfFailed: ev.InputConfFailed,
+		InputConfFailed:     ev.InputConfFailed,
+		ContainmentDegraded: ev.ContainmentDegraded,
 	}
 }
 
