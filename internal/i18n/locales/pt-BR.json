@@ -163,6 +163,7 @@
   "focus.active_tag": "[foco]",
   "chat.hidden_narrow": "Chat oculto (<80 col.) — Ctrl+L abre só o chat, ou alargue o terminal",
   "chat.hidden_narrow_key": "O chat não cabe aqui: Ctrl+L abre só ele",
+  "layout.hidden_list_key": "Lista oculta: Ctrl+H para mostrar",
   "layout.no_chat": "Sem chat ainda: abra um canal com Enter",
   "help.title": "Atalhos de Teclado",
   "help.close": "Ajuda: ?/Esc/F1/q fecha · ↑/↓ PgUp/PgDn Home/End rola",

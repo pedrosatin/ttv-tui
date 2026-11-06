@@ -163,6 +163,7 @@
   "focus.active_tag": "[focus]",
   "chat.hidden_narrow": "Chat hidden (<80 cols) — Ctrl+L opens chat only, or widen the terminal",
   "chat.hidden_narrow_key": "Chat does not fit here: Ctrl+L opens it",
+  "layout.hidden_list_key": "List hidden: Ctrl+H to show",
   "layout.no_chat": "No chat yet: open a channel with Enter",
   "help.title": "Keyboard Shortcuts",
   "help.close": "Help: ?/Esc/F1/q close · ↑/↓ PgUp/PgDn Home/End scroll",

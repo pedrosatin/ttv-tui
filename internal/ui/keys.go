@@ -272,11 +272,18 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.searching {
+	// The filter menu is a visible overlay in every layout. Other list
+	// inputs stay suspended until the list is shown again.
+	if m.hiddenListKey(msg) {
+		m.warnStatus(m.t("layout.hidden_list_key"))
+		return m, nil
+	}
+
+	if m.searching && m.listVisible() {
 		return m.updateSearchingKey(msg)
 	}
 
-	if m.filtering {
+	if m.filtering && m.listVisible() {
 		return m.updateFilteringKey(msg)
 	}
 
@@ -427,6 +434,19 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.selectHighlighted()
 	}
 	return m, nil
+}
+
+// hiddenListKey rejects list actions while preserving shared chat shortcuts
+// and text entry in a visible chat. Global controls are handled independently.
+func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
+	if m.listVisible() || m.channelFilterMenu || (m.composing && m.chatColumnVisible()) {
+		return false
+	}
+	if key.Matches(msg, m.keys.Filter, m.keys.Search, m.keys.Favorite, m.keys.ChannelFilter, m.keys.Retry) {
+		return true
+	}
+	return !m.chatColumnVisible() && key.Matches(msg,
+		m.keys.Up, m.keys.Down, m.keys.Select, m.keys.Clear, m.keys.CopyMessage)
 }
 
 // isSwitchFocusKey reports whether msg is Tab, including a lone '\t' rune some

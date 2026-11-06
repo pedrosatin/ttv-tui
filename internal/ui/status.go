@@ -163,9 +163,9 @@ func (m Model) statusParts() statusContent {
 		c.detail = m.listErrorDetail()
 	case m.channelFilterMenu:
 		primary = m.t("channel_filter.status_open")
-	case m.searching:
+	case m.searching && m.listVisible():
 		primary = fmt.Sprintf(m.t("search.prompt"), m.searchInput)
-	case m.filtering:
+	case m.filtering && m.listVisible():
 		if m.filterHasNoMatches() {
 			primary = fmt.Sprintf(m.t("filter.search_hint"), strings.TrimSpace(m.filter))
 		} else {
