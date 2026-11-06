@@ -1041,6 +1041,8 @@ func TestManager_ChannelSwitchDiscardsPendingAndNeverSendsToNewChannel(t *testin
 		t.Fatalf("Join(alanzoka): %v", err)
 	}
 	<-chanBReady
+	// Reading JOIN on the server can precede the client marking itself connected.
+	waitConnected(t, mgr, gen2)
 
 	// Also attempt to send a late SendRequest still carrying gen1/#gaules after switching to #alanzoka.
 	staleUpd, staleErr := mgr.Send(SendRequest{

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os/exec"
 	"sync"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -133,34 +132,14 @@ func (j *jobObject) release() {
 	}
 }
 
-// Preserve caller flags while requesting escape from an inherited job.
-func configureProcessGroup(cmd *exec.Cmd) {
-	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	cmd.SysProcAttr.CreationFlags |= windows.CREATE_BREAKAWAY_FROM_JOB
-}
+// Windows needs no creation flags: containment is assigned after Start.
+// In particular, requesting breakaway can prevent Start under an external job.
+func configureProcessGroup(*exec.Cmd) {}
 
-// startCommand is injectable to exercise a runner that refuses breakaway.
+// startCommand is injectable to exercise process creation failures.
 var startCommand = (*exec.Cmd).Start
 
-func startProcess(cmd *exec.Cmd) (*exec.Cmd, error) {
-	err := startCommand(cmd)
-	if errors.Is(err, windows.ERROR_ACCESS_DENIED) && cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB != 0 {
-		// Start consumes a Cmd even on failure. Copy only its launch specification,
-		// leaving the attempt's private state and closed internal pipes behind.
-		attr := *cmd.SysProcAttr
-		attr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
-		retry := &exec.Cmd{
-			Path: cmd.Path, Args: cmd.Args, Env: cmd.Env, Dir: cmd.Dir,
-			Stdin: cmd.Stdin, Stdout: cmd.Stdout, Stderr: cmd.Stderr,
-			ExtraFiles: cmd.ExtraFiles, SysProcAttr: &attr,
-			Err: cmd.Err, Cancel: cmd.Cancel, WaitDelay: cmd.WaitDelay,
-		}
-		return retry, startCommand(retry)
-	}
-	return cmd, err
-}
+func startProcess(cmd *exec.Cmd) (*exec.Cmd, error) { return cmd, startCommand(cmd) }
 
 // startedGroup puts cmd in a new job, after a successful Start. See processGroup
 // for the race this leaves open.

@@ -1,9 +1,13 @@
 # Windows: reprodução com proteção reduzida quando o Job Object é recusado
 
-O processo pede `CREATE_BREAKAWAY_FROM_JOB`, preservando as demais flags. Se a
-criação retornar `ACCESS_DENIED`, tenta novamente sem essa flag. Isso permite
-rodar dentro de um job externo que proíbe breakaway. O processo continua sendo
-atribuído ao nosso Job Object após iniciar; jobs aninhados podem aceitar isso.
+O processo inicia sem alterar `CreationFlags` e sem pedir
+`CREATE_BREAKAWAY_FROM_JOB`. Um job externo pode proibir breakaway e fazer o
+próprio `CreateProcess` falhar com `ACCESS_DENIED`. A criação ocorre uma única
+vez; erros nessa etapa continuam fatais.
+
+Após iniciar, `startedGroup` tenta atribuir o processo ao nosso Job Object;
+jobs aninhados podem aceitar isso. Esse caminho é compartilhado pela sessão e
+pelos helpers de teste, inclusive quando chamam `cmd.Start()` diretamente.
 
 Se a atribuição retornar `ACCESS_DENIED` para um processo ainda ativo, a sessão
 continua com aviso na barra, uma vez por reprodução. Outros erros continuam

@@ -2,12 +2,9 @@ package player
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -311,102 +308,31 @@ func TestRecordedGroupKillsNothing(t *testing.T) {
 	}
 }
 
-func TestStartBreakawayRetry(t *testing.T) {
-	for _, denied := range []bool{false, true} {
-		t.Run(fmt.Sprint("denied=", denied), func(t *testing.T) {
-			original := startCommand
-			t.Cleanup(func() { startCommand = original })
-			calls := 0
-			var first *exec.Cmd
-			startCommand = func(cmd *exec.Cmd) error {
-				calls++
-				if calls == 1 {
-					first = cmd
-				}
-				hasFlag := cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB != 0
-				if calls == 1 && !hasFlag {
-					t.Error("first start did not request breakaway")
-				}
-				if calls == 2 && hasFlag {
-					t.Error("retry still requests breakaway")
-				}
-				if cmd.SysProcAttr.CreationFlags&windows.CREATE_NEW_PROCESS_GROUP == 0 {
-					t.Error("caller flag lost")
-				}
-				if denied && calls == 1 {
-					// Consume the real Cmd.Start state without depending on the host's
-					// job policy. A bare injected error would allow reusing this Cmd.
-					cmd.Err = windows.ERROR_ACCESS_DENIED
-					err := cmd.Start()
-					cmd.Err = nil
-					return err
-				}
-				if calls == 2 {
-					if cmd == first {
-						t.Fatal("retry reused the consumed command")
-					}
-					if cmd.SysProcAttr == first.SysProcAttr || first.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB == 0 {
-						t.Fatal("retry changed the original process attributes")
-					}
-					attr := *first.SysProcAttr
-					attr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
-					if cmd.Path != first.Path || !reflect.DeepEqual(cmd.Args, first.Args) ||
-						!reflect.DeepEqual(cmd.Env, first.Env) || cmd.Dir != first.Dir ||
-						cmd.Stdin != first.Stdin || cmd.Stdout != first.Stdout || cmd.Stderr != first.Stderr ||
-						!reflect.DeepEqual(cmd.SysProcAttr, &attr) || cmd.WaitDelay != first.WaitDelay {
-						t.Fatal("retry lost the command specification")
-					}
-				}
-				// The actual runner may also forbid breakaway; retry remains exercised
-				// deterministically here, independently from the host's job policy.
-				cmd.SysProcAttr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
-				return cmd.Start()
-			}
-			mgr := newTestManager(t, "play", Options{})
-			base := mgr.opts.Command
-			dir := t.TempDir()
-			mgr.opts.Command = func(login, endpoint string) *exec.Cmd {
-				cmd := base(login, endpoint)
-				cmd.Dir = dir
-				cmd.Stdin = strings.NewReader("")
-				cmd.WaitDelay = time.Second
-				cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
-				return cmd
-			}
-			gen, err := mgr.Start("breakaway")
-			if err != nil {
-				t.Fatal(err)
-			}
-			_ = waitForState(t, mgr.Events(), gen, StatePlaying, exitWait)
-			if mgr.session.cmd.Process == nil || (denied && mgr.session.cmd == first) {
-				t.Fatal("session did not retain the started command")
-			}
-			want := 1
-			if denied {
-				want = 2
-			}
-			if calls != want {
-				t.Fatalf("start calls = %d, want %d", calls, want)
-			}
-			mgr.Stop()
-		})
+func TestConfigureProcessGroupPreservesAttributes(t *testing.T) {
+	for _, attr := range []*syscall.SysProcAttr{nil, {CreationFlags: windows.CREATE_NEW_PROCESS_GROUP, HideWindow: true}} {
+		cmd := exec.Command(os.Args[0])
+		cmd.SysProcAttr = attr
+		configureProcessGroup(cmd)
+		if cmd.SysProcAttr != attr {
+			t.Fatal("process attributes replaced")
+		}
+		if attr != nil && (attr.CreationFlags != windows.CREATE_NEW_PROCESS_GROUP || !attr.HideWindow) {
+			t.Fatal("caller process attributes changed")
+		}
+	}
+}
+
+func TestAssignAccessDeniedDegradesForDirectStart(t *testing.T) {
+	original := assignToJob
+	t.Cleanup(func() { assignToJob = original })
+	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_ACCESS_DENIED }
+	cmd := startIdleGroup(t, "fallback-endpoint")
+	if !processAlive(cmd.Process.Pid) {
+		t.Fatal("directly started helper did not survive job refusal")
 	}
 }
 
 func TestAssignAccessDeniedDegradesAndStopKillsTree(t *testing.T) {
-	originalStart := startCommand
-	t.Cleanup(func() { startCommand = originalStart })
-	calls := 0
-	startCommand = func(cmd *exec.Cmd) error {
-		calls++
-		if calls == 1 {
-			return windows.ERROR_ACCESS_DENIED
-		}
-		if cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB != 0 {
-			t.Fatal("breakaway on retry")
-		}
-		return cmd.Start()
-	}
 	original := assignToJob
 	t.Cleanup(func() { assignToJob = original })
 	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_ACCESS_DENIED }
@@ -440,17 +366,21 @@ func TestAssignAccessDeniedDegradesAndStopKillsTree(t *testing.T) {
 	}
 }
 
-func TestStartDoesNotRetryOtherErrors(t *testing.T) {
-	original := startCommand
-	t.Cleanup(func() { startCommand = original })
-	calls := 0
-	startCommand = func(*exec.Cmd) error { calls++; return windows.ERROR_FILE_NOT_FOUND }
-	mgr := newTestManager(t, "play", Options{})
-	if _, err := mgr.Start("missing"); !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
-		t.Fatalf("Start: %v", err)
-	}
-	if calls != 1 {
-		t.Fatalf("start calls = %d", calls)
+func TestStartDoesNotRetryCreationErrors(t *testing.T) {
+	for _, startErr := range []error{windows.ERROR_ACCESS_DENIED, windows.ERROR_FILE_NOT_FOUND} {
+		t.Run(startErr.Error(), func(t *testing.T) {
+			original := startCommand
+			t.Cleanup(func() { startCommand = original })
+			calls := 0
+			startCommand = func(*exec.Cmd) error { calls++; return startErr }
+			mgr := newTestManager(t, "play", Options{})
+			if _, err := mgr.Start("missing"); !errors.Is(err, startErr) {
+				t.Fatalf("Start: %v, want %v", err, startErr)
+			}
+			if calls != 1 {
+				t.Fatalf("start calls = %d", calls)
+			}
+		})
 	}
 }
 
