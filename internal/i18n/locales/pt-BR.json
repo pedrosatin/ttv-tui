@@ -133,6 +133,8 @@
   "chat.reject.channel_switched": "canal alterado antes do envio",
   "chat.reject.reconnected": "chat reconectado antes do envio",
   "chat.reject.banned": "banido ou silenciado",
+  "chat.reject.timeout": "não enviada: sem confirmação no prazo; confira o chat antes de reenviar",
+  "chat.reject.connection_lost": "não enviada: conexão perdida; confira o chat antes de reenviar",
   "chat.reject.other": "recusada pelo servidor",
   "chat.warn.rate_limit": "Limite de envio atingido (20 msgs/30s, 1 msg/s): excedente descartado",
   "chat.warn.channel_switched": "Canal alterado: envio pendente descartado",

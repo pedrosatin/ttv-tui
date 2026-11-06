@@ -133,6 +133,8 @@
   "chat.reject.channel_switched": "channel switched before send",
   "chat.reject.reconnected": "chat reconnected before send",
   "chat.reject.banned": "banned or timed out",
+  "chat.reject.timeout": "not sent: confirmation timed out; check chat before retrying",
+  "chat.reject.connection_lost": "not sent: connection lost; check chat before retrying",
   "chat.reject.other": "rejected by server",
   "chat.warn.rate_limit": "Rate limit reached (20 msgs/30s, 1 msg/s): excess message discarded",
   "chat.warn.channel_switched": "Channel changed: pending message discarded",

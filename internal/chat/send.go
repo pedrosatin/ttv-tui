@@ -22,6 +22,7 @@ var (
 	ErrNoActiveChannel = errors.New("chat: no active channel")
 	ErrRateLimited     = errors.New("chat: rate limit exceeded, message discarded")
 	ErrChannelSwitched = errors.New("chat: channel switched before send completed, message discarded")
+	ErrDisconnected    = errors.New("chat: disconnected, message not sent")
 	ErrSessionClosed   = errors.New("chat: session closed before send completed")
 )
 
@@ -40,6 +41,8 @@ const (
 type RejectReason string
 
 const (
+	RejectTimeout         RejectReason = "timeout"
+	RejectConnectionLost  RejectReason = "connection_lost"
 	RejectNone            RejectReason = ""
 	RejectSlowMode        RejectReason = "slow_mode"
 	RejectFollowersOnly   RejectReason = "followers_only"
@@ -57,6 +60,7 @@ const (
 // SendRequest describes an outbound PRIVMSG tied to the channel generation in
 // which the user composed it.
 type SendRequest struct {
+	expiresAt  time.Time
 	Generation uint64
 	Channel    string
 	Nonce      string

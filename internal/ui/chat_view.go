@@ -661,6 +661,10 @@ func (m Model) formatRejectReason(reason chat.RejectReason, detail string) strin
 		return m.t("chat.reject.unauthenticated")
 	case chat.RejectChannelSwitched:
 		return m.t("chat.reject.channel_switched")
+	case chat.RejectTimeout:
+		return m.t("chat.reject.timeout")
+	case chat.RejectConnectionLost:
+		return m.t("chat.reject.connection_lost")
 	case chat.RejectReconnected:
 		return m.t("chat.reject.reconnected")
 	case chat.RejectBanned:

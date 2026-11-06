@@ -59,13 +59,19 @@ type Options struct {
 	Dial             DialFunc
 	TLSConfig        *tls.Config
 	CoalesceInterval time.Duration
-	InitialBackoff   time.Duration
-	MaxBackoff       time.Duration
-	EventsBuffer     int
-	MaxSendQueue     int
-	RandNick         func() string
-	Now              func() time.Time
-	After            func(d time.Duration) <-chan time.Time
+	// PingInterval is the heartbeat cadence; PongTimeout is the reply allowance.
+	// Any complete incoming IRC line counts as proof of life.
+	PingInterval time.Duration
+	PongTimeout  time.Duration
+	// SendTimeout bounds total queue/confirmation time and each socket write.
+	SendTimeout    time.Duration
+	InitialBackoff time.Duration
+	MaxBackoff     time.Duration
+	EventsBuffer   int
+	MaxSendQueue   int
+	RandNick       func() string
+	Now            func() time.Time
+	After          func(d time.Duration) <-chan time.Time
 }
 
 // SessionEvent is emitted by Manager on state changes, ROOMSTATE updates,
@@ -107,6 +113,7 @@ type Manager struct {
 	inFlight  []SendRequest
 	limiter   *rateLimiter
 	nextNonce uint64
+	connected bool
 }
 
 // New creates a chat Manager with the given options.
@@ -118,6 +125,15 @@ func New(opts Options) *Manager {
 	opts.Username = strings.ToLower(strings.TrimSpace(opts.Username))
 	if opts.CoalesceInterval <= 0 {
 		opts.CoalesceInterval = defaultCoalesceInterval
+	}
+	if opts.PingInterval <= 0 {
+		opts.PingInterval = 15 * time.Second
+	}
+	if opts.PongTimeout <= 0 {
+		opts.PongTimeout = 10 * time.Second
+	}
+	if opts.SendTimeout <= 0 {
+		opts.SendTimeout = 10 * time.Second
 	}
 	if opts.InitialBackoff <= 0 {
 		opts.InitialBackoff = defaultInitialBackoff
@@ -282,7 +298,14 @@ func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
 	req.Generation = m.gen
 	req.Channel = m.channel
 	req.Body = body
+	req.expiresAt = time.Now().Add(m.opts.SendTimeout)
 
+	if !m.connected {
+		gen, ch := m.gen, m.channel
+		m.mu.Unlock()
+		upd := SendStatusUpdate{Generation: gen, Channel: ch, Nonce: req.Nonce, Body: body, Status: DeliveryDiscarded, Reason: RejectConnectionLost}
+		return upd, ErrDisconnected
+	}
 	pendingCount := len(m.pending)
 	if pendingCount >= m.opts.MaxSendQueue {
 		gen := m.gen
@@ -355,6 +378,7 @@ func (m *Manager) Join(channelLogin string) (uint64, error) {
 	prevChannel := m.channel
 	discarded := m.collectPendingLocked(prevSendCh)
 
+	m.connected = false
 	m.gen++
 	gen := m.gen
 	m.channel = ch
@@ -526,7 +550,6 @@ func (m *Manager) emitUpdate(gen uint64, channel string, upd SendStatusUpdate) {
 	ev := SessionEvent{
 		Generation:  gen,
 		Channel:     channel,
-		State:       StateConnected,
 		Anonymous:   anon,
 		SendUpdates: []SendStatusUpdate{upd},
 	}
@@ -590,6 +613,17 @@ func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64
 			attempt = 0
 		}
 
+		m.mu.Lock()
+		var failed []SendRequest
+		if m.gen == gen {
+			m.connected = false
+			failed = m.collectPendingLocked(m.sendCh)
+		}
+		m.mu.Unlock()
+		failedUpdates := make([]SendStatusUpdate, 0, len(failed))
+		for _, req := range failed {
+			failedUpdates = append(failedUpdates, SendStatusUpdate{Generation: gen, Channel: channel, Nonce: req.Nonce, Body: req.Body, Status: DeliveryDiscarded, Reason: RejectConnectionLost})
+		}
 		attempt++
 		wait := backoff
 		if wait > m.opts.MaxBackoff {
@@ -604,6 +638,7 @@ func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64
 			Err:         err,
 			Attempt:     attempt,
 			NextBackoff: wait,
+			SendUpdates: failedUpdates,
 		})
 
 		timer := time.NewTimer(wait)
@@ -629,6 +664,8 @@ func (m *Manager) connectAndServe(
 	roomState *RoomState,
 	sendCh <-chan SendRequest,
 ) (connectedOnce bool, err error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	conn, err := m.opts.Dial(ctx, m.opts.Addr)
 	if err != nil {
 		return false, fmt.Errorf("dial: %w", err)
@@ -644,8 +681,10 @@ func (m *Manager) connectAndServe(
 
 	// Ensure context cancellation unblocks any pending Read/Write immediately.
 	stopWatch := make(chan struct{})
-	defer close(stopWatch)
+	watchDone := make(chan struct{})
+	defer func() { close(stopWatch); <-watchDone }()
 	go func() {
+		defer close(watchDone)
 		select {
 		case <-ctx.Done():
 			closeConn()
@@ -653,10 +692,33 @@ func (m *Manager) connectAndServe(
 		}
 	}()
 
+	write := func(line string, expiresAt time.Time) error {
+		deadline := time.Now().Add(min(m.opts.PongTimeout, m.opts.SendTimeout))
+		if !expiresAt.IsZero() && expiresAt.Before(deadline) {
+			deadline = expiresAt
+		}
+		if err := conn.SetWriteDeadline(deadline); err != nil {
+			return err
+		}
+		_, err := io.WriteString(conn, line)
+		return err
+	}
+	if err := conn.SetWriteDeadline(time.Now().Add(min(m.opts.PongTimeout, m.opts.SendTimeout))); err != nil {
+		return false, err
+	}
 	if err := m.writeHandshake(conn, channel, anon); err != nil {
 		return false, fmt.Errorf("handshake: %w", err)
 	}
 
+	readTimeout := m.opts.PingInterval + m.opts.PongTimeout
+	if err := conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+		return false, err
+	}
+	m.mu.Lock()
+	if m.gen == gen {
+		m.connected = true
+	}
+	m.mu.Unlock()
 	m.emit(ctx, SessionEvent{
 		Generation: gen,
 		Channel:    channel,
@@ -669,11 +731,17 @@ func (m *Manager) connectAndServe(
 		err  error
 	}
 	linesCh := make(chan lineResult, 64)
+	readerDone := make(chan struct{})
+	defer func() { cancel(); closeConn(); <-readerDone }()
 	go func() {
+		defer close(readerDone)
 		defer close(linesCh)
 		scanner := bufio.NewScanner(conn)
 		scanner.Buffer(make([]byte, 0, scannerInitialBuf), scannerMaxBuf)
 		for scanner.Scan() {
+			if err := conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+				return
+			}
 			select {
 			case linesCh <- lineResult{line: scanner.Text()}:
 			case <-ctx.Done():
@@ -695,6 +763,10 @@ func (m *Manager) connectAndServe(
 	ticker := time.NewTicker(m.opts.CoalesceInterval)
 	defer ticker.Stop()
 
+	heartbeat := time.NewTicker(m.opts.PingInterval)
+	defer heartbeat.Stop()
+	expiry := time.NewTicker(max(time.Nanosecond, min(m.opts.SendTimeout/4, 100*time.Millisecond)))
+	defer expiry.Stop()
 	var sendWaitCh <-chan time.Time
 
 	flush := func() {
@@ -717,6 +789,7 @@ func (m *Manager) connectAndServe(
 
 	trySendQueued := func() error {
 		for {
+			updates = append(updates, m.expireSends(gen, channel)...)
 			m.mu.Lock()
 			if m.closed || m.gen != gen || m.channel != channel {
 				m.mu.Unlock()
@@ -779,7 +852,7 @@ func (m *Manager) connectAndServe(
 			sendWaitCh = nil
 
 			wire := FormatPrivMsg(channel, head.Nonce, head.Body)
-			if _, werr := io.WriteString(conn, wire); werr != nil {
+			if werr := write(wire, head.expiresAt); werr != nil {
 				return fmt.Errorf("write privmsg: %w", werr)
 			}
 		}
@@ -809,6 +882,14 @@ func (m *Manager) connectAndServe(
 				return connectedOnce, werr
 			}
 
+		case <-heartbeat.C:
+			if werr := write("PING :ttv-tui\r\n", time.Time{}); werr != nil {
+				flush()
+				return connectedOnce, fmt.Errorf("heartbeat write: %w", werr)
+			}
+		case <-expiry.C:
+			updates = append(updates, m.expireSends(gen, channel)...)
+			flush()
 		case <-ticker.C:
 			flush()
 
@@ -819,15 +900,20 @@ func (m *Manager) connectAndServe(
 			}
 			if res.err != nil {
 				flush()
+				var netErr net.Error
+				if errors.As(res.err, &netErr) && netErr.Timeout() {
+					return connectedOnce, fmt.Errorf("chat heartbeat timeout: no PONG or traffic for %s: %w", readTimeout, res.err)
+				}
 				return connectedOnce, fmt.Errorf("read: %w", res.err)
 			}
 
+			connectedOnce = true
 			ev := ParseLine(res.line)
 			switch ev.Kind {
 			case EventPing:
 				connectedOnce = true
 				pong := FormatPong(ev.PingPayload)
-				if _, werr := io.WriteString(conn, pong); werr != nil {
+				if werr := write(pong, time.Time{}); werr != nil {
 					flush()
 					return connectedOnce, fmt.Errorf("write pong: %w", werr)
 				}
@@ -1078,4 +1164,28 @@ func randomJustinfanNick() string {
 	}
 	n := binary.LittleEndian.Uint32(buf[:])%90000 + 10000
 	return fmt.Sprintf("justinfan%d", n)
+}
+
+func (m *Manager) expireSends(gen uint64, channel string) []SendStatusUpdate {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.gen != gen {
+		return nil
+	}
+	now := time.Now()
+	var updates []SendStatusUpdate
+	expire := func(queue []SendRequest) []SendRequest {
+		kept := queue[:0]
+		for _, req := range queue {
+			if !req.expiresAt.IsZero() && !now.Before(req.expiresAt) {
+				updates = append(updates, SendStatusUpdate{Generation: gen, Channel: channel, Nonce: req.Nonce, Body: req.Body, Status: DeliveryDiscarded, Reason: RejectTimeout})
+			} else {
+				kept = append(kept, req)
+			}
+		}
+		return kept
+	}
+	m.pending = expire(m.pending)
+	m.inFlight = expire(m.inFlight)
+	return updates
 }

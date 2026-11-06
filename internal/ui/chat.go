@@ -486,6 +486,10 @@ func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {
 	switch upd.Status {
 	case chat.DeliveryDiscarded:
 		switch upd.Reason {
+		case chat.RejectTimeout, chat.RejectConnectionLost:
+			if m.composeDraft == "" && normalizeChatChannel(upd.Channel) == m.chatPanel.channel {
+				m.composeDraft = upd.Body
+			}
 		case chat.RejectRateLimited:
 			m.chatPanel.sendWarning = m.t("chat.warn.rate_limit")
 		case chat.RejectChannelSwitched:
