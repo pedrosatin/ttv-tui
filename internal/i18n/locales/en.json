@@ -103,6 +103,8 @@
   "chat.usernotice.resub": "%s resubscribed",
   "chat.usernotice.resub_months": "%s resubscribed (%d months)",
   "chat.usernotice.sub": "%s subscribed",
+  "chat.usernotice.gift_recipient": "Subscription gift from %s to %s",
+  "chat.usernotice.gift_community": "%s gifted %d subs to the community",
   "chat.usernotice.gift": "Subscription gift from %s",
   "chat.usernotice.raid": "Raid from %s",
   "chat.usernotice.announcement": "Announcement from %s",

@@ -103,6 +103,8 @@
   "chat.usernotice.resub": "%s renovou a inscrição",
   "chat.usernotice.resub_months": "%s renovou a inscrição (%d meses)",
   "chat.usernotice.sub": "%s se inscreveu",
+  "chat.usernotice.gift_recipient": "Presente de inscrição de %s para %s",
+  "chat.usernotice.gift_community": "%s presenteou a comunidade com %d inscrições",
   "chat.usernotice.gift": "Presente de inscrição de %s",
   "chat.usernotice.raid": "Raid de %s",
   "chat.usernotice.announcement": "Anúncio de %s",

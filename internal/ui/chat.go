@@ -363,6 +363,11 @@ func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 	if gen == 0 {
 		gen = m.chatPanel.gen
 	}
+	if item.CommunityGiftID != "" && chat.ClassifyUserNotice(item.MsgID) == chat.UserNoticeGift {
+		item.Generation, item.Kind = gen, chat.MessageSystem
+		item.Body, item.SystemMsg, item.UserNotice = "", "", false
+		return item
+	}
 	text := strings.TrimSpace(item.Body)
 	body := strings.TrimSpace(item.SystemMsg)
 	switch {
@@ -375,15 +380,18 @@ func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 		body += " — " + text
 	}
 	return ChatMessage{
-		Generation:  gen,
-		Kind:        chat.MessageSystem,
-		ID:          item.ID,
-		ReceivedAt:  item.ReceivedAt,
-		User:        item.User,
-		DisplayName: item.DisplayName,
-		MsgID:       item.MsgID,
-		Months:      item.Months,
-		Body:        body,
+		Generation:      gen,
+		Kind:            chat.MessageSystem,
+		ID:              item.ID,
+		ReceivedAt:      item.ReceivedAt,
+		User:            item.User,
+		DisplayName:     item.DisplayName,
+		MsgID:           item.MsgID,
+		Months:          item.Months,
+		CommunityGiftID: item.CommunityGiftID,
+		GiftCount:       item.GiftCount,
+		GiftRecipient:   item.GiftRecipient,
+		Body:            body,
 	}
 }
 
@@ -404,6 +412,9 @@ func (m Model) userNoticeFallback(item ChatMessage) string {
 		}
 		return fmt.Sprintf(m.t("chat.usernotice.resub"), name)
 	case chat.UserNoticeGift:
+		if item.GiftRecipient != "" {
+			return fmt.Sprintf(m.t("chat.usernotice.gift_recipient"), name, item.GiftRecipient)
+		}
 		return fmt.Sprintf(m.t("chat.usernotice.gift"), name)
 	case chat.UserNoticeRaid:
 		return fmt.Sprintf(m.t("chat.usernotice.raid"), name)
@@ -529,7 +540,24 @@ func (m Model) ChatMessages() []ChatMessage {
 	if m.chatPanel.buf == nil {
 		return nil
 	}
-	return m.chatPanel.buf.Messages()
+	msgs := m.chatPanel.buf.Messages()
+	for i := range msgs {
+		if msgs[i].CommunityGiftID != "" && chat.ClassifyUserNotice(msgs[i].MsgID) == chat.UserNoticeGift {
+			name := strings.TrimSpace(msgs[i].DisplayName)
+			if name == "" {
+				name = strings.TrimSpace(msgs[i].User)
+			}
+			if name == "" {
+				name = "?"
+			}
+			if msgs[i].GiftCount == 1 && msgs[i].GiftRecipient != "" {
+				msgs[i].Body = fmt.Sprintf(m.t("chat.usernotice.gift_recipient"), name, msgs[i].GiftRecipient)
+			} else {
+				msgs[i].Body = fmt.Sprintf(m.t("chat.usernotice.gift_community"), name, msgs[i].GiftCount)
+			}
+		}
+	}
+	return msgs
 }
 
 // ChatRoomState returns the current ROOMSTATE flags for the active channel.

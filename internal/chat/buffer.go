@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"slices"
 	"strings"
 	"time"
 )
@@ -46,6 +47,13 @@ type Message struct {
 	// Months carries USERNOTICE msg-param-cumulative-months for the local resub
 	// fallback; 0 when unknown or not applicable.
 	Months int
+	// Community gifts retain their announced total and received child count
+	// separately: the total is their maximum, never their sum.
+	CommunityGiftID string
+	GiftCount       int
+	GiftRecipient   string
+	giftReceived    int
+	giftIDs         []string
 	// Deleted marks a message moderation erased on Twitch. Body keeps the text.
 	Deleted      bool
 	Self         bool
@@ -56,7 +64,10 @@ type Message struct {
 
 // ByteSize estimates the byte footprint of m for buffer accounting.
 func (m Message) ByteSize() int {
-	n := len(m.ID) + len(m.Nonce) + len(m.User) + len(m.DisplayName) + len(m.Color) + len(m.MsgID) + len(m.Body) + len(m.SystemMsg) + len(m.RejectDetail) + 56
+	n := len(m.ID) + len(m.Nonce) + len(m.User) + len(m.DisplayName) + len(m.Color) + len(m.MsgID) + len(m.Body) + len(m.SystemMsg) + len(m.RejectDetail) + len(m.CommunityGiftID) + len(m.GiftRecipient) + 80
+	for _, id := range m.giftIDs {
+		n += len(id) + 16
+	}
 	for _, b := range m.Badges {
 		n += len(b)
 	}
@@ -154,6 +165,7 @@ func (b *Buffer) Clear() {
 // message's body exceeds maxBytes, it is truncated on a valid UTF-8 boundary.
 // Oldest messages are evicted until both Len() <= maxLines and Bytes() <= maxBytes.
 // A message whose non-empty ID was stored recently is a replay and is dropped.
+// Community gifts update their existing entry and return false (no new line).
 func (b *Buffer) Append(msg Message) bool {
 	if b.generation != 0 && msg.Generation != b.generation {
 		return false
@@ -163,6 +175,43 @@ func (b *Buffer) Append(msg Message) bool {
 	}
 	if _, replay := b.seen[msg.ID]; replay {
 		return false
+	}
+
+	if msg.CommunityGiftID != "" && ClassifyUserNotice(msg.MsgID) == UserNoticeGift {
+		if msg.MsgID == "subgift" || msg.MsgID == "anonsubgift" {
+			msg.giftReceived = 1
+		}
+		msg.GiftCount = max(msg.GiftCount, msg.giftReceived)
+		for i := range b.items {
+			old := &b.items[i]
+			if old.CommunityGiftID != msg.CommunityGiftID || ClassifyUserNotice(old.MsgID) != UserNoticeGift {
+				continue
+			}
+			if msg.ID != "" && (old.ID == msg.ID || slices.Contains(old.giftIDs, msg.ID)) {
+				return false
+			}
+			b.totalBytes -= old.ByteSize()
+			if old.giftReceived < int(^uint(0)>>1) {
+				old.giftReceived += msg.giftReceived
+			}
+			old.GiftCount = max(old.GiftCount, msg.GiftCount, old.giftReceived)
+			if old.GiftRecipient == "" {
+				old.GiftRecipient = msg.GiftRecipient
+			}
+			if msg.ID != "" {
+				old.giftIDs = append(old.giftIDs, msg.ID)
+			}
+			b.totalBytes += old.ByteSize()
+			b.rememberID(msg.ID)
+			// Growing metadata is bounded by the same byte budget as new lines.
+			for len(b.items) > 0 && b.totalBytes > b.maxBytes {
+				b.totalBytes -= b.items[0].ByteSize()
+				copy(b.items, b.items[1:])
+				b.items[len(b.items)-1] = Message{}
+				b.items = b.items[:len(b.items)-1]
+			}
+			return false // Updated in place, so this is not a new scroll arrival.
+		}
 	}
 
 	size := msg.ByteSize()
@@ -283,7 +332,7 @@ func (b *Buffer) ClearMsg(gen uint64, targetMsgID string) {
 		return
 	}
 	for i := range b.items {
-		if b.items[i].ID == targetMsgID {
+		if b.items[i].ID == targetMsgID || slices.Contains(b.items[i].giftIDs, targetMsgID) {
 			b.items[i].Deleted = true
 		}
 	}
@@ -293,6 +342,9 @@ func (b *Buffer) ClearMsg(gen uint64, targetMsgID string) {
 func (b *Buffer) Messages() []Message {
 	out := make([]Message, len(b.items))
 	copy(out, b.items)
+	for i := range out {
+		out[i].giftIDs = slices.Clone(out[i].giftIDs)
+	}
 	return out
 }
 

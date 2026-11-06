@@ -29,7 +29,7 @@ func (m Model) SelectedChatMessage() (ChatMessage, bool) {
 	if m.chatPanel.buf == nil {
 		return ChatMessage{}, false
 	}
-	msgs := m.chatPanel.buf.Messages()
+	msgs := m.ChatMessages()
 	if len(msgs) == 0 {
 		return ChatMessage{}, false
 	}
@@ -91,7 +91,7 @@ func (m *Model) chatFollowLiveNow() {
 // beforeLen is buf.Len() immediately before Append; appended is whether Append
 // returned true.
 func (m *Model) noteChatAppend(beforeLen int, appended bool) {
-	if !appended || m.chatPanel.buf == nil {
+	if m.chatPanel.buf == nil {
 		return
 	}
 	after := m.chatPanel.buf.Len()
@@ -101,10 +101,15 @@ func (m *Model) noteChatAppend(beforeLen int, appended bool) {
 		}
 		return
 	}
-	m.chatPanel.pendingNew++
+	if appended {
+		m.chatPanel.pendingNew++
+	}
 	// Oldest messages may have been evicted to keep buffer limits; shift the
 	// anchor so the same logical message stays at the bottom of the viewport.
-	evicted := beforeLen + 1 - after
+	evicted := beforeLen - after
+	if appended {
+		evicted++
+	}
 	if evicted > 0 {
 		m.chatPanel.bottomIdx -= evicted
 		if m.chatPanel.bottomIdx < 0 {
@@ -191,7 +196,7 @@ func (m Model) scrollChatHome() Model {
 	if m.chatPanel.buf == nil {
 		return m
 	}
-	msgs := m.chatPanel.buf.Messages()
+	msgs := m.ChatMessages()
 	if len(msgs) == 0 {
 		return m
 	}

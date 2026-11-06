@@ -1030,18 +1030,21 @@ func (m *Manager) connectAndServe(
 				// Every kind becomes a system line, including the ones this client
 				// does not know: the UI falls back on msg-id when system-msg is empty.
 				batch = append(batch, Message{
-					Generation:  gen,
-					Kind:        MessageSystem,
-					UserNotice:  true,
-					ID:          ev.ID,
-					User:        ev.User,
-					DisplayName: ev.DisplayName,
-					Color:       ev.Color,
-					Badges:      ev.Badges,
-					MsgID:       ev.MsgID,
-					SystemMsg:   ev.SystemMsg,
-					Body:        ev.Body,
-					Months:      ev.CumulativeMonths,
+					Generation:      gen,
+					Kind:            MessageSystem,
+					UserNotice:      true,
+					ID:              ev.ID,
+					User:            ev.User,
+					DisplayName:     ev.DisplayName,
+					Color:           ev.Color,
+					Badges:          ev.Badges,
+					MsgID:           ev.MsgID,
+					SystemMsg:       ev.SystemMsg,
+					Body:            ev.Body,
+					Months:          ev.CumulativeMonths,
+					CommunityGiftID: ev.CommunityGiftID,
+					GiftCount:       ev.GiftCount,
+					GiftRecipient:   ev.GiftRecipient,
 				})
 
 			case EventReconnect:

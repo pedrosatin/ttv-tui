@@ -186,3 +186,29 @@ func TestClassifyUserNotice(t *testing.T) {
 		}
 	}
 }
+
+func TestManager_CommunityGiftTagsReachBuffer(t *testing.T) {
+	mgr, gen := startUserNoticeSession(t,
+		"@id=header;login=santa;display-name=Santa;msg-id=submysterygift;msg-param-community-gift-id=community;msg-param-mass-gift-count=50 :tmi.twitch.tv USERNOTICE #gaules",
+		"@id=child;login=santa;display-name=Santa;msg-id=subgift;msg-param-community-gift-id=community;msg-param-recipient-user-name=alice :tmi.twitch.tv USERNOTICE #gaules")
+	msgs := collectMessages(t, mgr, gen, 2)
+	if msgs[0].CommunityGiftID != "community" || msgs[0].GiftCount != 50 || msgs[1].GiftRecipient != "alice" {
+		t.Fatalf("gift metadata = %+v", msgs)
+	}
+	b := NewBuffer(0, 0)
+	b.SetGeneration(gen)
+	for _, msg := range msgs {
+		b.Append(msg)
+	}
+	if b.Len() != 1 || b.Messages()[0].GiftCount != 50 {
+		t.Fatalf("summary = %+v", b.Messages())
+	}
+	b.ClearChat(gen, "santa")
+	if !b.Messages()[0].Deleted {
+		t.Fatal("donor timeout did not mark group deleted")
+	}
+	b.SetGeneration(gen + 1)
+	if b.Len() != 0 {
+		t.Fatal("group survived channel change")
+	}
+}

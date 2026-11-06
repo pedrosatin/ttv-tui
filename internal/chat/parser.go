@@ -87,6 +87,9 @@ type Event struct {
 	BanDuration *int
 	// CumulativeMonths is msg-param-cumulative-months on USERNOTICE (0 when absent).
 	CumulativeMonths int
+	CommunityGiftID  string
+	GiftCount        int
+	GiftRecipient    string
 	// SystemMsg is the Twitch-provided system-msg tag on USERNOTICE (English).
 	SystemMsg string
 	RoomState RoomState
@@ -363,6 +366,14 @@ func populateUserNoticeTags(ev *Event) {
 	ev.DisplayName = strings.TrimSpace(ev.Tags["display-name"])
 	ev.Color = normalizeHexColor(ev.Tags["color"])
 	ev.SystemMsg = ev.Tags["system-msg"]
+	ev.CommunityGiftID = strings.TrimSpace(ev.Tags["msg-param-community-gift-id"])
+	ev.GiftRecipient = strings.TrimSpace(ev.Tags["msg-param-recipient-display-name"])
+	if ev.GiftRecipient == "" {
+		ev.GiftRecipient = strings.TrimSpace(ev.Tags["msg-param-recipient-user-name"])
+	}
+	if n, err := strconv.Atoi(ev.Tags["msg-param-mass-gift-count"]); err == nil && n > 0 {
+		ev.GiftCount = n
+	}
 	if login := strings.TrimSpace(ev.Tags["login"]); login != "" {
 		ev.User = login
 	}
