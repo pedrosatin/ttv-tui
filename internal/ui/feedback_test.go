@@ -154,11 +154,8 @@ func TestFeedbackDisconnectedChat(t *testing.T) {
 	}
 }
 
-// Use a real read-only state directory; no operator config is loaded.
+// Use a file as the state directory so saving fails on every platform.
 func TestFeedbackReadOnlyState(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses directory permissions")
-	}
 	dir := t.TempDir()
 	s := store.New(filepath.Join(dir, "state.json"))
 	ch := store.Channel{ID: "1", Login: "demo", DisplayName: "Demo"}
@@ -169,11 +166,7 @@ func TestFeedbackReadOnlyState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(dir, 0500); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
-	m := feedbackModel(t, s)
+	m := feedbackModel(t, store.New(filepath.Join(s.Path(), "state.json")))
 	m.favorites = []twitch.Channel{ch.ToTwitch()}
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 	if m.StatusNotice() != "" {
@@ -185,7 +178,7 @@ func TestFeedbackReadOnlyState(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(before) != string(after) {
-		t.Fatal("state changed despite read-only directory")
+		t.Fatal("existing state file changed after failed save")
 	}
 	if len(m.favorites) != 0 {
 		t.Fatal("in-memory change lost")
