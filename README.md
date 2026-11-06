@@ -255,6 +255,12 @@ Column width adaptation:
 - **Rate limits.** Outgoing messages pass through a local rate limiter matching Twitch's limits of 20 messages per 30 seconds globally and 1 message per second per channel. Messages spaced closer than 1 second queue automatically; if the 20-message window is full, excess messages are marked `[discarded: rate limit exceeded (20/30s or 1/s)]`.
 - **Delivery tracking and room restrictions.** Each sent message carries a client nonce and displays `[sending]` until confirmed by the server (`[sent]`). If the room rejects a message due to slow mode, followers-only mode, subscribers-only mode, emote-only mode, duplicate message rules (R9K), or a ban/timeout, `ttv-tui` tags the message as `[rejected: <reason>]` inline.
 
+### Moderation
+
+The app does not support bans, timeouts, or message deletion. Twitch discontinued IRC moderation commands; `/ban` and similar commands become public messages, so the app blocks slash commands except `/me`.
+Moderation actions require the Helix API with OAuth and a registered Twitch app. Its revocable `client_id` is tied to an account, and revocation would break login for all users at once.
+That risk is disproportionate for a product already in a gray area due to ad-free video. Chat supports badges, copying with context, evidence of deleted messages, and raid notices.
+
 ## Login and security
 
 Cookie extraction below describes the current Linux implementation. See limitations for integration outside Linux.

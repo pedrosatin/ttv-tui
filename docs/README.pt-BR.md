@@ -255,6 +255,12 @@ Adaptação à largura do terminal:
 - **Limites de envio.** As mensagens enviadas passam por um limitador local alinhado aos limites da Twitch de 20 mensagens a cada 30 segundos no total e 1 mensagem por segundo por canal. Mensagens com intervalo menor que 1 segundo entram em fila automaticamente; se a janela de 20 mensagens estiver cheia, o excedente é marcado como `[discarded: rate limit exceeded (20/30s or 1/s)]`.
 - **Rastreamento de entrega e restrições da sala.** Cada mensagem enviada recebe um identificador próprio do cliente e aparece como `[sending]` até a confirmação do servidor (`[sent]`). Se a sala recusar a mensagem por modo lento, modo exclusivo para seguidores, modo exclusivo para inscritos, modo apenas emotes, regra contra repetição (R9K) ou banimento/timeout, o `ttv-tui` marca a linha como `[rejected: <motivo>]`.
 
+### Moderação
+
+O app não oferece banimentos, timeouts ou exclusão de mensagens. A Twitch descontinuou comandos de moderação por IRC; `/ban` e similares viram mensagens públicas, por isso o app bloqueia comandos com barra, exceto `/me`.
+Ações de moderação exigem a API Helix com OAuth e um app registrado na Twitch. Seu `client_id` revogável fica vinculado a uma conta, e a revogação quebraria o login de todos os usuários de uma vez.
+Esse risco é desproporcional para um produto que já está em uma área cinzenta pelo vídeo sem anúncios. O chat oferece badges, cópia com contexto, evidência de mensagens apagadas e avisos de raid.
+
 ## Login e segurança
 
 A extração de cookies descrita abaixo corresponde à implementação Linux atual. Consulte as limitações para a integração fora do Linux.
