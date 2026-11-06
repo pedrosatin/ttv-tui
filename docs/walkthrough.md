@@ -66,9 +66,8 @@ Start the terminal interface:
 ttv-tui
 ```
 
-On startup, `ttv-tui` fetches the top live categories on Twitch sorted by concurrent viewer count:
+On startup, `ttv-tui` fetches the top live categories on Twitch sorted by concurrent viewer count.
 
-![Live categories view](img/categories.svg)
 
 - Use `↑` / `↓` or `j` / `k` to move the selection cursor (`▸`). Moving down to the end of the list automatically loads the next page.
 - Press `/` to filter the loaded categories by name, or `Ctrl+F` to search for a channel across all of Twitch (`Ctrl+S` is an alias and works the same way).
@@ -78,9 +77,8 @@ On startup, `ttv-tui` fetches the top live categories on Twitch sorted by concur
 
 Inside a category, each row displays the live viewer count, the channel display name and login (`DisplayName (login)`), and the stream title.
 
-Press `Enter` on any channel to start watching:
+Press `Enter` on any channel to start watching.
 
-![Playing a channel with side-by-side chat at 120 columns](img/playing-chat.svg)
 
 Two things happen simultaneously:
 
@@ -108,20 +106,21 @@ While a stream is playing, you can keep browsing in the left panel:
   - When logged in, type your message and press `Enter` to send it, or `Esc` to leave input mode while keeping your draft (`Draft (i resumes): ...`).
 - Each sent message shows `[sending]` until confirmed by Twitch IRC (`[sent]`), or `[rejected: <reason>]` if blocked by slow mode, followers-only, or subscribers-only restrictions.
 - Press `Ctrl+T` at any time to force a chat reconnect.
+- Press `y` with chat focused to copy a message with channel and local receipt time, for example `channel #login · YYYY-MM-DD HH:MM · nick: text`.
+- New-account messages carry `[new]`; deleted messages remain visible as `[deleted]` and their text can be copied. Slash commands are blocked with a warning except `/me`.
+- The status bar uses `▶`, `‖`, `✖` and `!` for playing, paused, error and warning states.
 
-Press `?` or `F1` to open the keyboard shortcuts reference at the bottom of the screen:
+Press `?` or `F1` to open the keyboard shortcuts reference at the bottom of the screen.
 
-![Keyboard shortcuts overlay](img/help.svg)
 
 While the help is open it takes every key: `↑/↓`, `PgUp/PgDn` and `Home/End` scroll it when it does not fit, and `?`, `F1`, `Esc` or `q` close it.
 
 ## 7. Narrow terminals (< 80 columns)
 
-`ttv-tui` adapts its layout to the terminal width. At 80 columns or wider, the list and chat panels sit side by side. If you resize your terminal or tmux pane below 80 columns (for example, to 79 columns), `ttv-tui` hides the chat panel so the channel list stays legible and displays a notice above the status bar:
+`ttv-tui` adapts its layout to the terminal width. At 80 columns or wider, the list and chat panels sit side by side. In split view below 80 columns, `ttv-tui` hides the chat panel and displays `Chat hidden (<80 cols) — Ctrl+L opens chat only, or widen the terminal` above the status bar. Press `Ctrl+L` to open full-width chat.
 
-![Narrow terminal at 79 columns with hidden chat notice](img/narrow-79cols.svg)
 
-Widen the terminal back to 80 columns or more and the chat panel reappears automatically without losing buffered messages.
+Widen the terminal back to 80 columns or more to restore the split without losing buffered messages. `Ctrl+W` cycles split, chat only, list only and focus. Without an open channel, layout keys keep the list visible and ask you to open a channel with `Enter`.
 
 ## 8. Quit cleanly
 

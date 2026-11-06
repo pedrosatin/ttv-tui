@@ -6,7 +6,6 @@
 
 Terminal UI for Twitch on Linux, macOS and Windows. Browse live categories and channels, watch streams through `streamlink` and `mpv` with ad filtering and in-app playback controls, and participate in IRC chat without opening a browser.
 
-![Watching a live channel with side-by-side chat](docs/img/playing-chat.svg)
 
 ## v1.8 support
 
@@ -20,7 +19,7 @@ Terminal UI for Twitch on Linux, macOS and Windows. Browse live categories and c
 
 The matrix defines v1.8 targets. Cross-compilation does not verify playback, audio, login, clipboard or shutdown on real hardware. Release v0.2.1 includes archives for all three operating systems.
 
-Browsing, search, local favorites, IRC chat and external video with pause/volume form the scope on supported targets. Use a terminal with Unicode and ANSI colors, at least 80 columns wide for chat. Linux video requires a configured graphical session and audio. On Windows, use Windows Terminal; automated ConPTY tests are outside this version.
+Browsing, search, local favorites, IRC chat and external video with pause/volume form the scope on supported targets. Use a terminal with Unicode and ANSI colors, at least 80 columns wide for split view; chat-only works below that width. Linux video requires a configured graphical session and audio. On Windows, use Windows Terminal; automated ConPTY tests are outside this version.
 
 ## Install
 
@@ -155,23 +154,20 @@ The UI language follows `--lang` (`en` or `pt-BR`), the `language` setting in `c
 
 ## Walkthrough
 
-When `ttv-tui` starts, it loads the top live categories on Twitch:
+When `ttv-tui` starts, it loads the top live categories on Twitch.
 
-![Live categories list](docs/img/categories.svg)
 
-Select a category with `Enter` to list its live channels, then press `Enter` on a channel to launch video playback in `mpv` and join the channel's IRC chat in the right panel:
+Select a category with `Enter` to list its live channels, then press `Enter` on a channel to launch video playback in `mpv` and join the channel's IRC chat in the right panel.
 
-![Playing a channel with chat open](docs/img/playing-chat.svg)
 
-Press `?` or `F1` at any time to display the in-app keyboard shortcuts overlay:
+Press `?` or `F1` at any time to display the in-app keyboard shortcuts overlay.
 
-![Keyboard shortcuts overlay](docs/img/help.svg)
 
 For a step-by-step tour covering installation, authentication, channel switching, favorites, chat, narrow terminals, and shutdown, read the [full walkthrough](docs/walkthrough.md).
 
 ## Keybindings
 
-Press `?` or `F1` to toggle the in-app shortcuts overlay. The tables below list all bindings, including two details omitted from the compact overlay: the unshifted `=` and `_` volume aliases, and `F1` working while typing in a prompt.
+Press `?` or `F1` to open the modal help. It captures keys; use `↑`/`↓`, `PgUp`/`PgDn`, or `Home`/`End` to scroll and `?`, `Esc`, `F1`, or `q` to close it. The tables below list all bindings, including two details omitted from the compact overlay: the unshifted `=` and `_` volume aliases, and `F1` working while typing in a prompt.
 
 ### List navigation and search
 
@@ -209,7 +205,7 @@ Press `?` or `F1` to toggle the in-app shortcuts overlay. The tables below list 
 | `Ctrl+L` | Show or hide the chat panel |
 
 The layout is a session preference: the status bar names the active one
-(`layout: chat`) and hiding the chat never triggers the narrow-terminal notice.
+(`layout: chat`) and hiding the chat never triggers the narrow-terminal notice. Without an open channel, layout keys keep the list visible and report `No chat yet: open a channel with Enter`. The status bar uses `▶` for playing, `‖` for paused, `✖` for errors and `!` for warnings, so state does not depend on color.
 
 ### Video player (`mpv` window)
 
@@ -247,15 +243,15 @@ Column width adaptation:
 
 - **100+ columns.** Side-by-side split with roughly 40% width for the list and 60% for chat.
 - **80 to 99 columns.** Side-by-side split with a compact chat column of at least 34 columns so the list stays readable.
-- **Under 80 columns.** The chat panel hides automatically and a notice (`! Chat hidden (<80 cols)`) appears above the status bar. Widen the terminal to 80 columns or more to restore chat.
+- **Under 80 columns.** In split view, chat is hidden and the notice `Chat hidden (<80 cols) — Ctrl+L opens chat only, or widen the terminal` appears. Press `Ctrl+L` for full-width chat, or widen the terminal to restore the split.
 
-![Narrow terminal at 79 columns with hidden chat notice](docs/img/narrow-79cols.svg)
 
 ## Chat
 
 - **Anonymous reading.** Connecting to and reading any channel's chat uses an anonymous Twitch IRC login (`justinfan...`) over TLS (`irc.chat.twitch.tv:6697`) with IRCv3 tags enabled. No account or token is required to read chat.
 - **Authenticated sending.** Pressing `i` to compose a message requires a valid token in `config.toml`.
-- **Copy message (`y`).** With focus on the chat panel, `y` copies the selected message (the bottom-most visible row, or the latest message while following live) to the system clipboard. The payload is only `author: text` (system lines copy the text alone), without list columns, `│` separators, or padding. Mouse selection is not used. Clipboard paths, in order: (1) `wl-copy` when `WAYLAND_DISPLAY` is set and `wl-copy` is on `PATH` (content persists after the app exits); (2) `xclip -selection clipboard` when `DISPLAY` is set and `xclip` is on `PATH`; (3) OSC 52 written to stderr for SSH/tmux and other hosts without those helpers. If a path fails, the next one is tried. The status bar names the path that worked (`Copied via wl-copy: …` / `xclip` / `OSC 52`), or shows a clear error when every path fails. For the OSC 52 path inside tmux, enable `set-clipboard on` (for example in `~/.tmux.conf`) so the sequence reaches the system clipboard.
+- **Copy message (`y`).** With focus on the chat panel, `y` copies the selected message (the bottom-most visible row, or the latest message while following live) to the system clipboard. The payload includes context, for example `channel #login · YYYY-MM-DD HH:MM · nick: text`, with local time. System lines use their text; messages without a receipt time omit the context. Layout separators and padding are excluded. Mouse selection is not used. Clipboard paths try the tmux buffer first when inside tmux, then (1) `wl-copy` when `WAYLAND_DISPLAY` is set and `wl-copy` is on `PATH` (content persists after the app exits); (2) `xclip -selection clipboard` when `DISPLAY` is set and `xclip` is on `PATH`; (3) OSC 52 written to stderr for SSH/tmux and other hosts without those helpers. If a path fails, the next one is tried. The status bar names the path that worked (`Copied via wl-copy: …` / `xclip` / `OSC 52`), or shows a clear error when every path fails. For the OSC 52 path inside tmux, enable `set-clipboard on` (for example in `~/.tmux.conf`) so the sequence reaches the system clipboard.
+- **Chat markers and commands.** Messages from new accounts carry `[new]`. Deleted messages remain visible as `[deleted]` and their text can still be copied. Slash commands are blocked with a warning, except `/me`; the draft is preserved.
 - **Rate limits.** Outgoing messages pass through a local rate limiter matching Twitch's limits of 20 messages per 30 seconds globally and 1 message per second per channel. Messages spaced closer than 1 second queue automatically; if the 20-message window is full, excess messages are marked `[discarded: rate limit exceeded (20/30s or 1/s)]`.
 - **Delivery tracking and room restrictions.** Each sent message carries a client nonce and displays `[sending]` until confirmed by the server (`[sent]`). If the room rejects a message due to slow mode, followers-only mode, subscribers-only mode, emote-only mode, duplicate message rules (R9K), or a ban/timeout, `ttv-tui` tags the message as `[rejected: <reason>]` inline.
 
@@ -296,7 +292,7 @@ Run `ttv-tui doctor --lang en` (or `--lang pt-BR`) before reporting a failure. I
 - **`keyring locked or unavailable` during login.** Unlock your desktop session keyring or install `libsecret` (`secret-tool`), sign in with Firefox and pass `--browser firefox`, or import a token with `ttv-tui login --import twt`.
 - **`Token expired or invalid`.** Browser session tokens expire when your web session ends. Log in to `twitch.tv` in your browser if needed and re-run `ttv-tui login --from-browser` or `ttv-tui login --import twt`.
 - **Orphaned player prompt on startup (`A player from a previous session is still running...`).** If a previous `ttv-tui` process was killed abruptly with `SIGKILL`, its `streamlink` and `mpv` process group may still be playing. On the next launch, `ttv-tui` verifies the recorded PID and socket in `~/.local/state/ttv-tui/players/` and prompts `[Y/n]` to stop the leftover player before opening the UI.
-- **Chat is hidden.** `ttv-tui` hides the right-hand chat panel when the terminal width is below 80 columns. Resize your terminal window or tmux pane to at least 80 columns.
+- **Chat is hidden.** In split view below 80 columns, press `Ctrl+L` to open full-width chat, or widen the terminal or tmux pane to restore the split.
 - **No video window or no audio from `mpv`.** `ttv-tui` launches `mpv` with `--no-config --no-input-default-bindings --no-osc --volume-max=100 --force-window=immediate --hwdec=auto-safe`. Verify that your Wayland or X11 display session (`DISPLAY` or `WAYLAND_DISPLAY`) and audio server (PipeWire / PulseAudio) are running, and check that `Volume` in the status bar is not `vol 0` (press `+` to raise volume). Press `?` after a player failure to view the `Last player error` line reported by `streamlink` or `mpv`.
 - **Colors and `NO_COLOR`.** Set `NO_COLOR` to any non-empty value in the terminal environment (for example `NO_COLOR=1 ttv-tui`) to turn color off without changing anything else; `TERM=dumb` and `CLICOLOR=0` have the same effect. No color SGR sequence is emitted (bold, reverse, and underline remain), so symbols keep carrying the state: the selection stays on `▸`, favorites keep `★`, live channels keep `●` and `[live]`, and offline channels keep `[offline]`. `NO_COLOR` is an environment variable, not a `config.toml` key.
 

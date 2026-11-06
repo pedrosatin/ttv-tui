@@ -6,7 +6,6 @@
 
 Twitch no terminal para Linux, macOS e Windows. Navegue por categorias e canais ao vivo, assista às transmissões via `streamlink` e `mpv` com filtro de anúncios e controles de reprodução pela própria TUI, e converse no chat IRC sem abrir o navegador.
 
-![Assistindo a um canal ao vivo com chat lado a lado](img/playing-chat.svg)
 
 ## Suporte na v1.8
 
@@ -20,7 +19,7 @@ Twitch no terminal para Linux, macOS e Windows. Navegue por categorias e canais 
 
 A matriz define os alvos da v1.8. Compilação cruzada não comprova reprodução, áudio, login, clipboard ou encerramento em máquina real. A release v0.2.1 inclui arquivos para os três sistemas operacionais.
 
-Navegação, busca, favoritos locais, chat IRC e vídeo externo com pausa/volume compõem o escopo nos alvos suportados. Use um terminal com Unicode e cores ANSI, com pelo menos 80 colunas para o chat. No Linux, vídeo exige uma sessão gráfica e áudio configurados. No Windows, use Windows Terminal; testes automatizados de ConPTY ficam fora desta versão.
+Navegação, busca, favoritos locais, chat IRC e vídeo externo com pausa/volume compõem o escopo nos alvos suportados. Use um terminal com Unicode e cores ANSI, com pelo menos 80 colunas para a divisão lado a lado; o modo só-chat funciona abaixo dessa largura. No Linux, vídeo exige uma sessão gráfica e áudio configurados. No Windows, use Windows Terminal; testes automatizados de ConPTY ficam fora desta versão.
 
 ## Instalação
 
@@ -155,23 +154,20 @@ O idioma da interface segue a opção `--lang` (`en` ou `pt-BR`), o campo `langu
 
 ## Passo a passo
 
-Ao iniciar, o `ttv-tui` carrega as categorias ao vivo mais assistidas na Twitch:
+Ao iniciar, o `ttv-tui` carrega as categorias ao vivo mais assistidas na Twitch.
 
-![Lista de categorias ao vivo](img/categories.svg)
 
-Selecione uma categoria com `Enter` para listar os canais ao vivo e pressione `Enter` sobre um canal para abrir a reprodução de vídeo no `mpv` e entrar no chat IRC do canal no painel direito:
+Selecione uma categoria com `Enter` para listar os canais ao vivo e pressione `Enter` sobre um canal para abrir a reprodução de vídeo no `mpv` e entrar no chat IRC do canal no painel direito.
 
-![Reproduzindo um canal com o chat aberto](img/playing-chat.svg)
 
-Pressione `?` ou `F1` a qualquer momento para exibir o quadro de atalhos de teclado:
+Pressione `?` ou `F1` a qualquer momento para exibir o quadro de atalhos de teclado.
 
-![Quadro de atalhos de teclado](img/help.svg)
 
 Para um roteiro passo a passo em inglês cobrindo instalação, autenticação, troca de canais, favoritos, chat, terminais estreitos e encerramento, consulte o [walkthrough completo](walkthrough.md).
 
 ## Atalhos de teclado
 
-Pressione `?` ou `F1` para abrir ou fechar o quadro de atalhos no aplicativo. As tabelas abaixo trazem todos os atalhos, incluindo dois detalhes omitidos no quadro resumido da tela: as teclas `=` e `_` como alternativas para o volume e o funcionamento de `F1` durante a digitação em campos de texto.
+Pressione `?` ou `F1` para abrir a ajuda modal. Ela captura as teclas; use `↑`/`↓`, `PgUp`/`PgDn` ou `Home`/`End` para rolar e `?`, `Esc`, `F1` ou `q` para fechar. As tabelas abaixo trazem todos os atalhos, incluindo dois detalhes omitidos no quadro resumido da tela: as teclas `=` e `_` como alternativas para o volume e o funcionamento de `F1` durante a digitação em campos de texto.
 
 ### Navegação na lista e busca
 
@@ -209,7 +205,7 @@ Pressione `?` ou `F1` para abrir ou fechar o quadro de atalhos no aplicativo. As
 | `Ctrl+L` | Mostrar ou ocultar o painel do chat |
 
 O layout vale para a sessão: a barra indica o ativo (`layout: chat`, `layout: lista` ou `layout: foco`) e ocultar o
-chat nunca dispara o aviso de terminal estreito.
+chat nunca dispara o aviso de terminal estreito. Sem canal aberto, as teclas de layout mantêm a lista visível e avisam que é preciso abrir um canal com `Enter`. A barra de status usa `▶` para reprodução, `‖` para pausa, `✖` para erros e `!` para avisos, sem depender da cor.
 
 ### Player de vídeo (janela do `mpv`)
 
@@ -247,15 +243,15 @@ Adaptação à largura do terminal:
 
 - **100 colunas ou mais.** Divisão lado a lado com cerca de 40% da largura para a lista e 60% para o chat.
 - **80 a 99 colunas.** Divisão lado a lado com coluna de chat compacta de no mínimo 34 colunas para manter a leitura da lista.
-- **Menos de 80 colunas.** O painel de chat é ocultado automaticamente e um aviso (`! Chat oculto (<80 col.)` / `! Chat hidden (<80 cols)`) aparece acima da barra de status. Alargue o terminal para 80 colunas ou mais para restaurar o chat.
+- **Menos de 80 colunas.** Na divisão lado a lado, o chat fica oculto e aparece um aviso. Pressione `Ctrl+L` para abrir o chat em largura total ou alargue o terminal para restaurar a divisão.
 
-![Terminal estreito com 79 colunas e aviso de chat oculto](img/narrow-79cols.svg)
 
 ## Chat
 
 - **Leitura anônima.** A conexão e a leitura do chat de qualquer canal usam login IRC anônimo da Twitch (`justinfan...`) sobre TLS (`irc.chat.twitch.tv:6697`) com tags IRCv3 habilitadas. Nenhuma conta ou token é exigido para ler o chat.
 - **Envio autenticado.** Pressionar `i` para redigir uma mensagem exige um token válido salvo em `config.toml`.
-- **Copiar mensagem (`y`).** Com o foco no painel do chat, `y` copia a mensagem selecionada (a da base visível, ou a mais recente enquanto o chat acompanha o ao vivo) para a área de transferência do sistema. O conteúdo é só `autor: texto` (linhas de sistema copiam só o texto), sem coluna da lista, sem `│` e sem preenchimento. A seleção por mouse não é usada. Caminhos de cópia, nesta ordem: (1) `wl-copy` quando `WAYLAND_DISPLAY` existe e `wl-copy` está no `PATH` (o texto permanece depois que o app sai); (2) `xclip -selection clipboard` quando `DISPLAY` existe e `xclip` está no `PATH`; (3) OSC 52 no stderr para SSH/tmux e hosts sem esses helpers. Se um caminho falhar, o próximo é tentado. A barra de status nomeia o caminho que funcionou (`Copiado via wl-copy: …` / `xclip` / `OSC 52`), ou mostra erro claro se todos falharem. Para o caminho OSC 52 dentro do tmux, ative `set-clipboard on` (por exemplo em `~/.tmux.conf`) para a sequência chegar à área de transferência do sistema.
+- **Copiar mensagem (`y`).** Com o foco no painel do chat, `y` copia a mensagem selecionada (a da base visível, ou a mais recente enquanto o chat acompanha o ao vivo) para a área de transferência do sistema. O conteúdo inclui contexto, por exemplo `canal #login · YYYY-MM-DD HH:MM · nick: texto`, com horário local. Linhas de sistema usam seu texto; mensagens sem horário de recebimento omitem o contexto. Separadores e preenchimento ficam de fora. A seleção por mouse não é usada. A cópia tenta primeiro o buffer do tmux quando está dentro dele, depois (1) `wl-copy` quando `WAYLAND_DISPLAY` existe e `wl-copy` está no `PATH` (o texto permanece depois que o app sai); (2) `xclip -selection clipboard` quando `DISPLAY` existe e `xclip` está no `PATH`; (3) OSC 52 no stderr para SSH/tmux e hosts sem esses helpers. Se um caminho falhar, o próximo é tentado. A barra de status nomeia o caminho que funcionou (`Copiado via wl-copy: …` / `xclip` / `OSC 52`), ou mostra erro claro se todos falharem. Para o caminho OSC 52 dentro do tmux, ative `set-clipboard on` (por exemplo em `~/.tmux.conf`) para a sequência chegar à área de transferência do sistema.
+- **Marcadores e comandos do chat.** Mensagens de contas novas recebem `[novo]`. Mensagens apagadas continuam visíveis como `[apagada]` e seu texto pode ser copiado. Comandos com barra são bloqueados com aviso, exceto `/me`; o rascunho é preservado.
 - **Limites de envio.** As mensagens enviadas passam por um limitador local alinhado aos limites da Twitch de 20 mensagens a cada 30 segundos no total e 1 mensagem por segundo por canal. Mensagens com intervalo menor que 1 segundo entram em fila automaticamente; se a janela de 20 mensagens estiver cheia, o excedente é marcado como `[discarded: rate limit exceeded (20/30s or 1/s)]`.
 - **Rastreamento de entrega e restrições da sala.** Cada mensagem enviada recebe um identificador próprio do cliente e aparece como `[sending]` até a confirmação do servidor (`[sent]`). Se a sala recusar a mensagem por modo lento, modo exclusivo para seguidores, modo exclusivo para inscritos, modo apenas emotes, regra contra repetição (R9K) ou banimento/timeout, o `ttv-tui` marca a linha como `[rejected: <motivo>]`.
 
@@ -296,7 +292,7 @@ Execute `ttv-tui doctor --lang pt-BR` (ou `--lang en`) antes de relatar uma falh
 - **`keyring bloqueado ou ausente` durante o login.** Desbloqueie o keyring da sua sessão gráfica ou instale `libsecret` (`secret-tool`), faça login pelo Firefox usando `--browser firefox` ou importe um token com `ttv-tui login --import twt`.
 - **`Token expirado ou inválido` (`Token expired or invalid`).** Os tokens de sessão do navegador expiram quando a sessão web termina. Faça login novamente em `twitch.tv` pelo navegador e execute `ttv-tui login --from-browser` ou `ttv-tui login --import twt`.
 - **Pergunta sobre player órfão ao iniciar (`Um player de uma sessão anterior ainda está tocando...`).** Se um processo anterior do `ttv-tui` foi interrompido de forma abrupta com `SIGKILL`, o grupo de processos `streamlink` e `mpv` pode ter continuado em execução. Na abertura seguinte, o `ttv-tui` confere o PID e o socket registrados em `~/.local/state/ttv-tui/players/` e pergunta `[S/n]` antes de encerrar o player remanescente.
-- **Chat oculto.** O `ttv-tui` oculta o painel direito de chat quando a largura do terminal fica abaixo de 80 colunas. Redimensione a janela do terminal ou o painel do tmux para pelo menos 80 colunas.
+- **Chat oculto.** Na divisão lado a lado abaixo de 80 colunas, pressione `Ctrl+L` para abrir o chat em largura total ou alargue o terminal ou painel do tmux para restaurar a divisão.
 - **Sem janela de vídeo ou sem áudio no `mpv`.** O `ttv-tui` inicia o `mpv` com `--no-config --no-input-default-bindings --no-osc --volume-max=100 --force-window=immediate --hwdec=auto-safe`. Verifique se a sessão gráfica Wayland ou X11 (`DISPLAY` ou `WAYLAND_DISPLAY`) e o servidor de áudio (PipeWire / PulseAudio) estão ativos, e confira se o volume na barra de status não está em `vol 0` (pressione `+` para aumentar). Pressione `?` após uma falha de reprodução para ler a linha `Último erro do player` (`Last player error`) retornada pelo `streamlink` ou pelo `mpv`.
 - **Cores e `NO_COLOR`.** Defina `NO_COLOR` com qualquer valor não vazio no ambiente do terminal (por exemplo `NO_COLOR=1 ttv-tui`) para desligar a cor sem mudar o resto; `TERM=dumb` e `CLICOLOR=0` têm o mesmo efeito. Nenhuma sequência SGR de cor é emitida (negrito, reverso e sublinhado continuam), então os símbolos continuam carregando o estado: a seleção permanece em `▸`, os favoritos mantêm `★`, os canais ao vivo mantêm `●` e `[ao vivo]`, e os offline mantêm `[offline]`. `NO_COLOR` é variável de ambiente, não uma chave do `config.toml`.
 
