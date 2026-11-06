@@ -288,6 +288,51 @@ func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case key.Matches(msg, m.keys.Home):
+		m.channelFilterMenuIndex = 0
+		return m, nil
+
+	case key.Matches(msg, m.keys.GoLive):
+		m.channelFilterMenuIndex = max(len(m.channelFilterMenuItems)-1, 0)
+		return m, nil
+
+	case key.Matches(msg, m.keys.PageUp), key.Matches(msg, m.keys.PageDown):
+		head, rows, cursor := m.channelFilterMenuRows(m.width)
+		available := m.height - 1
+		window := len(rows)
+		if m.height > 0 && len(head)+len(rows) > available {
+			budget := available
+			if m.height > 2 {
+				budget--
+			}
+			window = budget - min(len(head), (budget-1)/2)
+		}
+		step := max(window-1, 1)
+		direction := 1
+		if key.Matches(msg, m.keys.PageUp) {
+			direction = -1
+		}
+		target := cursor + direction*step
+		original := m.channelFilterMenuIndex
+		for i, item := range m.channelFilterMenuItems {
+			row := i
+			if item.Kind == filterMenuAudience {
+				row++
+			}
+			if direction > 0 && row <= target || direction < 0 && row >= target {
+				if direction > 0 && i > m.channelFilterMenuIndex || direction < 0 && i < m.channelFilterMenuIndex {
+					m.channelFilterMenuIndex = i
+					if direction < 0 {
+						break
+					}
+				}
+			}
+		}
+		if m.channelFilterMenuIndex == original && len(m.channelFilterMenuItems) > 0 {
+			m.channelFilterMenuIndex = min(max(original+direction, 0), len(m.channelFilterMenuItems)-1)
+		}
+		return m, nil
+
 	case key.Matches(msg, m.keys.Select), key.Matches(msg, m.keys.Pause), msg.Type == tea.KeySpace:
 		return m.toggleChannelFilterMenuItem()
 	}

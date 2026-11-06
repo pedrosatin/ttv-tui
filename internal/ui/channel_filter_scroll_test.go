@@ -264,3 +264,50 @@ func TestChannelFilterMenuScrollsInEveryLayout(t *testing.T) {
 		})
 	}
 }
+
+func TestChannelFilterMenuQuickNavigation(t *testing.T) {
+	m := menuWithLanguages(t, i18n.LangEN, 30, 80, 24)
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEnd})
+	if m.channelFilterMenuIndex != 35 {
+		t.Fatalf("End index = %d, want 35", m.channelFilterMenuIndex)
+	}
+	assertMenuCursorVisible(t, m, 24, "End")
+	if got := menuPositionRow(m); got != "36/36" {
+		t.Fatalf("position = %q", got)
+	}
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyHome})
+	if m.channelFilterMenuIndex != 0 {
+		t.Fatalf("Home index = %d", m.channelFilterMenuIndex)
+	}
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyPgDown})
+	if m.channelFilterMenuIndex != 19 {
+		t.Fatalf("PgDown index = %d, want 19", m.channelFilterMenuIndex)
+	}
+	if got := menuPositionRow(m); got != "20/36" {
+		t.Fatalf("position = %q", got)
+	}
+	assertMenuCursorVisible(t, m, 24, "PgDown")
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyPgUp})
+	if m.channelFilterMenuIndex != 0 {
+		t.Fatalf("PgUp index = %d", m.channelFilterMenuIndex)
+	}
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if m.channelFilterMenuIndex != 0 {
+		t.Fatalf("j/k index = %d", m.channelFilterMenuIndex)
+	}
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	if m.channelFilterMenuIndex != 35 {
+		t.Fatalf("G index = %d", m.channelFilterMenuIndex)
+	}
+	short := menuWithLanguages(t, i18n.LangEN, 0, 80, 24)
+	short, _ = pressKey(short, tea.KeyMsg{Type: tea.KeyEnd})
+	assertMenuCursorVisible(t, short, 24, "short End")
+	if short.channelFilterMenuIndex != 5 {
+		t.Fatalf("short End index = %d", short.channelFilterMenuIndex)
+	}
+	short, _ = pressKey(short, tea.KeyMsg{Type: tea.KeyHome})
+	if short.channelFilterMenuIndex != 0 {
+		t.Fatalf("short Home index = %d", short.channelFilterMenuIndex)
+	}
+}
