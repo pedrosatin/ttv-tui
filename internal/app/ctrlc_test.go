@@ -93,6 +93,13 @@ func (p *ptyTUI) openChannel() {
 	oldPid := p.playerPid
 	p.sendAndWait([]byte("\r"), "PtyChan")
 	p.sendAndWait([]byte("\r"), "Chat — #ptychan")
+	p.followPlayer(oldPid)
+}
+
+// followPlayer waits for the player that replaced oldPid and tracks it, so the
+// test cleanup kills the new pair and not the one already gone.
+func (p *ptyTUI) followPlayer(oldPid int) {
+	p.t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		pid := waitPid(p.t, filepath.Join(p.dir, "player.pid"), 10*time.Second)

@@ -3,6 +3,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -36,7 +37,15 @@ func TestLanguageConsistency_PTY(t *testing.T) {
 				cat.T("status.help_hint"), cat.T("status.quit_hint"))
 			t.Logf("PTY capture (%s) — home:\n%s", tc.lang, home)
 
+			// No channel yet: Ctrl+W has no layout to offer and says so.
+			p.sendAndWait([]byte{0x17}, cat.T("layout.no_chat"))
+
 			p.sendAndWait([]byte("\r"), "PtLive")
+
+			// The layouts arrange the chat, so they start with an open channel.
+			oldPid := p.playerPid
+			p.sendAndWait([]byte("\r"), fmt.Sprintf(cat.T("chat.title"), ""))
+			p.followPlayer(oldPid)
 
 			// Ctrl+W: split → chat → list. Only chat, list and focus reach the bar.
 			p.sendAndWait([]byte{0x17}, "layout: "+cat.T("layout.mode.chat"))
@@ -58,7 +67,7 @@ func TestLanguageConsistency_PTY(t *testing.T) {
 			p.sendAndWait([]byte("l"), cat.T("channel_filter.title"))
 			// The scan below only proves absence over a whole frame, so wait for
 			// the status line that closes the menu's.
-			menu := p.waitScreen(menuOff, cat.T("channel_filter.status_open")+" | "+cat.T("status.help_hint"))
+			menu := p.waitScreen(menuOff, cat.T("channel_filter.status_open"), cat.T("status.quit_hint"))
 			t.Logf("PTY capture (%s) — channel filter menu:\n%s", tc.lang, menu)
 
 			all := p.screenSince(0)

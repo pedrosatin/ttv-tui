@@ -13,12 +13,13 @@ const (
 
 // LayoutMode returns the current panel arrangement derived from visibility flags.
 func (m Model) LayoutMode() LayoutMode {
+	listOn := m.listVisible()
 	switch {
-	case m.showList && m.showChat:
+	case listOn && m.showChat:
 		return LayoutSplit
-	case !m.showList && m.showChat:
+	case !listOn && m.showChat:
 		return LayoutChat
-	case m.showList && !m.showChat:
+	case listOn && !m.showChat:
 		return LayoutList
 	default:
 		return LayoutFocus
@@ -41,9 +42,11 @@ func (m Model) layoutModeLabel(mode LayoutMode) string {
 	}
 }
 
-// listVisible reports whether the list panel should occupy columns.
+// listVisible reports whether the list panel should occupy columns. With no chat
+// the list is all there is to draw, so no flag can hide it and leave the screen
+// empty.
 func (m Model) listVisible() bool {
-	return m.showList
+	return m.showList || !m.hasChatPanel()
 }
 
 // chatColumnVisible reports whether the chat panel occupies a column (layout
@@ -56,6 +59,24 @@ func (m Model) chatColumnVisible() bool {
 // via layout must not show the "<80 cols" warning.
 func (m Model) shouldShowNarrowChatNotice() bool {
 	return m.showChat && m.hasChatPanel() && m.chatHiddenByWidth()
+}
+
+// warnChatHiddenByWidth answers a chat key the split cannot serve, and reports
+// whether it did. The on-screen notice alone reads as a key that did nothing.
+func (m *Model) warnChatHiddenByWidth() bool {
+	if !m.shouldShowNarrowChatNotice() {
+		return false
+	}
+	m.statusNotice = m.t("chat.hidden_narrow_key")
+	return true
+}
+
+// keepListWithoutChat answers a layout key before any chat exists: every mode
+// would draw the same list or nothing, so the panels stay and the bar says why.
+func (m *Model) keepListWithoutChat() {
+	m.showList, m.showChat = true, true
+	m.statusNotice = m.t("layout.no_chat")
+	m.normalizeFocusAfterLayout()
 }
 
 func (m *Model) cycleLayout() {
@@ -77,15 +98,21 @@ func (m *Model) toggleListPanel() {
 	m.normalizeFocusAfterLayout()
 }
 
+// toggleChatPanel shows or hides the chat. In a terminal too narrow for the split,
+// showing it means chat-only, the one mode that can draw it there.
 func (m *Model) toggleChatPanel() {
-	m.showChat = !m.showChat
+	if m.chatHiddenByWidth() {
+		m.showList, m.showChat = false, true
+	} else {
+		m.showChat = !m.showChat
+	}
 	m.normalizeFocusAfterLayout()
 }
 
 // normalizeFocusAfterLayout keeps focus and compose coherent with visible panels.
 // Esc never changes layout; only the layout keys do.
 func (m *Model) normalizeFocusAfterLayout() {
-	listOn := m.showList
+	listOn := m.listVisible()
 	chatOn := m.chatColumnVisible()
 	if !chatOn {
 		m.composing = false

@@ -255,6 +255,10 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Layout controls work from any mode (compose, search, filter).
+	if key.Matches(msg, m.keys.CycleLayout, m.keys.ToggleList, m.keys.ToggleChat) && !m.hasChatPanel() {
+		m.keepListWithoutChat()
+		return m, nil
+	}
 	if key.Matches(msg, m.keys.CycleLayout) {
 		m.cycleLayout()
 		return m, nil
@@ -334,6 +338,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.CopyMessage):
 		if m.Focus() != FocusChat {
+			m.warnChatHiddenByWidth()
 			return m, nil
 		}
 		return m.copyChatMessage()
@@ -441,9 +446,11 @@ func isSwitchFocusKey(msg tea.KeyMsg, keys keyMap) bool {
 }
 
 // switchPanelFocus toggles list ↔ chat. It leaves composition without clearing
-// the draft. When layout hides either panel, Tab is a no-op.
+// the draft. When layout hides either panel, Tab is a no-op; when width does, it
+// says so.
 func (m Model) switchPanelFocus() Model {
 	if !m.listVisible() || !m.chatColumnVisible() {
+		m.warnChatHiddenByWidth()
 		return m
 	}
 	m.composing = false
@@ -491,7 +498,7 @@ func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {
-	if !m.showChat || m.chatHiddenByWidth() {
+	if m.warnChatHiddenByWidth() || !m.showChat || m.chatHiddenByWidth() {
 		return m, nil
 	}
 	if !m.chatHasToken() && (m.chat != nil || m.chatPanel.channel != "") {

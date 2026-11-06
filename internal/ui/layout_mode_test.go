@@ -143,9 +143,11 @@ func TestLayoutHiddenChatDoesNotShowNarrowNotice(t *testing.T) {
 		t.Fatalf("layout-hidden chat must not show narrow notice at 79:\n%s", plainNarrowList)
 	}
 
-	m = sendLayoutKey(t, m, tea.KeyCtrlL) // show chat again; width still 79
-	if !m.showChat {
-		t.Fatal("expected showChat=true")
+	// Back to the split through the cycle; Ctrl+L would open chat-only here.
+	m = sendLayoutKey(t, m, tea.KeyCtrlW)
+	m = sendLayoutKey(t, m, tea.KeyCtrlW)
+	if m.LayoutMode() != LayoutSplit {
+		t.Fatalf("LayoutMode=%q, want split", m.LayoutMode())
 	}
 	plainNarrow := ansi.Strip(m.View())
 	if !strings.Contains(plainNarrow, "Chat hidden (<80 cols)") {

@@ -10,7 +10,9 @@ import (
 )
 
 const (
-	minChatColumns  = 80
+	// minSplitColumns is the narrowest terminal that fits list and chat side by
+	// side. Chat-only has the whole width and no such limit.
+	minSplitColumns = 80
 	fullChatColumns = 100
 	panelSeparator  = " │ "
 	panelSepWidth   = 3
@@ -87,8 +89,10 @@ func padOrTruncateVisual(s string, width int) string {
 	return s
 }
 
+// chatHiddenByWidth reports that the list leaves the chat no room: the limit
+// belongs to the split, so it never applies once the list is out of the way.
 func (m Model) chatHiddenByWidth() bool {
-	return m.width > 0 && m.width < minChatColumns
+	return m.listVisible() && m.width > 0 && m.width < minSplitColumns
 }
 
 // panelWidths returns the visual column widths (listWidth, chatWidth) when rendering
@@ -97,8 +101,8 @@ func (m Model) panelWidths() (int, int) {
 	if m.width <= 0 {
 		return 0, 0
 	}
-	listOn := m.showList
-	chatOn := m.showChat && m.hasChatPanel() && m.width >= minChatColumns
+	listOn := m.listVisible()
+	chatOn := m.chatColumnVisible()
 	switch {
 	case listOn && chatOn:
 		usable := m.width - panelSepWidth
@@ -148,7 +152,7 @@ func (m Model) View() (view string) {
 	// Unsized fallback (m.width <= 0 and m.height <= 0): used by unit tests that don't send WindowSizeMsg.
 	if m.width <= 0 && m.height <= 0 {
 		var bodyLines []string
-		if m.showList {
+		if m.listVisible() {
 			bodyLines = m.renderBodyLines(0)
 		}
 		if m.shouldShowNarrowChatNotice() {
@@ -156,7 +160,7 @@ func (m Model) View() (view string) {
 		} else if m.showChat {
 			chatLines := m.renderChatLines(defaultChatPreviewLines, 0)
 			bodyLines = append(bodyLines, chatLines...)
-		} else if !m.showList {
+		} else if !m.listVisible() {
 			bodyLines = append(bodyLines, m.focusModeHintLines(0)...)
 		}
 		bodyLines = append(bodyLines, overlayLines...)
@@ -366,6 +370,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		m.t("help.search"),
 		m.t("help.channel_filter"),
 		m.t("help.layout"),
+		m.t("help.layout_back"),
 		m.t("help.player"),
 		m.t("help.chat"),
 		m.t("help.app"),
@@ -640,7 +645,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		budget--
 	}
 	if m.shouldShowNarrowChatNotice() {
-		budget--
+		budget -= len(m.narrowChatNoticeLines(maxWidth))
 	}
 	if budget < 1 {
 		budget = 1

@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // expectKey is one catalog key (with its format arguments) that a rendered
@@ -45,6 +46,20 @@ func auditPlaying(t *testing.T, lang string, width int) Model {
 	m := playingModel(t, lang, &fakePlayback{})
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
 	return updated.(Model)
+}
+
+// auditChannelOpen has a channel open, which is what gives the layouts a chat
+// to arrange; before that the layout keys only explain why they do nothing.
+func auditChannelOpen(t *testing.T, lang string, width int) Model {
+	t.Helper()
+	m := New(auditCatalog(t, lang), WithPlayback(&fakePlayback{}), WithChat(&fakeChat{}))
+	m = auditSend(m, tea.WindowSizeMsg{Width: width, Height: 30})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	m = updated.(Model)
+	if cmd != nil {
+		m = auditSend(m, cmd())
+	}
+	return m
 }
 
 func auditSend(m Model, msg tea.Msg) Model {
@@ -95,7 +110,7 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 		return scenario{
 			name: name,
 			build: func(t *testing.T, lang string) Model {
-				m := auditModel(t, lang, 200)
+				m := auditChannelOpen(t, lang, 200)
 				for i := 0; i < presses; i++ {
 					m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})
 				}
@@ -109,6 +124,11 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 	scenarios := []scenario{
 		{"ready", func(t *testing.T, lang string) Model { return auditModel(t, lang, 200) }, func() []expectKey {
 			return []expectKey{ek("status.ready"), ek("app.title"), ek("status.help_hint"), ek("status.quit_hint")}
+		}},
+		{"layout_without_chat", func(t *testing.T, lang string) Model {
+			return auditSend(auditModel(t, lang, 200), tea.KeyMsg{Type: tea.KeyCtrlW})
+		}, func() []expectKey {
+			return []expectKey{ek("layout.no_chat")}
 		}},
 		layoutScenario("layout chat", 1, "chat"),
 		layoutScenario("layout list", 2, "list"),
@@ -248,7 +268,7 @@ func TestPTBRLayoutTokenIsPortuguese(t *testing.T) {
 		{i18n.LangEN, 3, "layout: focus"},
 	}
 	for _, tc := range cases {
-		m := auditModel(t, tc.lang, 120)
+		m := auditChannelOpen(t, tc.lang, 120)
 		for i := 0; i < tc.presses; i++ {
 			m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})
 		}
@@ -262,7 +282,7 @@ func TestPTBRLayoutTokenIsPortuguese(t *testing.T) {
 // volume must not push the layout label out either: the app title yields first.
 func TestPTBRLayoutTokenAndVolumeFitAt80Columns(t *testing.T) {
 	for presses, label := range map[int]string{1: "chat", 2: "lista", 3: "foco"} {
-		m := auditPlaying(t, i18n.LangPTBR, 80)
+		m := auditChannelOpen(t, i18n.LangPTBR, 80)
 		m = auditSend(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePaused, Login: "gaules", Volume: 55})
 		for i := 0; i < presses; i++ {
 			m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})
