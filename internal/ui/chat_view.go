@@ -609,6 +609,9 @@ func (m Model) authorBadge(badges []string) string {
 // show [mod] instead of the generic [sistema]/[system] prefix.
 const systemMsgIDModeration = "moderation"
 
+// systemMsgIDReconnect marks the line left in the history by a reconnect.
+const systemMsgIDReconnect = "reconnect_gap"
+
 func (m Model) systemLinePrefix(msg ChatMessage) string {
 	if msg.MsgID == systemMsgIDModeration {
 		return m.t("chat.mod_prefix")
@@ -651,6 +654,8 @@ func (m Model) formatRejectReason(reason chat.RejectReason, detail string) strin
 		return m.t("chat.reject.unauthenticated")
 	case chat.RejectChannelSwitched:
 		return m.t("chat.reject.channel_switched")
+	case chat.RejectReconnected:
+		return m.t("chat.reject.reconnected")
 	case chat.RejectBanned:
 		return m.t("chat.reject.banned")
 	default:

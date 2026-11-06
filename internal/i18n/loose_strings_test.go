@@ -166,6 +166,7 @@ var allowedExceptions = map[string]bool{
 	"dumb":                  true,
 	"0":                     true,
 	"moderation":            true,
+	"reconnect_gap":         true,
 	"%7s":                   true,
 	"%d/%d":                 true,
 	// help.colors legend term matching (not user-facing copy; paints i18n text)

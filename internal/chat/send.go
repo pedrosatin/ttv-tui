@@ -49,6 +49,7 @@ const (
 	RejectRateLimited     RejectReason = "rate_limit"
 	RejectUnauthenticated RejectReason = "unauthenticated"
 	RejectChannelSwitched RejectReason = "channel_switched"
+	RejectReconnected     RejectReason = "reconnected"
 	RejectBanned          RejectReason = "banned"
 	RejectOther           RejectReason = "other"
 )

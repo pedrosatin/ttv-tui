@@ -135,6 +135,9 @@ func runTUIHelper() int {
 		if os.Getenv("TTV_APP_USERNOTICE") == "1" {
 			dial = dialUserNoticeIRC
 		}
+		if os.Getenv("TTV_APP_RECONNECT") == "1" {
+			dial = newReconnectIRC()
+		}
 		chatMgr := chat.New(chat.Options{
 			Token:    "pty-test-token",
 			Username: "tester",

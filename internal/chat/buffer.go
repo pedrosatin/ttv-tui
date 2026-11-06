@@ -67,6 +67,13 @@ type Buffer struct {
 	generation uint64
 	items      []Message
 	totalBytes int
+
+	// seen and seenRing hold the most recent message IDs, up to twice maxLines.
+	// They outlive eviction on purpose: a reconnecting server may replay messages
+	// the buffer already dropped, and each one accepted would evict another.
+	seen     map[string]struct{}
+	seenRing []string
+	seenNext int
 }
 
 // NewBuffer creates a Buffer bounded by maxLines and maxBytes.
@@ -82,6 +89,7 @@ func NewBuffer(maxLines, maxBytes int) *Buffer {
 		maxLines: maxLines,
 		maxBytes: maxBytes,
 		items:    make([]Message, 0, min(maxLines, 128)),
+		seen:     make(map[string]struct{}),
 	}
 }
 
@@ -93,6 +101,12 @@ func (b *Buffer) SetGeneration(gen uint64) {
 		b.generation = gen
 		b.Clear()
 	}
+}
+
+// AdoptGeneration switches the active generation and keeps the stored messages.
+// It is for a new session on the same channel; a channel change uses SetGeneration.
+func (b *Buffer) AdoptGeneration(gen uint64) {
+	b.generation = gen
 }
 
 // Generation returns the active generation accepted by the buffer.
@@ -125,18 +139,25 @@ func (b *Buffer) Clear() {
 	clear(b.items)
 	b.items = b.items[:0]
 	b.totalBytes = 0
+	clear(b.seen)
+	b.seenRing = b.seenRing[:0]
+	b.seenNext = 0
 }
 
 // Append adds msg to the buffer if its Generation matches the buffer's active
 // generation (when the buffer has a non-zero generation set). If a single
 // message's body exceeds maxBytes, it is truncated on a valid UTF-8 boundary.
 // Oldest messages are evicted until both Len() <= maxLines and Bytes() <= maxBytes.
+// A message whose non-empty ID was stored recently is a replay and is dropped.
 func (b *Buffer) Append(msg Message) bool {
 	if b.generation != 0 && msg.Generation != b.generation {
 		return false
 	}
 	if b.generation == 0 && msg.Generation != 0 {
 		b.generation = msg.Generation
+	}
+	if _, replay := b.seen[msg.ID]; replay {
+		return false
 	}
 
 	size := msg.ByteSize()
@@ -171,7 +192,22 @@ func (b *Buffer) Append(msg Message) bool {
 
 	b.items = append(b.items, msg)
 	b.totalBytes += size
+	b.rememberID(msg.ID)
 	return true
+}
+
+func (b *Buffer) rememberID(id string) {
+	if id == "" {
+		return
+	}
+	if len(b.seenRing) < 2*b.maxLines {
+		b.seenRing = append(b.seenRing, id)
+	} else {
+		delete(b.seen, b.seenRing[b.seenNext])
+		b.seenRing[b.seenNext] = id
+		b.seenNext = (b.seenNext + 1) % len(b.seenRing)
+	}
+	b.seen[id] = struct{}{}
 }
 
 // UpdateDelivery updates the delivery state of a buffered message tracked by

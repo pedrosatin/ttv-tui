@@ -92,6 +92,8 @@ type chatPanel struct {
 	errText     string
 	sendWarning string
 	nextNonce   uint64
+	// gapPending asks for the reconnect line once the new session is up.
+	gapPending bool
 
 	// Scroll state (see chat_scroll.go). followLive pins the viewport to the
 	// newest message; bottomIdx is the buffer index shown at the bottom when
@@ -134,7 +136,7 @@ func (m Model) hasPendingOutgoing() bool {
 }
 
 func (m *Model) startChatChannel(login string) tea.Cmd {
-	norm := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(login), "#"))
+	norm := normalizeChatChannel(login)
 	if m.chatPanel.buf == nil {
 		m.chatPanel = newChatPanel()
 	}
@@ -150,6 +152,7 @@ func (m *Model) startChatChannel(login string) tea.Cmd {
 	}
 	m.chatPanel.roomState = ChatRoomState{FollowersOnly: -1}
 	m.chatPanel.switching = true
+	m.chatPanel.gapPending = false
 	m.resetChatScroll()
 	if sender, ok := m.chat.(ChatSender); ok {
 		m.chatPanel.anonymous = !sender.HasToken()
@@ -237,26 +240,32 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.chatPanel.switching = false
-		m.chatPanel.gen = msg.Generation
-		m.chatPanel.buf.SetGeneration(msg.Generation)
-		m.resetChatScroll()
+		// Generation 0 is a Join or Reconnect that failed: no session replaced
+		// the current one, so there is nothing to adopt.
+		if msg.Generation != 0 {
+			m.adoptChatGeneration(msg)
+		}
 	} else if msg.Generation != 0 && m.chatPanel.gen != 0 && msg.Generation < m.chatPanel.gen {
 		// Stale generation from a previous channel — discard.
 		return m, nil
 	} else if msg.Generation > m.chatPanel.gen {
-		m.chatPanel.gen = msg.Generation
-		m.chatPanel.buf.SetGeneration(msg.Generation)
-		m.resetChatScroll()
+		m.adoptChatGeneration(msg)
 	} else if m.chatPanel.gen != 0 && m.chatPanel.buf.Generation() != m.chatPanel.gen {
 		m.chatPanel.buf.SetGeneration(m.chatPanel.gen)
 		m.resetChatScroll()
 	}
 
 	if msg.Channel != "" {
-		m.chatPanel.channel = strings.ToLower(strings.TrimPrefix(msg.Channel, "#"))
+		m.chatPanel.channel = normalizeChatChannel(msg.Channel)
 	}
 	if msg.State != ChatStateNone {
 		m.chatPanel.state = msg.State
+	}
+	if msg.State == ChatStateReconnecting && m.chatPanel.buf.Len() > 0 {
+		m.chatPanel.gapPending = true
+	}
+	if msg.State == ChatStateConnected && m.chatPanel.gapPending {
+		m.markReconnectGap()
 	}
 	if msg.Anonymous {
 		m.chatPanel.anonymous = true
@@ -302,6 +311,43 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		m.noteChatAppend(beforeLen, appended)
 	}
 	return m, nil
+}
+
+func normalizeChatChannel(login string) string {
+	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(login), "#"))
+}
+
+// adoptChatGeneration moves the panel to the session of msg. Every reconnect
+// gets a new generation, so only a different channel empties the panel; opening
+// a channel clears the buffer earlier, in startChatChannel.
+func (m *Model) adoptChatGeneration(msg ChatEventMsg) {
+	m.chatPanel.gen = msg.Generation
+	if normalizeChatChannel(msg.Channel) == m.chatPanel.channel {
+		m.chatPanel.buf.AdoptGeneration(msg.Generation)
+		m.chatPanel.gapPending = m.chatPanel.buf.Len() > 0
+		return
+	}
+	m.chatPanel.buf.SetGeneration(msg.Generation)
+	m.chatPanel.gapPending = false
+	m.resetChatScroll()
+}
+
+// markReconnectGap appends the line separating the history from what the new
+// session delivers. Back-to-back reconnects with nothing in between share one
+// line. It carries no times: the client has no clock for when the gap began.
+func (m *Model) markReconnectGap() {
+	m.chatPanel.gapPending = false
+	msgs := m.chatPanel.buf.Messages()
+	if len(msgs) == 0 || msgs[len(msgs)-1].MsgID == systemMsgIDReconnect {
+		return
+	}
+	appended := m.chatPanel.buf.Append(ChatMessage{
+		Generation: m.chatPanel.gen,
+		Kind:       chat.MessageSystem,
+		MsgID:      systemMsgIDReconnect,
+		Body:       m.t("chat.reconnected_gap"),
+	})
+	m.noteChatAppend(len(msgs), appended)
 }
 
 // userNoticeMessage is the single renderer for USERNOTICE. Twitch's system-msg
@@ -444,6 +490,8 @@ func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {
 			m.chatPanel.sendWarning = m.t("chat.warn.rate_limit")
 		case chat.RejectChannelSwitched:
 			m.chatPanel.sendWarning = m.t("chat.warn.channel_switched")
+		case chat.RejectReconnected:
+			m.chatPanel.sendWarning = m.t("chat.warn.reconnected")
 		}
 	case chat.DeliveryRejected:
 		if upd.Reason == chat.RejectUnauthenticated {

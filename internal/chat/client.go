@@ -218,8 +218,9 @@ func (m *Manager) NextNonce() string {
 //  1. Without an access token, returns ErrNoToken immediately.
 //  2. Empty/whitespace-only bodies return ErrEmptyMessage without touching the wire.
 //  3. If the session generation or channel has already changed since the message
-//     was composed, the message is discarded with RejectChannelSwitched and never
-//     transmitted to the new channel.
+//     was composed, the message is discarded and never transmitted to the new
+//     session: RejectChannelSwitched for another channel, RejectReconnected for
+//     a new session on the same one.
 //  4. If the 20 msgs / 30s window or queue capacity is exceeded, the excess message
 //     is discarded with RejectRateLimited rather than queued unboundedly.
 func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
@@ -258,13 +259,17 @@ func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
 		activeGen := m.gen
 		activeChan := m.channel
 		m.mu.Unlock()
+		reason := RejectChannelSwitched
+		if reqChan == "" || reqChan == activeChan {
+			reason = RejectReconnected
+		}
 		upd := SendStatusUpdate{
 			Generation: activeGen,
 			Channel:    activeChan,
 			Nonce:      req.Nonce,
 			Body:       body,
 			Status:     DeliveryDiscarded,
-			Reason:     RejectChannelSwitched,
+			Reason:     reason,
 		}
 		m.emitUpdate(activeGen, activeChan, upd)
 		return upd, ErrChannelSwitched
@@ -376,6 +381,10 @@ func (m *Manager) Join(channelLogin string) (uint64, error) {
 	m.drainStaleEvents(gen)
 
 	if len(discarded) > 0 && prevChannel != "" {
+		reason := RejectChannelSwitched
+		if prevChannel == ch {
+			reason = RejectReconnected
+		}
 		updates := make([]SendStatusUpdate, 0, len(discarded))
 		for _, req := range discarded {
 			updates = append(updates, SendStatusUpdate{
@@ -384,7 +393,7 @@ func (m *Manager) Join(channelLogin string) (uint64, error) {
 				Nonce:      req.Nonce,
 				Body:       req.Body,
 				Status:     DeliveryDiscarded,
-				Reason:     RejectChannelSwitched,
+				Reason:     reason,
 			})
 		}
 		m.emit(ctx, SessionEvent{
