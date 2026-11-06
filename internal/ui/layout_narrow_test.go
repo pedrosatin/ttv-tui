@@ -158,7 +158,11 @@ func TestChatKeysAnswerInNarrowSplit(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
 			m = resize(m, 60, 24)
 			m = sendKeys(m, k)
-			if status := ansi.Strip(m.StatusBar()); !strings.Contains(status, "Ctrl+L") {
+			want := "Ctrl+L"
+			if name == "y" {
+				want = "focus the chat"
+			}
+			if status := ansi.Strip(m.StatusBar()); !strings.Contains(status, want) {
 				t.Fatalf("no answer in the status bar: %q", status)
 			}
 			if m.composing || m.Focus() != FocusList {

@@ -29,6 +29,9 @@ func sanitizeChatText(s string) string {
 			b.WriteByte(' ')
 			continue
 		}
+		if (r >= 0x202a && r <= 0x202e) || r == 0x034f || (r >= 0xe0000 && r <= 0xe007f) {
+			continue
+		}
 		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
 			continue
 		}

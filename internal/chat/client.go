@@ -941,6 +941,8 @@ func (m *Manager) connectAndServe(
 				batch = append(batch, Message{
 					Generation:  gen,
 					Kind:        MessageChat,
+					FirstMsg:    ev.Tags["first-msg"] == "1",
+					ReceivedAt:  time.Now(),
 					ID:          ev.ID,
 					User:        ev.User,
 					DisplayName: ev.DisplayName,

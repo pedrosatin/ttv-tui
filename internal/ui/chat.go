@@ -212,6 +212,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 	appended := m.chatPanel.buf.Append(ChatMessage{
 		Generation:  m.chatPanel.gen,
 		Kind:        chat.MessageChat,
+		ReceivedAt:  m.now(),
 		Nonce:       nonce,
 		User:        m.chatPanel.username,
 		DisplayName: displayName,
@@ -300,6 +301,9 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		m.applySendUpdate(upd)
 	}
 	for _, item := range msg.Messages {
+		if item.ReceivedAt.IsZero() {
+			item.ReceivedAt = m.now()
+		}
 		if item.Generation == 0 {
 			item.Generation = msg.Generation
 		}
@@ -374,6 +378,7 @@ func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 		Generation:  gen,
 		Kind:        chat.MessageSystem,
 		ID:          item.ID,
+		ReceivedAt:  item.ReceivedAt,
 		User:        item.User,
 		DisplayName: item.DisplayName,
 		MsgID:       item.MsgID,

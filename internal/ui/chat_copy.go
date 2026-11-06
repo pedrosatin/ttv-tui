@@ -202,9 +202,12 @@ func runStdinClipboard(name string, args []string, plaintext string) error {
 func (m Model) copyChatMessage() (tea.Model, tea.Cmd) {
 	msg, ok := m.SelectedChatMessage()
 	if !ok {
-		return m, nil
+		return m.showCopyFocusWarning()
 	}
 	plaintext := formatChatCopyText(msg)
+	if plaintext != "" && !msg.ReceivedAt.IsZero() {
+		plaintext = truncateUTF8Bytes(fmt.Sprintf(m.t("chat.copy.context"), sanitizeChatText(m.chatPanel.channel), msg.ReceivedAt.Local().Format(time.DateTime[:16]), plaintext), osc52MaxBytes)
+	}
 	if plaintext == "" {
 		return m, nil
 	}
@@ -241,7 +244,7 @@ func (m Model) applyCopyResult(msg copyResultMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) formatCopyNotice(msg ChatMessage, plaintext, method string) string {
-	preview := truncateRunes(plaintext, copyPreviewRunes)
+	preview := truncateRunes(formatChatCopyText(msg), copyPreviewRunes)
 	if method == clipboardMethodOSC52 {
 		return fmt.Sprintf(m.t("chat.copy.sent_terminal"), preview)
 	}
@@ -275,4 +278,12 @@ func (m Model) clearCopyNoticeIfExpired(gen uint64) Model {
 	m.copyNotice = ""
 	m.copyNoticeUntil = time.Time{}
 	return m
+}
+
+func (m Model) showCopyFocusWarning() (tea.Model, tea.Cmd) {
+	m.copyNoticeGen++
+	m.copyNotice = m.t("chat.copy.focus_chat")
+	m.copyNoticeUntil = m.now().Add(copyNoticeTTL)
+	gen := m.copyNoticeGen
+	return m, tea.Tick(copyNoticeTTL, func(time.Time) tea.Msg { return copyNoticeClearMsg{gen: gen} })
 }

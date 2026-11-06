@@ -141,7 +141,7 @@
   "chat.warn.reconnected": "Chat reconectado: envio pendente descartado",
   "chat.warn.no_token": "Envio desabilitado: rode 'ttv-tui login --from-browser' para entrar",
   "chat.warn.too_long": "Mensagem longa demais (máx. 500 caracteres) — encurte antes de enviar",
-  "chat.warn.command_blocked": "Não enviado: comandos de moderação com barra não funcionam por IRC (só /me). Rascunho mantido.",
+  "chat.warn.command_blocked": "Não enviado: comandos de moderação com barra não funcionam por IRC (só /me). Se não for comando, remova a barra inicial. Rascunho mantido.",
   "chat.scroll.new": "%d novas ↓",
   "chat.copy.done": "Copiado: %s — %s",
   "chat.copy.done_text": "Copiado: %s",
@@ -279,5 +279,8 @@
   "doctor.missing": "AUSENTE (instale e adicione ao PATH)",
   "doctor.version_failed": "encontrado; versão indisponível",
   "doctor.scope": "Verificações locais: validade do token, IPC anterior, vídeo, áudio e comportamento do terminal não são testados.",
-  "doctor.usage": "Uso: ttv-tui doctor [--lang en|pt-BR]\n\nOpções:\n"
+  "doctor.usage": "Uso: ttv-tui doctor [--lang en|pt-BR]\n\nOpções:\n",
+  "chat.first_msg": "[novo]",
+  "chat.copy.context": "canal #%s · %s · %s",
+  "chat.copy.focus_chat": "Nada para copiar; foque o chat."
 }

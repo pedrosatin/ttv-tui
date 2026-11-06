@@ -338,8 +338,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.CopyMessage):
 		if m.Focus() != FocusChat {
-			m.warnChatHiddenByWidth()
-			return m, nil
+			return m.showCopyFocusWarning()
 		}
 		return m.copyChatMessage()
 

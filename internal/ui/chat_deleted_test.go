@@ -143,7 +143,7 @@ func TestDeletedMessage_CopyKeepsTheOriginalText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if want := "Xingador: você é um lixo"; got != want {
+	if want := expectedContextCopy(m, "Xingador: você é um lixo"); got != want {
 		t.Fatalf("payload = %q, want %q", got, want)
 	}
 	if !strings.Contains(m.CopyNotice(), "você é um lixo") {

@@ -493,7 +493,7 @@ func TestManager_AnonymousHandshakeAndExactPong(t *testing.T) {
 
 		// Send PING with custom payload and a PRIVMSG.
 		_, _ = io.WriteString(conn, "PING :tmi.twitch.tv/custom-payload-987\r\n")
-		_, _ = io.WriteString(conn, "@color=#123456;display-name=Tester;msg-id=highlighted-message :tester!tester@tester.tmi.twitch.tv PRIVMSG #gaules :Olá chat!\r\n")
+		_, _ = io.WriteString(conn, "@first-msg=1;tmi-sent-ts=1700000000000;color=#123456;display-name=Tester;msg-id=highlighted-message :tester!tester@tester.tmi.twitch.tv PRIVMSG #gaules :Olá chat!\r\n")
 
 		pongLine, err := readClientLines(conn, 1, 2*time.Second)
 		if err == nil && len(pongLine) == 1 {
@@ -550,7 +550,7 @@ func TestManager_AnonymousHandshakeAndExactPong(t *testing.T) {
 		case ev := <-mgr.Events():
 			if len(ev.Messages) > 0 {
 				m := ev.Messages[0]
-				if m.Generation != 1 || m.DisplayName != "Tester" || m.Color != "#123456" || !m.Highlighted || m.Body != "Olá chat!" {
+				if m.ReceivedAt.IsZero() || time.Since(m.ReceivedAt) > time.Minute || !m.FirstMsg || m.Generation != 1 || m.DisplayName != "Tester" || m.Color != "#123456" || !m.Highlighted || m.Body != "Olá chat!" {
 					t.Fatalf("unexpected message: %+v", m)
 				}
 				return

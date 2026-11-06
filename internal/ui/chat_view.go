@@ -548,6 +548,9 @@ func (m Model) formatChatRow(msg ChatMessage, selected bool) (string, string) {
 	// Nicks use only blue/white ANSI slots so they never collide with the
 	// semantic palette (live/error/pause/focus).
 	renderedName := styleNick(name, msg.Color)
+	if msg.FirstMsg {
+		renderedName = m.t("chat.first_msg") + " " + renderedName
+	}
 	if badge := m.authorBadge(msg.Badges); badge != "" {
 		renderedName = badge + " " + renderedName
 	}

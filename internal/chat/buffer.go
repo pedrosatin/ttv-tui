@@ -1,6 +1,9 @@
 package chat
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 // Default buffer capacity limits:
 //   - DefaultMaxLines = 500 messages
@@ -23,6 +26,8 @@ const (
 type Message struct {
 	Generation  uint64
 	Kind        MessageKind
+	FirstMsg    bool
+	ReceivedAt  time.Time // Local receipt time, independent of Twitch sent timestamps.
 	ID          string
 	Nonce       string
 	User        string
@@ -51,7 +56,7 @@ type Message struct {
 
 // ByteSize estimates the byte footprint of m for buffer accounting.
 func (m Message) ByteSize() int {
-	n := len(m.ID) + len(m.Nonce) + len(m.User) + len(m.DisplayName) + len(m.Color) + len(m.MsgID) + len(m.Body) + len(m.SystemMsg) + len(m.RejectDetail) + 32
+	n := len(m.ID) + len(m.Nonce) + len(m.User) + len(m.DisplayName) + len(m.Color) + len(m.MsgID) + len(m.Body) + len(m.SystemMsg) + len(m.RejectDetail) + 56
 	for _, b := range m.Badges {
 		n += len(b)
 	}

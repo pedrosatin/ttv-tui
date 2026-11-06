@@ -223,7 +223,7 @@ func TestCopyY_LiveCopiesLastMessageAndWritesOSC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode OSC from stderr writer: %v (raw=%q)", err, buf.String())
 	}
-	if got != "User: msg 2" {
+	if got != expectedContextCopy(m, "User: msg 2") {
 		t.Fatalf("copied %q, want last live message User: msg 2", got)
 	}
 	wantNotice := "OSC 52 sent to terminal: User: msg 2"
@@ -259,7 +259,7 @@ func TestCopyY_ScrolledCopiesSelection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got != "User: msg 7" {
+	if got != expectedContextCopy(m, "User: msg 7") {
 		t.Fatalf("copied %q, want selected User: msg 7", got)
 	}
 	if !strings.Contains(m.CopyNotice(), "msg 7") || !strings.Contains(m.CopyNotice(), "OSC 52") {
@@ -295,7 +295,7 @@ func TestCopyY_SystemMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got != "gaules timed out for 10s" {
+	if got != expectedContextCopy(m, "gaules timed out for 10s") {
 		t.Fatalf("system payload = %q", got)
 	}
 	if !strings.HasPrefix(m.CopyNotice(), "OSC 52 sent to terminal: ") {
@@ -344,7 +344,7 @@ func TestCopyNoticeExpiresWithInjectedClock(t *testing.T) {
 	}
 }
 
-func TestCopyY_IgnoredOnListFocus(t *testing.T) {
+func TestCopyY_WarnsOnListFocus(t *testing.T) {
 	forceOSCClipboardEnv(t)
 	var buf bytes.Buffer
 	prev := osc52Out
@@ -355,13 +355,13 @@ func TestCopyY_IgnoredOnListFocus(t *testing.T) {
 	m.focus = FocusList
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
-	if cmd != nil {
-		m = flushCopy(t, m, cmd)
+	if cmd == nil {
+		t.Fatal("missing notice expiry command")
 	}
 	if buf.Len() != 0 {
 		t.Fatalf("list focus must not copy, wrote %q", buf.String())
 	}
-	if m.CopyNotice() != "" {
+	if m.CopyNotice() != m.t("chat.copy.focus_chat") {
 		t.Fatalf("unexpected notice %q", m.CopyNotice())
 	}
 }
@@ -456,7 +456,7 @@ func TestCopyUsesWlCopyWhenWayland(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wl-copy did not write output: %v", err)
 	}
-	if got := string(raw); got != "User: msg 1" {
+	if got := string(raw); got != expectedContextCopy(m, "User: msg 1") {
 		t.Fatalf("wl-copy payload = %q, want User: msg 1", got)
 	}
 	if buf.Len() != 0 {
@@ -495,7 +495,7 @@ func TestCopyUsesXclipWhenNoWayland(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xclip did not write output: %v", err)
 	}
-	if got := string(raw); got != "User: msg 1" {
+	if got := string(raw); got != expectedContextCopy(m, "User: msg 1") {
 		t.Fatalf("xclip payload = %q, want User: msg 1", got)
 	}
 	if buf.Len() != 0 {
@@ -527,7 +527,7 @@ func TestCopyFallsBackToOSC52WhenHelpersAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode OSC: %v (raw=%q)", err, buf.String())
 	}
-	if got != "User: msg 0" {
+	if got != expectedContextCopy(m, "User: msg 0") {
 		t.Fatalf("OSC payload = %q", got)
 	}
 	if !strings.Contains(m.CopyNotice(), "OSC 52") {
@@ -557,7 +557,7 @@ func TestCopyWlCopyFailureFallsBackToOSC52(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected OSC fallback, decode: %v (raw=%q)", err, buf.String())
 	}
-	if got != "User: msg 0" {
+	if got != expectedContextCopy(m, "User: msg 0") {
 		t.Fatalf("OSC payload = %q", got)
 	}
 	if !strings.Contains(m.CopyNotice(), "OSC 52") {
@@ -817,4 +817,9 @@ func TestOSC52NoticeNeverConfirmsCopy(t *testing.T) {
 			}
 		}
 	}
+}
+
+func expectedContextCopy(m Model, text string) string {
+	msg, _ := m.SelectedChatMessage()
+	return fmt.Sprintf(m.t("chat.copy.context"), m.chatPanel.channel, msg.ReceivedAt.Local().Format(time.DateTime[:16]), text)
 }
