@@ -5,6 +5,7 @@ package ui
 type LayoutMode string
 
 const (
+	LayoutVideo LayoutMode = "video" // experimental video above chat
 	LayoutSplit LayoutMode = "split" // list + chat
 	LayoutChat  LayoutMode = "chat"  // chat only
 	LayoutList  LayoutMode = "list"  // list only
@@ -13,6 +14,9 @@ const (
 
 // LayoutMode returns the current panel arrangement derived from visibility flags.
 func (m Model) LayoutMode() LayoutMode {
+	if m.showVideo {
+		return LayoutVideo
+	}
 	listOn := m.listVisible()
 	switch {
 	case listOn && m.showChat:
@@ -31,6 +35,8 @@ func (m Model) LayoutMode() LayoutMode {
 // identifiers; only the catalog label reaches the screen.
 func (m Model) layoutModeLabel(mode LayoutMode) string {
 	switch mode {
+	case LayoutVideo:
+		return m.t("layout.mode.video")
 	case LayoutSplit:
 		return m.t("layout.mode.split")
 	case LayoutChat:
@@ -46,7 +52,7 @@ func (m Model) layoutModeLabel(mode LayoutMode) string {
 // the list is all there is to draw, so no flag can hide it and leave the screen
 // empty.
 func (m Model) listVisible() bool {
-	return m.showList || !m.hasChatPanel()
+	return !m.showVideo && (m.showList || !m.hasChatPanel())
 }
 
 // chatColumnVisible reports whether the chat panel occupies a column (layout
@@ -75,25 +81,42 @@ func (m *Model) warnChatHiddenByWidth() bool {
 // would draw the same list or nothing, so the panels stay and the bar says why.
 func (m *Model) keepListWithoutChat() {
 	m.showList, m.showChat = true, true
-	m.warnStatus(m.t("layout.no_chat"))
+	if m.videoRequested && m.videoReason != "" {
+		m.warnStatus(m.t(m.videoReason))
+	} else {
+		m.warnStatus(m.t("layout.no_chat"))
+	}
 	m.normalizeFocusAfterLayout()
 }
 
 func (m *Model) cycleLayout() {
-	switch m.LayoutMode() {
+	mode := m.LayoutMode()
+	m.showVideo = false
+	switch mode {
 	case LayoutSplit:
 		m.showList, m.showChat = false, true
 	case LayoutChat:
 		m.showList, m.showChat = true, false
 	case LayoutList:
 		m.showList, m.showChat = false, false
+	case LayoutFocus:
+		if m.videoRequested && m.videoReason == "" {
+			m.showVideo = true
+			m.showList, m.showChat = false, true
+		} else {
+			m.showList, m.showChat = true, true
+		}
 	default:
 		m.showList, m.showChat = true, true
+	}
+	if m.videoRequested && m.videoReason != "" {
+		m.warnStatus(m.t(m.videoReason))
 	}
 	m.normalizeFocusAfterLayout()
 }
 
 func (m *Model) toggleListPanel() {
+	m.showVideo = false
 	m.showList = !m.showList
 	m.normalizeFocusAfterLayout()
 }
@@ -101,6 +124,7 @@ func (m *Model) toggleListPanel() {
 // toggleChatPanel shows or hides the chat. In a terminal too narrow for the split,
 // showing it means chat-only, the one mode that can draw it there.
 func (m *Model) toggleChatPanel() {
+	m.showVideo = false
 	if m.chatHiddenByWidth() {
 		m.showList, m.showChat = false, true
 	} else {

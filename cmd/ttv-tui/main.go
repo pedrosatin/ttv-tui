@@ -64,10 +64,12 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 		showHelp    bool
 		lang        string
 		importSrc   string
+		video       string
 	)
 	fs.BoolVar(&showVersion, "version", false, cat.T("cli.flag.version"))
 	fs.BoolVar(&showHelp, "help", false, cat.T("cli.flag.help"))
 	fs.BoolVar(&showHelp, "h", false, cat.T("cli.flag.help"))
+	fs.StringVar(&video, "video", "", cat.T("cli.flag.video"))
 	fs.StringVar(&lang, "lang", "", cat.T("cli.flag.lang"))
 	fs.StringVar(&importSrc, "import", "", cat.T("cli.flag.import"))
 
@@ -116,6 +118,7 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 	}
 
 	if err := app.Run(app.Options{
+		Video:      video,
 		Lang:       lang,
 		ConfigPath: cfgPath,
 		Input:      stdin,

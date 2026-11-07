@@ -24,6 +24,8 @@ import (
 
 // Options configures a single invocation of the application.
 type Options struct {
+	Video      string
+	SixelProbe player.SixelProbe
 	Lang       string
 	ConfigPath string
 	StatePath  string
@@ -47,6 +49,9 @@ func earlyCatalog() *i18n.Catalog {
 
 // Run composes config, i18n, Source, player, chat, and the UI model and runs the TUI program.
 func Run(opts Options) error {
+	if opts.Video != "" && opts.Video != "sixel" {
+		return errors.New(earlyCatalog().T("video.invalid_backend"))
+	}
 	if opts.Lang != "" && !i18n.IsSupportedFlag(opts.Lang) {
 		return fmt.Errorf(earlyCatalog().T("app.err_unsupported_lang"), opts.Lang, i18n.LangEN, i18n.LangPTBR)
 	}
@@ -181,6 +186,7 @@ func Run(opts Options) error {
 	}
 
 	uiOpts := []ui.Option{
+		videoOption(ctx, opts, input, output),
 		ui.WithSource(source),
 		ui.WithPlayback(newPlaybackBridge(playerMgr)),
 		ui.WithChat(newChatBridge(chatMgr)),

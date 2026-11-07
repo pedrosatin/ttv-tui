@@ -124,8 +124,12 @@ func (m *Model) noteChatAppend(beforeLen int, appended bool) {
 func (m Model) chatPageSize() int {
 	// Approximate the message-area row budget without relying on View mutations
 	// (tea.Model.View receives a copy). Header ~2, footer ~2, status bar 1.
-	if m.height > 6 {
-		return m.height - 6
+	height := m.height
+	if m.showVideo {
+		height -= m.videoRows(max(height-1, 0))
+	}
+	if height > 6 {
+		return height - 6
 	}
 	return defaultChatPreviewLines
 }

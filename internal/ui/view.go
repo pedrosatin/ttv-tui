@@ -149,6 +149,14 @@ func (m Model) View() (view string) {
 		overlayLines = m.renderChannelFilterMenuLines(m.width)
 	}
 
+	if m.showVideo {
+		available := m.height - 1
+		if m.height <= 0 {
+			available = 24
+		}
+		return m.videoView(available, overlayLines, status)
+	}
+
 	// Unsized fallback (m.width <= 0 and m.height <= 0): used by unit tests that don't send WindowSizeMsg.
 	if m.width <= 0 && m.height <= 0 {
 		var bodyLines []string
@@ -382,6 +390,13 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		m.t("help.nocolor"),
 	} {
 		out = append(out, wrapChatRow("  ", line, maxWidth)...)
+	}
+	if m.videoRequested {
+		key := m.videoReason
+		if key == "" {
+			key = "video.help"
+		}
+		out = append(out, wrapChatRow("  ", m.t(key), maxWidth)...)
 	}
 	out = append(out, m.renderHelpColorLines(maxWidth)...)
 	if line := m.playerErrorLine(); line != "" {

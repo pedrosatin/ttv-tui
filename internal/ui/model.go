@@ -291,11 +291,14 @@ type Model struct {
 	// showList / showChat are the session layout flags (ticket 02). Both start
 	// true (split). Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag
 	// independently. Layout is not persisted to disk.
-	showList bool
-	showChat bool
-	width    int
-	height   int
-	quitting bool
+	videoRequested bool
+	videoReason    string
+	showVideo      bool
+	showList       bool
+	showChat       bool
+	width          int
+	height         int
+	quitting       bool
 }
 
 // New creates a new UI Model backed by the given i18n catalog and options.

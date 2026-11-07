@@ -286,5 +286,14 @@
   "doctor.usage": "Usage: ttv-tui doctor [--lang en|pt-BR]\n\nFlags:\n",
   "chat.first_msg": "[new]",
   "chat.copy.context": "channel #%s · %s · %s",
-  "chat.copy.focus_chat": "Nothing to copy; focus the chat."
+  "chat.copy.focus_chat": "Nothing to copy; focus the chat.",
+  "cli.flag.video": "Experimental embedded video (sixel; disabled by default)",
+  "video.invalid_backend": "Invalid video backend: use --video=sixel",
+  "video.no_terminal": "Embedded video: no sixel in this terminal",
+  "video.no_mpv": "Embedded video: mpv has no sixel output",
+  "video.unsupported_platform": "Embedded video: Windows is not supported yet",
+  "video.tmux": "Embedded video: tmux is not supported yet",
+  "video.placeholder": "Experimental embedded video: unavailable at this stage",
+  "video.help": "Experimental video+chat: Ctrl+W after focus mode",
+  "layout.mode.video": "video+chat"
 }
