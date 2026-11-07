@@ -28,33 +28,42 @@ func readPTYFull(master *os.File, buf []byte) (int, error) {
 	deadline := time.Now().Add(2 * time.Second)
 	n := 0
 	for n < len(buf) {
+		read, err := readPTY(master, buf[n:], deadline)
+		n += read
+		if err != nil {
+			return n, err
+		}
+	}
+	return n, nil
+}
+
+// readPTY also serves the renderer's continuous reader. Darwin's non-pollable
+// os.File returns EAGAIN before output arrives; that is readiness, not EOF.
+func readPTY(master *os.File, buf []byte, deadline time.Time) (int, error) {
+	for {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return n, os.ErrDeadlineExceeded
+			return 0, os.ErrDeadlineExceeded
 		}
 		fds := []unix.PollFd{{Fd: int32(master.Fd()), Events: unix.POLLIN}}
 		if _, err := unix.Poll(fds, int(remaining.Milliseconds())+1); err != nil {
 			if errors.Is(err, syscall.EINTR) {
 				continue
 			}
-			return n, err
+			return 0, err
 		}
 		if fds[0].Revents == 0 {
 			continue
 		}
-		read, err := unix.Read(int(master.Fd()), buf[n:])
+		n, err := unix.Read(int(master.Fd()), buf)
 		if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EINTR) {
 			continue
 		}
-		if err != nil {
-			return n, err
+		if err == nil && n == 0 {
+			err = io.ErrUnexpectedEOF
 		}
-		if read == 0 {
-			return n, io.ErrUnexpectedEOF
-		}
-		n += read
+		return max(n, 0), err
 	}
-	return n, nil
 }
 
 func TestQueryDA1(t *testing.T) {
@@ -255,19 +264,53 @@ func (m rendererModel) View() string {
 // time: the size still reaches the program through the wrapper, every frame
 // crosses whole, and clear and resize get the image back.
 func TestSixelOutputWithBubbleTeaRenderer(t *testing.T) {
+	t.Run("native PTY", func(t *testing.T) { testSixelRenderer(t, false) })
+	t.Run("non-pollable PTY", func(t *testing.T) { testSixelRenderer(t, true) })
+}
+
+func testSixelRenderer(t *testing.T, nonPollable bool) {
 	master, slave := openPTY(t)
+	if nonPollable {
+		// Match Darwin on Linux too: NewFile sees a blocking descriptor, then
+		// reads return EAGAIN without os.File's runtime poller to retry them.
+		fd, err := unix.Dup(int(master.Fd()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = master.Close()
+		if err := unix.SetNonblock(fd, false); err != nil {
+			_ = unix.Close(fd)
+			t.Fatal(err)
+		}
+		master = os.NewFile(uintptr(fd), "non-pollable PTY")
+		if err := unix.SetNonblock(fd, true); err != nil {
+			_ = master.Close()
+			t.Fatal(err)
+		}
+	}
 	var mu sync.Mutex
 	var stream []byte
 	readerDone := make(chan struct{})
+	stopReader := make(chan struct{})
+	var readerErr error
 	go func() {
 		defer close(readerDone)
 		buf := make([]byte, 64*1024)
 		for {
-			n, err := master.Read(buf)
+			select {
+			case <-stopReader:
+				return
+			default:
+			}
+			n, err := readPTY(master, buf, time.Now().Add(100*time.Millisecond))
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				continue
+			}
 			mu.Lock()
 			stream = append(stream, buf[:n]...)
 			mu.Unlock()
 			if err != nil {
+				readerErr = err
 				return
 			}
 		}
@@ -291,6 +334,31 @@ func TestSixelOutputWithBubbleTeaRenderer(t *testing.T) {
 		_, err := prog.Run()
 		finished <- err
 	}()
+	programStopped := false
+	var stopOnce sync.Once
+	stopOutput := func() {
+		stopOnce.Do(func() {
+			_ = sixel.Close()
+			close(stopReader)
+			<-readerDone
+			_ = slave.Close()
+			_ = master.Close()
+		})
+	}
+	t.Cleanup(func() {
+		if !programStopped {
+			prog.Kill()
+			select {
+			case err := <-finished:
+				if err != nil && !errors.Is(err, tea.ErrProgramKilled) {
+					t.Errorf("Run during cleanup: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Error("program did not stop during cleanup")
+			}
+		}
+		stopOutput()
+	})
 	waitSize := func(width, height int) {
 		t.Helper()
 		select {
@@ -311,6 +379,11 @@ func TestSixelOutputWithBubbleTeaRenderer(t *testing.T) {
 		t.Helper()
 		deadline := time.Now().Add(5 * time.Second)
 		for !ok(snapshot()) {
+			select {
+			case <-readerDone:
+				t.Fatalf("PTY reader stopped waiting for %s: %v", what, readerErr)
+			default:
+			}
 			if time.Now().After(deadline) {
 				t.Fatalf("timeout waiting for %s", what)
 			}
@@ -346,6 +419,7 @@ func TestSixelOutputWithBubbleTeaRenderer(t *testing.T) {
 	prog.Quit()
 	select {
 	case err := <-finished:
+		programStopped = true
 		if err != nil {
 			t.Fatalf("Run: %v", err)
 		}
@@ -354,10 +428,7 @@ func TestSixelOutputWithBubbleTeaRenderer(t *testing.T) {
 	}
 	sixel.Submit(bytes.Clone(frame))
 	time.Sleep(200 * time.Millisecond)
-	_ = sixel.Close()
-	_ = slave.Close()
-	_ = master.Close()
-	<-readerDone
+	stopOutput()
 
 	got := snapshot()
 	exit := bytes.LastIndex(got, []byte("\x1b[?1049l"))

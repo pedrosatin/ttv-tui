@@ -438,8 +438,11 @@ func TestStore_ContendedLockReturnsError(t *testing.T) {
 	if err := SaveTo(path, State{}); err == nil {
 		t.Fatal("expected lock error")
 	}
-	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
-		t.Fatalf("lock waited too long: %v", elapsed)
+	// Nine production retries sleep for 450-495ms before I/O and scheduling.
+	// Allow CI overhead (including Windows timer granularity), but keep the
+	// guarantee that persistent contention returns an error within one second.
+	if elapsed := time.Since(started); elapsed < 300*time.Millisecond || elapsed > time.Second {
+		t.Fatalf("lock wait = %v, want 300ms-1s", elapsed)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("contended save changed state: %v", err)
