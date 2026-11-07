@@ -38,6 +38,37 @@ func WithVideo(requested bool, reason string) Option {
 
 func (m Model) videoRows(available int) int { return min(18, max(available-6, 0)) }
 
+// embeddedLayout reports whether playback started now belongs in the panel. The
+// flag only makes the layout reachable: every other layout keeps the mpv window.
+func (m Model) embeddedLayout() bool {
+	return m.showVideo && m.videoSurface != nil
+}
+
+// videoRestartOffered reports whether r restarts the player: its output no longer
+// matches the layout, or it failed under the panel, where the hidden list would
+// otherwise keep r from retrying. A list error on screen owns r.
+func (m Model) videoRestartOffered() bool {
+	if m.playback == nil || m.videoSurface == nil || m.playerLogin == "" || (m.err != nil && m.listVisible()) {
+		return false
+	}
+	if m.playerState == PlayerStateError {
+		return m.showVideo
+	}
+	return m.playerControllable() && m.playerEmbedded != m.embeddedLayout()
+}
+
+// videoAudioOnly reports a playback whose video went with the panel: it has no
+// window to fall back on, and only sound reaches the user.
+func (m Model) videoAudioOnly() bool {
+	return m.playerEmbedded && !m.showVideo && m.playerControllable()
+}
+
+// typingText reports whether a letter key is text for an input on screen.
+func (m Model) typingText() bool {
+	return m.channelFilterMenu || (m.composing && m.chatColumnVisible()) ||
+		((m.searching || m.filtering) && m.listVisible())
+}
+
 // videoPanel is the region as it stands now. An overlay takes the rows over, so
 // the panel gives way to it instead of competing for them.
 func (m Model) videoPanel() VideoPanel {
@@ -55,14 +86,14 @@ func (m Model) videoPanel() VideoPanel {
 		Rows:    rows,
 		Cols:    m.width,
 		Visible: true,
-		Playing: m.playerState == PlayerStatePlaying,
+		Playing: m.playerEmbedded && m.playerState == PlayerStatePlaying,
 	}
 }
 
 // videoImageOnScreen reports whether the panel may be holding an image: a paused
 // or held stream keeps its last frame on screen.
 func (m Model) videoImageOnScreen() bool {
-	if !m.videoPanel().Visible {
+	if !m.playerEmbedded || !m.videoPanel().Visible {
 		return false
 	}
 	switch m.playerState {
@@ -90,11 +121,19 @@ func (m Model) syncVideoPanel(before Model, cmd tea.Cmd) (Model, tea.Cmd) {
 	return m, cmd
 }
 
+// videoPanelText is what the panel says while it has no image.
+func (m Model) videoPanelText() string {
+	if m.playerControllable() && m.videoRestartOffered() {
+		return m.t("video.restart_embedded")
+	}
+	return m.t("video.placeholder")
+}
+
 func (m Model) videoView(available int, overlay []string, status string) string {
 	rows := m.videoRows(available)
 	lines := make([]string, rows)
 	if rows > 0 && !m.videoImageOnScreen() {
-		lines[0] = m.t("video.placeholder")
+		lines[0] = m.videoPanelText()
 	}
 	lines = append(lines, m.renderChatLines(available-rows, m.width)...)
 	for len(lines) < available {

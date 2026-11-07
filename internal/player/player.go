@@ -151,7 +151,7 @@ type Manager struct {
 	stopped  *sync.Cond
 	// inputConfErr is the last input.conf write failure, for the exit log.
 	inputConfErr error
-	// video, when set, makes sessions draw through it instead of a window.
+	// video is what StartEmbedded draws through.
 	video *SixelOutput
 }
 
@@ -219,9 +219,19 @@ func (m *Manager) Generation() uint64 {
 	return m.gen
 }
 
-// Start stops any previous session and starts playback for login.
-// It returns the new generation. The first event is StateStarting.
+// Start stops any previous session and starts playback for login in the mpv
+// window. It returns the new generation. The first event is StateStarting.
 func (m *Manager) Start(login string) (uint64, error) {
+	return m.start(login, false)
+}
+
+// StartEmbedded is Start with the video drawn through the output given to
+// SetVideoOutput. Without one it falls back to the window.
+func (m *Manager) StartEmbedded(login string) (uint64, error) {
+	return m.start(login, true)
+}
+
+func (m *Manager) start(login string, embedded bool) (uint64, error) {
 	if login == "" {
 		return 0, fmt.Errorf("player: empty channel login")
 	}
@@ -255,10 +265,13 @@ func (m *Manager) Start(login string) (uint64, error) {
 		return gen, err
 	}
 
-	m.mu.Lock()
-	video := m.video
-	m.mu.Unlock()
+	var video *SixelOutput
 	var videoWidth, videoHeight int
+	if embedded {
+		m.mu.Lock()
+		video = m.video
+		m.mu.Unlock()
+	}
 	if video != nil {
 		videoWidth, videoHeight = video.FrameSize()
 	}
@@ -381,8 +394,8 @@ func (m *Manager) SetVolume(v int) error {
 	return sess.setVolume(clampVolume(v))
 }
 
-// SetVideoOutput makes the sessions started from now on draw through out. Call it
-// before the first Start.
+// SetVideoOutput gives StartEmbedded somewhere to draw. It only enables that
+// choice: Start keeps using the window. Call it before the first Start.
 func (m *Manager) SetVideoOutput(out *SixelOutput) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -390,7 +403,7 @@ func (m *Manager) SetVideoOutput(out *SixelOutput) {
 }
 
 // ResizeVideo asks the active session for frames of a new size. A session still
-// starting picks the size up when its IPC connects.
+// starting picks the size up when its IPC connects. A window session ignores it.
 func (m *Manager) ResizeVideo(width, height int) error {
 	m.mu.Lock()
 	sess := m.session
@@ -399,6 +412,19 @@ func (m *Manager) ResizeVideo(width, height int) error {
 		return fmt.Errorf("player: no active session")
 	}
 	return sess.resizeVideo(width, height)
+}
+
+// SetVideoTrack turns the active session's video off and back on while its audio
+// goes on. A session still starting applies it when its IPC connects. A window
+// session ignores it: the panel says nothing about the window.
+func (m *Manager) SetVideoTrack(on bool) error {
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
+	if sess == nil {
+		return fmt.Errorf("player: no active session")
+	}
+	return sess.setVideoTrack(on)
 }
 
 // Volume returns the last known volume for the active session, or 0.

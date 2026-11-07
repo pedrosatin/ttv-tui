@@ -16,9 +16,10 @@ const (
 	// sixelFPS is what mpv is asked to produce, so it does not encode frames
 	// the output would drop.
 	sixelFPS = 15
-	// sixelResizeDelay holds the mpv reconfiguration until a dragged window
-	// stops changing size: each one rebuilds the video output.
-	sixelResizeDelay = 200 * time.Millisecond
+	// sixelPlayerDelay holds player reconfiguration until the panel stops
+	// changing: a dragged window, or help opened and closed at once. Each change
+	// rebuilds the video output.
+	sixelPlayerDelay = 200 * time.Millisecond
 
 	// sixelMaxWidth and sixelMaxHeight are the size the CPU cost was measured at.
 	sixelMaxWidth  = 480
@@ -30,6 +31,9 @@ const (
 	// Assumed when the terminal does not report its size in pixels.
 	defaultCellWidth  = 8
 	defaultCellHeight = 16
+	// sixelCellSlack is how many rows and columns a guessed cell gives up, because
+	// a real cell smaller than the guess draws the frame past the panel's end.
+	sixelCellSlack = 1
 )
 
 const (
@@ -59,6 +63,9 @@ type SixelOptions struct {
 	// Resize asks the player for frames of a new size. It runs on the output's
 	// own goroutine, never on the UI's.
 	Resize func(width, height int)
+	// Track turns the player's video on and off as the panel shows and hides, so
+	// a hidden panel costs no encoding. Same goroutine as Resize, which runs first.
+	Track func(on bool)
 }
 
 type sixelFrame struct {
@@ -92,11 +99,17 @@ type SixelOutput struct {
 	closed       bool
 	cellWidth    int
 	cellHeight   int
+	cellMeasured bool
 	width        int
 	height       int
-	resizeAt     time.Time
+	// playerAt is when the player hears about the panel; zero means nothing waits.
+	playerAt      time.Time
+	resizePending bool
+	// trackSent is the last value given to Track. mpv starts with video on.
+	trackSent    bool
 	cell         func() (int, int)
 	resizePlayer func(int, int)
+	trackPlayer  func(bool)
 
 	wake      chan struct{}
 	quit      chan struct{}
@@ -112,8 +125,10 @@ func NewSixelOutput(out io.Writer, opts SixelOptions) *SixelOutput {
 		cellHeight:   defaultCellHeight,
 		width:        sixelMaxWidth,
 		height:       sixelMaxHeight,
+		trackSent:    true,
 		cell:         opts.Cell,
 		resizePlayer: opts.Resize,
+		trackPlayer:  opts.Track,
 		wake:         make(chan struct{}, 1),
 		quit:         make(chan struct{}),
 		done:         make(chan struct{}),
@@ -175,8 +190,18 @@ func (o *SixelOutput) SetPanel(panel SixelPanel) {
 	if moved && panel.Rows > 0 && panel.Cols > 0 {
 		o.fitLocked()
 	}
+	if panel.Visible != o.trackSent {
+		o.playerAt = time.Now().Add(sixelPlayerDelay)
+	}
 	o.mu.Unlock()
 	o.signal()
+}
+
+// PanelVisible reports whether the player's video has a panel to go to now.
+func (o *SixelOutput) PanelVisible() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.panel.Visible
 }
 
 // FrameSize returns the size in pixels frames should have now.
@@ -221,13 +246,14 @@ func (o *SixelOutput) dropFramesLocked() {
 func (o *SixelOutput) fitLocked() {
 	if o.cell != nil {
 		if width, height := o.cell(); width > 0 && height > 0 {
-			o.cellWidth, o.cellHeight = width, height
+			o.cellWidth, o.cellHeight, o.cellMeasured = width, height, true
 		}
 	}
-	width := min(sixelMaxWidth, o.panel.Cols*o.cellWidth)
+	maxWidth, maxHeight := o.drawableLocked()
+	width := min(sixelMaxWidth, maxWidth)
 	height := width * 9 / 16
-	if limit := o.panel.Rows * o.cellHeight; height > limit {
-		height = limit
+	if height > maxHeight {
+		height = maxHeight
 		width = height * 16 / 9
 	}
 	height -= height % sixelBandHeight
@@ -235,11 +261,22 @@ func (o *SixelOutput) fitLocked() {
 		return
 	}
 	o.width, o.height = width, height
-	o.resizeAt = time.Now().Add(sixelResizeDelay)
+	o.resizePending = true
+	o.playerAt = time.Now().Add(sixelPlayerDelay)
+}
+
+// drawableLocked is the room in the panel, in pixels.
+func (o *SixelOutput) drawableLocked() (width, height int) {
+	cols, rows := o.panel.Cols, o.panel.Rows
+	if !o.cellMeasured {
+		cols, rows = max(cols-sixelCellSlack, 1), max(rows-sixelCellSlack, 1)
+	}
+	return cols * o.cellWidth, rows * o.cellHeight
 }
 
 func (o *SixelOutput) fitsLocked(f *sixelFrame) bool {
-	return f.width <= o.panel.Cols*o.cellWidth && f.height <= o.panel.Rows*o.cellHeight
+	width, height := o.drawableLocked()
+	return f.width <= width && f.height <= height
 }
 
 // nextFrameLocked picks what to draw. A frame that no longer fits the panel is
@@ -285,28 +322,36 @@ func (o *SixelOutput) run() {
 // step does the work that is due. It returns the wait until the next piece of
 // work, or a negative duration when there is none.
 func (o *SixelOutput) step() time.Duration {
-	wait := o.applyResize()
+	wait := o.applyPlayer()
 	if emit := o.emit(); emit >= 0 && (wait < 0 || emit < wait) {
 		wait = emit
 	}
 	return wait
 }
 
-func (o *SixelOutput) applyResize() time.Duration {
+// applyPlayer tells the player what the panel settled on. The size goes first, so
+// video coming back on comes up at the new size in a single rebuild.
+func (o *SixelOutput) applyPlayer() time.Duration {
 	o.mu.Lock()
-	if o.resizeAt.IsZero() {
+	if o.playerAt.IsZero() {
 		o.mu.Unlock()
 		return -1
 	}
-	if wait := time.Until(o.resizeAt); wait > 0 {
+	if wait := time.Until(o.playerAt); wait > 0 {
 		o.mu.Unlock()
 		return wait
 	}
-	o.resizeAt = time.Time{}
-	width, height, resize := o.width, o.height, o.resizePlayer
+	o.playerAt = time.Time{}
+	width, height, resize := o.width, o.height, o.resizePending
+	on := o.panel.Visible
+	track := on != o.trackSent
+	o.resizePending, o.trackSent = false, on
 	o.mu.Unlock()
-	if resize != nil {
-		resize(width, height)
+	if resize && o.resizePlayer != nil {
+		o.resizePlayer(width, height)
+	}
+	if track && o.trackPlayer != nil {
+		o.trackPlayer(on)
 	}
 	return -1
 }

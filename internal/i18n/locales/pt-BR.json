@@ -293,7 +293,9 @@
   "video.no_mpv": "Vídeo embutido: mpv sem saída sixel",
   "video.unsupported_platform": "Vídeo embutido: Windows ainda sem suporte",
   "video.tmux": "Vídeo embutido: tmux ainda sem suporte",
-  "video.placeholder": "Vídeo embutido experimental: indisponível nesta etapa",
+  "video.placeholder": "Vídeo embutido experimental: sem imagem no momento",
+  "video.restart_embedded": "Vídeo na janela do mpv: pressione r para reiniciar no modo embutido",
+  "video.audio_only": "Só áudio: pressione r para trazer a janela do mpv de volta",
   "video.help": "Vídeo+chat experimental: Ctrl+W após o modo foco",
   "layout.mode.video": "vídeo+chat"
 }

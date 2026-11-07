@@ -802,14 +802,16 @@ func TestInvalidTokenWarnsOnceInStatusBarWithoutCrashingApp(t *testing.T) {
 
 type fakePlayback struct {
 	started   []string
+	embedded  []bool
 	stopped   int
 	pauses    int
 	volDeltas []int
 	startMsg  PlayerStatusMsg
 }
 
-func (f *fakePlayback) Start(login string) tea.Cmd {
+func (f *fakePlayback) Start(login string, embedded bool) tea.Cmd {
 	f.started = append(f.started, login)
+	f.embedded = append(f.embedded, embedded)
 	msg := f.startMsg
 	if msg.State == "" {
 		msg = PlayerStatusMsg{Generation: uint64(len(f.started)), State: PlayerStateStarting, Login: login, Volume: 100, FromStart: true}

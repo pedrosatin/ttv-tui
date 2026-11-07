@@ -65,8 +65,10 @@ type PlayerStatusMsg struct {
 // (forwarded by the app from the player event pump).
 type Playback interface {
 	// Start begins playback for login (stopping any previous session) and
-	// returns a Cmd that yields an initial PlayerStatusMsg.
-	Start(login string) tea.Cmd
+	// returns a Cmd that yields an initial PlayerStatusMsg. embedded draws the
+	// video in the panel instead of the mpv window, and holds for the whole
+	// playback: only another Start changes it.
+	Start(login string, embedded bool) tea.Cmd
 	// Stop ends the active playback and returns a Cmd that yields a terminal status.
 	Stop() tea.Cmd
 	// TogglePause flips pause on the active playback. Status arrives via PlayerStatusMsg.
@@ -222,7 +224,8 @@ func (m Model) playerErrorDetail() string {
 	return fmt.Sprintf(m.t("player.fail.detail"), line)
 }
 
-// retryPlayback restarts playback of the channel whose player failed.
+// retryPlayback restarts playback of the player's channel, with the output the
+// layout calls for now.
 func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
 	login := m.playerLogin
 	m.playerState = PlayerStateStarting
@@ -231,7 +234,8 @@ func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
 	m.playerBreakElapsed = 0
 	m.playerVolume = 100
 	m.playerSwitching = true
-	return m, m.playback.Start(login)
+	m.playerEmbedded = m.embeddedLayout()
+	return m, m.playback.Start(login, m.playerEmbedded)
 }
 
 func clampPlayerVolume(v int) int {

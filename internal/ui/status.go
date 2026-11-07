@@ -187,6 +187,11 @@ func (m Model) statusParts() statusContent {
 		if m.statusNoticeWarns {
 			c.tone = toneWarning
 		}
+	case m.videoAudioOnly():
+		primary = m.t("video.audio_only")
+		c.tone = toneWarning
+		context = append(context, m.playerStatusBase())
+		addContext()
 	case m.playerWindowNoticeShown():
 		primary = m.t("player.window_notice")
 		c.tone = playerTone(m.playerState)

@@ -21,10 +21,14 @@ func newPlaybackBridge(mgr *player.Manager) *playbackBridge {
 	return &playbackBridge{mgr: mgr}
 }
 
-func (b *playbackBridge) Start(login string) tea.Cmd {
+func (b *playbackBridge) Start(login string, embedded bool) tea.Cmd {
 	mgr := b.mgr
+	start := mgr.Start
+	if embedded {
+		start = mgr.StartEmbedded
+	}
 	return func() tea.Msg {
-		gen, err := mgr.Start(login)
+		gen, err := start(login)
 		if err != nil {
 			return ui.PlayerStatusMsg{
 				Generation: gen,

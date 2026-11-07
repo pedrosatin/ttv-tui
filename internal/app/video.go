@@ -56,6 +56,7 @@ func startVideo(output io.Writer, mgr *player.Manager) (io.Writer, ui.Option, fu
 	sixel := player.NewSixelOutput(file, player.SixelOptions{
 		Cell:   func() (int, int) { return cellSize(file) },
 		Resize: func(width, height int) { _ = mgr.ResizeVideo(width, height) },
+		Track:  func(on bool) { _ = mgr.SetVideoTrack(on) },
 	})
 	mgr.SetVideoOutput(sixel)
 	return terminalOutput{SixelOutput: sixel, file: file}, ui.WithVideoSurface(sixelSurface{sixel}), func() { _ = sixel.Close() }

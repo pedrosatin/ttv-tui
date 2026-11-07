@@ -264,10 +264,13 @@ type Model struct {
 	// pendingRecents is the store-ordered recent list after a channel is opened.
 	// VisibleItems keeps using recents until the next list load (refresh, back
 	// to categories, reopen) applies this slice, so selection does not jump rows.
-	pendingRecents     []twitch.Channel
-	playback           Playback
-	playerGen          uint64
-	playerSwitching    bool
+	pendingRecents  []twitch.Channel
+	playback        Playback
+	playerGen       uint64
+	playerSwitching bool
+	// playerEmbedded is the output of the current playback: the panel or, when
+	// false, the mpv window. The layout picks it at Start and never after.
+	playerEmbedded     bool
 	playerState        PlayerState
 	playerLogin        string
 	playerLastLine     string
@@ -629,7 +632,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerBreakElapsed = 0
 			m.playerVolume = 100
 			m.playerSwitching = true
-			cmds = append(cmds, m.playback.Start(selected.Login))
+			m.playerEmbedded = m.embeddedLayout()
+			cmds = append(cmds, m.playback.Start(selected.Login, m.playerEmbedded))
 		}
 		if m.chat != nil || m.chatPanel.channel != "" {
 			if chatCmd := m.startChatChannel(selected.Login); chatCmd != nil {
@@ -703,7 +707,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerKeysWarnedGen = msg.Generation
 			m.warnStatus(m.t("player.warn.input_conf"))
 		}
-		if msg.State == PlayerStatePlaying && !m.playerWindowNotified && m.videoSurface == nil {
+		if msg.State == PlayerStatePlaying && !m.playerWindowNotified && !m.playerEmbedded {
 			// mpv opens its own window; someone new to the app may not notice it.
 			m.playerWindowNotified = true
 			m.playerWindowNotice = true

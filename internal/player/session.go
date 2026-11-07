@@ -100,6 +100,8 @@ type Session struct {
 	ipcConn net.Conn
 	nextReq atomic.Int64
 	pending map[int64]pendingCommand
+	// videoOff means the panel is hidden and mpv's video track stays off.
+	videoOff bool
 }
 
 // readerDrainWait bounds how long the exit path waits for the reader goroutines
@@ -467,7 +469,11 @@ func (s *Session) superviseIPC(ctx context.Context) {
 	// manual/window changes.
 	s.applyPlaybackBaseline()
 	if s.cfg.Video != nil {
-		// The panel may have changed size while mpv was starting.
+		// The panel may have changed while mpv was starting. ipcConn is already
+		// set, so a change after this read reaches mpv through setVideoTrack.
+		if !s.cfg.Video.PanelVisible() {
+			_ = s.setVideoTrack(false)
+		}
 		if w, h := s.cfg.Video.FrameSize(); w != s.cfg.VideoWidth || h != s.cfg.VideoHeight {
 			_ = s.resizeVideo(w, h)
 		}
@@ -692,22 +698,54 @@ func (s *Session) togglePause() error {
 
 // resizeVideo changes the size of the frames mpv produces. mpv reads the
 // vo-sixel size only when it builds the video output, and setting vo to the value
-// it already has is a no-op, so the video track goes off and back on.
+// it already has is a no-op, so the video track goes off and back on. With the
+// track off the new size just waits for it: turning it on here would bring video
+// back to a hidden panel.
 func (s *Session) resizeVideo(width, height int) error {
+	if s.cfg.Video == nil {
+		return nil
+	}
 	s.cmdMu.Lock()
 	defer s.cmdMu.Unlock()
 	if s.ipcConn == nil {
 		return fmt.Errorf("player: ipc not connected")
 	}
-	for _, cmd := range [][]any{
+	commands := [][]any{
 		{"set_property", "options/vo-sixel-width", width},
 		{"set_property", "options/vo-sixel-height", height},
-		{"set_property", "vid", "no"},
-		{"set_property", "vid", "auto"},
-	} {
+	}
+	if !s.videoOff {
+		commands = append(commands,
+			[]any{"set_property", "vid", "no"},
+			[]any{"set_property", "vid", "auto"},
+		)
+	}
+	for _, cmd := range commands {
 		if err := writeIPC(s.ipcConn, map[string]any{"command": cmd}); err != nil {
 			return fmt.Errorf("player: ipc write: %w", err)
 		}
+	}
+	return nil
+}
+
+// setVideoTrack stops mpv decoding and encoding video for a hidden panel, and
+// brings it back. mpv refuses vid=yes: auto selects the track again.
+func (s *Session) setVideoTrack(on bool) error {
+	if s.cfg.Video == nil {
+		return nil
+	}
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
+	s.videoOff = !on
+	if s.ipcConn == nil {
+		return nil
+	}
+	value := "no"
+	if on {
+		value = "auto"
+	}
+	if err := writeIPC(s.ipcConn, map[string]any{"command": []any{"set_property", "vid", value}}); err != nil {
+		return fmt.Errorf("player: ipc write: %w", err)
 	}
 	return nil
 }

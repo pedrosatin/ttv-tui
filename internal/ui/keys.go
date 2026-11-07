@@ -272,6 +272,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// r answers the panel's or the bar's offer before the list can claim the key,
+	// because the video layout hides the list. An input on screen keeps the letter.
+	if key.Matches(msg, m.keys.Retry) && m.videoRestartOffered() && !m.typingText() {
+		return m.retryPlayback()
+	}
+
 	// The filter menu is a visible overlay in every layout. Other list
 	// inputs stay suspended until the list is shown again.
 	if m.hiddenListKey(msg) {

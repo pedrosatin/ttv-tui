@@ -293,7 +293,9 @@
   "video.no_mpv": "Embedded video: mpv has no sixel output",
   "video.unsupported_platform": "Embedded video: Windows is not supported yet",
   "video.tmux": "Embedded video: tmux is not supported yet",
-  "video.placeholder": "Experimental embedded video: unavailable at this stage",
+  "video.placeholder": "Experimental embedded video: no picture right now",
+  "video.restart_embedded": "Video is in the mpv window: press r to restart it embedded",
+  "video.audio_only": "Audio only: press r to bring the mpv window back",
   "video.help": "Experimental video+chat: Ctrl+W after focus mode",
   "layout.mode.video": "video+chat"
 }

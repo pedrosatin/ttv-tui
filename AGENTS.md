@@ -8,8 +8,9 @@ arquitetura.
 
 1. **O vídeo não é reimplementado.** A TUI orquestra `streamlink` (token, HLS,
    filtro de anúncio) e `mpv` (decode/GPU), controlando o player por IPC JSON.
-   Nada de HLS próprio nem de vídeo em sixel dentro do terminal: o ganho seria
-   perder qualidade e queimar CPU.
+   Nada de HLS próprio. A janela do mpv é o padrão: vídeo em sixel no terminal é
+   experimental, opt-in por `--video=sixel`, usado só no modo `video` e sempre
+   codificado pelo mpv ([ADR 0010](docs/adr/0010-video-embutido-sixel.md)).
 
 2. **Acesso a dados fica atrás de uma interface `Source`.** O v1 fala o GraphQL
    público do site; quando existir um app registrado na Twitch, o adapter Helix

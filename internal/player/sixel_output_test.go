@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -490,6 +491,11 @@ func TestFrameSizeFollowsThePanel(t *testing.T) {
 		{"short panel", 5, 120, 10, 20, 177, 96},
 		{"narrow panel", 18, 30, 10, 20, 300, 168},
 		{"unknown cell", 18, 120, 0, 0, 480, 270},
+		{"unknown cell gives up a row", 10, 120, 0, 0, 256, 144},
+		{"unknown cell gives up a column", 18, 30, 0, 0, 232, 126},
+		{"unknown cell in a tiny panel", 1, 1, 0, 0, 480, 270},
+		{"known cell keeps the whole panel", 10, 120, 8, 16, 284, 156},
+		{"small known cell", 18, 120, 6, 12, 384, 216},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resized := make(chan [2]int, 1)
@@ -529,9 +535,9 @@ func TestDraggedResizeReconfiguresThePlayerOnce(t *testing.T) {
 	defer func() { _ = o.Close() }()
 	for rows := 3; rows < 10; rows++ {
 		o.SetPanel(SixelPanel{Row: 1, Col: 1, Rows: rows, Cols: 120, Visible: true})
-		time.Sleep(sixelResizeDelay / 10)
+		time.Sleep(sixelPlayerDelay / 10)
 	}
-	time.Sleep(2 * sixelResizeDelay)
+	time.Sleep(2 * sixelPlayerDelay)
 	if n := calls.Load(); n != 1 {
 		t.Fatalf("player reconfigured %d times", n)
 	}
@@ -619,3 +625,118 @@ func TestCloseStopsTheGoroutineAndKeepsWrites(t *testing.T) {
 		t.Fatalf("goroutines: %d before, %d after", before, after)
 	}
 }
+
+// A frame sized for the whole panel reaches past it when the cell is a guess: it
+// waits for the player to deliver the smaller size, as any oversized frame does.
+func TestGuessedCellKeepsFramesInsideTheSlack(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := NewSixelOutput(rec, SixelOptions{})
+	defer func() { _ = o.Close() }()
+	o.SetPanel(SixelPanel{Row: 1, Col: 1, Rows: 10, Cols: 120, Visible: true, Playing: true})
+	o.Submit(sized(1, 284, 156))
+	settle()
+	if n := rec.frames(); n != 0 {
+		t.Fatalf("%d frames over the slack", n)
+	}
+	o.Submit(sized(2, 256, 144))
+	waitFrames(t, rec, 1)
+}
+
+// trackRecorder collects what the output tells the player, in order.
+type trackRecorder struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (r *trackRecorder) add(call string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, call)
+}
+
+func (r *trackRecorder) snapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.calls)
+}
+
+func newTrackedSixel(t *testing.T) (*SixelOutput, *trackRecorder) {
+	t.Helper()
+	rec := &trackRecorder{}
+	o := NewSixelOutput(&terminalRecorder{}, SixelOptions{
+		Cell:   func() (int, int) { return 10, 20 },
+		Resize: func(width, height int) { rec.add(fmt.Sprintf("size %dx%d", width, height)) },
+		Track:  func(on bool) { rec.add(fmt.Sprintf("track %v", on)) },
+	})
+	t.Cleanup(func() { _ = o.Close() })
+	return o, rec
+}
+
+func waitPlayerCalls(t *testing.T, rec *trackRecorder, want ...string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for !slices.Equal(rec.snapshot(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("calls = %q, want %q", rec.snapshot(), want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestTrackFollowsThePanel(t *testing.T) {
+	o, rec := newTrackedSixel(t)
+	o.SetPanel(testPanel)
+	settleTrack()
+	if got := rec.snapshot(); len(got) != 0 {
+		t.Fatalf("mpv starts with video on, nothing to say: %q", got)
+	}
+	o.SetPanel(SixelPanel{})
+	waitPlayerCalls(t, rec, "track false")
+	if o.PanelVisible() {
+		t.Fatal("panel still visible")
+	}
+	o.SetPanel(testPanel)
+	waitPlayerCalls(t, rec, "track false", "track true")
+}
+
+// Help opened and closed at once costs no video output rebuild.
+func TestQuickHideAndShowLeavesTheTrackAlone(t *testing.T) {
+	o, rec := newTrackedSixel(t)
+	o.SetPanel(testPanel)
+	settleTrack()
+	o.SetPanel(SixelPanel{})
+	time.Sleep(sixelPlayerDelay / 4)
+	o.SetPanel(testPanel)
+	settleTrack()
+	if got := rec.snapshot(); len(got) != 0 {
+		t.Fatalf("calls = %q", got)
+	}
+}
+
+func TestPausedPanelKeepsTheTrack(t *testing.T) {
+	o, rec := newTrackedSixel(t)
+	o.SetPanel(testPanel)
+	paused := testPanel
+	paused.Playing = false
+	o.SetPanel(paused)
+	settleTrack()
+	if got := rec.snapshot(); len(got) != 0 {
+		t.Fatalf("calls = %q", got)
+	}
+}
+
+// The window changes while the panel is hidden: video must come back at the new
+// size in one rebuild, so the size has to reach the player first.
+func TestSizeReachesThePlayerBeforeTheTrack(t *testing.T) {
+	o, rec := newTrackedSixel(t)
+	o.SetPanel(testPanel)
+	settleTrack()
+	o.SetPanel(SixelPanel{})
+	waitPlayerCalls(t, rec, "track false")
+	smaller := testPanel
+	smaller.Rows = 5
+	o.SetPanel(smaller)
+	waitPlayerCalls(t, rec, "track false", "size 177x96", "track true")
+}
+
+func settleTrack() { time.Sleep(2 * sixelPlayerDelay) }

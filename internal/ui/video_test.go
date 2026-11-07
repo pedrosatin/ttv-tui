@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func TestVideoLayoutCycle(t *testing.T) {
@@ -99,21 +101,48 @@ func (f *fakeSurface) last(t *testing.T) VideoPanel {
 	return f.panels[len(f.panels)-1]
 }
 
-// playingVideoModel is the video layout with a stream playing at 120x32.
-func playingVideoModel(t *testing.T) (Model, *fakeSurface) {
+// windowVideoModel is a playback that began in the split, in the mpv window, with
+// the flag on and the terminal supported, at 120x32.
+func windowVideoModel(t *testing.T) (Model, *fakePlayback, *fakeSurface) {
 	t.Helper()
-	m, _, _ := setupTwoPanelModel(t)
+	m, pb, _ := setupTwoPanelModel(t)
 	surface := &fakeSurface{}
 	WithVideo(true, "")(&m)
 	WithVideoSurface(surface)(&m)
-	m = applyMsg(t, m, tea.WindowSizeMsg{Width: 120, Height: 32})
+	return applyMsg(t, m, tea.WindowSizeMsg{Width: 120, Height: 32}), pb, surface
+}
+
+func enterVideoLayout(t *testing.T, m Model) Model {
+	t.Helper()
 	for range 4 {
 		m = sendLayoutKey(t, m, tea.KeyCtrlW)
 	}
 	if m.LayoutMode() != LayoutVideo {
 		t.Fatalf("layout = %q", m.LayoutMode())
 	}
-	return m, surface
+	return m
+}
+
+var restartKey = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+
+// pressRestart presses r and completes the Start it causes.
+func pressRestart(t *testing.T, m Model) Model {
+	t.Helper()
+	updated, cmd := m.Update(restartKey)
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("r started nothing")
+	}
+	return applyMsg(t, m, cmd())
+}
+
+// playingVideoModel is the video layout with a stream playing in the panel: the
+// window session of the split, restarted with r, which is the second playback.
+func playingVideoModel(t *testing.T) (Model, *fakeSurface) {
+	t.Helper()
+	m, _, surface := windowVideoModel(t)
+	m = pressRestart(t, enterVideoLayout(t, m))
+	return applyMsg(t, m, playerState(PlayerStatePlaying)), surface
 }
 
 func applyMsg(t *testing.T, m Model, msg tea.Msg) Model {
@@ -123,7 +152,7 @@ func applyMsg(t *testing.T, m Model, msg tea.Msg) Model {
 }
 
 func playerState(state PlayerState) PlayerStatusMsg {
-	return PlayerStatusMsg{Generation: 1, State: state, Login: "gaules", Volume: 85}
+	return PlayerStatusMsg{Generation: 2, State: state, Login: "gaules", Volume: 85}
 }
 
 func clearsScreen(cmd tea.Cmd) bool {
@@ -322,5 +351,248 @@ func TestVideoSurfaceHasNoWindowToAnnounce(t *testing.T) {
 	m = applyMsg(t, m, playerState(PlayerStatePlaying))
 	if m.playerWindowNotified || m.playerWindowNotice {
 		t.Fatal("announced an mpv window that does not exist")
+	}
+}
+
+func TestOpeningAChannelPicksTheOutputFromTheLayout(t *testing.T) {
+	open := func(t *testing.T, m Model) Model {
+		t.Helper()
+		updated, _ := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "alanzoka"}})
+		return updated.(Model)
+	}
+	for presses, mode := range []LayoutMode{LayoutSplit, LayoutChat, LayoutList, LayoutFocus, LayoutVideo} {
+		t.Run(string(mode), func(t *testing.T) {
+			m, pb, _ := windowVideoModel(t)
+			for range presses {
+				m = sendLayoutKey(t, m, tea.KeyCtrlW)
+			}
+			if m.LayoutMode() != mode {
+				t.Fatalf("layout = %q", m.LayoutMode())
+			}
+			open(t, m)
+			if got, want := pb.embedded[len(pb.embedded)-1], mode == LayoutVideo; got != want {
+				t.Fatalf("embedded = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestVideoLayoutWithoutSurfaceStartsInTheWindow(t *testing.T) {
+	m, pb, _ := setupTwoPanelModel(t)
+	WithVideo(true, "")(&m)
+	m = enterVideoLayout(t, m)
+	updated, _ := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "alanzoka"}})
+	if pb.embedded[len(pb.embedded)-1] {
+		t.Fatal("nothing would draw the panel")
+	}
+	if updated.(Model).videoRestartOffered() {
+		t.Fatal("offered a restart into a panel that cannot draw")
+	}
+}
+
+func TestLayoutKeysNeverRestartThePlayer(t *testing.T) {
+	windowSession := func(t *testing.T) (Model, *fakePlayback) {
+		m, pb, _ := windowVideoModel(t)
+		return m, pb
+	}
+	embeddedSession := func(t *testing.T) (Model, *fakePlayback) {
+		m, _ := playingVideoModel(t)
+		return m, m.playback.(*fakePlayback)
+	}
+	for name, setup := range map[string]func(*testing.T) (Model, *fakePlayback){"window": windowSession, "embedded": embeddedSession} {
+		t.Run(name, func(t *testing.T) {
+			m, pb := setup(t)
+			started, stopped := len(pb.started), pb.stopped
+			for range 10 {
+				for _, key := range []tea.KeyType{tea.KeyCtrlW, tea.KeyCtrlH, tea.KeyCtrlW, tea.KeyCtrlL} {
+					m = sendLayoutKey(t, m, key)
+				}
+			}
+			if len(pb.started) != started || pb.stopped != stopped {
+				t.Fatalf("started %d more, stopped %d more", len(pb.started)-started, pb.stopped-stopped)
+			}
+		})
+	}
+}
+
+func TestWindowSessionInTheLayoutOffersTheRestart(t *testing.T) {
+	m, pb, surface := windowVideoModel(t)
+	if got := ansi.Strip(m.View()); strings.Contains(got, m.t("video.restart_embedded")) {
+		t.Fatalf("offer outside the layout:\n%s", got)
+	}
+	m = enterVideoLayout(t, m)
+	if row := strings.Split(ansi.Strip(m.View()), "\n")[0]; !strings.Contains(row, m.t("video.restart_embedded")) {
+		t.Fatalf("panel row: %q", row)
+	}
+	if got := surface.last(t); !got.Visible || got.Playing {
+		t.Fatalf("a window session drew in the panel: %+v", got)
+	}
+	// The offer stays for as long as it is true, past any other key.
+	m = sendLayoutKey(t, m, tea.KeyTab)
+	if row := strings.Split(ansi.Strip(m.View()), "\n")[0]; !strings.Contains(row, m.t("video.restart_embedded")) {
+		t.Fatalf("offer gone after a key: %q", row)
+	}
+	m = pressRestart(t, m)
+	if got := pb.embedded; len(got) != 2 || got[0] || !got[1] {
+		t.Fatalf("embedded = %v", got)
+	}
+	if m.videoRestartOffered() {
+		t.Fatal("still offered after the restart")
+	}
+	if row := strings.Split(ansi.Strip(m.View()), "\n")[0]; !strings.Contains(row, m.t("video.placeholder")) {
+		t.Fatalf("panel row while starting: %q", row)
+	}
+	_ = applyMsg(t, m, playerState(PlayerStatePlaying))
+	if got := surface.last(t); !got.Playing {
+		t.Fatalf("panel = %+v", got)
+	}
+}
+
+func TestLeavingTheLayoutLeavesAudioOnlyUntilRestarted(t *testing.T) {
+	m, surface := playingVideoModel(t)
+	pb := m.playback.(*fakePlayback)
+	bar := func() string { return ansi.Strip(m.StatusBar()) }
+	m = sendLayoutKey(t, m, tea.KeyCtrlW)
+	if got := surface.last(t); got.Visible || got.Playing {
+		t.Fatalf("panel still on: %+v", got)
+	}
+	if !strings.Contains(bar(), m.t("video.audio_only")) {
+		t.Fatalf("status bar: %q", bar())
+	}
+	if m.PlayerState() != PlayerStatePlaying {
+		t.Fatalf("state = %q", m.PlayerState())
+	}
+	// Nothing else says the picture is gone, so a key does not dismiss it.
+	m = sendLayoutKey(t, m, tea.KeyCtrlW)
+	if !strings.Contains(bar(), m.t("video.audio_only")) {
+		t.Fatalf("notice gone after a key: %q", bar())
+	}
+	m = pressRestart(t, m)
+	if got := pb.embedded; got[len(got)-1] {
+		t.Fatalf("embedded = %v", got)
+	}
+	if strings.Contains(bar(), m.t("video.audio_only")) {
+		t.Fatalf("stale notice: %q", bar())
+	}
+}
+
+func TestReturningToTheLayoutNeedsNoRestart(t *testing.T) {
+	m, surface := playingVideoModel(t)
+	m = sendLayoutKey(t, m, tea.KeyCtrlW)
+	m = enterVideoLayout(t, m)
+	want := VideoPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true}
+	if got := surface.last(t); got != want {
+		t.Fatalf("panel = %+v", got)
+	}
+	if m.videoRestartOffered() || strings.Contains(ansi.Strip(m.View()), m.t("video.restart_embedded")) {
+		t.Fatal("offered a restart with the output already right")
+	}
+	if strings.Contains(ansi.Strip(m.StatusBar()), m.t("video.audio_only")) {
+		t.Fatal("stale notice")
+	}
+}
+
+func TestAudioOnlyNoticeSurvivesEightyColumns(t *testing.T) {
+	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+		t.Run(lang, func(t *testing.T) {
+			m, _ := playingVideoModel(t)
+			m.catalog, _ = i18n.New(lang)
+			m = sendLayoutKey(t, m, tea.KeyCtrlW)
+			m = applyMsg(t, m, tea.WindowSizeMsg{Width: 80, Height: 24})
+			if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, m.t("video.audio_only")) {
+				t.Fatalf("status bar: %q", bar)
+			}
+		})
+	}
+}
+
+func TestEndedPlaybackOffersNothing(t *testing.T) {
+	for _, state := range []PlayerState{PlayerStateEnded, PlayerStateNone} {
+		t.Run(string(state), func(t *testing.T) {
+			m, _ := playingVideoModel(t)
+			m = sendLayoutKey(t, m, tea.KeyCtrlW)
+			m = applyMsg(t, m, playerState(state))
+			if m.videoRestartOffered() || m.videoAudioOnly() {
+				t.Fatalf("offered with state %q", state)
+			}
+		})
+	}
+}
+
+func TestFailureUnderThePanelRetriesEmbedded(t *testing.T) {
+	m, _ := playingVideoModel(t)
+	pb := m.playback.(*fakePlayback)
+	m = applyMsg(t, m, playerState(PlayerStateError))
+	m = pressRestart(t, m)
+	if got := pb.embedded; !got[len(got)-1] || len(got) != 3 {
+		t.Fatalf("embedded = %v", got)
+	}
+}
+
+func TestRestartKeyStaysTextInAnInput(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		open func(*Model)
+		text func(Model) string
+	}{
+		{"filter", func(m *Model) { m.filtering = true }, func(m Model) string { return m.filter }},
+		{"search", func(m *Model) { m.searching = true }, func(m Model) string { return m.searchInput }},
+		{"chat draft", func(m *Model) { m.focus, m.composing = FocusChat, true }, func(m Model) string { return m.composeDraft }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, _ := playingVideoModel(t)
+			pb := m.playback.(*fakePlayback)
+			m = sendLayoutKey(t, m, tea.KeyCtrlW) // split: r is on offer
+			tc.open(&m)
+			started := len(pb.started)
+			next, _ := m.Update(restartKey)
+			if len(pb.started) != started {
+				t.Fatal("r in an input restarted the player")
+			}
+			if got := tc.text(next.(Model)); got != "r" {
+				t.Fatalf("input holds %q", got)
+			}
+		})
+	}
+}
+
+func TestRestartKeyStaysOutOfTheFilterMenu(t *testing.T) {
+	m, _ := playingVideoModel(t)
+	pb := m.playback.(*fakePlayback)
+	m = sendLayoutKey(t, m, tea.KeyCtrlW)
+	m.channelFilterMenu = true
+	started := len(pb.started)
+	_, _ = m.Update(restartKey)
+	if len(pb.started) != started {
+		t.Fatal("r behind the filter menu restarted the player")
+	}
+}
+
+func TestListErrorKeepsItsRestartKey(t *testing.T) {
+	m, _ := playingVideoModel(t)
+	pb := m.playback.(*fakePlayback)
+	m = sendLayoutKey(t, m, tea.KeyCtrlW) // split: the list is on screen
+	m.err = errors.New("list failed")
+	started := len(pb.started)
+	_, _ = m.Update(restartKey)
+	if len(pb.started) != started {
+		t.Fatal("r on a list error restarted the player")
+	}
+}
+
+func TestWindowSessionWithTheFlagStillAnnouncesTheWindow(t *testing.T) {
+	m, _, _ := windowVideoModel(t)
+	m.playerWindowNotified = false
+	m = applyMsg(t, m, playerState(PlayerStatePlaying))
+	if !m.playerWindowNotified || !m.playerWindowNotice {
+		t.Fatal("the window opened with no notice")
+	}
+}
+
+func TestWindowSessionHasNoImageToClear(t *testing.T) {
+	m, _, _ := windowVideoModel(t)
+	m = enterVideoLayout(t, m)
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlW}); clearsScreen(cmd) {
+		t.Fatal("cleared a panel that held no image")
 	}
 }
