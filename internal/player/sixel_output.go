@@ -28,11 +28,13 @@ const (
 	// cannot spill past its last band.
 	sixelBandHeight = 6
 
-	// Assumed when the terminal does not report its size in pixels.
-	defaultCellWidth  = 8
-	defaultCellHeight = 16
-	// sixelCellSlack is how many rows and columns a guessed cell gives up, because
-	// a real cell smaller than the guess draws the frame past the panel's end.
+	// Assumed when the terminal reports no cell size at all. A guess too large
+	// paints over the chat and a guess too small only shrinks the video, so this
+	// sits at the small end of the fonts in real use.
+	defaultCellWidth  = 6
+	defaultCellHeight = 12
+	// sixelCellSlack is how many rows and columns a guessed cell gives up, as a
+	// margin for a real cell smaller still.
 	sixelCellSlack = 1
 )
 
@@ -53,6 +55,10 @@ type SixelPanel struct {
 	Visible bool
 	// Playing means frames may be drawn right now.
 	Playing bool
+	// Still means the last frame stays valid while no new one comes. It is drawn
+	// again whenever the panel is Visible and needs it, so a pause survives damage
+	// and an overlay gets the image back when it closes.
+	Still bool
 }
 
 // SixelOptions configures a SixelOutput.
@@ -176,15 +182,21 @@ func (o *SixelOutput) Submit(frame []byte) {
 
 // SetPanel moves, shows or hides the region. It never waits for the terminal, and
 // once it hides the panel no further frame can start. A frame already being
-// written ends before any renderer write that follows.
+// written ends before any renderer write that follows. A hidden panel forgets its
+// last frame unless Still keeps it for the way back.
 func (o *SixelOutput) SetPanel(panel SixelPanel) {
 	o.mu.Lock()
 	moved := panel.Row != o.panel.Row || panel.Col != o.panel.Col ||
 		panel.Rows != o.panel.Rows || panel.Cols != o.panel.Cols
+	shown := panel.Visible && !o.panel.Visible
 	o.panel = panel
 	if !o.activeLocked() {
-		o.dropFramesLocked()
-	} else if moved {
+		o.pending = nil
+		if !panel.Still {
+			o.dropFramesLocked()
+		}
+	}
+	if (moved || shown) && o.drawableNowLocked() {
 		o.dirty = true
 	}
 	if moved && panel.Rows > 0 && panel.Cols > 0 {
@@ -232,9 +244,17 @@ func (o *SixelOutput) signal() {
 	}
 }
 
+// activeLocked reports whether new frames are welcome.
 func (o *SixelOutput) activeLocked() bool {
+	return o.panel.Playing && o.drawableNowLocked()
+}
+
+// drawableNowLocked reports whether anything may reach the panel, new frame or
+// repaint of the last one.
+func (o *SixelOutput) drawableNowLocked() bool {
 	p := o.panel
-	return p.Visible && p.Playing && p.Rows > 0 && p.Cols > 0 && !o.suspended && !o.broken && !o.closed
+	return p.Visible && (p.Playing || p.Still) && p.Rows > 0 && p.Cols > 0 &&
+		!o.suspended && !o.broken && !o.closed
 }
 
 func (o *SixelOutput) dropFramesLocked() {
@@ -283,7 +303,7 @@ func (o *SixelOutput) fitsLocked(f *sixelFrame) bool {
 // dropped, not clipped: it would paint over the chat, so the panel stays blank
 // until the player delivers the new size.
 func (o *SixelOutput) nextFrameLocked() *sixelFrame {
-	if !o.activeLocked() {
+	if !o.drawableNowLocked() {
 		return nil
 	}
 	if o.pending != nil && !o.fitsLocked(o.pending) {

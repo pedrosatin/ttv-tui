@@ -5,6 +5,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -143,7 +144,7 @@ func newVideoRig(t *testing.T, flag bool) *videoRig {
 			}
 		}()
 		var stop func()
-		_, surface, stop = startVideo(terminal, mgr)
+		_, surface, stop = startVideo(terminal, mgr, nil)
 		t.Cleanup(func() {
 			stop()
 			_ = terminal.Close()
@@ -392,6 +393,80 @@ func TestVideoRestartKeyUsesTheOutputOfTheMode(t *testing.T) {
 	}
 	if bar := ansi.Strip(r.model.StatusBar()); strings.Contains(bar, r.cat.T("video.audio_only")) {
 		t.Fatalf("stale notice: %q", bar)
+	}
+}
+
+// setVolume is a volume change as mpv reports it, and waits for the model to see it.
+func (r *videoRig) setVolume(mpv *fakeMPV, volume int) {
+	r.t.Helper()
+	line := fmt.Sprintf(`{"event":"property-change","id":3,"name":"volume","data":%d}`+"\n", volume)
+	if _, err := mpv.conn.Write([]byte(line)); err != nil {
+		r.t.Fatal(err)
+	}
+	r.await("the volume", func() bool { return r.model.PlayerVolume() == volume })
+}
+
+func TestVideoRestartKeyKeepsTheVolume(t *testing.T) {
+	r := newVideoRig(t, true)
+	r.open("gaules")
+	window := r.serve(1)
+	r.setVolume(window, 40)
+
+	r.press(cycleKey, 4)
+	r.press(restart, 1)
+	if got := r.model.PlayerVolume(); got != 40 {
+		t.Fatalf("the bar went to %d on the restart", got)
+	}
+	embedded := r.serve(2)
+	r.await("the volume to reach the new session", func() bool { return embedded.received(`"volume",40`) })
+	if embedded.received(`"volume",100`) {
+		t.Fatalf("the restart went through the baseline: %q", embedded.commands)
+	}
+
+	// Only another channel goes back to the baseline.
+	r.open("alanzoka")
+	other := r.serve(3)
+	r.await("the baseline", func() bool { return other.received(`"volume",100`) })
+	if got := r.model.PlayerVolume(); got != 100 {
+		t.Fatalf("another channel kept volume %d", got)
+	}
+}
+
+var (
+	escKey  = tea.KeyMsg{Type: tea.KeyEsc}
+	listKey = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
+)
+
+// The whole way through the terminal: with the list open no frame gets out, and
+// the session goes on with its audio.
+func TestVideoListOverThePanelStopsTheFrames(t *testing.T) {
+	for name, open := range map[string]tea.KeyMsg{"esc": escKey, "l": listKey} {
+		t.Run(name, func(t *testing.T) {
+			r, mpv := embeddedRig(t)
+			r.await("frames in the panel", func() bool { return r.frames() > 0 })
+
+			r.press(open, 1)
+			r.await("vid=no", func() bool { return mpv.received(`"vid","no"`) })
+			r.settle()
+			drawn := r.frames()
+			r.settle()
+			if n := r.frames(); n != drawn {
+				t.Fatalf("%d frames under the list", n-drawn)
+			}
+			if !mpv.alive() || len(r.starts()) != 2 {
+				t.Fatalf("the list touched the session: alive=%v starts=%q", mpv.alive(), r.starts())
+			}
+			if r.model.LayoutMode() != ui.LayoutVideo {
+				t.Fatalf("layout = %q", r.model.LayoutMode())
+			}
+
+			r.press(escKey, 1)
+			r.await("frames after the list", func() bool { return r.frames() > drawn })
+			r.await("vid=auto", func() bool { return mpv.received(`"vid","auto"`) })
+			if n := len(r.starts()); n != 2 {
+				t.Fatalf("closing restarted the player: %q", r.starts())
+			}
+		})
 	}
 }
 

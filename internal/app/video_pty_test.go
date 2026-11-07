@@ -15,6 +15,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/player"
+	"golang.org/x/sys/unix"
 )
 
 func TestQueryDA1(t *testing.T) {
@@ -58,6 +59,121 @@ func TestQueryDA1(t *testing.T) {
 			buf := make([]byte, 2)
 			if _, err := io.ReadFull(master, buf); err != nil || string(buf) != "ok" {
 				t.Fatalf("terminal not restored: %q %v", buf, err)
+			}
+		})
+	}
+}
+
+// fakeTerminal reads the query off the far end of a PTY and answers it in pieces,
+// as a real terminal may. It reports the query it saw.
+func fakeTerminal(master io.ReadWriter, reply string) <-chan string {
+	seen := make(chan string, 1)
+	go func() {
+		query := make([]byte, len("\x1b[16t\x1b[c"))
+		n, _ := io.ReadFull(master, query)
+		seen <- string(query[:n])
+		for _, b := range []byte(reply) {
+			if _, err := master.Write([]byte{b}); err != nil {
+				return
+			}
+		}
+	}()
+	return seen
+}
+
+const da1Answer = "\x1b[?62;4;22c"
+
+func TestProbeCellFollowsTheTerminalAnswer(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		reply         string
+		width, height int
+	}{
+		{"answers", "\x1b[6;12;6t" + da1Answer, 6, 12},
+		{"answers a large cell", "\x1b[6;24;12t" + da1Answer, 12, 24},
+		{"ignores the query", da1Answer, 0, 0},
+		{"answers zeros", "\x1b[6;0;0t" + da1Answer, 0, 0},
+		{"answers nothing", "", 0, 0},
+		{"answers without DA1", "\x1b[6;12;6t", 6, 12},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			master, slave := openPTY(t)
+			defer func() { _ = master.Close(); _ = slave.Close() }()
+			seen := fakeTerminal(master, tc.reply)
+			begin := time.Now()
+			cell := probeCell(context.Background(), slave, slave)
+			if time.Since(begin) > 2*time.Second {
+				t.Fatal("the query outlived its timeout")
+			}
+			if got := <-seen; got != "\x1b[16t\x1b[c" {
+				t.Fatalf("query = %q", got)
+			}
+			if width, height := cell(); width != tc.width || height != tc.height {
+				t.Fatalf("cell = %dx%d, want %dx%d", width, height, tc.width, tc.height)
+			}
+			// Nothing of the answer may stay behind for Bubble Tea to read as keys.
+			if _, err := slave.Write([]byte("ok")); err != nil {
+				t.Fatal(err)
+			}
+			buf := make([]byte, 2)
+			if _, err := io.ReadFull(master, buf); err != nil || string(buf) != "ok" {
+				t.Fatalf("terminal not restored: %q %v", buf, err)
+			}
+		})
+	}
+}
+
+// DA1 proves the terminal is done, so one that ignores the query costs no timeout.
+func TestQueryCellEndsOnTheDA1Reply(t *testing.T) {
+	master, slave := openPTY(t)
+	defer func() { _ = master.Close(); _ = slave.Close() }()
+	fakeTerminal(master, da1Answer)
+	if reply, err := queryCell(context.Background(), slave, slave); err != nil || string(reply) != da1Answer {
+		t.Fatalf("reply %q err=%v", reply, err)
+	}
+}
+
+// A window size with the pixel fields filled in needs no question at all.
+func TestProbeCellAsksNothingWhenTheWindowSizeHasPixels(t *testing.T) {
+	master, slave := openPTY(t)
+	defer func() { _ = master.Close(); _ = slave.Close() }()
+	ws := unix.Winsize{Row: 30, Col: 100, Xpixel: 700, Ypixel: 420}
+	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &ws); err != nil {
+		t.Fatal(err)
+	}
+	cell := probeCell(context.Background(), slave, slave)
+	if width, height := cell(); width != 7 || height != 14 {
+		t.Fatalf("cell = %dx%d", width, height)
+	}
+	if _, err := slave.Write([]byte("ok")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(master, buf); err != nil || string(buf) != "ok" {
+		t.Fatalf("something was written first: %q %v", buf, err)
+	}
+}
+
+// From the terminal's answer to the frame on screen, with a real 6x12 cell and the
+// 18 rows of the panel. Whether or not the terminal answers, the chat keeps its rows.
+func TestRealCellOf6x12NeverReachesTheChat(t *testing.T) {
+	const panelRows, realCellHeight = 18, 12
+	for name, reply := range map[string]string{
+		"terminal answers":      "\x1b[6;12;6t" + da1Answer,
+		"terminal ignores":      da1Answer,
+		"terminal stays silent": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			master, slave := openPTY(t)
+			defer func() { _ = master.Close(); _ = slave.Close() }()
+			fakeTerminal(master, reply)
+			cell := probeCell(context.Background(), slave, slave)
+			sixel := player.NewSixelOutput(io.Discard, player.SixelOptions{Cell: cell})
+			defer func() { _ = sixel.Close() }()
+			sixel.SetPanel(player.SixelPanel{Row: 1, Col: 1, Rows: panelRows, Cols: 120, Visible: true})
+			if _, height := sixel.FrameSize(); height > panelRows*realCellHeight {
+				t.Fatalf("frame of %dpx takes %.1f rows of a %d-row panel",
+					height, float64(height)/realCellHeight, panelRows)
 			}
 		})
 	}

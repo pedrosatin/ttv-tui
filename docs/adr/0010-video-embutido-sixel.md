@@ -24,7 +24,17 @@ custa reconexão e possivelmente um anúncio, por isso mudar de layout nunca rei
 player. Com uma sessão no ar, só `r` reinicia, com o VO do layout corrente.
 
 A lista fica oculta no modo `video`, então um canal costuma nascer fora dele. Entrar no
-modo com sessão GPU mostra no painel a oferta de `r`.
+modo com sessão GPU mostra no painel a oferta de `r` e a tecla da lista. Reiniciar o mesmo
+canal mantém o volume, e só outro canal volta ao baseline de 100. O `Manager` guarda canal
+e volume da última sessão, porque um retry pode vir depois de um início que falhou e não
+deixou sessão para consultar.
+
+`Esc` ou `l` abre a lista sem sair do modo, no desenho normal de lista e chat. O painel
+fica coberto: nenhum frame sai, então nenhuma linha é disputada com a lista. Coberto conta
+como oculto para o `vid=no` abaixo. A diferença para a ajuda é que a saída guarda o último
+frame e o reemite ao fechar, o que cobre a pausa, quando nenhum frame novo viria, e a espera
+pelo `vid=auto`. Escolher um canal ou `Esc` fecha. Aqui `Esc` não sobe um nível na lista:
+quem quer as categorias usa `Ctrl+R`.
 
 Com sessão sixel, esconder o painel manda `vid=no` depois de 200 ms de estabilidade:
 sair do modo, abrir a ajuda ou encolher a janela. O mpv para de decodificar e de
@@ -35,13 +45,16 @@ não religar o vídeo.
 
 Sessão GPU ignora esses comandos. `vid=no` apagaria a imagem da janela.
 
-## Célula sem tamanho em pixels
+## Tamanho da célula
 
-O tamanho vem de `TIOCGWINSZ`. Sem os campos em pixels, a saída assume célula 8x16 e
-abre mão de 1 linha e 1 coluna do painel, no cálculo do frame e no descarte de frame
-grande demais.
+O tamanho vem de `TIOCGWINSZ`, que acompanha mudança de fonte. Sem os campos em pixels, a
+TUI pergunta com `CSI 16 t` antes de o Bubble Tea assumir a entrada, e manda DA1 junto: o
+terminal responde em ordem, então a resposta do DA1 encerra a espera, e só um terminal mudo
+gasta os 350 ms do timeout. Depois disso ninguém lê essa resposta, por isso ela vale para a
+sessão inteira: mudar a fonte nesse terminal passa despercebido.
 
-A folga cobre diferença pequena. Com célula real 6x12 e painel de 18 linhas, os 480x270
-cabem nas 17 linhas assumidas e ocupam 22,5 linhas reais, 4,5 além do painel. O
-terminal que informa os pixels não passa por essa estimativa. O caminho para o caso
-restante é consultar a célula com `CSI 16 t`.
+Sem resposta, a saída assume célula 6x12 e abre mão de 1 linha e 1 coluna, no cálculo do
+frame e no descarte de frame grande demais. Estimativa pequena só encolhe o vídeo, e
+estimativa grande pinta sobre o chat. Em painel de 18 linhas o frame fica em 362x204, que
+cabe em qualquer célula a partir de 6x12. Com célula real menor que isso e nenhum dos dois
+meios de medir, o frame ainda passa do painel, e nada detecta esse caso.

@@ -192,7 +192,7 @@ func Run(opts Options) error {
 		videoReason = detectVideo(ctx, opts, input, output)
 		if videoReason == "" {
 			var stopVideo func()
-			programOutput, videoSurface, stopVideo = startVideo(output, playerMgr)
+			programOutput, videoSurface, stopVideo = startVideo(output, playerMgr, probeCell(ctx, input, output))
 			defer stopVideo()
 		}
 	}

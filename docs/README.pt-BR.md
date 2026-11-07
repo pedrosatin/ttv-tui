@@ -246,6 +246,16 @@ Adaptação à largura do terminal:
 - **Menos de 80 colunas.** Na divisão lado a lado, o chat fica oculto e aparece um aviso. Pressione `Ctrl+L` para abrir o chat em largura total ou alargue o terminal para restaurar a divisão.
 
 
+## Vídeo embutido experimental
+
+`ttv-tui --video=sixel` acrescenta um layout que desenha o vídeo no terminal, acima do chat. Ele vem desligado, e todos os outros layouts continuam com a janela do `mpv`.
+
+- **Requisitos.** Um terminal com sixel e um `mpv` com a saída de vídeo `sixel`. Os dois são verificados ao iniciar. Se faltar algum, o app funciona como sempre e `Ctrl+W` explica o motivo.
+- **Como chegar.** Com um canal aberto, pressione `Ctrl+W` até a barra mostrar `layout: vídeo+chat`, o passo depois do foco. Um canal aberto ali desenha no painel. Um canal que já toca na janela do `mpv` fica lá até você pressionar `r`, que o reinicia embutido com o mesmo volume.
+- **Como trocar de canal.** `Esc` ou `l` abre a lista sobre o vídeo. Os frames param enquanto ela está aberta e o áudio continua. Escolher um canal ou pressionar `Esc` volta ao vídeo. `Ctrl+R` volta às categorias.
+- **Como sair.** `Ctrl+W`, `Ctrl+H` ou `Ctrl+L` deixa o layout. O áudio continua sem imagem e a barra avisa: `r` reinicia o canal na janela do `mpv` e `Ctrl+X` encerra.
+- **Limitações.** 15 fps em até 480x270, com cerca de 0,8 núcleo de CPU, contra cerca de um quarto de núcleo da janela do `mpv`. Não há suporte em kitty, Alacritty, Terminal.app, Windows e tmux. Em terminal que não informa o tamanho da célula, o vídeo fica menor que o painel para a imagem não invadir o chat.
+
 ## Chat
 
 - **Leitura anônima.** A conexão e a leitura do chat de qualquer canal usam login IRC anônimo da Twitch (`justinfan...`) sobre TLS (`irc.chat.twitch.tv:6697`) com tags IRCv3 habilitadas. Nenhuma conta ou token é exigido para ler o chat.

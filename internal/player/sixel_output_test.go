@@ -280,7 +280,7 @@ func TestSubmitNeverWaitsForTheTerminal(t *testing.T) {
 		<-release
 		return len(p), nil
 	})
-	o := NewSixelOutput(out, SixelOptions{})
+	o := NewSixelOutput(out, SixelOptions{Cell: func() (int, int) { return 10, 20 }})
 	defer func() { _ = o.Close() }()
 	defer close(release)
 	o.SetPanel(testPanel)
@@ -490,9 +490,9 @@ func TestFrameSizeFollowsThePanel(t *testing.T) {
 		{"room to spare", 18, 120, 10, 20, 480, 270},
 		{"short panel", 5, 120, 10, 20, 177, 96},
 		{"narrow panel", 18, 30, 10, 20, 300, 168},
-		{"unknown cell", 18, 120, 0, 0, 480, 270},
-		{"unknown cell gives up a row", 10, 120, 0, 0, 256, 144},
-		{"unknown cell gives up a column", 18, 30, 0, 0, 232, 126},
+		{"unknown cell", 18, 120, 0, 0, 362, 204},
+		{"unknown cell gives up a row", 10, 120, 0, 0, 192, 108},
+		{"unknown cell gives up a column", 18, 30, 0, 0, 174, 96},
 		{"unknown cell in a tiny panel", 1, 1, 0, 0, 480, 270},
 		{"known cell keeps the whole panel", 10, 120, 8, 16, 284, 156},
 		{"small known cell", 18, 120, 6, 12, 384, 216},
@@ -524,6 +524,180 @@ func TestFrameSizeFollowsThePanel(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The terminal said nothing about its cell, so the guess is all there is. Whatever
+// the real cell, the frame has to end inside the panel: 480x270 in a real 6x12
+// cell is 22.5 rows, past the 18 the panel has.
+func TestGuessedCellKeepsTheFrameInsideThePanel(t *testing.T) {
+	for _, real := range [][2]int{{6, 12}, {7, 14}, {8, 16}, {10, 20}} {
+		for _, rows := range []int{18, 10, 5, 2} {
+			for _, cols := range []int{120, 80, 40} {
+				o := NewSixelOutput(&terminalRecorder{}, SixelOptions{})
+				o.SetPanel(SixelPanel{Row: 1, Col: 1, Rows: rows, Cols: cols, Visible: true})
+				width, height := o.FrameSize()
+				_ = o.Close()
+				if float64(height)/float64(real[1]) > float64(rows) || float64(width)/float64(real[0]) > float64(cols) {
+					t.Errorf("cell %dx%d, panel %dx%d: frame %dx%d leaves the panel", real[0], real[1], cols, rows, width, height)
+				}
+			}
+		}
+	}
+}
+
+// A frame of the size mpv started with, before the resize reaches it, is what
+// would invade the chat in that gap.
+func TestGuessedCellDropsAFrameThatWouldReachTheChat(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := NewSixelOutput(rec, SixelOptions{})
+	t.Cleanup(func() { _ = o.Close() })
+	o.SetPanel(testPanel)
+	o.Submit(sized(1, 480, 270))
+	settle()
+	if n := rec.frames(); n != 0 {
+		t.Fatalf("%d frames of 22.5 rows drawn in 18", n)
+	}
+	width, height := o.FrameSize()
+	o.Submit(sized(2, width, height))
+	waitFrames(t, rec, 1)
+}
+
+// A cell that was measured needs no margin: the panel is used in full.
+func TestMeasuredCellUsesTheWholePanel(t *testing.T) {
+	o := NewSixelOutput(&terminalRecorder{}, SixelOptions{Cell: func() (int, int) { return 6, 12 }})
+	t.Cleanup(func() { _ = o.Close() })
+	o.SetPanel(SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true})
+	if _, height := o.FrameSize(); height != 18*12 {
+		t.Fatalf("height = %d, want the 18 rows of 12px", height)
+	}
+}
+
+func coveredPanel() SixelPanel {
+	covered := testPanel
+	covered.Visible, covered.Playing, covered.Still = false, false, true
+	return covered
+}
+
+func TestCoveredPanelDrawsNothingAndGivesTheLastFrameBack(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := newTestSixel(t, rec)
+	o.SetPanel(testPanel)
+	o.Submit(frame(1))
+	waitFrames(t, rec, 1)
+
+	o.SetPanel(coveredPanel())
+	settle()
+	rec.reset()
+	o.Submit(frame(2))
+	if _, err := o.Write([]byte("list text")); err != nil {
+		t.Fatal(err)
+	}
+	settle()
+	if n := rec.frames(); n != 0 {
+		t.Fatalf("%d frames under the overlay", n)
+	}
+
+	o.SetPanel(testPanel)
+	waitFrames(t, rec, 1)
+	if got := string(rec.bytes()); !strings.Contains(got, framed(1, 1, frame(1))) {
+		t.Fatalf("closing did not bring the last frame back: %q", got)
+	}
+}
+
+// What was offered under the overlay never reaches the screen, not even late.
+func TestFrameOfferedToACoveredPanelIsNotKept(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := newTestSixel(t, rec)
+	o.SetPanel(testPanel)
+	o.Submit(frame(1))
+	waitFrames(t, rec, 1)
+	o.SetPanel(coveredPanel())
+	o.Submit(frame(2))
+	rec.reset()
+	o.SetPanel(testPanel)
+	waitFrames(t, rec, 1)
+	settle()
+	if got := rec.bytes(); bytes.Contains(got, frame(2)) || rec.frames() != 1 {
+		t.Fatalf("frames = %d: %q", rec.frames(), got)
+	}
+}
+
+// The overlay can close on a paused stream, which sends nothing new: the image
+// has to come from what the output kept.
+func TestCoveredPanelGivesTheImageBackToAPause(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := newTestSixel(t, rec)
+	o.SetPanel(testPanel)
+	o.Submit(frame(1))
+	waitFrames(t, rec, 1)
+	o.SetPanel(coveredPanel())
+	settle()
+	rec.reset()
+
+	paused := testPanel
+	paused.Playing, paused.Still = false, true
+	o.SetPanel(paused)
+	waitFrames(t, rec, 1)
+	if got := string(rec.bytes()); !strings.Contains(got, framed(1, 1, frame(1))) {
+		t.Fatalf("no image for the pause: %q", got)
+	}
+
+	// New frames still stay out: only Playing lets them in.
+	o.Submit(frame(2))
+	settle()
+	if n := rec.frames(); n != 1 {
+		t.Fatalf("frames = %d during a pause", n)
+	}
+}
+
+func TestPlayerEndingUnderTheOverlayForgetsTheFrame(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := newTestSixel(t, rec)
+	o.SetPanel(testPanel)
+	o.Submit(frame(1))
+	waitFrames(t, rec, 1)
+	o.SetPanel(coveredPanel())
+	ended := coveredPanel()
+	ended.Still = false
+	o.SetPanel(ended)
+	rec.reset()
+
+	o.SetPanel(testPanel)
+	settle()
+	if n := rec.frames(); n != 0 {
+		t.Fatalf("a frame of the old session came back: %d", n)
+	}
+}
+
+// The window shrank under the overlay: the kept frame no longer fits.
+func TestKeptFrameThatNoLongerFitsIsNotDrawn(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := newTestSixel(t, rec)
+	o.SetPanel(testPanel)
+	o.Submit(frame(1))
+	waitFrames(t, rec, 1)
+	small := coveredPanel()
+	small.Rows = 5
+	o.SetPanel(small)
+	rec.reset()
+
+	small.Visible, small.Playing = true, true
+	o.SetPanel(small)
+	settle()
+	if n := rec.frames(); n != 0 {
+		t.Fatalf("%d oversized frames drawn on the way back", n)
+	}
+}
+
+// Nobody sees the frames under the overlay, so the player stops encoding them.
+func TestCoveredPanelTurnsTheTrackOffAndBackOn(t *testing.T) {
+	o, rec := newTrackedSixel(t)
+	o.SetPanel(testPanel)
+	settleTrack()
+	o.SetPanel(coveredPanel())
+	waitPlayerCalls(t, rec, "track false")
+	o.SetPanel(testPanel)
+	waitPlayerCalls(t, rec, "track false", "track true")
 }
 
 func TestDraggedResizeReconfiguresThePlayerOnce(t *testing.T) {
@@ -633,12 +807,12 @@ func TestGuessedCellKeepsFramesInsideTheSlack(t *testing.T) {
 	o := NewSixelOutput(rec, SixelOptions{})
 	defer func() { _ = o.Close() }()
 	o.SetPanel(SixelPanel{Row: 1, Col: 1, Rows: 10, Cols: 120, Visible: true, Playing: true})
-	o.Submit(sized(1, 284, 156))
+	o.Submit(sized(1, 213, 120))
 	settle()
 	if n := rec.frames(); n != 0 {
 		t.Fatalf("%d frames over the slack", n)
 	}
-	o.Submit(sized(2, 256, 144))
+	o.Submit(sized(2, 192, 108))
 	waitFrames(t, rec, 1)
 }
 

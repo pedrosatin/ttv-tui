@@ -125,7 +125,7 @@ func (m Model) chatPageSize() int {
 	// Approximate the message-area row budget without relying on View mutations
 	// (tea.Model.View receives a copy). Header ~2, footer ~2, status bar 1.
 	height := m.height
-	if m.showVideo {
+	if m.videoBodyShown() {
 		height -= m.videoRows(max(height-1, 0))
 	}
 	if height > 6 {

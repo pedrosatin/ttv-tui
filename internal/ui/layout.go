@@ -52,7 +52,7 @@ func (m Model) layoutModeLabel(mode LayoutMode) string {
 // the list is all there is to draw, so no flag can hide it and leave the screen
 // empty.
 func (m Model) listVisible() bool {
-	return !m.showVideo && (m.showList || !m.hasChatPanel())
+	return !m.videoBodyShown() && (m.showList || !m.hasChatPanel() || m.videoListOpen)
 }
 
 // chatColumnVisible reports whether the chat panel occupies a column (layout
@@ -91,7 +91,7 @@ func (m *Model) keepListWithoutChat() {
 
 func (m *Model) cycleLayout() {
 	mode := m.LayoutMode()
-	m.showVideo = false
+	m.leaveVideoLayout()
 	switch mode {
 	case LayoutSplit:
 		m.showList, m.showChat = false, true
@@ -116,7 +116,7 @@ func (m *Model) cycleLayout() {
 }
 
 func (m *Model) toggleListPanel() {
-	m.showVideo = false
+	m.leaveVideoLayout()
 	m.showList = !m.showList
 	m.normalizeFocusAfterLayout()
 }
@@ -124,7 +124,7 @@ func (m *Model) toggleListPanel() {
 // toggleChatPanel shows or hides the chat. In a terminal too narrow for the split,
 // showing it means chat-only, the one mode that can draw it there.
 func (m *Model) toggleChatPanel() {
-	m.showVideo = false
+	m.leaveVideoLayout()
 	if m.chatHiddenByWidth() {
 		m.showList, m.showChat = false, true
 	} else {

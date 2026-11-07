@@ -293,9 +293,11 @@
   "video.no_mpv": "Vídeo embutido: mpv sem saída sixel",
   "video.unsupported_platform": "Vídeo embutido: Windows ainda sem suporte",
   "video.tmux": "Vídeo embutido: tmux ainda sem suporte",
-  "video.placeholder": "Vídeo embutido experimental: sem imagem no momento",
-  "video.restart_embedded": "Vídeo na janela do mpv: pressione r para reiniciar no modo embutido",
+  "video.placeholder": "Vídeo embutido experimental: sem imagem no momento · Esc abre a lista",
+  "video.restart_embedded": "Vídeo na janela do mpv: r reinicia no modo embutido · Esc abre a lista",
   "video.audio_only": "Só áudio: pressione r para trazer a janela do mpv de volta",
-  "video.help": "Vídeo+chat experimental: Ctrl+W após o modo foco",
+  "video.help": "Vídeo+chat experimental: Ctrl+W após o modo foco · Esc ou l abre a lista sobre o vídeo, Esc fecha",
+  "video.list_open": "Lista sobre o vídeo: Esc volta",
+  "video.hidden_list_key": "Lista oculta: Esc ou l abre sobre o vídeo",
   "layout.mode.video": "vídeo+chat"
 }

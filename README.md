@@ -246,6 +246,16 @@ Column width adaptation:
 - **Under 80 columns.** In split view, chat is hidden and the notice `Chat hidden (<80 cols) — Ctrl+L opens chat only, or widen the terminal` appears. Press `Ctrl+L` for full-width chat, or widen the terminal to restore the split.
 
 
+## Experimental embedded video
+
+`ttv-tui --video=sixel` adds a layout that draws the video in the terminal, above the chat. It is off by default, and every other layout keeps the `mpv` window.
+
+- **Requirements.** A terminal with sixel support and an `mpv` with the `sixel` video output. Both are checked at startup. If either is missing, the app runs as usual and `Ctrl+W` says why.
+- **Getting there.** With a channel open, press `Ctrl+W` until the status bar shows `layout: video+chat`, the step after focus. A channel opened there draws in the panel. One already playing in the `mpv` window stays there until you press `r`, which restarts it embedded at the same volume.
+- **Choosing another channel.** `Esc` or `l` opens the list over the video. Frames stop while it is open and the audio goes on. Choosing a channel or pressing `Esc` returns to the video. `Ctrl+R` goes back to the categories.
+- **Getting out.** `Ctrl+W`, `Ctrl+H` or `Ctrl+L` leaves the layout. The audio goes on without a picture and the status bar says so: `r` restarts the channel in the `mpv` window and `Ctrl+X` stops it.
+- **Limitations.** 15 fps at up to 480x270, at about 0.8 of a CPU core, against about a quarter of a core for the `mpv` window. kitty, Alacritty, Terminal.app, Windows and tmux are not supported. A terminal that does not report its cell size gets a video smaller than the panel, so the picture stays clear of the chat.
+
 ## Chat
 
 - **Anonymous reading.** Connecting to and reading any channel's chat uses an anonymous Twitch IRC login (`justinfan...`) over TLS (`irc.chat.twitch.tv:6697`) with IRCv3 tags enabled. No account or token is required to read chat.

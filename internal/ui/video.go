@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -16,6 +17,9 @@ type VideoPanel struct {
 	Visible bool
 	// Playing means frames may be drawn right now.
 	Playing bool
+	// Still means the last frame stays valid while no new one comes: it is drawn
+	// again if the rows need it, now or when they come back.
+	Still bool
 }
 
 // VideoSurface draws video outside the renderer. SetPanel runs inside Update, so
@@ -37,6 +41,30 @@ func WithVideo(requested bool, reason string) Option {
 }
 
 func (m Model) videoRows(available int) int { return min(18, max(available-6, 0)) }
+
+// videoBodyShown reports whether the screen is the panel above the chat. The list
+// opened over it swaps that for the ordinary list and chat.
+func (m Model) videoBodyShown() bool { return m.showVideo && !m.videoListOpen }
+
+// openVideoList shows the list without leaving the mode. The panel gives its rows
+// up for as long as it stays open, so no frame shares a line with the list.
+func (m *Model) openVideoList() {
+	m.videoListOpen = true
+	m.focus = FocusList
+}
+
+// closeVideoList goes back to the panel, if the list was open over it.
+func (m *Model) closeVideoList() {
+	if !m.videoListOpen {
+		return
+	}
+	m.videoListOpen = false
+	m.normalizeFocusAfterLayout()
+}
+
+func (m *Model) leaveVideoLayout() {
+	m.showVideo, m.videoListOpen = false, false
+}
 
 // embeddedLayout reports whether playback started now belongs in the panel. The
 // flag only makes the layout reachable: every other layout keeps the mpv window.
@@ -63,6 +91,12 @@ func (m Model) videoAudioOnly() bool {
 	return m.playerEmbedded && !m.showVideo && m.playerControllable()
 }
 
+// videoListKey reports whether msg opens the list over the panel. An input on
+// screen keeps both keys.
+func (m Model) videoListKey(msg tea.KeyMsg) bool {
+	return m.videoBodyShown() && !m.typingText() && key.Matches(msg, m.keys.Clear, m.keys.ChannelFilter)
+}
+
 // typingText reports whether a letter key is text for an input on screen.
 func (m Model) typingText() bool {
 	return m.channelFilterMenu || (m.composing && m.chatColumnVisible()) ||
@@ -70,30 +104,32 @@ func (m Model) typingText() bool {
 }
 
 // videoPanel is the region as it stands now. An overlay takes the rows over, so
-// the panel gives way to it instead of competing for them.
+// the panel gives way to it instead of competing for them. Only the list keeps the
+// image for its return, even with help or the filter menu opened on top of it.
 func (m Model) videoPanel() VideoPanel {
-	if m.videoSurface == nil || !m.showVideo || m.quitting || m.width <= 0 || m.height <= 1 ||
-		m.helpVisible || m.channelFilterMenu {
+	if m.videoSurface == nil || !m.showVideo || m.quitting || m.width <= 0 || m.height <= 1 {
 		return VideoPanel{}
 	}
 	rows := m.videoRows(m.height - 1)
 	if rows == 0 {
 		return VideoPanel{}
 	}
-	return VideoPanel{
-		Row:     1,
-		Col:     1,
-		Rows:    rows,
-		Cols:    m.width,
-		Visible: true,
-		Playing: m.playerEmbedded && m.playerState == PlayerStatePlaying,
+	panel := VideoPanel{Row: 1, Col: 1, Rows: rows, Cols: m.width, Still: m.videoHasImage()}
+	if m.videoListOpen {
+		return panel
 	}
+	if m.helpVisible || m.channelFilterMenu {
+		return VideoPanel{}
+	}
+	panel.Visible = true
+	panel.Playing = m.playerEmbedded && m.playerState == PlayerStatePlaying
+	return panel
 }
 
-// videoImageOnScreen reports whether the panel may be holding an image: a paused
-// or held stream keeps its last frame on screen.
-func (m Model) videoImageOnScreen() bool {
-	if !m.playerEmbedded || !m.videoPanel().Visible {
+// videoHasImage reports whether the playback has a picture for the panel: a paused
+// or held stream keeps its last frame.
+func (m Model) videoHasImage() bool {
+	if !m.playerEmbedded {
 		return false
 	}
 	switch m.playerState {
@@ -102,6 +138,11 @@ func (m Model) videoImageOnScreen() bool {
 	default:
 		return false
 	}
+}
+
+// videoImageOnScreen reports whether the panel may be holding an image.
+func (m Model) videoImageOnScreen() bool {
+	return m.videoHasImage() && m.videoPanel().Visible
 }
 
 // syncVideoPanel publishes a changed panel. The renderer skips lines that did not

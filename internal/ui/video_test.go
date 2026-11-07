@@ -173,7 +173,7 @@ func clearsScreen(cmd tea.Cmd) bool {
 
 func TestVideoPanelGeometryFollowsTheWindow(t *testing.T) {
 	m, surface := playingVideoModel(t)
-	want := VideoPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true}
+	want := VideoPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true, Still: true}
 	if got := surface.last(t); got != want {
 		t.Fatalf("panel = %+v", got)
 	}
@@ -480,7 +480,7 @@ func TestReturningToTheLayoutNeedsNoRestart(t *testing.T) {
 	m, surface := playingVideoModel(t)
 	m = sendLayoutKey(t, m, tea.KeyCtrlW)
 	m = enterVideoLayout(t, m)
-	want := VideoPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true}
+	want := VideoPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true, Still: true}
 	if got := surface.last(t); got != want {
 		t.Fatalf("panel = %+v", got)
 	}
@@ -594,5 +594,219 @@ func TestWindowSessionHasNoImageToClear(t *testing.T) {
 	m = enterVideoLayout(t, m)
 	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlW}); clearsScreen(cmd) {
 		t.Fatal("cleared a panel that held no image")
+	}
+}
+
+var (
+	escKeyMsg  = tea.KeyMsg{Type: tea.KeyEsc}
+	listKeyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
+)
+
+func TestVideoListOpensInsideTheMode(t *testing.T) {
+	for name, key := range map[string]tea.KeyMsg{"esc": escKeyMsg, "l": listKeyMsg} {
+		t.Run(name, func(t *testing.T) {
+			m, surface := playingVideoModel(t)
+			updated, cmd := m.Update(key)
+			m = updated.(Model)
+			if !m.listVisible() || m.Focus() != FocusList {
+				t.Fatalf("list not reachable: visible=%v focus=%v", m.listVisible(), m.Focus())
+			}
+			if m.LayoutMode() != LayoutVideo {
+				t.Fatalf("the mode was left: %q", m.LayoutMode())
+			}
+			if plain := ansi.Strip(m.View()); !strings.Contains(plain, m.t("video.list_open")) {
+				t.Fatalf("nothing says how to go back:\n%s", plain)
+			}
+			got := surface.last(t)
+			if got.Visible || got.Playing || !got.Still || got.Rows == 0 {
+				t.Fatalf("frames not paused: %+v", got)
+			}
+			if !clearsScreen(cmd) {
+				t.Fatal("the image stays under the blank lines of the list")
+			}
+		})
+	}
+}
+
+func TestVideoListClosesBackToThePanel(t *testing.T) {
+	m, surface := playingVideoModel(t)
+	playing := surface.last(t)
+	m = applyMsg(t, applyMsg(t, m, escKeyMsg), escKeyMsg)
+	if m.listVisible() || m.LayoutMode() != LayoutVideo || m.Focus() != FocusChat {
+		t.Fatalf("visible=%v layout=%q focus=%v", m.listVisible(), m.LayoutMode(), m.Focus())
+	}
+	if got := surface.last(t); got != playing {
+		t.Fatalf("panel = %+v, want %+v", got, playing)
+	}
+	if !m.videoImageOnScreen() {
+		t.Fatal("panel rows would carry text over the image")
+	}
+}
+
+func TestVideoListOverAPauseGetsTheImageBack(t *testing.T) {
+	m, surface := playingVideoModel(t)
+	m = applyMsg(t, m, playerState(PlayerStatePaused))
+	m = applyMsg(t, m, escKeyMsg)
+	if got := surface.last(t); got.Visible || !got.Still {
+		t.Fatalf("under the list: %+v", got)
+	}
+	m = applyMsg(t, m, escKeyMsg)
+	if got := surface.last(t); !got.Visible || got.Playing || !got.Still {
+		t.Fatalf("after the list: %+v", got)
+	}
+	if !m.videoImageOnScreen() {
+		t.Fatal("panel rows would carry text over the image")
+	}
+}
+
+func TestVideoListChoosingAChannelReturnsToThePanel(t *testing.T) {
+	m, surface := playingVideoModel(t)
+	m = applyMsg(t, m, escKeyMsg)
+	before := len(surface.panels)
+	m = applyMsg(t, m, ChannelSelectedMsg{Channel: twitch.Channel{Login: "alanzoka"}})
+	if m.videoListOpen || m.listVisible() {
+		t.Fatal("the list stayed open over the new channel")
+	}
+	if !m.playerEmbedded {
+		t.Fatal("the channel chosen in the mode left the panel")
+	}
+	// One publish: the old channel's frame must not flash on the way out.
+	if got := surface.panels[before:]; len(got) != 1 || got[0].Still || got[0].Playing || !got[0].Visible {
+		t.Fatalf("panels = %+v", got)
+	}
+}
+
+func TestVideoListSteppingIntoACategoryStaysOpen(t *testing.T) {
+	m, _ := playingVideoModel(t)
+	m = applyMsg(t, m, escKeyMsg)
+	m = applyMsg(t, m, tea.KeyMsg{Type: tea.KeyDown})
+	if !m.videoListOpen {
+		t.Fatal("navigation closed the list")
+	}
+}
+
+func TestVideoListRestartKeyReturnsToThePanel(t *testing.T) {
+	m, pb, surface := windowVideoModel(t)
+	m = enterVideoLayout(t, m)
+	starts := len(pb.started)
+	m = applyMsg(t, m, escKeyMsg)
+	m = pressRestart(t, m)
+	if m.videoListOpen || len(pb.started) != starts+1 {
+		t.Fatalf("open=%v starts=%d", m.videoListOpen, len(pb.started)-starts)
+	}
+	m = applyMsg(t, m, playerState(PlayerStatePlaying))
+	if got := surface.last(t); !got.Playing {
+		t.Fatalf("panel = %+v", got)
+	}
+}
+
+func TestVideoListInputsKeepEsc(t *testing.T) {
+	m, _ := playingVideoModel(t)
+	m = applyMsg(t, m, listKeyMsg)
+	m = applyMsg(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if !m.filtering {
+		t.Fatal("filter did not open in the list")
+	}
+	m = applyMsg(t, m, escKeyMsg)
+	if m.filtering || !m.videoListOpen {
+		t.Fatalf("filtering=%v open=%v", m.filtering, m.videoListOpen)
+	}
+	m = applyMsg(t, m, escKeyMsg)
+	if m.videoListOpen {
+		t.Fatal("Esc did not close the list")
+	}
+}
+
+func TestVideoListKeysStayTextWhileComposing(t *testing.T) {
+	m, _ := playingVideoModel(t)
+	m.chatPanel.channel = "gaules"
+	m.composing = true
+	m = applyMsg(t, m, listKeyMsg)
+	if m.videoListOpen || m.composeDraft != "l" {
+		t.Fatalf("open=%v draft=%q", m.videoListOpen, m.composeDraft)
+	}
+	m = applyMsg(t, m, escKeyMsg)
+	if m.videoListOpen || m.composing {
+		t.Fatalf("Esc must only leave the input: open=%v composing=%v", m.videoListOpen, m.composing)
+	}
+}
+
+func TestVideoListHelpOverItKeepsTheFrame(t *testing.T) {
+	m, surface := playingVideoModel(t)
+	m = applyMsg(t, m, escKeyMsg)
+	applyMsg(t, m, tea.KeyMsg{Type: tea.KeyF1})
+	if got := surface.last(t); !got.Still {
+		t.Fatalf("help lost the frame: %+v", got)
+	}
+}
+
+func TestVideoListGoesWithTheLayout(t *testing.T) {
+	for _, key := range []tea.KeyType{tea.KeyCtrlW, tea.KeyCtrlH, tea.KeyCtrlL} {
+		m, _ := playingVideoModel(t)
+		m = applyMsg(t, m, escKeyMsg)
+		m = sendLayoutKey(t, m, key)
+		if m.videoListOpen || m.showVideo {
+			t.Fatalf("key %v: open=%v video=%v", key, m.videoListOpen, m.showVideo)
+		}
+	}
+	m, _ := playingVideoModel(t)
+	m = applyMsg(t, m, escKeyMsg)
+	m = enterVideoLayout(t, sendLayoutKey(t, m, tea.KeyCtrlW))
+	if m.videoListOpen || m.listVisible() {
+		t.Fatal("the list came back open with the mode")
+	}
+}
+
+func TestVideoPanelOffersTheListWithTheRestart(t *testing.T) {
+	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+		m, _, _ := windowVideoModel(t)
+		m.catalog, _ = i18n.New(lang)
+		m = enterVideoLayout(t, m)
+		row := strings.Split(ansi.Strip(m.View()), "\n")[0]
+		if !strings.Contains(row, "Esc") || !strings.Contains(row, " r ") {
+			t.Fatalf("%s: panel row %q", lang, row)
+		}
+	}
+}
+
+func TestVideoHiddenListKeyPointsAtTheOverlay(t *testing.T) {
+	m, _ := playingVideoModel(t)
+	m = applyMsg(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, m.t("video.hidden_list_key")) {
+		t.Fatalf("bar: %q", bar)
+	}
+}
+
+func TestVideoHelpNamesTheListKey(t *testing.T) {
+	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+		m, _ := playingVideoModel(t)
+		m.catalog, _ = i18n.New(lang)
+		m.helpVisible = true
+		help := strings.Join(m.renderHelpLines(200), "\n")
+		if !strings.Contains(help, m.t("video.help")) || !strings.Contains(m.t("video.help"), "Esc") {
+			t.Fatalf("%s: %s", lang, help)
+		}
+	}
+}
+
+func TestRestartKeepsTheVolumeOnTheBar(t *testing.T) {
+	m, _, _ := windowVideoModel(t)
+	m = applyMsg(t, m, PlayerStatusMsg{Generation: m.playerGen, State: m.playerState, Volume: 40})
+	m = enterVideoLayout(t, m)
+	if !m.videoRestartOffered() {
+		t.Fatal("no restart on offer")
+	}
+	// The bar is judged before the player answers: the fake always says 100.
+	m = applyMsg(t, m, restartKey)
+	if m.PlayerVolume() != 40 {
+		t.Fatalf("after r: volume %d", m.PlayerVolume())
+	}
+	m = applyMsg(t, m, ChannelSelectedMsg{Channel: twitch.Channel{Login: m.playerLogin}})
+	if m.PlayerVolume() != 40 {
+		t.Fatalf("same channel again: volume %d", m.PlayerVolume())
+	}
+	m = applyMsg(t, m, ChannelSelectedMsg{Channel: twitch.Channel{Login: "alanzoka"}})
+	if m.PlayerVolume() != 100 {
+		t.Fatalf("another channel: volume %d", m.PlayerVolume())
 	}
 }

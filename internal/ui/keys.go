@@ -278,10 +278,21 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.retryPlayback()
 	}
 
+	// The mode hides the list, and this is the way to another channel without
+	// leaving it.
+	if m.videoListKey(msg) {
+		m.openVideoList()
+		return m, nil
+	}
+
 	// The filter menu is a visible overlay in every layout. Other list
 	// inputs stay suspended until the list is shown again.
 	if m.hiddenListKey(msg) {
-		m.warnStatus(m.t("layout.hidden_list_key"))
+		if m.showVideo {
+			m.warnStatus(m.t("video.hidden_list_key"))
+		} else {
+			m.warnStatus(m.t("layout.hidden_list_key"))
+		}
 		return m, nil
 	}
 
@@ -325,6 +336,10 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Clear):
+		if m.videoListOpen {
+			m.closeVideoList()
+			return m, nil
+		}
 		if m.Focus() == FocusChat {
 			m.focus = FocusList
 			m.composing = false

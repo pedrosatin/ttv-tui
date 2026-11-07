@@ -299,11 +299,13 @@ type Model struct {
 	videoSurface   VideoSurface
 	videoPublished VideoPanel
 	showVideo      bool
-	showList       bool
-	showChat       bool
-	width          int
-	height         int
-	quitting       bool
+	// videoListOpen is the list opened over the panel. It implies showVideo.
+	videoListOpen bool
+	showList      bool
+	showChat      bool
+	width         int
+	height        int
+	quitting      bool
 }
 
 // New creates a new UI Model backed by the given i18n catalog and options.
@@ -624,13 +626,17 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.store != nil {
 			cmds = append(cmds, m.saveStoreCmd())
 		}
+		m.closeVideoList()
 		if m.playback != nil {
+			// The player keeps the volume of a channel it restarts.
+			if selected.Login != m.playerLogin {
+				m.playerVolume = 100
+			}
 			m.playerLogin = selected.Login
 			m.playerState = PlayerStateStarting
 			m.playerLastLine = ""
 			m.playerFailure = PlayerFailureNone
 			m.playerBreakElapsed = 0
-			m.playerVolume = 100
 			m.playerSwitching = true
 			m.playerEmbedded = m.embeddedLayout()
 			cmds = append(cmds, m.playback.Start(selected.Login, m.playerEmbedded))

@@ -1255,6 +1255,92 @@ func drainEvents(mgr *Manager) {
 	}
 }
 
+// lastVolumeSet is the last volume the session asked mpv for.
+func lastVolumeSet(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := ""
+	for line := range strings.SplitSeq(string(raw), "\n") {
+		if strings.Contains(line, `"set_property","volume"`) {
+			last = line
+		}
+	}
+	return last
+}
+
+func TestRestartKeepsTheVolumeOfTheSameChannel(t *testing.T) {
+	cmdLog := filepath.Join(t.TempDir(), "volume-cmds.jsonl")
+	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
+	mgr := newTestManager(t, "play-control", Options{})
+
+	start := func(login string) uint64 {
+		t.Helper()
+		gen, err := mgr.Start(login)
+		if err != nil {
+			t.Fatalf("Start(%s): %v", login, err)
+		}
+		_ = waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+		return gen
+	}
+	settled := func(gen uint64, want int) {
+		t.Helper()
+		waitVolume(t, mgr, gen, want, 3*time.Second)
+		waitCommandsSettled(t, mgr, StatePlaying, 5*time.Second)
+		command := fmt.Sprintf(`["set_property","volume",%d]`, want)
+		if got := lastVolumeSet(t, cmdLog); !strings.Contains(got, command) {
+			t.Fatalf("last volume sent = %q, want %s", got, command)
+		}
+		if got := mgr.Volume(); got != want {
+			t.Fatalf("Volume = %d, want %d", got, want)
+		}
+	}
+
+	gen := start("gaules")
+	settled(gen, 100)
+	if err := mgr.AdjustVolume(-30); err != nil {
+		t.Fatal(err)
+	}
+	waitVolume(t, mgr, gen, 70, 3*time.Second)
+
+	settled(start("gaules"), 70)
+
+	// A retry can come after a stop, with no session left to read the volume from.
+	mgr.Stop()
+	settled(start("gaules"), 70)
+
+	// Another channel is the only thing that goes back to the baseline.
+	settled(start("alanzoka"), 100)
+	settled(start("gaules"), 100)
+}
+
+func TestVolumeZeroSurvivesTheRestart(t *testing.T) {
+	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
+	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
+	mgr := newTestManager(t, "play-control", Options{})
+	gen, err := mgr.Start("gaules")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+	if err := mgr.SetVolume(0); err != nil {
+		t.Fatal(err)
+	}
+	waitVolume(t, mgr, gen, 0, 3*time.Second)
+	gen, err = mgr.Start("gaules")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+	waitCommands(t, cmdLog, 5*time.Second, `["set_property","volume",0]`)
+	waitCommandsSettled(t, mgr, StatePlaying, 5*time.Second)
+	if got := lastVolumeSet(t, cmdLog); !strings.Contains(got, `["set_property","volume",0]`) {
+		t.Fatalf("muted channel came back at %q", got)
+	}
+}
+
 func waitVolume(t *testing.T, mgr *Manager, gen uint64, want int, timeout time.Duration) {
 	t.Helper()
 	deadline := time.After(timeout)

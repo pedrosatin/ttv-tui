@@ -149,7 +149,7 @@ func (m Model) View() (view string) {
 		overlayLines = m.renderChannelFilterMenuLines(m.width)
 	}
 
-	if m.showVideo {
+	if m.videoBodyShown() {
 		available := m.height - 1
 		if m.height <= 0 {
 			available = 24

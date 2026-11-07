@@ -225,14 +225,14 @@ func (m Model) playerErrorDetail() string {
 }
 
 // retryPlayback restarts playback of the player's channel, with the output the
-// layout calls for now.
+// layout calls for now and the volume it had: the player keeps that one.
 func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
+	m.closeVideoList()
 	login := m.playerLogin
 	m.playerState = PlayerStateStarting
 	m.playerFailure = PlayerFailureNone
 	m.playerLastLine = ""
 	m.playerBreakElapsed = 0
-	m.playerVolume = 100
 	m.playerSwitching = true
 	m.playerEmbedded = m.embeddedLayout()
 	return m, m.playback.Start(login, m.playerEmbedded)

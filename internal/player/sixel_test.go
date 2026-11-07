@@ -42,3 +42,31 @@ func TestDetectSixel(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestParseCellReply(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		reply         string
+		width, height int
+		ok            bool
+	}{
+		{"alone", "\x1b[6;12;6t", 6, 12, true},
+		{"before the DA1 reply", "\x1b[6;20;10t\x1b[?62;4c", 10, 20, true},
+		{"after stray input", "x\x1b[6;16;8t", 8, 16, true},
+		{"8-bit CSI", "\x9b6;16;8t", 8, 16, true},
+		{"only DA1", "\x1b[?62;4c", 0, 0, false},
+		{"empty", "", 0, 0, false},
+		{"zeros", "\x1b[6;0;0t", 0, 0, false},
+		{"zero height", "\x1b[6;0;8t", 0, 0, false},
+		{"text area report", "\x1b[4;540;960t", 0, 0, false},
+		{"cut short", "\x1b[6;12;", 0, 0, false},
+		{"absurd", "\x1b[6;99999;6t", 0, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			width, height, ok := ParseCellReply([]byte(tc.reply))
+			if width != tc.width || height != tc.height || ok != tc.ok {
+				t.Fatalf("got %dx%d ok=%v", width, height, ok)
+			}
+		})
+	}
+}

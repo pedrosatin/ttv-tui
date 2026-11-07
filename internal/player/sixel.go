@@ -4,6 +4,7 @@ import (
 	"context"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -43,6 +44,23 @@ func DetectSixel(ctx context.Context, probe SixelProbe) string {
 		}
 	}
 	return "video.no_mpv"
+}
+
+var cellReply = regexp.MustCompile(`\x1b\[6;([0-9]{1,4});([0-9]{1,4})t`)
+
+// ParseCellReply reads the answer to CSI 16 t, CSI 6 ; height ; width t. A terminal
+// that answers with zeros knows no more than one that stays silent, so ok is false.
+func ParseCellReply(reply []byte) (width, height int, ok bool) {
+	match := cellReply.FindSubmatch([]byte(strings.ReplaceAll(string(reply), "\x9b", "\x1b[")))
+	if match == nil {
+		return 0, 0, false
+	}
+	height, _ = strconv.Atoi(string(match[1]))
+	width, _ = strconv.Atoi(string(match[2]))
+	if width == 0 || height == 0 {
+		return 0, 0, false
+	}
+	return width, height, true
 }
 
 var da1Reply = regexp.MustCompile(`\x1b\[\?([0-9]+(?:;[0-9]+)*)c`)

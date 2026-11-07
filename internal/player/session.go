@@ -34,6 +34,8 @@ type sessionConfig struct {
 	Video *SixelOutput
 	// VideoWidth and VideoHeight are the frame size in Command's arguments.
 	VideoWidth, VideoHeight int
+	// Volume is what the player is set to once its IPC connects.
+	Volume int
 }
 
 type pendingKind int
@@ -144,7 +146,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		endpoint: endpoint,
 		cancel:   cancel,
 		state:    StateStarting,
-		volume:   100,
+		volume:   cfg.Volume,
 		waitDone: make(chan struct{}),
 		pending:  make(map[int64]pendingCommand),
 
@@ -659,15 +661,15 @@ func (s *Session) emitStatus() {
 	s.cfg.Emit(ev)
 }
 
-// applyPlaybackBaseline sets volume=100 and pause=false on the connected mpv.
-// Chosen over get_property so softvol values above the UI clamp (0..100) are
+// applyPlaybackBaseline sets the session's volume and pause=false on the connected
+// mpv. Chosen over get_property so softvol values above the UI clamp (0..100) are
 // written back instead of only clamped in memory.
 func (s *Session) applyPlaybackBaseline() {
 	s.mu.Lock()
 	s.desiredPaused = false
 	s.hasDesiredPause = true
 	s.mu.Unlock()
-	_ = s.setVolumeWithOSD(100, false)
+	_ = s.setVolumeWithOSD(s.cfg.Volume, false)
 	_ = s.sendCommand([]any{"set_property", "pause", false}, pendingCommand{
 		kind:   pendingPause,
 		paused: false,

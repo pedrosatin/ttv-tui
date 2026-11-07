@@ -24,6 +24,10 @@ const (
 	StateEnded    State = "encerrado"
 )
 
+// baselineVolume is where a channel starts: mpv can open above the 0..100 range the
+// app shows.
+const baselineVolume = 100
+
 // EndReason distinguishes how playback reached StateEnded.
 type EndReason string
 
@@ -153,6 +157,11 @@ type Manager struct {
 	inputConfErr error
 	// video is what StartEmbedded draws through.
 	video *SixelOutput
+	// keptLogin and keptVolume are the channel of the last session to end and the
+	// volume it ended on. They outlive the session: a retry may follow a start that
+	// failed and left none.
+	keptLogin  string
+	keptVolume int
 }
 
 // New creates a Manager. The Events channel stays open for the Manager lifetime;
@@ -252,6 +261,7 @@ func (m *Manager) start(login string, embedded bool) (uint64, error) {
 
 	if prev != nil {
 		m.stopTracked(prev)
+		m.keepVolume(prev)
 	}
 
 	if err := m.checkTools(); err != nil {
@@ -294,6 +304,7 @@ func (m *Manager) start(login string, embedded bool) (uint64, error) {
 		Video:              video,
 		VideoWidth:         videoWidth,
 		VideoHeight:        videoHeight,
+		Volume:             m.startVolume(login),
 		WriteInputConf:     m.opts.WriteInputConf,
 		SocketWait:         m.opts.SocketWait,
 		StopWait:           m.opts.StopWait,
@@ -327,6 +338,26 @@ func (m *Manager) start(login string, embedded bool) (uint64, error) {
 	return gen, nil
 }
 
+// keepVolume records where sess left the volume, once it can no longer change.
+func (m *Manager) keepVolume(sess *Session) {
+	volume := sess.Volume()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.keptLogin, m.keptVolume = sess.cfg.Login, volume
+}
+
+// startVolume is the volume a new session of login opens at: where the same
+// channel left it, so a retry changes nothing the user set, or the baseline for
+// any other channel.
+func (m *Manager) startVolume(login string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if login == m.keptLogin {
+		return m.keptVolume
+	}
+	return baselineVolume
+}
+
 // checkTools reports the first RequiredTools entry that LookPath cannot find.
 func (m *Manager) checkTools() error {
 	for _, tool := range m.opts.RequiredTools {
@@ -351,6 +382,7 @@ func (m *Manager) Stop() {
 	m.mu.Unlock()
 	if sess != nil {
 		m.stopTracked(sess)
+		m.keepVolume(sess)
 	}
 	m.mu.Lock()
 	for m.stopping > 0 {
