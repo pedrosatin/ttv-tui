@@ -255,6 +255,7 @@ Column width adaptation:
 - **Choosing another channel.** `Esc` or `l` opens the list over the video. Frames stop while it is open and the audio goes on. Choosing a channel or pressing `Esc` returns to the video. `Ctrl+R` goes back to the categories.
 - **Getting out.** `Ctrl+W`, `Ctrl+H` or `Ctrl+L` leaves the layout. The audio goes on without a picture and the status bar says so: `r` restarts the channel in the `mpv` window and `Ctrl+X` stops it.
 - **Limitations.** 15 fps at up to 480x270, at about 0.8 of a CPU core, against about a quarter of a core for the `mpv` window. kitty, Alacritty, Terminal.app, Windows and tmux are not supported. A terminal that does not report its cell size gets a video smaller than the panel, so the picture stays clear of the chat.
+- **Waiting for the picture.** After a resize, or when help closes, the picture can take up to about 2.5 s to come back, because `mpv` waits for the next keyframe. A window that shrank leaves the panel blank during that wait, and the list leaves the last frame on screen. The frames also share the line with the keys: on a terminal or SSH link that takes 300 KB/s, a key took about half a second to show.
 
 ## Chat
 

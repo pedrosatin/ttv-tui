@@ -44,6 +44,9 @@ func TestMain(m *testing.M) {
 	case "owner":
 		runOrphanOwner()
 		os.Exit(0)
+	case "sixel-player":
+		runSixelPlayer()
+		os.Exit(0)
 	}
 	os.Exit(m.Run())
 }

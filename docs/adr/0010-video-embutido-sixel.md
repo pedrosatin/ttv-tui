@@ -36,6 +36,10 @@ frame e o reemite ao fechar, o que cobre a pausa, quando nenhum frame novo viria
 pelo `vid=auto`. Escolher um canal ou `Esc` fecha. Aqui `Esc` não sobe um nível na lista:
 quem quer as categorias usa `Ctrl+R`.
 
+Em pausa o mpv ainda desenha um frame quando o vídeo é reconstruído, cerca de 0,6 a 1,9 s
+depois do `vid=auto`. A saída aceita esse frame: depois de encolher a janela ele é a única
+imagem que o painel vai ter.
+
 Com sessão sixel, esconder o painel manda `vid=no` depois de 200 ms de estabilidade:
 sair do modo, abrir a ajuda ou encolher a janela. O mpv para de decodificar e de
 codificar vídeo, e o áudio continua. A barra avisa enquanto a sessão estiver só no

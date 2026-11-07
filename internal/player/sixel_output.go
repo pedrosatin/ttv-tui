@@ -57,7 +57,9 @@ type SixelPanel struct {
 	Playing bool
 	// Still means the last frame stays valid while no new one comes. It is drawn
 	// again whenever the panel is Visible and needs it, so a pause survives damage
-	// and an overlay gets the image back when it closes.
+	// and an overlay gets the image back when it closes. A new one may still come:
+	// a paused player draws once when its video is rebuilt, and after a resize that
+	// frame is the only image the panel will get.
 	Still bool
 }
 
@@ -171,7 +173,7 @@ func (o *SixelOutput) Submit(frame []byte) {
 		return
 	}
 	o.mu.Lock()
-	if !o.activeLocked() {
+	if !o.drawableNowLocked() {
 		o.mu.Unlock()
 		return
 	}
@@ -190,7 +192,7 @@ func (o *SixelOutput) SetPanel(panel SixelPanel) {
 		panel.Rows != o.panel.Rows || panel.Cols != o.panel.Cols
 	shown := panel.Visible && !o.panel.Visible
 	o.panel = panel
-	if !o.activeLocked() {
+	if !o.drawableNowLocked() {
 		o.pending = nil
 		if !panel.Still {
 			o.dropFramesLocked()
@@ -242,11 +244,6 @@ func (o *SixelOutput) signal() {
 	case o.wake <- struct{}{}:
 	default:
 	}
-}
-
-// activeLocked reports whether new frames are welcome.
-func (o *SixelOutput) activeLocked() bool {
-	return o.panel.Playing && o.drawableNowLocked()
 }
 
 // drawableNowLocked reports whether anything may reach the panel, new frame or

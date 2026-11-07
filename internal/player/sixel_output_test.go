@@ -641,12 +641,29 @@ func TestCoveredPanelGivesTheImageBackToAPause(t *testing.T) {
 	if got := string(rec.bytes()); !strings.Contains(got, framed(1, 1, frame(1))) {
 		t.Fatalf("no image for the pause: %q", got)
 	}
+}
 
-	// New frames still stay out: only Playing lets them in.
-	o.Submit(frame(2))
+// A smaller panel throws away a last frame that no longer fits, and a paused mpv
+// answers the rebuild with a single frame. Refusing it would leave the panel blank
+// until the pause ends.
+func TestPausedPanelTakesTheFrameOfARebuild(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := newTestSixel(t, rec)
+	o.SetPanel(testPanel)
+	o.Submit(frame(1))
+	waitFrames(t, rec, 1)
+
+	paused := testPanel
+	paused.Playing, paused.Still = false, true
+	paused.Rows, paused.Cols = 8, 40
+	o.SetPanel(paused)
 	settle()
-	if n := rec.frames(); n != 1 {
-		t.Fatalf("frames = %d during a pause", n)
+	rec.reset()
+
+	o.Submit(sized(2, 96, 54))
+	waitFrames(t, rec, 1)
+	if got := string(rec.bytes()); !strings.Contains(got, framed(1, 1, sized(2, 96, 54))) {
+		t.Fatalf("the paused panel refused the frame: %q", got)
 	}
 }
 

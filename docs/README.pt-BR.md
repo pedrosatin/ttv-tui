@@ -255,6 +255,7 @@ Adaptação à largura do terminal:
 - **Como trocar de canal.** `Esc` ou `l` abre a lista sobre o vídeo. Os frames param enquanto ela está aberta e o áudio continua. Escolher um canal ou pressionar `Esc` volta ao vídeo. `Ctrl+R` volta às categorias.
 - **Como sair.** `Ctrl+W`, `Ctrl+H` ou `Ctrl+L` deixa o layout. O áudio continua sem imagem e a barra avisa: `r` reinicia o canal na janela do `mpv` e `Ctrl+X` encerra.
 - **Limitações.** 15 fps em até 480x270, com cerca de 0,8 núcleo de CPU, contra cerca de um quarto de núcleo da janela do `mpv`. Não há suporte em kitty, Alacritty, Terminal.app, Windows e tmux. Em terminal que não informa o tamanho da célula, o vídeo fica menor que o painel para a imagem não invadir o chat.
+- **Espera pela imagem.** Depois de redimensionar, ou ao fechar a ajuda, a imagem pode levar cerca de 2,5 s para voltar, porque o `mpv` espera o próximo keyframe. Se a janela encolheu, o painel fica em branco nessa espera, e a lista deixa o último frame na tela. Os frames também dividem a linha com as teclas: em um terminal ou link SSH que aguenta 300 KB/s, uma tecla levou cerca de meio segundo para aparecer.
 
 ## Chat
 

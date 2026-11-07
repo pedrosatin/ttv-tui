@@ -335,3 +335,66 @@ func TestRealMPVTrackOffKeepsAudio(t *testing.T) {
 	mgr.Stop()
 	_ = out.Close()
 }
+
+// Against the real mpv: a paused player answers a rebuild with one frame of the new
+// size. It is the only picture a panel that shrank during a pause will get, and it
+// has to cross the output.
+func TestRealMPVPausedRebuildDrawsOnce(t *testing.T) {
+	if os.Getenv(realMPVEnv) != "1" {
+		t.Skipf("set %s=1 to run against a real mpv", realMPVEnv)
+	}
+	if _, err := exec.LookPath("mpv"); err != nil {
+		t.Fatalf("%s is set but mpv is not on PATH: %v", realMPVEnv, err)
+	}
+	rec := &terminalRecorder{}
+	out := newTestSixel(t, rec)
+	out.SetPanel(testPanel)
+	mgr := New(Options{
+		RuntimeDir: t.TempDir(),
+		StopWait:   500 * time.Millisecond,
+		Command: func(_, endpoint string) *exec.Cmd {
+			args := append(sixelMPVArgs(endpoint, "", 480, 270), "--audio=no", "av://lavfi:testsrc=size=640x360:rate=30")
+			return exec.Command("mpv", args...)
+		},
+	})
+	t.Cleanup(mgr.Close)
+	mgr.SetVideoOutput(out)
+	gen, err := mgr.StartEmbedded("real")
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForState(t, mgr.Events(), gen, StatePlaying, 15*time.Second)
+	waitFrames(t, rec, 5)
+
+	if err := mgr.TogglePause(); err != nil {
+		t.Fatalf("TogglePause: %v", err)
+	}
+	waitForState(t, mgr.Events(), gen, StatePaused, 5*time.Second)
+	paused := testPanel
+	paused.Playing, paused.Still = false, true
+	out.SetPanel(paused)
+	time.Sleep(300 * time.Millisecond)
+	drawn := rec.frames()
+
+	start := time.Now()
+	if err := mgr.ResizeVideo(240, 132); err != nil {
+		t.Fatalf("ResizeVideo: %v", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		_, frames := splitEmissions(t, bytes.Clone(rec.bytes()), 1, 1)
+		if len(frames) > drawn {
+			width, height, ok := sixelRaster(frames[len(frames)-1])
+			if ok && width <= 240 && height <= 132 {
+				t.Logf("frame of %dx%d %s after the resize", width, height, time.Since(start).Round(time.Millisecond))
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no frame of the new size while paused: %d frames, %d before", len(frames), drawn)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	mgr.Stop()
+	_ = out.Close()
+}
