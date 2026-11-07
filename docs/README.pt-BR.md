@@ -248,13 +248,14 @@ Adaptação à largura do terminal:
 
 ## Vídeo embutido experimental
 
-`ttv-tui --video=sixel` acrescenta um layout que desenha o vídeo no terminal, acima do chat. Ele vem desligado, e todos os outros layouts continuam com a janela do `mpv`.
+`ttv-tui --video=sixel` acrescenta um layout que desenha o vídeo no terminal, acima do chat. Ele vem desligado, e todos os outros layouts continuam com a janela do `mpv`. O modo embutido é experimental e ainda não foi verificado visualmente em todos os terminais.
 
 - **Requisitos.** Um terminal com sixel e um `mpv` com a saída de vídeo `sixel`. Os dois são verificados ao iniciar. Se faltar algum, o app funciona como sempre e `Ctrl+W` explica o motivo.
 - **Como chegar.** Com um canal aberto, pressione `Ctrl+W` até a barra mostrar `layout: vídeo+chat`, o passo depois do foco. Um canal aberto ali desenha no painel. Um canal que já toca na janela do `mpv` fica lá até você pressionar `r`, que o reinicia embutido com o mesmo volume.
 - **Como trocar de canal.** `Esc` ou `l` abre a lista sobre o vídeo. Os frames param enquanto ela está aberta e o áudio continua. Escolher um canal ou pressionar `Esc` volta ao vídeo. `Ctrl+R` volta às categorias.
 - **Como sair.** `Ctrl+W`, `Ctrl+H` ou `Ctrl+L` deixa o layout. O áudio continua sem imagem e a barra avisa: `r` reinicia o canal na janela do `mpv` e `Ctrl+X` encerra.
-- **Limitações.** 15 fps em até 480x270, com cerca de 0,8 núcleo de CPU, contra cerca de um quarto de núcleo da janela do `mpv`. Não há suporte em kitty, Alacritty, Terminal.app, Windows e tmux. Em terminal que não informa o tamanho da célula, o vídeo fica menor que o painel para a imagem não invadir o chat.
+- **Limitações.** A 15 fps, o frame é a maior imagem 16:9 que cabe no painel, centralizada (por exemplo, 640x360 com células de 10x20). O painel é limitado a 18 linhas; em janelas largas, a altura limita a imagem e deixa sobra igual dos dois lados. Em uma live real, o uso de CPU do `mpv` passou de cerca de 105% para 125%, e a saída de 2,0 para 3,2 MB/s. Não há suporte em kitty, Alacritty, Terminal.app, Windows e tmux. Em terminal que não informa o tamanho da célula, o vídeo fica menor que o painel para a imagem não invadir o chat.
+- **Inicialização do player.** Um início travado sem linha de log leva 30 s para informar erro; um socket presente que recusa conexões continua falhando rápido (cerca de 2 s). O log do streamlink vai para um arquivo na sessão.
 - **Espera pela imagem.** Depois de redimensionar, ou ao fechar a ajuda, a imagem pode levar cerca de 2,5 s para voltar, porque o `mpv` espera o próximo keyframe. Se a janela encolheu, o painel fica em branco nessa espera, e a lista deixa o último frame na tela. Os frames também dividem a linha com as teclas: em um terminal ou link SSH que aguenta 300 KB/s, uma tecla levou cerca de meio segundo para aparecer.
 
 ## Chat
