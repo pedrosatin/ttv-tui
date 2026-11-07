@@ -293,6 +293,8 @@ type Model struct {
 	// independently. Layout is not persisted to disk.
 	videoRequested bool
 	videoReason    string
+	videoSurface   VideoSurface
+	videoPublished VideoPanel
 	showVideo      bool
 	showList       bool
 	showChat       bool
@@ -471,6 +473,14 @@ func (m Model) checkTokenCmd() tea.Cmd {
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	if model, ok := next.(Model); ok {
+		return model.syncVideoPanel(m, cmd)
+	}
+	return next, cmd
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.BatchMsg:
 		var cmds []tea.Cmd
@@ -693,7 +703,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerKeysWarnedGen = msg.Generation
 			m.warnStatus(m.t("player.warn.input_conf"))
 		}
-		if msg.State == PlayerStatePlaying && !m.playerWindowNotified {
+		if msg.State == PlayerStatePlaying && !m.playerWindowNotified && m.videoSurface == nil {
 			// mpv opens its own window; someone new to the app may not notice it.
 			m.playerWindowNotified = true
 			m.playerWindowNotice = true

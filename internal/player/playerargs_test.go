@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -208,4 +209,57 @@ func mustJSONStrings(t *testing.T, argv []string) string {
 		parts[i] = b.String()
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+func TestSixelCommandKeepsTheLogOutOfTheFrames(t *testing.T) {
+	cmd := sixelCommand("gaules", "/run/ipc", "/run/input.conf", 480, 270)
+	var playerArgs string
+	for i, arg := range cmd.Args {
+		if arg == "--player-args" {
+			playerArgs = cmd.Args[i+1]
+		}
+	}
+	got, err := posixShlexSplit(playerArgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"--no-terminal",
+		"--vo=sixel",
+		"--vo-sixel-width=480",
+		"--vo-sixel-height=270",
+		"--vo-sixel-buffered=yes",
+		"--vo-sixel-alt-screen=no",
+		"--vo-sixel-config-clear=no",
+		"--vf=fps=15",
+		"--input-ipc-server=/run/ipc",
+		"--input-conf=/run/input.conf",
+	} {
+		if !slices.Contains(got, want) {
+			t.Fatalf("mpv args miss %s: %q", want, got)
+		}
+	}
+	// The last --force-window wins, and with it on vid=no keeps the output alive.
+	var forceWindow string
+	for _, arg := range got {
+		if strings.HasPrefix(arg, "--force-window") {
+			forceWindow = arg
+		}
+	}
+	if forceWindow != "--force-window=no" {
+		t.Fatalf("mpv would keep the video output across a resize: %q", got)
+	}
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, " -v --logfile /dev/stderr ") {
+		t.Fatalf("player stdout not separated from the log: %s", joined)
+	}
+}
+
+func TestDefaultCommandStaysAWindow(t *testing.T) {
+	joined := strings.Join(DefaultCommand("gaules", "/run/ipc", "/run/input.conf").Args, " ")
+	for _, unwanted := range []string{"sixel", "--no-terminal", "--logfile", " -v "} {
+		if strings.Contains(joined, unwanted) {
+			t.Fatalf("default command has %q: %s", unwanted, joined)
+		}
+	}
 }

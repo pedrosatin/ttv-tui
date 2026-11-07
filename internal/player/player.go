@@ -151,6 +151,8 @@ type Manager struct {
 	stopped  *sync.Cond
 	// inputConfErr is the last input.conf write failure, for the exit log.
 	inputConfErr error
+	// video, when set, makes sessions draw through it instead of a window.
+	video *SixelOutput
 }
 
 // New creates a Manager. The Events channel stays open for the Manager lifetime;
@@ -253,16 +255,32 @@ func (m *Manager) Start(login string) (uint64, error) {
 		return gen, err
 	}
 
+	m.mu.Lock()
+	video := m.video
+	m.mu.Unlock()
+	var videoWidth, videoHeight int
+	if video != nil {
+		videoWidth, videoHeight = video.FrameSize()
+	}
+
 	command := sessionCommandOf(m.opts.Command)
+	noInputConf := sessionCommandOf(m.opts.CommandNoInputConf)
 	if m.defaultCommand {
 		command = defaultSessionCommand
+		if video != nil {
+			command = sixelSessionCommand(videoWidth, videoHeight, true)
+			noInputConf = sixelSessionCommand(videoWidth, videoHeight, false)
+		}
 	}
 	sess, err := startSession(sessionConfig{
 		Generation:         gen,
 		Login:              login,
 		RuntimeDir:         m.opts.RuntimeDir,
 		Command:            command,
-		CommandNoInputConf: sessionCommandOf(m.opts.CommandNoInputConf),
+		CommandNoInputConf: noInputConf,
+		Video:              video,
+		VideoWidth:         videoWidth,
+		VideoHeight:        videoHeight,
 		WriteInputConf:     m.opts.WriteInputConf,
 		SocketWait:         m.opts.SocketWait,
 		StopWait:           m.opts.StopWait,
@@ -363,6 +381,26 @@ func (m *Manager) SetVolume(v int) error {
 	return sess.setVolume(clampVolume(v))
 }
 
+// SetVideoOutput makes the sessions started from now on draw through out. Call it
+// before the first Start.
+func (m *Manager) SetVideoOutput(out *SixelOutput) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.video = out
+}
+
+// ResizeVideo asks the active session for frames of a new size. A session still
+// starting picks the size up when its IPC connects.
+func (m *Manager) ResizeVideo(width, height int) error {
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
+	if sess == nil {
+		return fmt.Errorf("player: no active session")
+	}
+	return sess.resizeVideo(width, height)
+}
+
 // Volume returns the last known volume for the active session, or 0.
 func (m *Manager) Volume() int {
 	m.mu.Lock()
@@ -438,7 +476,50 @@ func commandNoInputConf(login, endpoint string) *exec.Cmd {
 
 // playerCommand omits --input-conf when inputConf is empty.
 func playerCommand(login, endpoint, inputConf string) *exec.Cmd {
-	mpvArgs := []string{
+	return streamlinkCommand(login, mpvArgs(endpoint, inputConf))
+}
+
+// sixelSessionCommand is the session command that draws in the terminal.
+func sixelSessionCommand(width, height int, withInputConf bool) sessionCommand {
+	return func(login string, layout sessionLayout) *exec.Cmd {
+		inputConf := ""
+		if withInputConf {
+			inputConf = inputConfPath(layout.Dir)
+		}
+		return sixelCommand(login, layout.Endpoint, inputConf, width, height)
+	}
+}
+
+// sixelCommand runs mpv with its sixel output on stdout, which reaches a pipe of
+// ours instead of the terminal.
+//
+// --no-terminal keeps mpv away from /dev/tty and off stdout with its own messages;
+// the sixel output is not affected. -v hands the player's stdout to streamlink's,
+// so --logfile moves streamlink's log to stderr: a line landing inside a frame
+// would corrupt it, and the frame would swallow the line that announces an ad.
+func sixelCommand(login, endpoint, inputConf string, width, height int) *exec.Cmd {
+	return streamlinkCommand(login, sixelMPVArgs(endpoint, inputConf, width, height),
+		"-v", "--logfile", "/dev/stderr")
+}
+
+// sixelMPVArgs undoes --force-window: it would keep the video output alive across
+// vid=no, and resizeVideo depends on mpv rebuilding it.
+func sixelMPVArgs(endpoint, inputConf string, width, height int) []string {
+	return append(mpvArgs(endpoint, inputConf),
+		"--force-window=no",
+		"--no-terminal",
+		"--vo=sixel",
+		fmt.Sprintf("--vo-sixel-width=%d", width),
+		fmt.Sprintf("--vo-sixel-height=%d", height),
+		"--vo-sixel-buffered=yes",
+		"--vo-sixel-alt-screen=no",
+		"--vo-sixel-config-clear=no",
+		fmt.Sprintf("--vf=fps=%d", sixelFPS),
+	)
+}
+
+func mpvArgs(endpoint, inputConf string) []string {
+	args := []string{
 		"--no-config",
 		"--no-input-default-bindings",
 		"--no-osc",
@@ -450,18 +531,20 @@ func playerCommand(login, endpoint, inputConf string) *exec.Cmd {
 		"--hwdec=auto-safe",
 	}
 	if inputConf != "" {
-		mpvArgs = append(mpvArgs, "--input-conf="+inputConf)
+		args = append(args, "--input-conf="+inputConf)
 	}
-	cmd := exec.Command(
-		"streamlink",
-		"--no-config",
-		"--loglevel", "info",
+	return args
+}
+
+func streamlinkCommand(login string, mpv []string, extra ...string) *exec.Cmd {
+	args := append([]string{"--no-config", "--loglevel", "info"}, extra...)
+	args = append(args,
 		fmt.Sprintf("https://www.twitch.tv/%s", login),
 		"best",
 		"--player", "mpv",
-		"--player-args", buildPlayerArgs(mpvArgs),
+		"--player-args", buildPlayerArgs(mpv),
 	)
-	return cmd
+	return exec.Command("streamlink", args...)
 }
 
 // buildPlayerArgs joins an mpv argv into the single string --player-args takes.

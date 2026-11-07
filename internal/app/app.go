@@ -185,8 +185,21 @@ func Run(opts Options) error {
 		}
 	}
 
+	videoReason := ""
+	programOutput := output
+	var videoSurface ui.Option
+	if opts.Video != "" {
+		videoReason = detectVideo(ctx, opts, input, output)
+		if videoReason == "" {
+			var stopVideo func()
+			programOutput, videoSurface, stopVideo = startVideo(output, playerMgr)
+			defer stopVideo()
+		}
+	}
+
 	uiOpts := []ui.Option{
-		videoOption(ctx, opts, input, output),
+		ui.WithVideo(opts.Video != "", videoReason),
+		videoSurface,
 		ui.WithSource(source),
 		ui.WithPlayback(newPlaybackBridge(playerMgr)),
 		ui.WithChat(newChatBridge(chatMgr)),
@@ -233,7 +246,7 @@ func Run(opts Options) error {
 	progOpts = append(progOpts, tea.WithAltScreen())
 	progOpts = append(progOpts,
 		tea.WithInput(input),
-		tea.WithOutput(output),
+		tea.WithOutput(programOutput),
 		tea.WithContext(ctx),
 		tea.WithoutSignalHandler(),
 	)

@@ -14,21 +14,51 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
 
-func videoOption(ctx context.Context, opts Options, input io.Reader, output io.Writer) ui.Option {
-	if opts.Video == "" {
-		return ui.WithVideo(false, "")
-	}
+// detectVideo returns the reason the requested backend cannot run, as a catalog
+// key. Empty means it can.
+func detectVideo(ctx context.Context, opts Options, input io.Reader, output io.Writer) string {
 	if runtime.GOOS == "windows" {
-		return ui.WithVideo(true, "video.unsupported_platform")
+		return "video.unsupported_platform"
 	}
 	if os.Getenv("TMUX") != "" {
-		return ui.WithVideo(true, "video.tmux")
+		return "video.tmux"
 	}
 	probe := opts.SixelProbe
 	if probe.Terminal == nil {
 		probe.Terminal = func(ctx context.Context) ([]byte, error) { return queryDA1(ctx, input, output) }
 	}
-	return ui.WithVideo(true, player.DetectSixel(ctx, probe))
+	return player.DetectSixel(ctx, probe)
+}
+
+// terminalOutput is what Bubble Tea writes to while video is on. Bubble Tea only
+// reads the window size from an output that is a terminal File, so a bare writer
+// would cost the UI every resize.
+type terminalOutput struct {
+	*player.SixelOutput
+	file *os.File
+}
+
+func (t terminalOutput) Read(p []byte) (int, error) { return t.file.Read(p) }
+func (t terminalOutput) Fd() uintptr                { return t.file.Fd() }
+
+// sixelSurface adapts player.SixelOutput to ui.VideoSurface.
+type sixelSurface struct{ out *player.SixelOutput }
+
+func (s sixelSurface) SetPanel(p ui.VideoPanel) { s.out.SetPanel(player.SixelPanel(p)) }
+
+// startVideo takes the terminal over for the sixel backend. It returns the writer
+// Bubble Tea must use and the UI option for the panel; stop ends the output.
+func startVideo(output io.Writer, mgr *player.Manager) (io.Writer, ui.Option, func()) {
+	file, ok := output.(*os.File)
+	if !ok {
+		return output, nil, func() {}
+	}
+	sixel := player.NewSixelOutput(file, player.SixelOptions{
+		Cell:   func() (int, int) { return cellSize(file) },
+		Resize: func(width, height int) { _ = mgr.ResizeVideo(width, height) },
+	})
+	mgr.SetVideoOutput(sixel)
+	return terminalOutput{SixelOutput: sixel, file: file}, ui.WithVideoSurface(sixelSurface{sixel}), func() { _ = sixel.Close() }
 }
 
 // queryDA1 owns input only before Bubble Tea starts. Cancel and join the reader

@@ -543,6 +543,8 @@ func runPlayerHelper() {
 			InitialPause:     os.Getenv("TTV_PLAYER_HELPER_INIT_PAUSE") == "1",
 			ExternalVolume:   helperEnvFloat("TTV_PLAYER_HELPER_EXTERNAL_VOLUME"),
 		})
+	case "sixel-play":
+		helperSixelPlay(socket, login)
 	case "ad-then-play":
 		fmt.Println("[plugins.twitch][info] Waiting for pre-roll ads to finish, be patient")
 		fmt.Println("[stream.hls][info] Filtering out segments and pausing stream output")
@@ -604,6 +606,21 @@ func runPlayerHelper() {
 		fmt.Fprintf(os.Stderr, "unknown helper mode %q\n", mode)
 		os.Exit(2)
 	}
+}
+
+// helperSixelPlay writes what mpv writes to a pipe, plus one streamlink line
+// between two frames, while the fake IPC runs.
+func helperSixelPlay(socket, login string) {
+	go func() {
+		for i := 0; ; i++ {
+			_, _ = os.Stdout.WriteString(mpvStream)
+			if i == 40 {
+				fmt.Println("[stream.hls][info] Filtering out segments and pausing stream output")
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+	helperPlay(socket, login, false, helperIPCOptions{LogCommandsPath: os.Getenv("TTV_PLAYER_HELPER_CMDS")})
 }
 
 func helperDelay() time.Duration {

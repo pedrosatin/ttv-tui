@@ -30,6 +30,10 @@ type sessionConfig struct {
 	BreakMaxHold time.Duration
 	RegistryDir  string
 	Emit         func(Event)
+	// Video receives the frames on the player's stdout. Nil reads stdout as lines.
+	Video *SixelOutput
+	// VideoWidth and VideoHeight are the frame size in Command's arguments.
+	VideoWidth, VideoHeight int
 }
 
 type pendingKind int
@@ -228,7 +232,11 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	}
 
 	s.readers.Add(2)
-	go s.consumeLines(ctx, stdout)
+	if cfg.Video != nil {
+		go s.consumeVideo(ctx, stdout)
+	} else {
+		go s.consumeLines(ctx, stdout)
+	}
 	go s.consumeLines(ctx, stderr)
 	go s.waitProcess()
 	go s.superviseIPC(ctx)
@@ -355,35 +363,59 @@ func (s *Session) consumeLines(ctx context.Context, r io.Reader) {
 	// streamlink lines can be long when dumping playlist metadata
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
-		line := sc.Text()
-		f := FailureNone
-		if strings.Contains(strings.ToLower(line), "error") {
-			f = ClassifyLine(line)
+		s.handleLine(sc.Text())
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
-		s.mu.Lock()
-		s.lastLine = line
-		if f != FailureNone && s.failClass == FailureNone {
-			s.failLine = line
-			s.failClass = f
-		}
-		s.mu.Unlock()
-		if isFatalLine(f) {
-			// Playback cannot start (channel offline, player missing): report
-			// it now and tear the process down instead of waiting for it.
-			go s.failFast()
-		}
+	}
+}
 
-		switch classifyAdLine(line) {
-		case adSignalHoldStart:
-			s.startAdHold()
-		case adSignalHoldEnd:
-			s.endAdHold()
+// consumeVideo reads a stdout that carries sixel frames: frames go to the video
+// output and whatever text is left takes the path of any other line.
+func (s *Session) consumeVideo(ctx context.Context, r io.Reader) {
+	defer s.readers.Done()
+	demux := sixelDemux{onLine: s.handleLine, onFrame: s.cfg.Video.Submit}
+	defer demux.flush()
+	buf := make([]byte, 64*1024)
+	for {
+		n, err := r.Read(buf)
+		demux.feed(buf[:n])
+		if err != nil {
+			return
 		}
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
+	}
+}
+
+func (s *Session) handleLine(line string) {
+	f := FailureNone
+	if strings.Contains(strings.ToLower(line), "error") {
+		f = ClassifyLine(line)
+	}
+	s.mu.Lock()
+	s.lastLine = line
+	if f != FailureNone && s.failClass == FailureNone {
+		s.failLine = line
+		s.failClass = f
+	}
+	s.mu.Unlock()
+	if isFatalLine(f) {
+		// Playback cannot start (channel offline, player missing): report
+		// it now and tear the process down instead of waiting for it.
+		go s.failFast()
+	}
+
+	switch classifyAdLine(line) {
+	case adSignalHoldStart:
+		s.startAdHold()
+	case adSignalHoldEnd:
+		s.endAdHold()
 	}
 }
 
@@ -434,6 +466,12 @@ func (s *Session) superviseIPC(ctx context.Context) {
 	// without reading get_property; later observe_property events still track
 	// manual/window changes.
 	s.applyPlaybackBaseline()
+	if s.cfg.Video != nil {
+		// The panel may have changed size while mpv was starting.
+		if w, h := s.cfg.Video.FrameSize(); w != s.cfg.VideoWidth || h != s.cfg.VideoHeight {
+			_ = s.resizeVideo(w, h)
+		}
+	}
 
 	readErr := make(chan error, 1)
 	go func() {
@@ -650,6 +688,28 @@ func (s *Session) togglePause() error {
 		paused: want,
 		osd:    true,
 	})
+}
+
+// resizeVideo changes the size of the frames mpv produces. mpv reads the
+// vo-sixel size only when it builds the video output, and setting vo to the value
+// it already has is a no-op, so the video track goes off and back on.
+func (s *Session) resizeVideo(width, height int) error {
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
+	if s.ipcConn == nil {
+		return fmt.Errorf("player: ipc not connected")
+	}
+	for _, cmd := range [][]any{
+		{"set_property", "options/vo-sixel-width", width},
+		{"set_property", "options/vo-sixel-height", height},
+		{"set_property", "vid", "no"},
+		{"set_property", "vid", "auto"},
+	} {
+		if err := writeIPC(s.ipcConn, map[string]any{"command": cmd}); err != nil {
+			return fmt.Errorf("player: ipc write: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Session) adjustVolume(delta int) error {
