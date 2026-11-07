@@ -1,16 +1,16 @@
 class TtvTui < Formula
   desc "Browse and watch Twitch in the terminal"
   homepage "https://github.com/pedrosatin/ttv-tui"
-  version "0.3.1"
+  version "0.4.0"
 
   on_arm do
-    url "https://github.com/pedrosatin/ttv-tui/releases/download/v0.3.1/ttv-tui_0.3.1_darwin_arm64.tar.gz"
-    sha256 "b522ca3b23966196b52ce1bb535d47861ed59c2bb12f1f8c56233b1978cdc744"
+    url "https://github.com/pedrosatin/ttv-tui/releases/download/v0.4.0/ttv-tui_0.4.0_darwin_arm64.tar.gz"
+    sha256 "611b01da39dc67d7b17c8a6aec2389375eac228f848d1fa50ea3365af047e442"
   end
 
   on_intel do
-    url "https://github.com/pedrosatin/ttv-tui/releases/download/v0.3.1/ttv-tui_0.3.1_darwin_amd64.tar.gz"
-    sha256 "762752fb6ec569939f2ea8b6238db1f7248f7f2132e966f0bbd83a12a99aa7ab"
+    url "https://github.com/pedrosatin/ttv-tui/releases/download/v0.4.0/ttv-tui_0.4.0_darwin_amd64.tar.gz"
+    sha256 "527bb0a74b0a2aedf29297d521ce1bfdf24598a27e88e270f6d82667cd506375"
   end
   license "MIT"
 
