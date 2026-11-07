@@ -5,7 +5,9 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +20,43 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// readPTYFull handles the nonblocking, non-pollable master returned on Darwin.
+// Use raw reads on Linux too, so readiness handling is exercised rather than
+// hidden by os.File's poller. The fake terminal must wait for the query before answering;
+// otherwise it exits on EAGAIN and the real probe can only time out.
+func readPTYFull(master *os.File, buf []byte) (int, error) {
+	deadline := time.Now().Add(2 * time.Second)
+	n := 0
+	for n < len(buf) {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return n, os.ErrDeadlineExceeded
+		}
+		fds := []unix.PollFd{{Fd: int32(master.Fd()), Events: unix.POLLIN}}
+		if _, err := unix.Poll(fds, int(remaining.Milliseconds())+1); err != nil {
+			if errors.Is(err, syscall.EINTR) {
+				continue
+			}
+			return n, err
+		}
+		if fds[0].Revents == 0 {
+			continue
+		}
+		read, err := unix.Read(int(master.Fd()), buf[n:])
+		if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EINTR) {
+			continue
+		}
+		if err != nil {
+			return n, err
+		}
+		if read == 0 {
+			return n, io.ErrUnexpectedEOF
+		}
+		n += read
+	}
+	return n, nil
+}
+
 func TestQueryDA1(t *testing.T) {
 	for _, reply := range []string{"\x1b[?62;4;22c", "\x1b[?62;22c", ""} {
 		t.Run(reply, func(t *testing.T) {
@@ -26,7 +65,7 @@ func TestQueryDA1(t *testing.T) {
 			done := make(chan error, 1)
 			go func() {
 				query := make([]byte, 3)
-				_, err := io.ReadFull(master, query)
+				_, err := readPTYFull(master, query)
 				if err == nil && string(query) != "\x1b[c" {
 					err = io.ErrUnexpectedEOF
 				}
@@ -57,7 +96,7 @@ func TestQueryDA1(t *testing.T) {
 				t.Fatal(err)
 			}
 			buf := make([]byte, 2)
-			if _, err := io.ReadFull(master, buf); err != nil || string(buf) != "ok" {
+			if _, err := readPTYFull(master, buf); err != nil || string(buf) != "ok" {
 				t.Fatalf("terminal not restored: %q %v", buf, err)
 			}
 		})
@@ -66,11 +105,11 @@ func TestQueryDA1(t *testing.T) {
 
 // fakeTerminal reads the query off the far end of a PTY and answers it in pieces,
 // as a real terminal may. It reports the query it saw.
-func fakeTerminal(master io.ReadWriter, reply string) <-chan string {
+func fakeTerminal(master *os.File, reply string) <-chan string {
 	seen := make(chan string, 1)
 	go func() {
 		query := make([]byte, len("\x1b[16t\x1b[c"))
-		n, _ := io.ReadFull(master, query)
+		n, _ := readPTYFull(master, query)
 		seen <- string(query[:n])
 		for _, b := range []byte(reply) {
 			if _, err := master.Write([]byte{b}); err != nil {
@@ -116,7 +155,7 @@ func TestProbeCellFollowsTheTerminalAnswer(t *testing.T) {
 				t.Fatal(err)
 			}
 			buf := make([]byte, 2)
-			if _, err := io.ReadFull(master, buf); err != nil || string(buf) != "ok" {
+			if _, err := readPTYFull(master, buf); err != nil || string(buf) != "ok" {
 				t.Fatalf("terminal not restored: %q %v", buf, err)
 			}
 		})
@@ -149,7 +188,7 @@ func TestProbeCellAsksNothingWhenTheWindowSizeHasPixels(t *testing.T) {
 		t.Fatal(err)
 	}
 	buf := make([]byte, 2)
-	if _, err := io.ReadFull(master, buf); err != nil || string(buf) != "ok" {
+	if _, err := readPTYFull(master, buf); err != nil || string(buf) != "ok" {
 		t.Fatalf("something was written first: %q %v", buf, err)
 	}
 }

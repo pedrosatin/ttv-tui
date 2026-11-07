@@ -407,6 +407,28 @@ func TestStore_StaleLock(t *testing.T) {
 	}
 }
 
+// A writer must survive a lock held longer than the old 70-90ms retry window.
+func TestStore_WaitsForContendedLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	lock := path + ".lock"
+	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	released := make(chan error, 1)
+	time.AfterFunc(150*time.Millisecond, func() { released <- os.Remove(lock) })
+	err := SaveTo(path, State{Favorites: []Channel{{Login: "another"}}})
+	if releaseErr := <-released; releaseErr != nil {
+		t.Fatal(releaseErr)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := LoadFrom(path)
+	if err != nil || len(st.Favorites) != 1 || st.Favorites[0].Login != "another" {
+		t.Fatalf("save after contention: %+v, %v", st, err)
+	}
+}
+
 func TestStore_ContendedLockReturnsError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	if err := os.WriteFile(path+".lock", nil, 0o600); err != nil {

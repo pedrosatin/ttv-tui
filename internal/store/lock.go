@@ -37,7 +37,7 @@ func lockStateFile(path string) (func() error, error) {
 		return nil, fmt.Errorf("create state dir: %w", err)
 	}
 	lockPath := path + ".lock"
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := 0; attempt < 10; attempt++ {
 		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			info, statErr := f.Stat()
@@ -80,9 +80,11 @@ func lockStateFile(path string) (func() error, error) {
 				}
 			}
 		}
-		if attempt < 4 {
-			// Four bounded waits total 70-90ms; jitter spreads simultaneous writers.
-			time.Sleep(time.Duration(10+attempt*5+rand.IntN(6)) * time.Millisecond)
+		if attempt < 9 {
+			// Nine waits total 450-495ms (excluding I/O and scheduling), allowing
+			// fsync under CI/race load. Saves run in a Tea command, off the key
+			// handler. Jitter spreads competing processes; O_EXCL stays exclusive.
+			time.Sleep(time.Duration(10+attempt*10+rand.IntN(6)) * time.Millisecond)
 		}
 	}
 	return nil, fmt.Errorf("acquire state lock %s: %w", lockPath, os.ErrExist)
