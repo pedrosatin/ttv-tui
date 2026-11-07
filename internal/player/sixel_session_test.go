@@ -2,6 +2,7 @@ package player
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,14 +35,16 @@ func TestSessionRoutesFramesAndLinesApart(t *testing.T) {
 	}
 	waitCommands(t, cmdLog, 5*time.Second,
 		`["set_property","options/vo-sixel-width",240]`,
-		`["set_property","options/vo-sixel-height",132]`,
+		`["set_property","options/vo-sixel-height",138]`,
+		`["set_property","options/vo-sixel-rows",23]`,
 		`["set_property","vid","no"]`,
 		`["set_property","vid","auto"]`,
 	)
 	mgr.Stop()
 	_ = out.Close()
 
-	text, frames := splitEmissions(t, rec.bytes(), 1, 1)
+	// 224x126 in the 480x280 of the panel.
+	text, frames := splitEmissions(t, rec.bytes(), 4, 13)
 	if len(text) != 0 {
 		t.Fatalf("the player reached the terminal outside a frame: %q", text)
 	}
@@ -67,7 +70,7 @@ func TestSessionAppliesAPanelResizeThatBeatItsIPC(t *testing.T) {
 	panel.Rows = 5
 	out.SetPanel(panel)
 	width, height := out.FrameSize()
-	if width == sixelMaxWidth {
+	if width == sixelStartWidth {
 		t.Fatal("panel did not change the frame size")
 	}
 	waitCommands(t, cmdLog, 5*time.Second, `["set_property","vid","auto"]`)
@@ -75,7 +78,7 @@ func TestSessionAppliesAPanelResizeThatBeatItsIPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), `"options/vo-sixel-height",96`) {
+	if !strings.Contains(string(raw), `"options/vo-sixel-height",102`) {
 		t.Fatalf("size %dx%d not applied: %s", width, height, raw)
 	}
 }
@@ -200,7 +203,7 @@ func TestResizeLeavesAHiddenTrackOff(t *testing.T) {
 	if err := mgr.ResizeVideo(240, 132); err != nil {
 		t.Fatalf("ResizeVideo: %v", err)
 	}
-	waitCommands(t, cmdLog, 5*time.Second, `["set_property","options/vo-sixel-height",132]`)
+	waitCommands(t, cmdLog, 5*time.Second, `["set_property","options/vo-sixel-height",138]`)
 	if n := countingLog(t, cmdLog, `"vid","auto"`); n != 0 {
 		t.Fatal("a resize brought video back to a hidden panel")
 	}
@@ -256,10 +259,10 @@ func TestRealMPVDrawsThroughTheOutput(t *testing.T) {
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		_, frames := splitEmissions(t, bytes.Clone(rec.bytes()), 1, 1)
+		_, frames := splitEmissions(t, bytes.Clone(rec.bytes()), 0, 0)
 		last := frames[len(frames)-1]
 		width, height, ok := sixelRaster(last)
-		if ok && width <= 240 && height <= 132 {
+		if ok && width <= 240 && height == 132 {
 			t.Logf("%d frames, last %dx%d", len(frames), width, height)
 			break
 		}
@@ -270,9 +273,50 @@ func TestRealMPVDrawsThroughTheOutput(t *testing.T) {
 	}
 	mgr.Stop()
 	_ = out.Close()
-	text, _ := splitEmissions(t, rec.bytes(), 1, 1)
+	text, _ := splitEmissions(t, rec.bytes(), 0, 0)
 	if len(text) != 0 {
 		t.Fatalf("mpv reached the terminal outside a frame: %q", text)
+	}
+}
+
+// Against the real mpv: the frame is as tall as what was asked for, which is what
+// fills the panel. Left alone, mpv takes a row off for itself and 360 becomes 342.
+func TestRealMPVDrawsTheSizeItWasAsked(t *testing.T) {
+	if os.Getenv(realMPVEnv) != "1" {
+		t.Skipf("set %s=1 to run against a real mpv", realMPVEnv)
+	}
+	if _, err := exec.LookPath("mpv"); err != nil {
+		t.Fatalf("%s is set but mpv is not on PATH: %v", realMPVEnv, err)
+	}
+	for _, size := range [][2]int{{640, 360}, {608, 342}, {171, 96}, {299, 168}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			rec := &terminalRecorder{}
+			out := newTestSixel(t, rec)
+			out.SetPanel(SixelPanel{Row: 1, Col: 1, Rows: 40, Cols: 120, Visible: true, Playing: true})
+			mgr := New(Options{
+				RuntimeDir: t.TempDir(),
+				StopWait:   500 * time.Millisecond,
+				Command: func(_, endpoint string) *exec.Cmd {
+					args := append(sixelMPVArgs(endpoint, "", size[0], size[1]), "--audio=no", "av://lavfi:testsrc=size=1280x720:rate=30")
+					return exec.Command("mpv", args...)
+				},
+			})
+			t.Cleanup(mgr.Close)
+			mgr.SetVideoOutput(out)
+			gen, err := mgr.StartEmbedded("real")
+			if err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			waitForState(t, mgr.Events(), gen, StatePlaying, 15*time.Second)
+			waitFrames(t, rec, 2)
+			mgr.Stop()
+			_ = out.Close()
+			_, frames := splitEmissions(t, rec.bytes(), 0, 0)
+			width, height, ok := sixelRaster(frames[0])
+			if !ok || height != size[1] || width > size[0] || width < size[0]-1 {
+				t.Fatalf("frame %dx%d, asked for %dx%d", width, height, size[0], size[1])
+			}
+		})
 	}
 }
 
@@ -326,9 +370,9 @@ func TestRealMPVTrackOffKeepsAudio(t *testing.T) {
 		t.Fatalf("SetVideoTrack: %v", err)
 	}
 	waitFrames(t, rec, drawn+3)
-	_, frames := splitEmissions(t, bytes.Clone(rec.bytes()), 1, 1)
+	_, frames := splitEmissions(t, bytes.Clone(rec.bytes()), 0, 0)
 	width, height, ok := sixelRaster(frames[len(frames)-1])
-	if !ok || width > 240 || height > 132 {
+	if !ok || width > 240 || height != 132 {
 		t.Fatalf("frames back at %dx%d", width, height)
 	}
 	t.Logf("%d frames before the track went off, back at %dx%d", drawn, width, height)
@@ -382,7 +426,7 @@ func TestRealMPVPausedRebuildDrawsOnce(t *testing.T) {
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		_, frames := splitEmissions(t, bytes.Clone(rec.bytes()), 1, 1)
+		_, frames := splitEmissions(t, bytes.Clone(rec.bytes()), 0, 0)
 		if len(frames) > drawn {
 			width, height, ok := sixelRaster(frames[len(frames)-1])
 			if ok && width <= 240 && height <= 132 {

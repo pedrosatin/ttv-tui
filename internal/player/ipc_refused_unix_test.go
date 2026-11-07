@@ -116,7 +116,7 @@ func TestIPCEndpointRefused(t *testing.T) {
 // Through the whole session: the failure is reported fast, with a clear
 // message, and the process group (parent and descendant) is gone.
 func TestSessionFailsFastWhenSocketHasNoListener(t *testing.T) {
-	mgr := newTestManager(t, "socket-no-listener", Options{SocketWait: 15 * time.Second, StopWait: 300 * time.Millisecond})
+	mgr := newTestManager(t, "socket-no-listener", Options{SocketWait: defaultSocketWait, StopWait: 300 * time.Millisecond})
 	start := time.Now()
 	gen, err := mgr.Start("chan")
 	if err != nil {
@@ -129,7 +129,7 @@ func TestSessionFailsFastWhenSocketHasNoListener(t *testing.T) {
 	ev := waitError(t, mgr, gen, 5*time.Second)
 	elapsed := time.Since(start)
 	if elapsed > 4*time.Second {
-		t.Fatalf("error after %v: must not take the 15s SocketWait", elapsed)
+		t.Fatalf("error after %v: must not take the %v of SocketWait", elapsed, defaultSocketWait)
 	}
 	if !strings.Contains(ev.LastLine, "control channel") || strings.Contains(strings.ToLower(ev.LastLine), "socket") {
 		t.Fatalf("LastLine = %q, want a clear message about the control channel", ev.LastLine)

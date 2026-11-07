@@ -54,6 +54,7 @@ echo '  sixel            terminal graphics using sixels'
 var (
 	sixelWidthArg  = regexp.MustCompile(`--vo-sixel-width=([0-9]+)`)
 	sixelHeightArg = regexp.MustCompile(`--vo-sixel-height=([0-9]+)`)
+	sixelRowsArg   = regexp.MustCompile(`--vo-sixel-rows=([0-9]+)`)
 )
 
 // sixelPlayer stands in for streamlink and mpv in one process: it speaks the IPC
@@ -62,15 +63,17 @@ var (
 // draws a single frame when it does. TTV_FAKE_ROGUE keeps frames coming through
 // vid=no, so whatever stops them is the output's own gate.
 type sixelPlayer struct {
-	mu            sync.Mutex
-	width, height int
-	off, paused   bool
-	owed          bool
-	epoch         int
-	rogue         bool
-	rebuild       time.Duration
-	conn          net.Conn
-	log           *os.File
+	mu    sync.Mutex
+	width int
+	// box and rows are mpv's height and row options; see mpvFrameHeight.
+	box, rows   int
+	off, paused bool
+	owed        bool
+	epoch       int
+	rogue       bool
+	rebuild     time.Duration
+	conn        net.Conn
+	log         *os.File
 }
 
 func runSixelPlayer() {
@@ -95,7 +98,8 @@ func runSixelPlayer() {
 	p := &sixelPlayer{rebuild: rebuild, rogue: os.Getenv("TTV_FAKE_ROGUE") == "1", conn: conn, log: log}
 	if strings.Contains(args, "--vo=sixel") {
 		p.width = argNumber(sixelWidthArg, args)
-		p.height = argNumber(sixelHeightArg, args)
+		p.box = argNumber(sixelHeightArg, args)
+		p.rows = argNumber(sixelRowsArg, args)
 		go p.draw()
 	}
 	p.send(map[string]any{"event": "playback-restart"})
@@ -129,7 +133,7 @@ func (p *sixelPlayer) draw() {
 		p.mu.Lock()
 		show := !p.off && (!p.paused || p.owed)
 		p.owed = false
-		width, height := p.width, p.height
+		width, height := p.width, mpvFrameHeight(p.box, p.rows)
 		p.mu.Unlock()
 		if !show {
 			continue
@@ -139,6 +143,13 @@ func (p *sixelPlayer) draw() {
 			os.Exit(0)
 		}
 	}
+}
+
+// mpvFrameHeight is what mpv makes of the height it is given: the last of its rows
+// stays free, and the rest is rounded down to a sixel band.
+func mpvFrameHeight(box, rows int) int {
+	height := box * (rows - 1) / rows
+	return height - height%6
 }
 
 // serve answers commands until the session goes.
@@ -171,7 +182,9 @@ func (p *sixelPlayer) apply(command []json.RawMessage) {
 	case `"options/vo-sixel-width"`:
 		p.setSize(value, &p.width)
 	case `"options/vo-sixel-height"`:
-		p.setSize(value, &p.height)
+		p.setSize(value, &p.box)
+	case `"options/vo-sixel-rows"`:
+		p.setSize(value, &p.rows)
 	case `"pause"`:
 		p.mu.Lock()
 		p.paused = value == "true"

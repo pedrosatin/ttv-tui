@@ -21,9 +21,10 @@ const (
 	// rebuilds the video output.
 	sixelPlayerDelay = 200 * time.Millisecond
 
-	// sixelMaxWidth and sixelMaxHeight are the size the CPU cost was measured at.
-	sixelMaxWidth  = 480
-	sixelMaxHeight = 270
+	// sixelStartWidth and sixelStartHeight are the frame size before any panel.
+	// From the first panel on, the size is what fits it: see fitLocked.
+	sixelStartWidth  = 480
+	sixelStartHeight = 270
 	// sixelBandHeight is the height of one sixel row. A frame rounded down to it
 	// cannot spill past its last band.
 	sixelBandHeight = 6
@@ -131,8 +132,8 @@ func NewSixelOutput(out io.Writer, opts SixelOptions) *SixelOutput {
 		out:          out,
 		cellWidth:    defaultCellWidth,
 		cellHeight:   defaultCellHeight,
-		width:        sixelMaxWidth,
-		height:       sixelMaxHeight,
+		width:        sixelStartWidth,
+		height:       sixelStartHeight,
 		trackSent:    true,
 		cell:         opts.Cell,
 		resizePlayer: opts.Resize,
@@ -258,8 +259,9 @@ func (o *SixelOutput) dropFramesLocked() {
 	o.pending, o.last, o.dirty = nil, nil, false
 }
 
-// fitLocked derives the frame size from the panel, keeping 16:9 under the
-// measured maximum, and schedules the player's reconfiguration if it changed.
+// fitLocked derives the frame size from the panel: the largest 16:9 that fits it.
+// The panel is the only limit, and it caps the rows, so the size follows the cell.
+// It schedules the player's reconfiguration if the size changed.
 func (o *SixelOutput) fitLocked() {
 	if o.cell != nil {
 		if width, height := o.cell(); width > 0 && height > 0 {
@@ -267,13 +269,11 @@ func (o *SixelOutput) fitLocked() {
 		}
 	}
 	maxWidth, maxHeight := o.drawableLocked()
-	width := min(sixelMaxWidth, maxWidth)
-	height := width * 9 / 16
-	if height > maxHeight {
-		height = maxHeight
-		width = height * 16 / 9
-	}
+	height := min(maxHeight, maxWidth*9/16)
 	height -= height % sixelBandHeight
+	// Rounded up, so that height is what limits mpv's fit: rounded down, the width
+	// would, and mpv would drop a sixel band to keep the aspect.
+	width := (height*16 + 8) / 9
 	if height <= 0 || (width == o.width && height == o.height) {
 		return
 	}
@@ -294,6 +294,14 @@ func (o *SixelOutput) drawableLocked() (width, height int) {
 func (o *SixelOutput) fitsLocked(f *sixelFrame) bool {
 	width, height := o.drawableLocked()
 	return f.width <= width && f.height <= height
+}
+
+// originLocked is the cell where a frame that fits starts: centered in the panel.
+// A stream that is not 16:9, or a frame of a size the player has not left yet,
+// leaves room around it. It goes by what the frame declares, not by what was asked.
+func (o *SixelOutput) originLocked(f *sixelFrame) (row, col int) {
+	width, height := o.drawableLocked()
+	return o.panel.Row + (height-f.height)/2/o.cellHeight, o.panel.Col + (width-f.width)/2/o.cellWidth
 }
 
 // nextFrameLocked picks what to draw. A frame that no longer fits the panel is
@@ -389,7 +397,7 @@ func (o *SixelOutput) emit() time.Duration {
 	}
 	o.pending, o.last, o.dirty = nil, frame, false
 	o.nextEmit = now.Add(sixelFrameInterval)
-	row, col := o.panel.Row, o.panel.Col
+	row, col := o.originLocked(frame)
 	o.mu.Unlock()
 
 	o.buf = append(o.buf[:0], sixelSaveMode...)

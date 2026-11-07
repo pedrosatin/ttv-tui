@@ -1,8 +1,9 @@
 package player
 
 const (
-	// maxSixelFrame bounds the memory one frame can take. A 480x270 frame stays
-	// well below it; anything larger is not a frame this app asked for.
+	// maxSixelFrame bounds the memory one frame can take. Pure noise, the worst
+	// case for the encoder, measured 3.3 MiB at 1280x720, what a panel of 18 rows
+	// reaches with 40px cells; anything larger is not a frame this app asked for.
 	maxSixelFrame = 8 << 20
 	// maxSixelLine matches the limit consumeLines gives streamlink's lines.
 	maxSixelLine = 1 << 20

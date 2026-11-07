@@ -212,7 +212,7 @@ func mustJSONStrings(t *testing.T, argv []string) string {
 }
 
 func TestSixelCommandKeepsTheLogOutOfTheFrames(t *testing.T) {
-	cmd := sixelCommand("gaules", "/run/ipc", "/run/input.conf", 480, 270)
+	cmd := sixelCommand("gaules", "/run/ipc", "/run/input.conf", "/run/streamlink.log", 480, 270)
 	var playerArgs string
 	for i, arg := range cmd.Args {
 		if arg == "--player-args" {
@@ -227,7 +227,8 @@ func TestSixelCommandKeepsTheLogOutOfTheFrames(t *testing.T) {
 		"--no-terminal",
 		"--vo=sixel",
 		"--vo-sixel-width=480",
-		"--vo-sixel-height=270",
+		"--vo-sixel-height=276",
+		"--vo-sixel-rows=46",
 		"--vo-sixel-buffered=yes",
 		"--vo-sixel-alt-screen=no",
 		"--vo-sixel-config-clear=no",
@@ -250,7 +251,7 @@ func TestSixelCommandKeepsTheLogOutOfTheFrames(t *testing.T) {
 		t.Fatalf("mpv would keep the video output across a resize: %q", got)
 	}
 	joined := strings.Join(cmd.Args, " ")
-	if !strings.Contains(joined, " -v --logfile /dev/stderr ") {
+	if !strings.Contains(joined, " -v --logfile /run/streamlink.log ") {
 		t.Fatalf("player stdout not separated from the log: %s", joined)
 	}
 }

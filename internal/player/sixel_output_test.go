@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -82,7 +84,8 @@ func newTestSixel(t *testing.T, rec *terminalRecorder) *SixelOutput {
 	return o
 }
 
-var testPanel = SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true}
+// testPanel is exactly what frame fills, so a frame lands on its first cell.
+var testPanel = SixelPanel{Row: 1, Col: 1, Rows: 14, Cols: 48, Visible: true, Playing: true}
 
 // sized builds a frame declaring a size, with an id in the payload.
 func sized(id, width, height int) []byte {
@@ -111,19 +114,28 @@ func settle() { time.Sleep(3 * sixelFrameInterval) }
 
 // splitEmissions walks the stream and returns what is outside image sequences.
 // Every DCS must be the exact wrapper around a frame: anything else in between
-// means two writers mixed.
+// means two writers mixed. A zero row and col accept any cell, for frames whose
+// size changes along the way and with it where they are centered.
 func splitEmissions(t *testing.T, stream []byte, row, col int) (text []byte, frames [][]byte) {
 	t.Helper()
-	prefix := fmt.Appendf(nil, "\x1b7\x1b[?80l\x1b[%d;%dH", row, col)
+	cell := func(n int) string {
+		if n == 0 {
+			return "[0-9]+"
+		}
+		return strconv.Itoa(n)
+	}
+	prefix := regexp.MustCompile(`\x1b7\x1b\[\?80l\x1b\[` + cell(row) + ";" + cell(col) + `H$`)
 	for len(stream) > 0 {
 		dcs := bytes.Index(stream, []byte("\x1bP"))
 		if dcs < 0 {
 			return append(text, stream...), frames
 		}
-		if dcs < len(prefix) || !bytes.Equal(stream[dcs-len(prefix):dcs], prefix) {
+		head := stream[max(dcs-32, 0):dcs]
+		at := prefix.FindIndex(head)
+		if at == nil {
 			t.Fatalf("DCS without its exact prefix: %q", stream[max(dcs-32, 0):dcs+8])
 		}
-		text = append(text, stream[:dcs-len(prefix)]...)
+		text = append(text, stream[:dcs-len(head)+at[0]]...)
 		end := bytes.Index(stream[dcs:], []byte("\x1b\\"))
 		if end < 0 {
 			t.Fatalf("unterminated DCS: %q", stream[dcs:])
@@ -372,21 +384,25 @@ func TestHidingStopsFramesAndForgetsTheLastOne(t *testing.T) {
 }
 
 func TestClearAndResizeBringTheImageBack(t *testing.T) {
-	for name, damage := range map[string]func(*SixelOutput) error{
-		"clear": func(o *SixelOutput) error {
+	for name, tc := range map[string]struct {
+		damage   func(*SixelOutput) error
+		row, col int
+	}{
+		"clear": {func(o *SixelOutput) error {
 			_, err := o.Write([]byte("\x1b[2J\x1b[H"))
 			return err
-		},
-		"resize": func(o *SixelOutput) error {
+		}, 1, 1},
+		// 480x270 centered in the new 1000x320.
+		"resize": {func(o *SixelOutput) error {
 			panel := testPanel
 			panel.Rows, panel.Cols = 16, 100
 			o.SetPanel(panel)
 			return nil
-		},
-		"repaint over the panel": func(o *SixelOutput) error {
+		}, 2, 27},
+		"repaint over the panel": {func(o *SixelOutput) error {
 			_, err := o.Write([]byte("\x1b[H" + strings.Repeat(" ", 120) + "\r\n"))
 			return err
-		},
+		}, 1, 1},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := &terminalRecorder{}
@@ -401,14 +417,14 @@ func TestClearAndResizeBringTheImageBack(t *testing.T) {
 			}
 
 			rec.reset()
-			if err := damage(o); err != nil {
+			if err := tc.damage(o); err != nil {
 				t.Fatal(err)
 			}
 			// No new frame arrives: the stream may be stalled or buffering.
 			waitFrames(t, rec, 1)
 			settle()
 			stream := rec.bytes()
-			if !bytes.HasSuffix(stream, []byte(framed(1, 1, f))) {
+			if !bytes.HasSuffix(stream, []byte(framed(tc.row, tc.col, f))) {
 				t.Fatalf("the image is not the last thing written: %q", stream)
 			}
 			if n := rec.frames(); n != 1 {
@@ -480,6 +496,52 @@ func TestFrameLargerThanThePanelIsNotDrawn(t *testing.T) {
 	waitFrames(t, rec, 2)
 }
 
+// The cell position is what a frame of this size in this panel has to get.
+func TestFrameIsCenteredInThePanel(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		panel         SixelPanel
+		width, height int
+		row, col      int
+	}{
+		{"fills it", SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 64}, 640, 360, 1, 1},
+		{"room at the sides", SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 120}, 640, 360, 1, 29},
+		{"room above and below", SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 30}, 299, 168, 5, 1},
+		{"room all around", SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 120}, 480, 270, 3, 37},
+		{"an odd pixel stays on the top and left", SixelPanel{Row: 1, Col: 1, Rows: 3, Cols: 3}, 19, 39, 1, 1},
+		{"panel away from the corner", SixelPanel{Row: 4, Col: 7, Rows: 18, Cols: 120}, 640, 360, 4, 35},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &terminalRecorder{}
+			o := newTestSixel(t, rec)
+			tc.panel.Visible, tc.panel.Playing = true, true
+			o.SetPanel(tc.panel)
+			f := sized(1, tc.width, tc.height)
+			o.Submit(bytes.Clone(f))
+			waitFrames(t, rec, 1)
+			if got, want := string(rec.bytes()), framed(tc.row, tc.col, f); got != want {
+				t.Fatalf("emitted %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// A cell that was only guessed still centers, inside the room it left for itself.
+func TestFrameIsCenteredByTheGuessedCell(t *testing.T) {
+	rec := &terminalRecorder{}
+	o := NewSixelOutput(rec, SixelOptions{})
+	t.Cleanup(func() { _ = o.Close() })
+	o.SetPanel(SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true})
+	width, height := o.FrameSize()
+	f := sized(1, width, height)
+	o.Submit(bytes.Clone(f))
+	waitFrames(t, rec, 1)
+	// 119 columns of 6px hold 714px and 17 rows of 12px hold 204px.
+	if got, want := string(rec.bytes()), framed(1, 30, f); got != want {
+		t.Fatalf("emitted %q, want %q", got, want)
+	}
+}
+
 func TestFrameSizeFollowsThePanel(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -487,14 +549,15 @@ func TestFrameSizeFollowsThePanel(t *testing.T) {
 		cellW, cellH  int
 		width, height int
 	}{
-		{"room to spare", 18, 120, 10, 20, 480, 270},
-		{"short panel", 5, 120, 10, 20, 177, 96},
-		{"narrow panel", 18, 30, 10, 20, 300, 168},
-		{"unknown cell", 18, 120, 0, 0, 362, 204},
+		{"wide panel fills its height", 18, 120, 10, 20, 640, 360},
+		{"large cell", 18, 200, 16, 32, 1024, 576},
+		{"short panel", 5, 120, 10, 20, 171, 96},
+		{"narrow panel fills its width", 18, 30, 10, 20, 299, 168},
+		{"unknown cell", 18, 120, 0, 0, 363, 204},
 		{"unknown cell gives up a row", 10, 120, 0, 0, 192, 108},
-		{"unknown cell gives up a column", 18, 30, 0, 0, 174, 96},
+		{"unknown cell gives up a column", 18, 30, 0, 0, 171, 96},
 		{"unknown cell in a tiny panel", 1, 1, 0, 0, 480, 270},
-		{"known cell keeps the whole panel", 10, 120, 8, 16, 284, 156},
+		{"known cell keeps the whole panel", 10, 120, 8, 16, 278, 156},
 		{"small known cell", 18, 120, 6, 12, 384, 216},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -511,7 +574,10 @@ func TestFrameSizeFollowsThePanel(t *testing.T) {
 			if tc.height%sixelBandHeight != 0 {
 				t.Fatalf("height %d splits a sixel band", tc.height)
 			}
-			if tc.width == sixelMaxWidth {
+			if ratio := float64(tc.width) / float64(tc.height); tc.rows > 1 && (ratio < 1.77 || ratio > 1.79) {
+				t.Fatalf("%dx%d is not 16:9", tc.width, tc.height)
+			}
+			if tc.width == sixelStartWidth {
 				return
 			}
 			select {
@@ -662,7 +728,8 @@ func TestPausedPanelTakesTheFrameOfARebuild(t *testing.T) {
 
 	o.Submit(sized(2, 96, 54))
 	waitFrames(t, rec, 1)
-	if got := string(rec.bytes()); !strings.Contains(got, framed(1, 1, sized(2, 96, 54))) {
+	// 96x54 centered in 400x160.
+	if got := string(rec.bytes()); !strings.Contains(got, framed(3, 16, sized(2, 96, 54))) {
 		t.Fatalf("the paused panel refused the frame: %q", got)
 	}
 }
@@ -927,7 +994,7 @@ func TestSizeReachesThePlayerBeforeTheTrack(t *testing.T) {
 	smaller := testPanel
 	smaller.Rows = 5
 	o.SetPanel(smaller)
-	waitPlayerCalls(t, rec, "track false", "size 177x96", "track true")
+	waitPlayerCalls(t, rec, "track false", "size 171x96", "track true")
 }
 
 func settleTrack() { time.Sleep(2 * sixelPlayerDelay) }

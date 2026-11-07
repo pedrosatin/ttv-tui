@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -374,7 +375,9 @@ func testSixelRenderer(t *testing.T, nonPollable bool) {
 	sixel.SetPanel(player.SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 100, Visible: true, Playing: true})
 
 	frame := []byte("\x1bPq\"1;1;480;270#1" + strings.Repeat("!200~-", 500) + "\x1b\\")
-	wrapped := append(append([]byte("\x1b7\x1b[?80l\x1b[1;1H"), frame...), "\x1b8"...)
+	wrapped := func(row, col int) []byte {
+		return append(append(fmt.Appendf(nil, "\x1b7\x1b[?80l\x1b[%d;%dH", row, col), frame...), "\x1b8"...)
+	}
 	waitFor := func(what string, ok func([]byte) bool) {
 		t.Helper()
 		deadline := time.Now().Add(5 * time.Second)
@@ -390,22 +393,25 @@ func testSixelRenderer(t *testing.T, nonPollable bool) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
-	imageAfter := func(mark int) func([]byte) bool {
-		return func(s []byte) bool { return bytes.Contains(s[mark:], wrapped) }
+	imageAfter := func(mark, row, col int) func([]byte) bool {
+		return func(s []byte) bool { return bytes.Contains(s[mark:], wrapped(row, col)) }
 	}
 
 	// Chat churn and a single frame: after this only damage can draw again.
 	sixel.Submit(bytes.Clone(frame))
-	waitFor("the first image", imageAfter(0))
+	// 480x270 centered in 1000x360, then in 900x360.
+	waitFor("the first image", imageAfter(0, 3, 27))
 	for range 5 {
 		prog.Send(tickMsg{})
 		time.Sleep(20 * time.Millisecond)
 	}
 
+	// Entering the alternate screen clears too: only a clear after it counts.
+	clears := bytes.Count(snapshot(), []byte("\x1b[2J"))
 	prog.Send(clearMsg{})
-	waitFor("the clear", func(s []byte) bool { return bytes.Contains(s, []byte("\x1b[2J")) })
+	waitFor("the clear", func(s []byte) bool { return bytes.Count(s, []byte("\x1b[2J")) > clears })
 	clearAt := bytes.LastIndex(snapshot(), []byte("\x1b[2J"))
-	waitFor("the image after the clear", imageAfter(clearAt))
+	waitFor("the image after the clear", imageAfter(clearAt, 3, 27))
 
 	mark := len(snapshot())
 	setSize(t, master, 26, 90)
@@ -414,7 +420,7 @@ func testSixelRenderer(t *testing.T, nonPollable bool) {
 	}
 	waitSize(90, 26)
 	sixel.SetPanel(player.SixelPanel{Row: 1, Col: 1, Rows: 18, Cols: 90, Visible: true, Playing: true})
-	waitFor("the image after the resize", imageAfter(mark))
+	waitFor("the image after the resize", imageAfter(mark, 3, 22))
 
 	prog.Quit()
 	select {
@@ -439,7 +445,8 @@ func testSixelRenderer(t *testing.T, nonPollable bool) {
 		t.Fatal("a frame landed on the shell after the program left the alternate screen")
 	}
 	// Whatever the renderer wrote, every DCS on the wire is the whole wrapped frame.
-	if starts, whole := bytes.Count(got, []byte("\x1bP")), bytes.Count(got, wrapped); starts != whole || whole < 3 {
+	whole := bytes.Count(got, wrapped(3, 27)) + bytes.Count(got, wrapped(3, 22))
+	if starts := bytes.Count(got, []byte("\x1bP")); starts != whole || whole < 3 {
 		t.Fatalf("%d DCS on the wire, %d whole", starts, whole)
 	}
 }

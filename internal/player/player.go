@@ -131,7 +131,14 @@ type Options struct {
 }
 
 const (
-	defaultSocketWait   = 15 * time.Second
+	// defaultSocketWait covers everything streamlink does before mpv exists,
+	// over the user's network: 15.6s measured behind a VPN at 380ms RTT, which
+	// the previous 15s turned into a timeout on every attempt. The cost of the
+	// margin falls only on a start that hangs without a word: it takes this long
+	// to be reported. Nothing else waits for it: a player that dies ends the wait
+	// at once, a fatal line fails the session at once, and an endpoint that
+	// exists and refuses fails after ipcRefusedGrace.
+	defaultSocketWait   = 30 * time.Second
 	defaultStopWait     = 3 * time.Second
 	defaultBreakMaxHold = 5 * time.Minute
 	defaultEventsBuffer = 32
@@ -301,6 +308,7 @@ func (m *Manager) start(login string, embedded bool) (uint64, error) {
 		RuntimeDir:         m.opts.RuntimeDir,
 		Command:            command,
 		CommandNoInputConf: noInputConf,
+		PlayerLog:          m.defaultCommand && video != nil,
 		Video:              video,
 		VideoWidth:         videoWidth,
 		VideoHeight:        videoHeight,
@@ -544,7 +552,7 @@ func sixelSessionCommand(width, height int, withInputConf bool) sessionCommand {
 		if withInputConf {
 			inputConf = inputConfPath(layout.Dir)
 		}
-		return sixelCommand(login, layout.Endpoint, inputConf, width, height)
+		return sixelCommand(login, layout.Endpoint, inputConf, playerLogPath(layout.Dir), width, height)
 	}
 }
 
@@ -553,22 +561,36 @@ func sixelSessionCommand(width, height int, withInputConf bool) sessionCommand {
 //
 // --no-terminal keeps mpv away from /dev/tty and off stdout with its own messages;
 // the sixel output is not affected. -v hands the player's stdout to streamlink's,
-// so --logfile moves streamlink's log to stderr: a line landing inside a frame
-// would corrupt it, and the frame would swallow the line that announces an ad.
-func sixelCommand(login, endpoint, inputConf string, width, height int) *exec.Cmd {
+// so --logfile moves streamlink's log off it: a line landing inside a frame would
+// corrupt it, and the frame would swallow the line that announces an ad.
+//
+// logFile has to be a real file. streamlink resolves the path before opening it,
+// and /dev/stderr on a pipe resolves to /proc/PID/fd/pipe:[N], which nothing can
+// open: streamlink then dies in its logging setup, before any stream.
+func sixelCommand(login, endpoint, inputConf, logFile string, width, height int) *exec.Cmd {
 	return streamlinkCommand(login, sixelMPVArgs(endpoint, inputConf, width, height),
-		"-v", "--logfile", "/dev/stderr")
+		"-v", "--logfile", logFile)
+}
+
+// sixelBox is the height and row count that make mpv draw frames exactly height
+// tall. mpv keeps the last terminal row free and, with no terminal to ask, counts
+// 25 rows: 360 would come out as 342. So each row is one sixel band, plus one band
+// for the row it gives up. height is a multiple of the band.
+func sixelBox(height int) (boxHeight, rows int) {
+	return height + sixelBandHeight, height/sixelBandHeight + 1
 }
 
 // sixelMPVArgs undoes --force-window: it would keep the video output alive across
 // vid=no, and resizeVideo depends on mpv rebuilding it.
 func sixelMPVArgs(endpoint, inputConf string, width, height int) []string {
+	boxHeight, rows := sixelBox(height)
 	return append(mpvArgs(endpoint, inputConf),
 		"--force-window=no",
 		"--no-terminal",
 		"--vo=sixel",
 		fmt.Sprintf("--vo-sixel-width=%d", width),
-		fmt.Sprintf("--vo-sixel-height=%d", height),
+		fmt.Sprintf("--vo-sixel-height=%d", boxHeight),
+		fmt.Sprintf("--vo-sixel-rows=%d", rows),
 		"--vo-sixel-buffered=yes",
 		"--vo-sixel-alt-screen=no",
 		"--vo-sixel-config-clear=no",

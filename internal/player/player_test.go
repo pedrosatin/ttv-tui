@@ -545,6 +545,8 @@ func runPlayerHelper() {
 		})
 	case "sixel-play":
 		helperSixelPlay(socket, login)
+	case "fake-streamlink":
+		helperFakeStreamlink(login)
 	case "ad-then-play":
 		fmt.Println("[plugins.twitch][info] Waiting for pre-roll ads to finish, be patient")
 		fmt.Println("[stream.hls][info] Filtering out segments and pausing stream output")

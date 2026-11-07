@@ -30,6 +30,9 @@ type sessionConfig struct {
 	BreakMaxHold time.Duration
 	RegistryDir  string
 	Emit         func(Event)
+	// PlayerLog means Command logs to playerLogPath instead of its output, and the
+	// session follows that file as it does stderr.
+	PlayerLog bool
 	// Video receives the frames on the player's stdout. Nil reads stdout as lines.
 	Video *SixelOutput
 	// VideoWidth and VideoHeight are the frame size in Command's arguments.
@@ -93,8 +96,11 @@ type Session struct {
 	volume          int
 	waitDone        chan struct{}
 	waitErr         error
-	// readers counts the stdout/stderr reader goroutines; outputs are their
-	// read ends, closed once the readers are drained (or given up on).
+	// failing is set once failFast has taken the session down: streamlink repeats
+	// its error line in the log and on stdout, and only the first one acts.
+	failing bool
+	// readers counts the goroutines reading the process's output; outputs are
+	// their read ends, closed once the readers are drained (or given up on).
 	readers sync.WaitGroup
 	outputs []*os.File
 
@@ -183,6 +189,17 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	cmd.Stdout = stdoutW
 	cmd.Stderr = stderrW
 	s.outputs = []*os.File{stdout, stderr}
+	var playerLog *os.File
+	if cfg.PlayerLog {
+		playerLog, err = openPlayerLog(playerLogPath(dir))
+		if err != nil {
+			closeFiles(stdout, stdoutW, stderr, stderrW)
+			s.cleanupFiles()
+			cancel()
+			return nil, err
+		}
+		s.outputs = append(s.outputs, playerLog)
+	}
 
 	s.emit(Event{
 		Generation: cfg.Generation,
@@ -197,7 +214,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	// readers see EOF when the process (and its descendants) are done.
 	closeFiles(stdoutW, stderrW)
 	if err != nil {
-		closeFiles(stdout, stderr)
+		closeFiles(s.outputs...)
 		s.cleanupFiles()
 		cancel()
 		return nil, fmt.Errorf("player: start: %w", err)
@@ -207,7 +224,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		// Nothing could stop this process later, so it does not get to play.
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		closeFiles(stdout, stderr)
+		closeFiles(s.outputs...)
 		s.cleanupFiles()
 		cancel()
 		return nil, err
@@ -242,6 +259,10 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		go s.consumeLines(ctx, stdout)
 	}
 	go s.consumeLines(ctx, stderr)
+	if playerLog != nil {
+		s.readers.Add(1)
+		go s.consumeLines(ctx, &logFollower{ctx: ctx, file: playerLog, gone: s.waitDone})
+	}
 	go s.waitProcess()
 	go s.superviseIPC(ctx)
 	go s.superviseBreak(ctx)
@@ -712,9 +733,11 @@ func (s *Session) resizeVideo(width, height int) error {
 	if s.ipcConn == nil {
 		return fmt.Errorf("player: ipc not connected")
 	}
+	boxHeight, rows := sixelBox(height)
 	commands := [][]any{
 		{"set_property", "options/vo-sixel-width", width},
-		{"set_property", "options/vo-sixel-height", height},
+		{"set_property", "options/vo-sixel-height", boxHeight},
+		{"set_property", "options/vo-sixel-rows", rows},
 	}
 	if !s.videoOff {
 		commands = append(commands,
@@ -993,9 +1016,10 @@ func (s *Session) transition(state State, reason EndReason, lastLine string) {
 // terminated, so the exit is not reported as a separate end.
 func (s *Session) failFast() {
 	s.mu.Lock()
-	stopped := s.stopped
+	skip := s.stopped || s.failing
+	s.failing = true
 	s.mu.Unlock()
-	if stopped {
+	if skip {
 		return
 	}
 	s.transition(StateError, "", "")
