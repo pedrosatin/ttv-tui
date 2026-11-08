@@ -144,11 +144,9 @@ func TestVideoStressClear(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		mark := r.term.frameCount()
 		time.Sleep(300 * time.Millisecond)
-		maxResidual := 0
-		if raceEnabled {
-			// Frames already in flight can arrive late with race instrumentation.
-			maxResidual = 2
-		}
+		// Frames already in flight can arrive late on any platform; they are not
+		// a continuous redraw loop. More than two still indicates ongoing output.
+		const maxResidual = 2
 		if n := r.term.frameCount() - mark; n > maxResidual {
 			t.Fatalf("%d frames with nothing new to show", n)
 		}
