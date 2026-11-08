@@ -26,6 +26,8 @@ Dois contratos ligam os processos:
 
 - `TTV_TUI_VIDEO_HOST` aponta para um socket em que o TUI publica, em JSON, as células do vídeo.
   Enquanto há reprodução, essas células ficam transparentes e o libmpv desenha por baixo.
+- Com o chat sobre o vídeo (`Ctrl+O`), o TUI publica quantas colunas finais do retângulo são do
+  chat. A janela as desenha com fundo translúcido e texto opaco, e o vídeo não perde largura.
 - Um executável chamado `mpv` entra primeiro no `PATH` do TUI. Ele entrega o stdin do streamlink ao
   core embutido por `SCM_RIGHTS` e fica vivo enquanto a sessão existir. O IPC JSON, o streamlink e
   o filtro de anúncio continuam iguais (regra 1).
