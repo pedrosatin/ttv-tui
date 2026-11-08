@@ -101,6 +101,10 @@ func (m Model) panelWidths() (int, int) {
 	if m.width <= 0 {
 		return 0, 0
 	}
+	if m.videoHost != nil {
+		listW, chatW, _ := m.hostedWidths()
+		return listW, chatW
+	}
 	listOn := m.listVisible()
 	chatOn := m.chatColumnVisible()
 	switch {
@@ -163,6 +167,10 @@ func (m Model) frame() string {
 			available = 24
 		}
 		return m.videoView(available, overlayLines, status)
+	}
+
+	if m.videoHost != nil && m.width > 0 && m.height > 1 {
+		return m.hostedView(m.height-1, overlayLines, status)
 	}
 
 	// Unsized fallback (m.width <= 0 and m.height <= 0): used by unit tests that don't send WindowSizeMsg.
@@ -398,6 +406,9 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		m.t("help.nocolor"),
 	} {
 		out = append(out, wrapChatRow("  ", line, maxWidth)...)
+	}
+	if m.videoHost != nil {
+		out = append(out, wrapChatRow("  ", m.t("help.hosted_resize"), maxWidth)...)
 	}
 	if m.videoRequested {
 		key := m.videoReason

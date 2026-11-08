@@ -301,6 +301,12 @@ type Model struct {
 	// the terminal height at the last resize. See videoStateLines.
 	videoStateRows int
 	videoSurface   VideoSurface
+	videoHost      VideoSurface
+	// hostedListCols and hostedChatCols are the widths asked for; 0 means automatic.
+	hostedListCols int
+	hostedChatCols int
+	hostedPersist  HostedColumnsPersist
+	hostedSaveGen  int
 	videoPublished VideoPanel
 	showVideo      bool
 	// videoListOpen is the list opened over the panel. It implies showVideo.
@@ -500,6 +506,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case hostedSaveMsg:
+		return m, m.saveHostedColumns(msg.gen)
 	case tea.BatchMsg:
 		var cmds []tea.Cmd
 		var cur tea.Model = m
@@ -725,7 +733,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerKeysWarnedGen = msg.Generation
 			m.warnStatus(m.t("player.warn.input_conf"))
 		}
-		if msg.State == PlayerStatePlaying && !m.playerWindowNotified && !m.playerEmbedded {
+		if msg.State == PlayerStatePlaying && !m.playerWindowNotified && !m.playerEmbedded && m.videoHost == nil {
 			// mpv opens its own window; someone new to the app may not notice it.
 			m.playerWindowNotified = true
 			m.playerWindowNotice = true

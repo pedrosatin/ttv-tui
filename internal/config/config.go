@@ -25,6 +25,11 @@ type Config struct {
 	// MinVideoChatRows..MaxVideoChatRows. 0 means the default
 	// (DefaultVideoChatRows). TOML key: video_chat_rows.
 	VideoChatRows int
+	// ListColumns and ChatColumns are the widths of the list and chat columns in
+	// the hosted window, within MinPanelColumns..MaxPanelColumns. 0 means
+	// automatic. TOML keys: list_columns, chat_columns.
+	ListColumns int
+	ChatColumns int
 	// VideoChatPosition places the chat strip of the video mode: VideoChatBottom
 	// or VideoChatTop. Empty means VideoChatBottom. TOML key:
 	// video_chat_position.
@@ -46,6 +51,20 @@ const (
 
 	VideoSixel = "sixel"
 )
+
+// Limits of a saved panel width. The UI applies the tighter limits of the moment.
+const (
+	MinPanelColumns = 20
+	MaxPanelColumns = 400
+)
+
+// normalizePanelColumns keeps a saved width in range; anything else means automatic.
+func normalizePanelColumns(cols int) int {
+	if cols < MinPanelColumns || cols > MaxPanelColumns {
+		return 0
+	}
+	return cols
+}
 
 // normalizeVideoChatRows keeps rows inside the accepted range; anything else is
 // 0, the default.
@@ -201,6 +220,8 @@ func SaveTo(path string, cfg Config) error {
 	cfg.VideoChatRows = normalizeVideoChatRows(cfg.VideoChatRows)
 	cfg.VideoChatPosition = normalizeVideoChatPosition(cfg.VideoChatPosition)
 	cfg.Video = normalizeVideo(cfg.Video)
+	cfg.ListColumns = normalizePanelColumns(cfg.ListColumns)
+	cfg.ChatColumns = normalizePanelColumns(cfg.ChatColumns)
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -267,6 +288,12 @@ func formatTOML(cfg Config) string {
 	}
 	if rows := normalizeVideoChatRows(cfg.VideoChatRows); rows > 0 {
 		fmt.Fprintf(&b, "video_chat_rows = %d\n", rows)
+	}
+	if cols := normalizePanelColumns(cfg.ListColumns); cols > 0 {
+		fmt.Fprintf(&b, "list_columns = %d\n", cols)
+	}
+	if cols := normalizePanelColumns(cfg.ChatColumns); cols > 0 {
+		fmt.Fprintf(&b, "chat_columns = %d\n", cols)
 	}
 	if pos := normalizeVideoChatPosition(cfg.VideoChatPosition); pos != "" {
 		fmt.Fprintf(&b, "video_chat_position = %s\n", quoteTOML(pos))
@@ -402,6 +429,18 @@ func parseTOML(input string) (Config, error) {
 				n = 0
 			}
 			cfg.VideoChatRows = normalizeVideoChatRows(n)
+		case "list_columns", "ui.list_columns":
+			n, err := parseTOMLInt(rawVal)
+			if err != nil {
+				n = 0
+			}
+			cfg.ListColumns = normalizePanelColumns(n)
+		case "chat_columns", "ui.chat_columns":
+			n, err := parseTOMLInt(rawVal)
+			if err != nil {
+				n = 0
+			}
+			cfg.ChatColumns = normalizePanelColumns(n)
 		case "video_chat_position", "ui.video_chat_position", "video.chat_position":
 			val, err := unquoteTOML(rawVal)
 			if err != nil {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -30,6 +31,8 @@ type Options struct {
 	VideoSet   bool
 	SixelProbe player.SixelProbe
 	Lang       string
+	// Terminal keeps the app in the terminal even where the window could open.
+	Terminal   bool
 	ConfigPath string
 	StatePath  string
 	Source     twitch.Source
@@ -77,6 +80,17 @@ func Run(opts Options) error {
 		cfgPath, _ = config.DefaultPath()
 	}
 	video := videoBackend(opts, cfg)
+	if openWindow(opts, video) {
+		return nil
+	}
+	var hostOption ui.Option
+	if path := os.Getenv(videoHostEnv); path != "" {
+		// The hosting window draws the video, so no terminal backend applies.
+		if host, err := dialVideoHost(path); err == nil {
+			defer host.Close()
+			hostOption, video = ui.WithVideoHost(host), ""
+		}
+	}
 
 	resolvedLang := i18n.Resolve(opts.Lang, cfg.Language, i18n.EnvLocale())
 	catalog, err := i18n.New(resolvedLang)
@@ -204,6 +218,7 @@ func Run(opts Options) error {
 	uiOpts := []ui.Option{
 		ui.WithVideo(video != "", videoReason),
 		videoSurface,
+		hostOption,
 		ui.WithSource(source),
 		ui.WithPlayback(newPlaybackBridge(playerMgr)),
 		ui.WithChat(newChatBridge(chatMgr)),
@@ -214,15 +229,37 @@ func Run(opts Options) error {
 		ui.WithVideoChatOnTop(cfg.VideoChatOnTop()),
 	}
 	if cfgPath != "" {
+		// Reread before each save: a `ttv-tui login` in another terminal must not be
+		// undone by a change of panel width here.
 		persistPath := cfgPath
 		persistCfg := cfg
-		uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, func(languages []string, minViewers int) error {
-			persistCfg.FilterLanguages = languages
-			persistCfg.MinViewers = minViewers
+		var persistMu sync.Mutex
+		updateConfig := func(change func(*config.Config)) error {
+			persistMu.Lock()
+			defer persistMu.Unlock()
+			if fresh, err := config.LoadFrom(persistPath); err == nil {
+				persistCfg = fresh
+			}
+			change(&persistCfg)
 			return config.SaveTo(persistPath, persistCfg)
+		}
+		uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, func(languages []string, minViewers int) error {
+			return updateConfig(func(c *config.Config) {
+				c.FilterLanguages = languages
+				c.MinViewers = minViewers
+			})
 		}))
-	} else if len(cfg.FilterLanguages) > 0 || cfg.MinViewers > 0 {
-		uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, nil))
+		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, func(list, chat int) error {
+			return updateConfig(func(c *config.Config) {
+				c.ListColumns = list
+				c.ChatColumns = chat
+			})
+		}))
+	} else {
+		if len(cfg.FilterLanguages) > 0 || cfg.MinViewers > 0 {
+			uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, nil))
+		}
+		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, nil))
 	}
 	if corruptNotice != "" {
 		uiOpts = append(uiOpts, ui.WithCorruptNotice(corruptNotice))

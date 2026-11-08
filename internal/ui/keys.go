@@ -39,6 +39,10 @@ type keyMap struct {
 	CycleLayout   key.Binding
 	ToggleList    key.Binding
 	ToggleChat    key.Binding
+	ListWider     key.Binding
+	ListNarrower  key.Binding
+	ChatWider     key.Binding
+	ChatNarrower  key.Binding
 	// ToggleVideoChat shows or hides the chat strip, only in the video mode.
 	ToggleVideoChat key.Binding
 }
@@ -145,6 +149,12 @@ func defaultKeyMap() keyMap {
 		ToggleChat: key.NewBinding(
 			key.WithKeys("ctrl+l"),
 		),
+		// The arrow moves the divider: the list's is to the right of it, the
+		// chat's to the left, so each panel grows toward the video.
+		ListWider:    key.NewBinding(key.WithKeys("ctrl+right")),
+		ListNarrower: key.NewBinding(key.WithKeys("ctrl+left")),
+		ChatWider:    key.NewBinding(key.WithKeys("alt+left")),
+		ChatNarrower: key.NewBinding(key.WithKeys("alt+right")),
 		// c (chat) is free in every other screen. It only acts on the video body,
 		// and an input on screen keeps it as text.
 		ToggleVideoChat: key.NewBinding(
@@ -277,6 +287,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.ToggleChat) {
 		m.toggleChatPanel()
 		return m, nil
+	}
+	if handled, cmd := m.handleHostedResizeKey(msg); handled {
+		return m, cmd
 	}
 
 	if m.videoChatKey(msg) {

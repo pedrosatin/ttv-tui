@@ -125,6 +125,11 @@ func (m *Model) toggleListPanel() {
 	m.leaveVideoLayout()
 	m.showList = !m.showList
 	m.normalizeFocusAfterLayout()
+	// In the hosted window the list comes back to be used: the arrows and Enter that
+	// follow belong to it, not to the chat that took the focus while it was away.
+	if m.videoHost != nil && m.showList && m.listVisible() {
+		m.focus = FocusList
+	}
 }
 
 // toggleChatPanel shows or hides the chat. In a terminal too narrow for the split,

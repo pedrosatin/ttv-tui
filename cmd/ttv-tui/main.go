@@ -70,6 +70,7 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 	fs.BoolVar(&showHelp, "help", false, cat.T("cli.flag.help"))
 	fs.BoolVar(&showHelp, "h", false, cat.T("cli.flag.help"))
 	fs.StringVar(&video, "video", "", cat.T("cli.flag.video"))
+	terminal := fs.Bool("terminal", false, cat.T("cli.flag.terminal"))
 	fs.StringVar(&lang, "lang", "", cat.T("cli.flag.lang"))
 	fs.StringVar(&importSrc, "import", "", cat.T("cli.flag.import"))
 
@@ -121,6 +122,7 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 		Video:      video,
 		VideoSet:   flagGiven(fs, "video"),
 		Lang:       lang,
+		Terminal:   *terminal,
 		ConfigPath: cfgPath,
 		Input:      stdin,
 		Output:     stdout,
