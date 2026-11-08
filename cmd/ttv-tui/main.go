@@ -103,7 +103,7 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 	rest := fs.Args()
 	if len(rest) > 0 {
 		if rest[0] == "doctor" {
-			return runDoctorSubcommand(rest[1:], resolvedLang, cfgPath, stdout, stderr)
+			return runDoctorSubcommand(rest[1:], resolvedLang, cfgPath, stdin, stdout, stderr)
 		}
 		if rest[0] == "login" {
 			return runLoginSubcommand(rest[1:], lang, importSrc, stdin, stdout, stderr, baseLoginOpts, cfg)
@@ -119,6 +119,7 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 
 	if err := app.Run(app.Options{
 		Video:      video,
+		VideoSet:   flagGiven(fs, "video"),
 		Lang:       lang,
 		ConfigPath: cfgPath,
 		Input:      stdin,
@@ -132,6 +133,13 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 		return app.ExitCode(err)
 	}
 	return 0
+}
+
+// flagGiven tells a flag passed empty from one left out, which the value cannot.
+func flagGiven(fs *flag.FlagSet, name string) bool {
+	given := false
+	fs.Visit(func(f *flag.Flag) { given = given || f.Name == name })
+	return given
 }
 
 func runLoginSubcommand(
@@ -224,7 +232,7 @@ func runLoginSubcommand(
 	return 0
 }
 
-func runDoctorSubcommand(args []string, rootLang, configPath string, stdout, stderr io.Writer) int {
+func runDoctorSubcommand(args []string, rootLang, configPath string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cat, _ := i18n.New(i18n.Resolve(findLangFlag(args), rootLang, i18n.EnvLocale()))
 	fs := flag.NewFlagSet("ttv-tui doctor", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -241,5 +249,10 @@ func runDoctorSubcommand(args []string, rootLang, configPath string, stdout, std
 		fs.Usage()
 		return 2
 	}
-	return doctor.Run(stdout, doctor.Options{Version: version, Lang: lang, ConfigPath: configPath})
+	return doctor.Run(stdout, doctor.Options{
+		Version:    version,
+		Lang:       lang,
+		ConfigPath: configPath,
+		Terminal:   app.TerminalProbe(stdin, stdout),
+	})
 }

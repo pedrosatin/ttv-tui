@@ -19,6 +19,8 @@ func TestDetectSixel(t *testing.T) {
 		{"no mpv vo", "\x1b[?62;4c", "gpu GPU output\n", "video.no_mpv", false},
 		{"not substring", "\x1b[?62;4c", "gpu not sixel\n", "video.no_mpv", false},
 		{"mpv failed", "\x1b[?62;4c", "sixel output", "video.no_mpv", true},
+		{"neither side", "\x1b[?62;22c", "gpu GPU output\n", "video.no_both", false},
+		{"silent terminal, mpv failed", "", "sixel output", "video.no_both", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			probe := SixelProbe{
@@ -38,7 +40,10 @@ func TestDetectSixel(t *testing.T) {
 			}
 		})
 	}
-	if got := DetectSixel(context.Background(), SixelProbe{Terminal: func(context.Context) ([]byte, error) { return nil, context.DeadlineExceeded }}); got != "video.no_terminal" {
+	if got := DetectSixel(context.Background(), SixelProbe{
+		Terminal: func(context.Context) ([]byte, error) { return nil, context.DeadlineExceeded },
+		Command:  func(context.Context, string, ...string) ([]byte, error) { return []byte("sixel output"), nil },
+	}); got != "video.no_terminal" {
 		t.Fatal(got)
 	}
 }

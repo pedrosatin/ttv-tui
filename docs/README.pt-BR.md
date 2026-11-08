@@ -248,9 +248,11 @@ Adaptação à largura do terminal:
 
 ## Vídeo embutido experimental
 
-`ttv-tui --video=sixel` acrescenta um layout que desenha o vídeo no terminal com uma faixa de chat. Ele vem desligado, e todos os outros layouts continuam com a janela do `mpv`. O modo embutido é experimental e ainda não foi verificado visualmente em todos os terminais.
+Definir `video = "sixel"` no `config.toml` acrescenta um layout que desenha o vídeo no terminal com uma faixa de chat. Ele vem desligado, e todos os outros layouts continuam com a janela do `mpv`. O modo embutido é experimental e ainda não foi verificado visualmente em todos os terminais.
 
-- **Requisitos.** Um terminal com sixel e um `mpv` com a saída de vídeo `sixel`. Os dois são verificados ao iniciar. Se faltar algum, o app funciona como sempre e `Ctrl+W` explica o motivo.
+A chave de config vale também para o atalho de desktop, que abre o `ttv-tui` sem flags. Valor inválido conta como desligado e o app abre normalmente. Como alternativa avançada, `--video=sixel` liga o modo em uma execução e `--video=` desliga em uma execução; a flag vence o config.
+
+- **Requisitos.** Um terminal com sixel e um `mpv` com a saída de vídeo `sixel`. Os dois são verificados ao iniciar. Se faltar algum, o app funciona como sempre e uma linha no topo da tela diz, desde a abertura e durante toda a sessão, qual lado falhou e o que fazer. `ttv-tui doctor` informa o mesmo sem abrir a TUI.
 - **Como chegar.** Com um canal aberto, pressione `Ctrl+W` até a barra mostrar `layout: vídeo+chat`, o passo depois do foco. Um canal aberto ali desenha no painel. Um canal que já toca na janela do `mpv` fica lá até você pressionar `r`, que o reinicia embutido com o mesmo volume.
 - **Área de vídeo e chat.** O vídeo ocupa toda a área disponível do modo `video`, descontada a faixa de chat e a barra de status. `c` oculta ou mostra o chat sem reiniciar o player; em campos de texto, continua sendo uma letra. No `config.toml`, `video_chat_rows = 8` define a altura da faixa, de 3 a 30 linhas, limitada ao espaço disponível. `video_chat_position = "bottom"` coloca o chat abaixo do vídeo; `"top"` o coloca acima. Valores ausentes ou inválidos usam 8 e `"bottom"`. Com o chat oculto, o vídeo ocupa também as linhas da faixa.
 - **Como trocar de canal.** `Esc` ou `l` abre a lista sobre o vídeo. Os frames param enquanto ela está aberta e o áudio continua. Escolher um canal ou pressionar `Esc` volta ao vídeo. `Ctrl+R` volta às categorias.
@@ -300,9 +302,9 @@ Consulte [SECURITY.md](../SECURITY.md) para instruções de relato privado de vu
 
 ## Solução de problemas
 
-Execute `ttv-tui doctor --lang pt-BR` (ou `--lang en`) antes de relatar uma falha. O comando mostra versão, SO/arquitetura, presença e versão numérica de `streamlink`/`mpv`, diretórios efetivos e token apenas como SIM/NÃO. Não valida o token na rede. Configuração ilegível é informada sem reproduzir o erro ou conteúdo. Dependência ausente ou diretório de estado/configuração ilegível retorna código 1; diagnóstico concluído retorna 0.
+Execute `ttv-tui doctor --lang pt-BR` (ou `--lang en`) antes de relatar uma falha. O comando mostra versão, SO/arquitetura, presença e versão numérica de `streamlink`/`mpv`, diretórios efetivos, token apenas como SIM/NÃO e se o vídeo embutido pode rodar: o terminal atual (`TERM` e o emulador, quando dá para identificar), sixel no terminal (SIM, NÃO ou NÃO TESTADO, com o motivo), sixel no `mpv` (por `--vo=help`), o veredito e o próximo passo quando falta algo, como `abra com foot ttv-tui` ou `instale um mpv com --vo=sixel`. O terminal é consultado com uma pergunta curta que nunca espera mais de um segundo; com stdin ou stdout redirecionado, ele não é consultado e aparece como NÃO TESTADO. As linhas de vídeo embutido não mudam o código de saída. Não valida o token na rede. Configuração ilegível é informada sem reproduzir o erro ou conteúdo. Dependência ausente ou diretório de estado/configuração ilegível retorna código 1; diagnóstico concluído retorna 0.
 
-“Limpo” significa ausência de registros pendentes; “pendente” também pode ser uma instância ativa. O comando não altera registros nem testa IPC anterior, terminal, áudio ou vídeo. Ferramenta encontrada cuja versão falha é informada como versão indisponível.
+“Limpo” significa ausência de registros pendentes; “pendente” também pode ser uma instância ativa. O comando não altera registros nem testa IPC anterior, áudio ou reprodução. Ferramenta encontrada cuja versão falha é informada como versão indisponível.
 
 
 - **`Canal offline: escolha outro canal` (`Channel offline: pick another channel`).** O `streamlink` informou que não há transmissão ativa para aquele canal. Escolha outro canal ao vivo ou pressione `r` para atualizar a lista.

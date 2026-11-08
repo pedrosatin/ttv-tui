@@ -138,6 +138,14 @@ func (m Model) View() (view string) {
 	if m.quitting {
 		return ""
 	}
+	if state := m.videoStateView(); len(state) > 0 {
+		return strings.Join(state, "\n") + "\n" + m.frame()
+	}
+	return m.frame()
+}
+
+// frame draws the panels and the status bar in m.height rows.
+func (m Model) frame() string {
 	status := m.StatusBar()
 	if m.height == 1 {
 		return status
@@ -397,6 +405,8 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 			key = "video.help"
 		}
 		out = append(out, wrapChatRow("  ", m.t(key), maxWidth)...)
+	} else {
+		out = append(out, wrapChatRow("  ", m.t("help.video_enable"), maxWidth)...)
 	}
 	out = append(out, m.renderHelpColorLines(maxWidth)...)
 	if line := m.playerErrorLine(); line != "" {

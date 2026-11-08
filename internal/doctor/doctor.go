@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -22,6 +23,10 @@ type Options struct {
 	Version    string
 	Lang       string
 	ConfigPath string
+	// Terminal asks the terminal for its DA1 reply. Nil means no terminal can be
+	// asked, as with redirected streams, and the terminal side is reported as not
+	// tested.
+	Terminal func(context.Context) ([]byte, error)
 }
 
 // Run prints a read-only report. Missing tools and unreadable configuration or
@@ -74,6 +79,20 @@ func Run(out io.Writer, opts Options) int {
 		code = 1
 	}
 	line("doctor.registry", cat.T(status))
+	// Embedded video is optional: its lines never change the exit code.
+	line("doctor.terminal", describeTerminal(cat))
+	video := checkVideo(context.Background(), videoEnv{
+		goos:       runtime.GOOS,
+		tmux:       os.Getenv("TMUX") != "",
+		terminal:   opts.Terminal,
+		configured: cfg.Video != "",
+	})
+	line("doctor.sixel_terminal", video.terminal.text(cat))
+	line("doctor.sixel_mpv", video.mpv.text(cat))
+	line("doctor.video_mode", cat.T(video.verdict))
+	if len(video.steps) > 0 {
+		line("doctor.next", video.nextStep(cat))
+	}
 	_, _ = fmt.Fprintln(out, cat.T("doctor.scope"))
 	return code
 }

@@ -10,9 +10,28 @@ import (
 
 	"github.com/charmbracelet/x/term"
 	"github.com/muesli/cancelreader"
+	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
+
+// videoBackend picks the backend for this run: the flag when given, even empty,
+// and the config otherwise. The flag is checked before the config is read.
+func videoBackend(opts Options, cfg config.Config) string {
+	if opts.VideoSet || opts.Video != "" {
+		return opts.Video
+	}
+	return cfg.Video
+}
+
+// TerminalProbe returns the DA1 query for doctor, or nil unless both streams are
+// the terminal: a redirected stream would swallow the query or never answer it.
+func TerminalProbe(input io.Reader, output io.Writer) func(context.Context) ([]byte, error) {
+	if !isTerminal(input) || !isTerminal(output) {
+		return nil
+	}
+	return func(ctx context.Context) ([]byte, error) { return queryDA1(ctx, input, output) }
+}
 
 // detectVideo returns the reason the requested backend cannot run, as a catalog
 // key. Empty means it can.

@@ -60,4 +60,11 @@ func TestDoctorWithRedirectedStdinAndStdout(t *testing.T) {
 	if code != 1 || stderr.Len() != 0 || !bytes.Contains(report, []byte("Token configured: NO")) || bytes.Contains(report, []byte("ssh -t")) {
 		t.Fatalf("code=%d stderr=%q report=%q", code, stderr.String(), report)
 	}
+	// No TUI and no query: the report is plain text, whatever the streams are.
+	if bytes.Contains(report, []byte("\x1b")) {
+		t.Fatalf("terminal escapes in a redirected report: %q", report)
+	}
+	if !bytes.Contains(report, []byte("Sixel in terminal: NOT TESTED")) || !bytes.Contains(report, []byte("Next step:")) {
+		t.Fatalf("no sixel diagnostic: %q", report)
+	}
 }

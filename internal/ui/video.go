@@ -40,6 +40,40 @@ func WithVideo(requested bool, reason string) Option {
 	return func(m *Model) { m.videoRequested, m.videoReason = requested, reason }
 }
 
+// videoStateLines is the persistent line for a mode that was asked for and cannot
+// run: which side failed and what to do, wrapped so the way out is never cut. It
+// is a state, not a notice, so it does not compete with the status bar.
+func (m Model) videoStateLines() []string {
+	if !m.videoRequested || m.videoReason == "" {
+		return nil
+	}
+	rows := wrapChatRow("  ! ", m.t(m.videoReason), m.width)
+	for i, row := range rows {
+		rows[i] = styleWarning(row)
+	}
+	return rows
+}
+
+// applyWindowSize records the terminal size. The state line takes its rows here,
+// once, so every height computed from m.height already leaves them out. The bar
+// keeps its row even on a terminal too short for the whole line. The video panel
+// never coexists with the line: it needs a reason-free start.
+func (m *Model) applyWindowSize(width, height int) {
+	m.width, m.height = width, height
+	m.videoStateRows = min(len(m.videoStateLines()), max(height-1, 0))
+	m.height -= m.videoStateRows
+}
+
+// videoStateView returns the rows of the state line the frame has room for. An
+// unsized model has no budget to respect and shows it whole.
+func (m Model) videoStateView() []string {
+	lines := m.videoStateLines()
+	if m.height > 0 {
+		lines = lines[:min(len(lines), m.videoStateRows)]
+	}
+	return lines
+}
+
 // defaultVideoChatRows is the height of the chat strip under the video.
 const defaultVideoChatRows = 8
 

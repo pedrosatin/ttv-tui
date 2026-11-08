@@ -8,8 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/player"
@@ -17,6 +19,16 @@ import (
 
 func TestMain(m *testing.M) {
 	if os.Getenv("TTV_DOCTOR_HELPER") == "1" {
+		if slices.Contains(os.Args[1:], "--vo=help") {
+			if os.Getenv("TTV_DOCTOR_FAKE_VO_WAIT") == "1" {
+				time.Sleep(time.Minute)
+			}
+			fmt.Print(os.Getenv("TTV_DOCTOR_FAKE_VO"))
+			if os.Getenv("TTV_DOCTOR_FAKE_VO_FAIL") == "1" {
+				os.Exit(1)
+			}
+			os.Exit(0)
+		}
 		fmt.Println("mpv v9.8.7")
 		fmt.Println(os.Getenv("TTV_DOCTOR_FAKE_SECRET"))
 		_, _ = fmt.Fprintln(os.Stderr, os.Getenv("TTV_DOCTOR_FAKE_SECRET"))
@@ -31,6 +43,9 @@ func isolate(t *testing.T) string {
 	for _, key := range []string{"XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"} {
 		t.Setenv(key, filepath.Join(base, key))
 	}
+	// Fake tools only print fixtures. Skip the race runtime's one-second exit
+	// grace period so tool startup/exit does not consume the probe deadline.
+	t.Setenv("GORACE", os.Getenv("GORACE")+" atexit_sleep_ms=0")
 	t.Setenv("TTV_DOCTOR_HELPER", "1")
 	return base
 }

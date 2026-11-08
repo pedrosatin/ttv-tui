@@ -20,12 +20,10 @@ type SixelProbe struct {
 func DetectSixel(ctx context.Context, probe SixelProbe) string {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	if probe.Terminal == nil {
-		return "video.no_terminal"
-	}
-	reply, err := probe.Terminal(ctx)
-	if err != nil || !terminalSixel(reply) {
-		return "video.no_terminal"
+	terminal := false
+	if probe.Terminal != nil {
+		reply, err := probe.Terminal(ctx)
+		terminal = err == nil && TerminalHasSixel(reply)
 	}
 	run := probe.Command
 	if run == nil {
@@ -33,17 +31,30 @@ func DetectSixel(ctx context.Context, probe SixelProbe) string {
 			return exec.CommandContext(ctx, name, args...).Output()
 		}
 	}
+	// Both sides are always checked, so the reason names everything to fix.
 	out, err := run(ctx, "mpv", "--no-config", "--vo=help")
-	if err != nil {
+	mpv := err == nil && HasSixelVO(out)
+	switch {
+	case !terminal && !mpv:
+		return "video.no_both"
+	case !terminal:
+		return "video.no_terminal"
+	case !mpv:
 		return "video.no_mpv"
+	default:
+		return ""
 	}
+}
+
+// HasSixelVO reports whether the output of mpv --vo=help lists the sixel output.
+func HasSixelVO(out []byte) bool {
 	for line := range strings.SplitSeq(string(out), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) > 0 && fields[0] == "sixel" {
-			return ""
+			return true
 		}
 	}
-	return "video.no_mpv"
+	return false
 }
 
 var cellReply = regexp.MustCompile(`\x1b\[6;([0-9]{1,4});([0-9]{1,4})t`)
@@ -65,7 +76,8 @@ func ParseCellReply(reply []byte) (width, height int, ok bool) {
 
 var da1Reply = regexp.MustCompile(`\x1b\[\?([0-9]+(?:;[0-9]+)*)c`)
 
-func terminalSixel(reply []byte) bool {
+// TerminalHasSixel reports whether a DA1 reply announces sixel graphics.
+func TerminalHasSixel(reply []byte) bool {
 	for _, match := range da1Reply.FindAllSubmatch([]byte(strings.ReplaceAll(string(reply), "\x9b", "\x1b[")), -1) {
 		// The first parameter identifies the terminal class, not a capability.
 		fields := strings.Split(string(match[1]), ";")

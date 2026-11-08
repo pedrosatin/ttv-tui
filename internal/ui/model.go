@@ -296,6 +296,9 @@ type Model struct {
 	// independently. Layout is not persisted to disk.
 	videoRequested bool
 	videoReason    string
+	// videoStateRows is how many rows the persistent video state line took from
+	// the terminal height at the last resize. See videoStateLines.
+	videoStateRows int
 	videoSurface   VideoSurface
 	videoPublished VideoPanel
 	showVideo      bool
@@ -523,8 +526,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.clearCopyNoticeIfExpired(msg.gen), nil
 
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		m.applyWindowSize(msg.Width, msg.Height)
 		return m, nil
 
 	case CategoriesLoadedMsg:

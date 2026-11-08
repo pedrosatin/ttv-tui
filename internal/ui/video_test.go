@@ -53,11 +53,12 @@ func TestVideoLayoutCycle(t *testing.T) {
 				}
 			}
 			if tc.reason != "" {
-				if !strings.Contains(ansi.Strip(m.StatusBar()), m.t(tc.reason)) {
-					t.Fatalf("missing reason: %s", m.StatusBar())
+				m = resized(t, m, 120, 32)
+				if stateText(m.View(), m.videoStateRows) != noSpaces(m.t(tc.reason)) {
+					t.Fatalf("missing reason: %s", ansi.Strip(m.View()))
 				}
 				m.helpVisible = true
-				if !strings.Contains(strings.Join(m.renderHelpLines(120), "\n"), m.t(tc.reason)) {
+				if !strings.Contains(noSpaces(strings.Join(m.renderHelpLines(120), "")), noSpaces(m.t(tc.reason))) {
 					t.Fatal("help missing reason")
 				}
 			}

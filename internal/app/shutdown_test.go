@@ -111,6 +111,14 @@ func runTUIHelper() int {
 		Source:     emptySource{},
 		Player:     mgr,
 	}
+	if body := os.Getenv("TTV_APP_CONFIG_BODY"); body != "" {
+		if err := os.WriteFile(opts.ConfigPath, []byte(body), 0o600); err != nil {
+			return 3
+		}
+	}
+	if vo, ok := os.LookupEnv("TTV_APP_MPV_VO"); ok {
+		opts.SixelProbe.Command = func(context.Context, string, ...string) ([]byte, error) { return []byte(vo), nil }
+	}
 	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" || os.Getenv("TTV_APP_RECENT_ORDER") == "1" || os.Getenv("TTV_APP_SEARCH_ESC") == "1" || os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" || os.Getenv("TTV_APP_FILTER_SCROLL") == "1" {
 		// Logged-in chat whose dial never reaches the network, so every UI
 		// mode can be entered from the PTY.

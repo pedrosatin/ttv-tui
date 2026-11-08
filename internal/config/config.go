@@ -29,6 +29,9 @@ type Config struct {
 	// or VideoChatTop. Empty means VideoChatBottom. TOML key:
 	// video_chat_position.
 	VideoChatPosition string
+	// Video names the embedded video backend: VideoSixel, or empty for off (the
+	// mpv window only). An unknown value loads as off. TOML key: video.
+	Video string
 }
 
 // Limits and values of the video chat strip keys. A value out of range or
@@ -40,6 +43,8 @@ const (
 
 	VideoChatBottom = "bottom"
 	VideoChatTop    = "top"
+
+	VideoSixel = "sixel"
 )
 
 // normalizeVideoChatRows keeps rows inside the accepted range; anything else is
@@ -60,6 +65,14 @@ func normalizeVideoChatPosition(pos string) string {
 	default:
 		return ""
 	}
+}
+
+// normalizeVideo lowercases and trims backend; an unknown value is "", off.
+func normalizeVideo(backend string) string {
+	if b := strings.ToLower(strings.TrimSpace(backend)); b == VideoSixel {
+		return b
+	}
+	return ""
 }
 
 // VideoChatOnTop reports whether the chat strip of the video mode goes above the
@@ -187,6 +200,7 @@ func SaveTo(path string, cfg Config) error {
 	}
 	cfg.VideoChatRows = normalizeVideoChatRows(cfg.VideoChatRows)
 	cfg.VideoChatPosition = normalizeVideoChatPosition(cfg.VideoChatPosition)
+	cfg.Video = normalizeVideo(cfg.Video)
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -256,6 +270,9 @@ func formatTOML(cfg Config) string {
 	}
 	if pos := normalizeVideoChatPosition(cfg.VideoChatPosition); pos != "" {
 		fmt.Fprintf(&b, "video_chat_position = %s\n", quoteTOML(pos))
+	}
+	if video := normalizeVideo(cfg.Video); video != "" {
+		fmt.Fprintf(&b, "video = %s\n", quoteTOML(video))
 	}
 	return b.String()
 }
@@ -391,6 +408,14 @@ func parseTOML(input string) (Config, error) {
 				val = ""
 			}
 			cfg.VideoChatPosition = normalizeVideoChatPosition(val)
+		case "video", "ui.video", "video.backend":
+			// Same rule as the strip keys: a bad value means off, never a config
+			// that keeps the app from starting.
+			val, err := unquoteTOML(rawVal)
+			if err != nil {
+				val = ""
+			}
+			cfg.Video = normalizeVideo(val)
 		case "window_control", "player.window_control", "ui.window_control":
 			// Removed in v1.6: geometry belongs to the compositor. Accept the
 			// legacy key so old configs keep loading without error.

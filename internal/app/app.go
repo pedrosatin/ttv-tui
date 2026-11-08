@@ -24,7 +24,10 @@ import (
 
 // Options configures a single invocation of the application.
 type Options struct {
+	// Video is the --video flag. It overrides the config when not empty or when
+	// VideoSet says the flag was given empty, which turns the mode off for this run.
 	Video      string
+	VideoSet   bool
 	SixelProbe player.SixelProbe
 	Lang       string
 	ConfigPath string
@@ -73,6 +76,7 @@ func Run(opts Options) error {
 	if cfgPath == "" {
 		cfgPath, _ = config.DefaultPath()
 	}
+	video := videoBackend(opts, cfg)
 
 	resolvedLang := i18n.Resolve(opts.Lang, cfg.Language, i18n.EnvLocale())
 	catalog, err := i18n.New(resolvedLang)
@@ -188,7 +192,7 @@ func Run(opts Options) error {
 	videoReason := ""
 	programOutput := output
 	var videoSurface ui.Option
-	if opts.Video != "" {
+	if video != "" {
 		videoReason = detectVideo(ctx, opts, input, output)
 		if videoReason == "" {
 			var stopVideo func()
@@ -198,7 +202,7 @@ func Run(opts Options) error {
 	}
 
 	uiOpts := []ui.Option{
-		ui.WithVideo(opts.Video != "", videoReason),
+		ui.WithVideo(video != "", videoReason),
 		videoSurface,
 		ui.WithSource(source),
 		ui.WithPlayback(newPlaybackBridge(playerMgr)),

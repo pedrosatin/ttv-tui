@@ -84,11 +84,7 @@ func (m *Model) warnChatHiddenByWidth() bool {
 // would draw the same list or nothing, so the panels stay and the bar says why.
 func (m *Model) keepListWithoutChat() {
 	m.showList, m.showChat = true, true
-	if m.videoRequested && m.videoReason != "" {
-		m.warnStatus(m.t(m.videoReason))
-	} else {
-		m.warnStatus(m.t("layout.no_chat"))
-	}
+	m.warnStatus(m.t("layout.no_chat"))
 	m.normalizeFocusAfterLayout()
 }
 
@@ -108,12 +104,13 @@ func (m *Model) cycleLayout() {
 			m.showList, m.showChat = false, true
 		} else {
 			m.showList, m.showChat = true, true
+			// The step where the mode would come: the moment to say it exists.
+			if !m.videoRequested {
+				m.statusNotice, m.statusNoticeWarns = m.t("video.enable_hint"), false
+			}
 		}
 	default:
 		m.showList, m.showChat = true, true
-	}
-	if m.videoRequested && m.videoReason != "" {
-		m.warnStatus(m.t(m.videoReason))
 	}
 	m.normalizeFocusAfterLayout()
 }

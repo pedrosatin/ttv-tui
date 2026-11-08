@@ -248,9 +248,11 @@ Column width adaptation:
 
 ## Experimental embedded video
 
-`ttv-tui --video=sixel` adds a layout that draws the video in the terminal with a chat strip. It is off by default, and every other layout keeps the `mpv` window. The embedded mode is experimental and has not been visually verified in every terminal.
+Setting `video = "sixel"` in `config.toml` adds a layout that draws the video in the terminal with a chat strip. It is off by default, and every other layout keeps the `mpv` window. The embedded mode is experimental and has not been visually verified in every terminal.
 
-- **Requirements.** A terminal with sixel support and an `mpv` with the `sixel` video output. Both are checked at startup. If either is missing, the app runs as usual and `Ctrl+W` says why.
+The config key works from the desktop shortcut too, which starts `ttv-tui` with no flags. An invalid value counts as off and the app starts normally. As an advanced alternative, `--video=sixel` turns the mode on for one run and `--video=` turns it off for one run; the flag wins over the config.
+
+- **Requirements.** A terminal with sixel support and an `mpv` with the `sixel` video output. Both are checked at startup. If either is missing, the app runs as usual and a line at the top of the screen says, from the opening and for the whole session, which side failed and what to do. `ttv-tui doctor` reports the same without opening the TUI.
 - **Getting there.** With a channel open, press `Ctrl+W` until the status bar shows `layout: video+chat`, the step after focus. A channel opened there draws in the panel. One already playing in the `mpv` window stays there until you press `r`, which restarts it embedded at the same volume.
 - **Video and chat area.** Video uses all available space in `video` mode, minus the chat strip and status bar. `c` hides or shows the chat without restarting the player; in text fields, it still types a letter. In `config.toml`, `video_chat_rows = 8` sets the strip height, from 3 to 30 lines, capped by the available space. `video_chat_position = "bottom"` puts chat below the video; `"top"` puts it above. Missing or invalid values use 8 and `"bottom"`. With chat hidden, video also uses the strip rows.
 - **Choosing another channel.** `Esc` or `l` opens the list over the video. Frames stop while it is open and the audio goes on. Choosing a channel or pressing `Esc` returns to the video. `Ctrl+R` goes back to the categories.
@@ -300,9 +302,9 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting and revocation instru
 
 ## Troubleshooting
 
-Run `ttv-tui doctor --lang en` (or `--lang pt-BR`) before reporting a failure. It shows app version, OS/architecture, presence and numeric version of `streamlink`/`mpv`, effective directories and token presence as YES/NO only. It does not validate the token over the network. Unreadable configuration is reported without echoing its error or contents. Missing dependencies or unreadable state/configuration return exit code 1; a completed diagnostic returns 0.
+Run `ttv-tui doctor --lang en` (or `--lang pt-BR`) before reporting a failure. It shows app version, OS/architecture, presence and numeric version of `streamlink`/`mpv`, effective directories, token presence as YES/NO only, and whether embedded video can run: the current terminal (`TERM`, plus the emulator when it can be named), sixel in the terminal (YES, NO or NOT TESTED, with the reason), sixel in `mpv` (from `--vo=help`), the verdict, and the next step when something is missing, such as `open with foot ttv-tui` or `install an mpv with --vo=sixel`. The terminal is asked with a short query and never waits more than a second; with stdin or stdout redirected it is not asked and shows as NOT TESTED. The embedded video lines do not change the exit code. It does not validate the token over the network. Unreadable configuration is reported without echoing its error or contents. Missing dependencies or unreadable state/configuration return exit code 1; a completed diagnostic returns 0.
 
-“Clean” means no pending records; “pending” can also mean an active instance. The command does not modify records or test past IPC, terminal, audio or video. A tool found whose version probe fails is reported as version unavailable.
+“Clean” means no pending records; “pending” can also mean an active instance. The command does not modify records or test past IPC, audio or playback. A tool found whose version probe fails is reported as version unavailable.
 
 
 - **`Channel offline: pick another channel`.** `streamlink` reported no playable streams for that login. Select another live channel or press `r` to refresh the channel list.
