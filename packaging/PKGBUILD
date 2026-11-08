@@ -7,7 +7,7 @@
 # com os hashes SHA-256 do arquivo checksums.txt publicado no release do GitHub.
 
 pkgname=ttv-tui-bin
-pkgver=0.4.1
+pkgver=0.5.0
 pkgrel=1
 pkgdesc="Twitch no terminal: navegue por categorias, assista canais e converse no chat"
 arch=('x86_64' 'aarch64')
@@ -24,8 +24,8 @@ conflicts=('ttv-tui')
 source_x86_64=("${url}/releases/download/v${pkgver}/ttv-tui_${pkgver}_linux_amd64.tar.gz")
 source_aarch64=("${url}/releases/download/v${pkgver}/ttv-tui_${pkgver}_linux_arm64.tar.gz")
 
-sha256sums_x86_64=('d7b0be3e58f93f85bb061ae71df52219ef5a01b2cc9e586f5fd1744a85533047')
-sha256sums_aarch64=('de1dd1a50fcf9c23f569a10ce3ed02ebebcd676b6e107097308714b854058fd6')
+sha256sums_x86_64=('5938b1ee01f039b9ce396486274c90b7afc52269d105b22e0d36ec191ee5b507')
+sha256sums_aarch64=('326b7938a2aba1a9ef33b468f8ef0e33c257cf0a0b844d0b9bacfb2e2dc801a3')
 
 package() {
   install -Dm755 "${srcdir}/ttv-tui" "${pkgdir}/usr/bin/ttv-tui"
