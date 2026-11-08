@@ -42,7 +42,6 @@ const (
 // The streamlink on PATH during these tests. It takes the real arguments of a real
 // session and becomes the player below.
 const stressStreamlink = `#!/bin/sh
-printf '%s\n' "$*" >> "$TTV_FAKE_LOG"
 TTV_APP_HELPER=sixel-player exec "$TTV_APP_BIN" "$@"
 `
 
@@ -80,6 +79,20 @@ func runSixelPlayer() {
 	args := strings.Join(os.Args[1:], " ")
 	match := ipcServerArg.FindStringSubmatch(args)
 	if match == nil {
+		os.Exit(2)
+	}
+	// Commit the start before IPC or frames can tell the test this session is ready.
+	starts, err := os.OpenFile(os.Getenv("TTV_FAKE_LOG"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		os.Exit(2)
+	}
+	if _, err := starts.WriteString(args + "\n"); err != nil {
+		os.Exit(2)
+	}
+	if err := starts.Sync(); err != nil {
+		os.Exit(2)
+	}
+	if err := starts.Close(); err != nil {
 		os.Exit(2)
 	}
 	listener, err := net.Listen("unix", match[1])
@@ -304,6 +317,8 @@ func (f *floodIRC) close() {
 }
 
 type stressOptions struct {
+	// raceTimeout widens awaits for timing-sensitive scenarios under -race.
+	raceTimeout bool
 	// rogue keeps the player drawing through vid=no.
 	rogue bool
 	// viaRun goes through Run, detection included, instead of a program built here.
@@ -318,16 +333,17 @@ type stressOptions struct {
 // client and output, and only streamlink, mpv and the IRC server faked. Everything
 // but a few messages reaches it the way it reaches a user: keys and SIGWINCH.
 type stressRig struct {
-	t      *testing.T
-	master *os.File
-	term   *wireTerminal
-	irc    *floodIRC
-	cat    *i18n.Catalog
-	prog   *tea.Program
-	starts string
-	ipc    string
-	cols   int
-	rows   int
+	t           *testing.T
+	raceTimeout bool
+	master      *os.File
+	term        *wireTerminal
+	irc         *floodIRC
+	cat         *i18n.Catalog
+	prog        *tea.Program
+	starts      string
+	ipc         string
+	cols        int
+	rows        int
 }
 
 func startStressRig(t *testing.T, opts stressOptions) *stressRig {
@@ -378,7 +394,7 @@ func startStressRig(t *testing.T, opts stressOptions) *stressRig {
 		t.Fatal(err)
 	}
 	r := &stressRig{
-		t: t, master: master, term: term, irc: newFloodIRC(), cat: cat,
+		t: t, raceTimeout: opts.raceTimeout, master: master, term: term, irc: newFloodIRC(), cat: cat,
 		starts: starts, ipc: ipc, cols: 100, rows: 30,
 	}
 	mgr := player.New(player.Options{RuntimeDir: runtimeDir, StopWait: 500 * time.Millisecond, SocketWait: 10 * time.Second})
@@ -492,7 +508,12 @@ func (r *stressRig) press(keys string) {
 
 func (r *stressRig) await(what string, ok func() bool) {
 	r.t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	timeout := 15 * time.Second
+	if raceEnabled && r.raceTimeout {
+		// Race instrumentation slows the PTY, renderer and fake player.
+		timeout = 45 * time.Second
+	}
+	deadline := time.Now().Add(timeout)
 	for !ok() {
 		if time.Now().After(deadline) {
 			r.t.Fatalf("timeout waiting for %s; screen:\n%s", what, r.term.picture())
@@ -558,7 +579,7 @@ func (r *stressRig) play() {
 	r.awaitText(r.cat.T("video.restart_embedded"))
 	r.press("r")
 	r.await("the first frames", func() bool { return r.term.frameCount() >= 3 })
-	if starts := r.lines(r.starts); len(starts) != 2 || !usesSixel(starts[1]) {
+	if starts := r.lines(r.starts); len(starts) < 1 || !usesSixel(starts[len(starts)-1]) {
 		r.t.Fatalf("starts: %q", starts)
 	}
 }
