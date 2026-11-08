@@ -67,13 +67,31 @@ func readPTY(master *os.File, buf []byte, deadline time.Time) (int, error) {
 	}
 }
 
+// closePTYAfter waits beyond readPTYFull's two-second deadline before closing
+// the files: raw reads call Fd, which must not overlap os.File.Close.
+func closePTYAfter(t *testing.T, master, slave *os.File, done <-chan struct{}) {
+	t.Helper()
+	t.Cleanup(func() {
+		select {
+		case <-done:
+			_ = master.Close()
+			_ = slave.Close()
+		case <-time.After(3 * time.Second):
+			// Leave the files open rather than race a reader that failed to stop.
+			t.Error("fake terminal did not stop before PTY cleanup")
+		}
+	})
+}
+
 func TestQueryDA1(t *testing.T) {
 	for _, reply := range []string{"\x1b[?62;4;22c", "\x1b[?62;22c", ""} {
 		t.Run(reply, func(t *testing.T) {
 			master, slave := openPTY(t)
-			defer func() { _ = master.Close(); _ = slave.Close() }()
 			done := make(chan error, 1)
+			stopped := make(chan struct{})
+			closePTYAfter(t, master, slave, stopped)
 			go func() {
+				defer close(stopped)
 				query := make([]byte, 3)
 				_, err := readPTYFull(master, query)
 				if err == nil && string(query) != "\x1b[c" {
@@ -115,17 +133,21 @@ func TestQueryDA1(t *testing.T) {
 
 // fakeTerminal reads the query off the far end of a PTY and answers it in pieces,
 // as a real terminal may. It reports the query it saw.
-func fakeTerminal(master *os.File, reply string) <-chan string {
+func fakeTerminal(t *testing.T, master, slave *os.File, reply string) <-chan string {
+	t.Helper()
 	seen := make(chan string, 1)
+	done := make(chan struct{})
+	closePTYAfter(t, master, slave, done)
 	go func() {
+		defer close(done)
 		query := make([]byte, len("\x1b[16t\x1b[c"))
 		n, _ := readPTYFull(master, query)
-		seen <- string(query[:n])
 		for _, b := range []byte(reply) {
 			if _, err := master.Write([]byte{b}); err != nil {
-				return
+				break
 			}
 		}
+		seen <- string(query[:n])
 	}()
 	return seen
 }
@@ -147,8 +169,7 @@ func TestProbeCellFollowsTheTerminalAnswer(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			master, slave := openPTY(t)
-			defer func() { _ = master.Close(); _ = slave.Close() }()
-			seen := fakeTerminal(master, tc.reply)
+			seen := fakeTerminal(t, master, slave, tc.reply)
 			begin := time.Now()
 			cell := probeCell(context.Background(), slave, slave)
 			if time.Since(begin) > 2*time.Second {
@@ -175,8 +196,7 @@ func TestProbeCellFollowsTheTerminalAnswer(t *testing.T) {
 // DA1 proves the terminal is done, so one that ignores the query costs no timeout.
 func TestQueryCellEndsOnTheDA1Reply(t *testing.T) {
 	master, slave := openPTY(t)
-	defer func() { _ = master.Close(); _ = slave.Close() }()
-	fakeTerminal(master, da1Answer)
+	fakeTerminal(t, master, slave, da1Answer)
 	if reply, err := queryCell(context.Background(), slave, slave); err != nil || string(reply) != da1Answer {
 		t.Fatalf("reply %q err=%v", reply, err)
 	}
@@ -214,8 +234,7 @@ func TestRealCellOf6x12NeverReachesTheChat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			master, slave := openPTY(t)
-			defer func() { _ = master.Close(); _ = slave.Close() }()
-			fakeTerminal(master, reply)
+			fakeTerminal(t, master, slave, reply)
 			cell := probeCell(context.Background(), slave, slave)
 			sixel := player.NewSixelOutput(io.Discard, player.SixelOptions{Cell: cell})
 			defer func() { _ = sixel.Close() }()
