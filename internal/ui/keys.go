@@ -39,6 +39,8 @@ type keyMap struct {
 	CycleLayout   key.Binding
 	ToggleList    key.Binding
 	ToggleChat    key.Binding
+	// ToggleVideoChat shows or hides the chat strip, only in the video mode.
+	ToggleVideoChat key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -142,6 +144,11 @@ func defaultKeyMap() keyMap {
 		),
 		ToggleChat: key.NewBinding(
 			key.WithKeys("ctrl+l"),
+		),
+		// c (chat) is free in every other screen. It only acts on the video body,
+		// and an input on screen keeps it as text.
+		ToggleVideoChat: key.NewBinding(
+			key.WithKeys("c"),
 		),
 	}
 }
@@ -269,6 +276,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if key.Matches(msg, m.keys.ToggleChat) {
 		m.toggleChatPanel()
+		return m, nil
+	}
+
+	if m.videoChatKey(msg) {
+		m.toggleVideoChat()
 		return m, nil
 	}
 
@@ -532,6 +544,10 @@ func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {
+	if m.videoChatHidden() {
+		m.warnStatus(m.t("video.chat_off_key"))
+		return m, nil
+	}
 	if m.warnChatHiddenByWidth() || !m.showChat || m.chatHiddenByWidth() {
 		return m, nil
 	}

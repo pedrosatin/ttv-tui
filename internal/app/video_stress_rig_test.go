@@ -536,8 +536,8 @@ const (
 )
 
 // panelRows is the height of the panel in a terminal of this height: the rule of
-// ui.videoRows, from outside.
-func panelRows(height int) int { return min(18, max(height-1-6, 0)) }
+// ui.videoRows, from outside, with the chat strip on at its default 8 rows.
+func panelRows(height int) int { return max(height-1-8, 0) }
 
 // play takes the path of a user: channel in the window, the mode, then r.
 func (r *stressRig) play() {

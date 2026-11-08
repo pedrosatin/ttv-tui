@@ -43,7 +43,7 @@ func TestVideoLayoutCycle(t *testing.T) {
 					if mode == LayoutVideo {
 						plain := ansi.Strip(m.View())
 						lines := strings.Split(plain, "\n")
-						if !strings.Contains(lines[0], m.t("video.placeholder")) || !strings.Contains(lines[18], "Chat") || m.listVisible() || m.Focus() != FocusChat {
+						if !strings.Contains(lines[0], m.t("video.placeholder")) || !strings.Contains(lines[32-1-defaultVideoChatRows], "Chat") || m.listVisible() || m.Focus() != FocusChat {
 							t.Fatalf("invalid video layout:\n%s", plain)
 						}
 						if len(lines) != 32 {
@@ -173,12 +173,12 @@ func clearsScreen(cmd tea.Cmd) bool {
 
 func TestVideoPanelGeometryFollowsTheWindow(t *testing.T) {
 	m, surface := playingVideoModel(t)
-	want := VideoPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true, Still: true}
+	want := VideoPanel{Row: 1, Col: 1, Rows: 32 - 1 - defaultVideoChatRows, Cols: 120, Visible: true, Playing: true, Still: true}
 	if got := surface.last(t); got != want {
 		t.Fatalf("panel = %+v", got)
 	}
 	m = applyMsg(t, m, tea.WindowSizeMsg{Width: 90, Height: 15})
-	want.Rows, want.Cols = 8, 90
+	want.Rows, want.Cols = 15-1-defaultVideoChatRows, 90
 	if got := surface.last(t); got != want {
 		t.Fatalf("panel after resize = %+v", got)
 	}
@@ -480,7 +480,7 @@ func TestReturningToTheLayoutNeedsNoRestart(t *testing.T) {
 	m, surface := playingVideoModel(t)
 	m = sendLayoutKey(t, m, tea.KeyCtrlW)
 	m = enterVideoLayout(t, m)
-	want := VideoPanel{Row: 1, Col: 1, Rows: 18, Cols: 120, Visible: true, Playing: true, Still: true}
+	want := VideoPanel{Row: 1, Col: 1, Rows: 32 - 1 - defaultVideoChatRows, Cols: 120, Visible: true, Playing: true, Still: true}
 	if got := surface.last(t); got != want {
 		t.Fatalf("panel = %+v", got)
 	}

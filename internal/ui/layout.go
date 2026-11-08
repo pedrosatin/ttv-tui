@@ -36,6 +36,9 @@ func (m Model) LayoutMode() LayoutMode {
 func (m Model) layoutModeLabel(mode LayoutMode) string {
 	switch mode {
 	case LayoutVideo:
+		if m.videoChatOff {
+			return m.t("layout.mode.video_nochat")
+		}
 		return m.t("layout.mode.video")
 	case LayoutSplit:
 		return m.t("layout.mode.split")
@@ -58,7 +61,7 @@ func (m Model) listVisible() bool {
 // chatColumnVisible reports whether the chat panel occupies a column (layout
 // wants it, a chat session exists, and the terminal is wide enough).
 func (m Model) chatColumnVisible() bool {
-	return m.showChat && m.hasChatPanel() && !m.chatHiddenByWidth()
+	return m.showChat && m.hasChatPanel() && !m.chatHiddenByWidth() && !m.videoChatHidden()
 }
 
 // shouldShowNarrowChatNotice is true only when width hides chat. Hiding chat

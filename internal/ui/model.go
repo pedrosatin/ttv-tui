@@ -301,6 +301,12 @@ type Model struct {
 	showVideo      bool
 	// videoListOpen is the list opened over the panel. It implies showVideo.
 	videoListOpen bool
+	// videoChatOff hides the chat strip of the video mode, so the panel takes
+	// every row. It outlives leaving the mode, for the rest of the session.
+	videoChatOff bool
+	// videoChatRows is the height of the chat strip; zero means
+	// defaultVideoChatRows.
+	videoChatRows int
 	showList      bool
 	showChat      bool
 	width         int

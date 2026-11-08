@@ -40,7 +40,53 @@ func WithVideo(requested bool, reason string) Option {
 	return func(m *Model) { m.videoRequested, m.videoReason = requested, reason }
 }
 
-func (m Model) videoRows(available int) int { return min(18, max(available-6, 0)) }
+// defaultVideoChatRows is the height of the chat strip under the video.
+const defaultVideoChatRows = 8
+
+// WithVideoChatRows sets the height of the chat strip in the video mode. Zero or
+// less keeps the current height.
+func WithVideoChatRows(rows int) Option {
+	return func(m *Model) {
+		if rows > 0 {
+			m.videoChatRows = rows
+		}
+	}
+}
+
+// videoChatStripRows is how many of the mode's available rows go to the chat: the
+// configured height, never more than there is, and none while the chat is off.
+func (m Model) videoChatStripRows(available int) int {
+	if m.videoChatOff {
+		return 0
+	}
+	rows := m.videoChatRows
+	if rows <= 0 {
+		rows = defaultVideoChatRows
+	}
+	return min(rows, max(available, 0))
+}
+
+// videoRows is the panel's height: every row the chat strip leaves. The strip is
+// opaque and full width under the panel, so the two never share a line.
+func (m Model) videoRows(available int) int {
+	return max(available-m.videoChatStripRows(available), 0)
+}
+
+// videoChatHidden reports whether the screen is the video body with its chat off.
+func (m Model) videoChatHidden() bool { return m.videoChatOff && m.videoBodyShown() }
+
+// videoChatKey reports whether msg shows or hides the chat strip. Only the video
+// body has one, and an input on screen keeps the letter.
+func (m Model) videoChatKey(msg tea.KeyMsg) bool {
+	return m.videoBodyShown() && !m.typingText() && key.Matches(msg, m.keys.ToggleVideoChat)
+}
+
+// toggleVideoChat shows or hides the strip. The panel follows in syncVideoPanel,
+// and the output asks the player for the new frame size: nothing restarts.
+func (m *Model) toggleVideoChat() {
+	m.videoChatOff = !m.videoChatOff
+	m.normalizeFocusAfterLayout()
+}
 
 // videoBodyShown reports whether the screen is the panel above the chat. The list
 // opened over it swaps that for the ordinary list and chat.
@@ -158,6 +204,10 @@ func (m Model) syncVideoPanel(before Model, cmd tea.Cmd) (Model, tea.Cmd) {
 	}
 	if before.videoImageOnScreen() && !m.videoImageOnScreen() {
 		cmd = tea.Batch(cmd, tea.ClearScreen)
+	} else if before.videoImageOnScreen() && before.videoChatOff != m.videoChatOff {
+		// The image moves inside a panel of another height, and the rows it
+		// leaves may stay blank, which the renderer would not repaint.
+		cmd = tea.Batch(cmd, tea.ClearScreen)
 	}
 	return m, cmd
 }
@@ -176,7 +226,9 @@ func (m Model) videoView(available int, overlay []string, status string) string 
 	if rows > 0 && !m.videoImageOnScreen() {
 		lines[0] = m.videoPanelText()
 	}
-	lines = append(lines, m.renderChatLines(available-rows, m.width)...)
+	if strip := available - rows; strip > 0 {
+		lines = append(lines, m.renderChatLines(strip, m.width)...)
+	}
 	for len(lines) < available {
 		lines = append(lines, "")
 	}

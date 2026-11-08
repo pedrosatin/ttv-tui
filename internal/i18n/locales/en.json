@@ -296,8 +296,10 @@
   "video.placeholder": "Experimental embedded video: no picture right now · Esc opens the list",
   "video.restart_embedded": "Video is in the mpv window: r restarts it embedded · Esc opens the list",
   "video.audio_only": "Audio only: press r to bring the mpv window back",
-  "video.help": "Experimental video+chat: Ctrl+W after focus mode · Esc or l opens the list over the video, Esc closes it",
+  "video.help": "Experimental video+chat: Ctrl+W after focus mode · c shows or hides the chat under the video · Esc or l opens the list over the video, Esc closes it",
   "video.list_open": "List over the video: Esc goes back",
   "video.hidden_list_key": "List hidden: Esc or l to open it over the video",
-  "layout.mode.video": "video+chat"
+  "layout.mode.video": "video+chat",
+  "layout.mode.video_nochat": "video, chat off",
+  "video.chat_off_key": "Chat off: c shows it"
 }

@@ -296,8 +296,10 @@
   "video.placeholder": "Vídeo embutido experimental: sem imagem no momento · Esc abre a lista",
   "video.restart_embedded": "Vídeo na janela do mpv: r reinicia no modo embutido · Esc abre a lista",
   "video.audio_only": "Só áudio: pressione r para trazer a janela do mpv de volta",
-  "video.help": "Vídeo+chat experimental: Ctrl+W após o modo foco · Esc ou l abre a lista sobre o vídeo, Esc fecha",
+  "video.help": "Vídeo+chat experimental: Ctrl+W após o modo foco · c mostra ou esconde o chat sob o vídeo · Esc ou l abre a lista sobre o vídeo, Esc fecha",
   "video.list_open": "Lista sobre o vídeo: Esc volta",
   "video.hidden_list_key": "Lista oculta: Esc ou l abre sobre o vídeo",
-  "layout.mode.video": "vídeo+chat"
+  "layout.mode.video": "vídeo+chat",
+  "layout.mode.video_nochat": "vídeo, chat desligado",
+  "video.chat_off_key": "Chat desligado: c mostra"
 }
