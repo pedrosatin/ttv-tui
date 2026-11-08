@@ -184,8 +184,8 @@ func TestReliabilityHealthySimulatedDay(t *testing.T) {
 }
 
 func TestReliabilityBlockedWriteAndNoReplay(t *testing.T) {
+	before := runtime.NumGoroutine()
 	synctest.Test(t, func(t *testing.T) {
-		before := runtime.NumGoroutine()
 		var dials atomic.Int64
 		release := make(chan struct{})
 		mgr := New(Options{Token: "test", PingInterval: time.Second, PongTimeout: time.Second, SendTimeout: time.Second,
@@ -247,8 +247,18 @@ func TestReliabilityBlockedWriteAndNoReplay(t *testing.T) {
 		mgr.Close()
 		close(release)
 		synctest.Wait()
-		if after := runtime.NumGoroutine(); after > before {
-			t.Fatalf("goroutines before %d after %d", before, after)
-		}
 	})
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		after := runtime.NumGoroutine()
+		if after <= before {
+			return
+		}
+		if time.Now().After(deadline) {
+			buf := make([]byte, 1<<20)
+			n := runtime.Stack(buf, true)
+			t.Fatalf("goroutines before %d after %d; all stacks:\n%s", before, after, buf[:n])
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }
