@@ -9,8 +9,43 @@ permissions:
   contents: write
 
 jobs:
+  # The window links SDL3 and libmpv, so it builds where those are packaged.
+  window:
+    name: Window binary
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd mesa tar gzip
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: window/go.mod
+          cache: false
+
+      - name: Build
+        working-directory: window
+        run: go build -buildvcs=false -trimpath -ldflags "-s -w" -o ttv-tui-window .
+
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist-window
+          tar -czf "dist-window/ttv-tui-window_${VERSION}_linux_amd64.tar.gz" -C window ttv-tui-window
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: window
+          path: dist-window/
+
   goreleaser:
     name: Release
+    needs: window
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,6 +58,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Download window binary
+        uses: actions/download-artifact@v4
+        with:
+          name: window
+          path: dist-window
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6.1.0

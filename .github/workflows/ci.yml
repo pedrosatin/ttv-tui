@@ -39,6 +39,33 @@ jobs:
       - name: Run race detector on concurrent packages
         run: go test -race -count=1 ./internal/player ./internal/chat ./internal/ui ./internal/store
 
+  # The window is its own module: it links SDL3 and libmpv, which only some
+  # systems package, so the rest of the build never depends on it.
+  window:
+    name: Window (Arch)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 15
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd mesa
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: window/go.mod
+          cache: false
+
+      - name: Build, vet and test
+        working-directory: window
+        run: |
+          go build -buildvcs=false -o /tmp/ttv-tui-window .
+          go vet ./...
+          go test -buildvcs=false ./...
+
   # Proves on every push that the app and its tests compile on each OS, and that
   # the suite runs there. The suite needs neither mpv nor streamlink; only the
   # Windows handshake step below uses a real mpv.

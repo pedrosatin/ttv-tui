@@ -10,7 +10,7 @@ Comment=Browse live Twitch categories and channels, watch streams via streamlink
 #   - Or invoke your terminal emulator directly, e.g.:
 #     Exec=alacritty --class ttv-tui -e ttv-tui
 #     Exec=kitty --app-id ttv-tui ttv-tui
-Exec=xdg-terminal-exec ttv-tui
+Exec=sh -c "ttv-tui-window --probe 2>/dev/null && exec ttv-tui-window || exec xdg-terminal-exec ttv-tui"
 Icon=ttv-tui
 Terminal=false
 Categories=AudioVideo;Player;

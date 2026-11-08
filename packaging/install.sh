@@ -247,6 +247,23 @@ mkdir -p "$bin_dir"
 info "Instalando binário em ${bin_target}..."
 install -m 0755 "${tmp_dir}/ttv-tui" "$bin_target"
 
+# A janela (SDL3 + libmpv) só existe para Linux amd64; sem ela o app fica no terminal.
+if [[ "$os" == "linux" && "$arch" == "amd64" ]]; then
+  window_tarball="ttv-tui-window_${version}_${os}_${arch}.tar.gz"
+  window_line="$(awk -v file="$window_tarball" '$2 == file || $2 == "*" file { print; exit }' "${tmp_dir}/checksums.txt")"
+  if [[ -n "$window_line" ]] && curl -fsSL -o "${tmp_dir}/${window_tarball}" "${release_base_url}/${window_tarball}"; then
+    (
+      cd "$tmp_dir"
+      printf '%s\n' "$window_line" | "${checksum_cmd[@]}" -c -
+    )
+    tar -xzf "${tmp_dir}/${window_tarball}" -C "$tmp_dir" ttv-tui-window
+    info "Instalando a janela em ${bin_dir}/ttv-tui-window..."
+    install -m 0755 "${tmp_dir}/ttv-tui-window" "${bin_dir}/ttv-tui-window"
+  else
+    info "Janela indisponível nesta versão; o ttv-tui segue no terminal."
+  fi
+fi
+
 resolve_asset() {
   local tarball_rel="$1"
   local local_path="$2"

@@ -1,6 +1,8 @@
 # binários
 /ttv-tui
 /dist/
+/dist-window/
+/window/ttv-tui-window
 
 # cobertura e artefatos de teste
 *.out

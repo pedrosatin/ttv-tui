@@ -39,6 +39,8 @@ archives:
 
 checksum:
   name_template: "checksums.txt"
+  extra_files:
+    - glob: ./dist-window/*.tar.gz
 
 changelog:
   sort: asc
@@ -55,3 +57,5 @@ release:
     name: ttv-tui
   draft: false
   prerelease: auto
+  extra_files:
+    - glob: ./dist-window/*.tar.gz
