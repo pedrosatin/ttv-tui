@@ -189,7 +189,9 @@ func (m Model) statusParts() statusContent {
 		}
 	case m.videoListOpen:
 		primary = m.t("video.list_open")
-		context = append(context, m.playerStatusBase())
+		if state := m.playerStatusBase(); state != "" {
+			context = append(context, state)
+		}
 		addContext()
 	case m.videoAudioOnly():
 		primary = m.t("video.audio_only")

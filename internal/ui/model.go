@@ -292,8 +292,9 @@ type Model struct {
 	composing                  bool
 	composeDraft               string
 	// showList / showChat are the session layout flags (ticket 02). Both start
-	// true (split). Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag
-	// independently. Layout is not persisted to disk.
+	// true (split) unless the video layout can draw (see openInVideoLayout).
+	// Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag independently.
+	// Layout is not persisted to disk.
 	videoRequested bool
 	videoReason    string
 	// videoStateRows is how many rows the persistent video state line took from
@@ -356,6 +357,7 @@ func New(catalog *i18n.Catalog, opts ...Option) Model {
 	if m.invalidTokenInit {
 		m.authNotice = m.t("auth.token_invalid_notice")
 	}
+	m.openInVideoLayout()
 	return m
 }
 

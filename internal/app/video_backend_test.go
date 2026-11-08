@@ -1,11 +1,14 @@
 package app
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/player"
 )
 
 func TestVideoBackendFlagWinsOverConfig(t *testing.T) {
@@ -28,6 +31,18 @@ func TestVideoBackendFlagWinsOverConfig(t *testing.T) {
 				t.Fatalf("got %q want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// With nothing to draw on there is no surface, so the app opens in the split.
+func TestStartVideoNeedsATerminalFile(t *testing.T) {
+	mgr := player.New(player.Options{RuntimeDir: t.TempDir()})
+	defer mgr.Close()
+	var buf bytes.Buffer
+	out, surface, stop := startVideo(&buf, mgr, nil)
+	defer stop()
+	if surface != nil || out != io.Writer(&buf) {
+		t.Fatalf("surface=%v out=%T", surface != nil, out)
 	}
 }
 

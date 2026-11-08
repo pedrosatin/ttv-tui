@@ -164,6 +164,18 @@ func newVideoRig(t *testing.T, flag bool) *videoRig {
 	return r
 }
 
+// newSplitVideoRig is the mode available but left before any channel, which is how
+// a session comes to be in the mpv window with the terminal supported.
+func newSplitVideoRig(t *testing.T) *videoRig {
+	t.Helper()
+	r := newVideoRig(t, true)
+	r.press(cycleKey, 1)
+	if r.model.LayoutMode() != ui.LayoutSplit {
+		t.Fatalf("layout = %q", r.model.LayoutMode())
+	}
+	return r
+}
+
 func (r *videoRig) send(msg tea.Msg) {
 	r.t.Helper()
 	next, cmd := r.model.Update(msg)
@@ -287,10 +299,11 @@ var (
 	restart  = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
 )
 
-// embeddedRig reaches the state a user reaches: window first, then r in the mode.
+// embeddedRig reaches a panel session the long way: window first, then r in the
+// mode. Opening in the mode has its own tests.
 func embeddedRig(t *testing.T) (*videoRig, *fakeMPV) {
 	t.Helper()
-	r := newVideoRig(t, true)
+	r := newSplitVideoRig(t)
 	r.open("gaules")
 	r.serve(1)
 	r.press(cycleKey, 4)
@@ -299,8 +312,59 @@ func embeddedRig(t *testing.T) (*videoRig, *fakeMPV) {
 	return r, mpv
 }
 
-func TestVideoSplitSessionUsesTheWindow(t *testing.T) {
+// What opening the app with the mode on gives: a channel chosen goes to the panel,
+// with no Ctrl+W, no r and no window.
+func TestVideoFirstChannelOfTheOpeningLayoutIsEmbedded(t *testing.T) {
 	r := newVideoRig(t, true)
+	if r.model.LayoutMode() != ui.LayoutVideo {
+		t.Fatalf("opened in %q", r.model.LayoutMode())
+	}
+	r.open("gaules")
+	r.serve(1)
+	args := r.starts()[0]
+	if !usesSixel(args) {
+		t.Fatalf("first session got no sixel: %s", args)
+	}
+	if strings.LastIndex(args, "--force-window=no") < strings.LastIndex(args, "--force-window=immediate") {
+		t.Fatalf("mpv would open its window: %s", args)
+	}
+	if strings.Contains(args, "--vo-sixel-width=0") || strings.Contains(args, "--vo-sixel-height=0") {
+		t.Fatalf("the panel had no size at the first start: %s", args)
+	}
+	r.await("frames in the panel", func() bool { return r.frames() > 0 })
+	if n := len(r.starts()); n != 1 {
+		t.Fatalf("started %d times: %q", n, r.starts())
+	}
+	if r.model.PlayerWindowNotice() {
+		t.Fatal("announced an mpv window that does not exist")
+	}
+}
+
+func TestVideoLeavingTheOpeningLayoutNeverRestarts(t *testing.T) {
+	r := newVideoRig(t, true)
+	if r.model.LayoutMode() != ui.LayoutVideo {
+		t.Fatalf("opened in %q", r.model.LayoutMode())
+	}
+	r.open("gaules")
+	mpv := r.serve(1)
+	r.await("frames in the panel", func() bool { return r.frames() > 0 })
+
+	r.press(cycleKey, 1)
+	if r.model.LayoutMode() != ui.LayoutSplit {
+		t.Fatalf("layout = %q", r.model.LayoutMode())
+	}
+	r.await("vid=no", func() bool { return mpv.received(`"vid","no"`) })
+	r.settle()
+	if !mpv.alive() || len(r.starts()) != 1 {
+		t.Fatalf("leaving the mode touched the session: alive=%v starts=%q", mpv.alive(), r.starts())
+	}
+	if bar := ansi.Strip(r.model.StatusBar()); !strings.Contains(bar, r.cat.T("video.audio_only")) {
+		t.Fatalf("status bar: %q", bar)
+	}
+}
+
+func TestVideoSplitSessionUsesTheWindow(t *testing.T) {
+	r := newSplitVideoRig(t)
 	r.open("gaules")
 	r.serve(1)
 	args := r.starts()[0]
@@ -314,7 +378,7 @@ func TestVideoSplitSessionUsesTheWindow(t *testing.T) {
 }
 
 func TestVideoChannelOpenedInTheModeIsEmbedded(t *testing.T) {
-	r := newVideoRig(t, true)
+	r := newSplitVideoRig(t)
 	r.open("gaules")
 	r.serve(1)
 	r.press(cycleKey, 4)
@@ -330,7 +394,7 @@ func TestVideoChannelOpenedInTheModeIsEmbedded(t *testing.T) {
 }
 
 func TestVideoEnteringTheModeWarnsAndNeverRestarts(t *testing.T) {
-	r := newVideoRig(t, true)
+	r := newSplitVideoRig(t)
 	r.open("gaules")
 	mpv := r.serve(1)
 	r.press(cycleKey, 4)
@@ -407,7 +471,7 @@ func (r *videoRig) setVolume(mpv *fakeMPV, volume int) {
 }
 
 func TestVideoRestartKeyKeepsTheVolume(t *testing.T) {
-	r := newVideoRig(t, true)
+	r := newSplitVideoRig(t)
 	r.open("gaules")
 	window := r.serve(1)
 	r.setVolume(window, 40)

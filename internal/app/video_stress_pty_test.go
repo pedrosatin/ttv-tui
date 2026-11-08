@@ -407,6 +407,22 @@ func TestVideoStressThroughRun(t *testing.T) {
 	r.awaitPicture()
 }
 
+// The report that started this: with video = "sixel" in the config and a terminal
+// that can draw it, the first channel goes to the panel and no window opens.
+func TestVideoOpensEmbeddedFromTheConfigThroughRun(t *testing.T) {
+	r := startStressRig(t, stressOptions{viaRun: true, videoFromConfig: true, config: "video = \"sixel\"\n"})
+	r.awaitText(r.cat.T("video.active"))
+	r.play()
+	r.awaitPicture()
+	starts := r.lines(r.starts)
+	if len(starts) != 1 {
+		t.Fatalf("starts: %q", starts)
+	}
+	if strings.LastIndex(starts[0], "--force-window=no") < strings.LastIndex(starts[0], "--force-window=immediate") {
+		t.Fatalf("mpv would open its window: %s", starts[0])
+	}
+}
+
 // The config moves the strip: Run reads video_chat_position and video_chat_rows,
 // and the image lands under a strip of that height, on the real wire.
 func TestVideoChatOnTopThroughRun(t *testing.T) {

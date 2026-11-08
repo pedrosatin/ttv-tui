@@ -321,6 +321,7 @@
   "video.no_both": "Embedded video off: neither this terminal nor this mpv has sixel. Install an mpv with --vo=sixel and open with foot ttv-tui (Linux) or in iTerm2 (macOS); details in ttv-tui doctor",
   "video.unsupported_platform": "Embedded video off: Windows is not supported yet. Video stays in the mpv window",
   "video.tmux": "Embedded video off: tmux is not supported yet. Run ttv-tui outside tmux",
+  "video.active": "Embedded video on: pick a channel",
   "video.placeholder": "Experimental embedded video: no picture right now · Esc opens the list",
   "video.restart_embedded": "Video is in the mpv window: r restarts it embedded · Esc opens the list",
   "video.audio_only": "Audio only: press r to bring the mpv window back",

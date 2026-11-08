@@ -148,8 +148,28 @@ func (m *Model) closeVideoList() {
 	m.normalizeFocusAfterLayout()
 }
 
+func (m *Model) enterVideoLayout() {
+	m.showVideo = true
+	m.showList, m.showChat = false, true
+}
+
 func (m *Model) leaveVideoLayout() {
 	m.showVideo, m.videoListOpen = false, false
+}
+
+// openInVideoLayout makes the video layout the first screen when it can draw: asked
+// for, supported, and with a surface, which only a real terminal output provides.
+// The list opens over the panel because nothing plays yet and the mode hides it.
+// Any other start stays in the split.
+func (m *Model) openInVideoLayout() {
+	if !m.videoRequested || m.videoReason != "" || m.videoSurface == nil {
+		return
+	}
+	m.enterVideoLayout()
+	m.openVideoList()
+	if m.statusNotice == "" {
+		m.statusNotice = m.t("video.active")
+	}
 }
 
 // embeddedLayout reports whether playback started now belongs in the panel. The

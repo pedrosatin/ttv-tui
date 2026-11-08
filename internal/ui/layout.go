@@ -82,9 +82,16 @@ func (m *Model) warnChatHiddenByWidth() bool {
 
 // keepListWithoutChat answers a layout key before any chat exists: every mode
 // would draw the same list or nothing, so the panels stay and the bar says why.
+//
+// The video layout is the exception: leaving it does change the screen, so a layout
+// key there goes to the split the channel will then open in.
 func (m *Model) keepListWithoutChat() {
+	leaving := m.showVideo
+	m.leaveVideoLayout()
 	m.showList, m.showChat = true, true
-	m.warnStatus(m.t("layout.no_chat"))
+	if !leaving {
+		m.warnStatus(m.t("layout.no_chat"))
+	}
 	m.normalizeFocusAfterLayout()
 }
 
@@ -100,8 +107,7 @@ func (m *Model) cycleLayout() {
 		m.showList, m.showChat = false, false
 	case LayoutFocus:
 		if m.videoRequested && m.videoReason == "" {
-			m.showVideo = true
-			m.showList, m.showChat = false, true
+			m.enterVideoLayout()
 		} else {
 			m.showList, m.showChat = true, true
 			// The step where the mode would come: the moment to say it exists.

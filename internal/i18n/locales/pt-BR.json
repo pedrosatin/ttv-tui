@@ -321,6 +321,7 @@
   "video.no_both": "Vídeo embutido desligado: nem este terminal nem este mpv têm sixel. Instale um mpv com --vo=sixel e abra com foot ttv-tui (Linux) ou no iTerm2 (macOS); detalhes em ttv-tui doctor",
   "video.unsupported_platform": "Vídeo embutido desligado: Windows ainda sem suporte. O vídeo fica na janela do mpv",
   "video.tmux": "Vídeo embutido desligado: tmux ainda sem suporte. Rode o ttv-tui fora do tmux",
+  "video.active": "Vídeo embutido ativo: escolha um canal",
   "video.placeholder": "Vídeo embutido experimental: sem imagem no momento · Esc abre a lista",
   "video.restart_embedded": "Vídeo na janela do mpv: r reinicia no modo embutido · Esc abre a lista",
   "video.audio_only": "Só áudio: pressione r para trazer a janela do mpv de volta",

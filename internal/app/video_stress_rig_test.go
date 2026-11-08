@@ -326,6 +326,9 @@ type stressOptions struct {
 	viaRun bool
 	// config is the config file Run reads; only with viaRun.
 	config string
+	// videoFromConfig leaves the backend to the config instead of the flag; only
+	// with viaRun.
+	videoFromConfig bool
 }
 
 // stressRig is the application on a PTY, with the terminal above on the far end:
@@ -409,9 +412,13 @@ func startStressRig(t *testing.T, opts stressOptions) *stressRig {
 				t.Fatal(err)
 			}
 		}
+		video := "sixel"
+		if opts.videoFromConfig {
+			video = ""
+		}
 		go func() {
 			finished <- Run(Options{
-				Video: "sixel", Lang: i18n.LangEN,
+				Video: video, Lang: i18n.LangEN,
 				ConfigPath: filepath.Join(dir, "config.toml"), StatePath: filepath.Join(dir, "state", "state.json"),
 				Source: oneChannelSource{}, Player: mgr, Chat: chatMgr,
 				Input: slave, Output: slave, Log: io.Discard,
@@ -567,7 +574,8 @@ const (
 // ui.videoRows, from outside, with the chat strip on at its default 8 rows.
 func panelRows(height int) int { return max(height-1-8, 0) }
 
-// play takes the path of a user: channel in the window, the mode, then r.
+// play takes the path of a user: the app opens in the mode with the list on top,
+// and the channel chosen goes straight to the panel.
 func (r *stressRig) play() {
 	r.t.Helper()
 	r.awaitText("PtyCategory")
@@ -575,9 +583,6 @@ func (r *stressRig) play() {
 	r.awaitText("PtyChan")
 	r.press("\r")
 	r.awaitText("Chat — #ptychan")
-	r.press(strings.Repeat(string(rune(keyCtrlW)), 4))
-	r.awaitText(r.cat.T("video.restart_embedded"))
-	r.press("r")
 	r.await("the first frames", func() bool { return r.term.frameCount() >= 3 })
 	if starts := r.lines(r.starts); len(starts) < 1 || !usesSixel(starts[len(starts)-1]) {
 		r.t.Fatalf("starts: %q", starts)
