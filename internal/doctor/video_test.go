@@ -122,21 +122,42 @@ func TestVideoCombinations(t *testing.T) {
 	}
 }
 
-// The phrases the operator acts on, spelled out once per language.
+// expectedPlatform selects the Windows fallback when the terminal cannot be queried.
+func expectedPlatform(other string) string {
+	if runtime.GOOS == "windows" {
+		return "doctor.next_windows"
+	}
+	return other
+}
+
 func TestNextStepWording(t *testing.T) {
-	for _, tc := range []struct{ lang, reply, vo, want string }{
-		{i18n.LangEN, noSixelReply, voWithSixel, "foot ttv-tui"},
-		{i18n.LangPTBR, noSixelReply, voWithSixel, "abra com foot ttv-tui"},
-		{i18n.LangEN, withSixelReply, voNoSixel, "install an mpv with --vo=sixel"},
-		{i18n.LangPTBR, withSixelReply, voNoSixel, "instale um mpv com --vo=sixel"},
-		{i18n.LangEN, withSixelReply, voWithSixel, `add video = "sixel" to config.toml`},
-		{i18n.LangPTBR, withSixelReply, voWithSixel, `ponha video = "sixel" no config.toml`},
+	for _, tc := range []struct{ lang, reply, vo, step, reason string }{
+		{i18n.LangEN, noSixelReply, voWithSixel, "doctor.next_terminal", "doctor.reason_no_sixel"},
+		{i18n.LangPTBR, noSixelReply, voWithSixel, "doctor.next_terminal", "doctor.reason_no_sixel"},
+		{i18n.LangEN, withSixelReply, voNoSixel, "doctor.next_mpv", "doctor.reason_mpv_no_vo"},
+		{i18n.LangPTBR, withSixelReply, voNoSixel, "doctor.next_mpv", "doctor.reason_mpv_no_vo"},
+		{i18n.LangEN, withSixelReply, voWithSixel, "doctor.next_enable", ""},
+		{i18n.LangPTBR, withSixelReply, voWithSixel, "doctor.next_enable", ""},
 	} {
 		videoFixture(t, tc.vo)
 		var out bytes.Buffer
 		Run(&out, Options{Lang: tc.lang, Terminal: answering(tc.reply)})
-		if !strings.Contains(out.String(), tc.want) {
-			t.Fatalf("%s: report lacks %q:\n%s", tc.lang, tc.want, out.String())
+		cat := catalog(t, tc.lang)
+		next := reportLine(out.String(), cat, "doctor.next")
+		if want := cat.T(expectedPlatform(tc.step)); !strings.Contains(next, want) {
+			t.Fatalf("%s: next step %q lacks %q", tc.lang, next, want)
+		}
+		reason := tc.reason
+		if runtime.GOOS == "windows" {
+			if !strings.Contains(reportLine(out.String(), cat, "doctor.sixel_terminal"), cat.T("doctor.reason_windows")) {
+				t.Fatalf("%s: report lacks Windows reason: %s", tc.lang, out.String())
+			}
+			if reason == "doctor.reason_no_sixel" {
+				reason = ""
+			}
+		}
+		if reason != "" && !strings.Contains(out.String(), cat.T(reason)) {
+			t.Fatalf("%s: report lacks %s: %s", tc.lang, reason, out.String())
 		}
 	}
 }
@@ -214,19 +235,28 @@ func TestSilentTerminalDoesNotHang(t *testing.T) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
-	done := make(chan string, 1)
+	done := make(chan videoReport, 1)
 	go func() {
-		var out bytes.Buffer
-		Run(&out, Options{Lang: i18n.LangEN, Terminal: silent})
-		done <- out.String()
+		done <- checkVideo(context.Background(), videoEnv{goos: "linux", terminal: silent})
 	}()
 	select {
 	case report := <-done:
-		if !strings.Contains(report, "did not answer") {
-			t.Fatalf("report does not name the silence:\n%s", report)
+		if report.terminal.reason != "doctor.reason_no_reply" || len(report.steps) == 0 || report.steps[0] != "doctor.next_terminal" {
+			t.Fatalf("silent terminal report = %+v", report)
 		}
 	case <-time.After(3*time.Second + terminalQueryLimit):
 		t.Fatal("doctor hung on a silent terminal")
+	}
+	var out bytes.Buffer
+	Run(&out, Options{Lang: i18n.LangEN, Terminal: silent})
+	cat := catalog(t, i18n.LangEN)
+	reason := "doctor.reason_no_reply"
+	if runtime.GOOS == "windows" {
+		reason = "doctor.reason_windows"
+	}
+	if !strings.Contains(reportLine(out.String(), cat, "doctor.sixel_terminal"), cat.T(reason)) ||
+		!strings.Contains(reportLine(out.String(), cat, "doctor.next"), cat.T(expectedPlatform("doctor.next_terminal"))) {
+		t.Fatalf("report lacks reason or next step: %s", out.String())
 	}
 }
 
