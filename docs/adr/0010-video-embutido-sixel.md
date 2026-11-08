@@ -4,12 +4,13 @@ O ADR 0002 rejeitou vídeo no terminal pelo custo de CPU e pela queda de framera
 medição da v1.10 confirmou o custo: a janela GPU gastou 23% de CPU a cerca de 30 fps,
 e sixel em 480x270 a 15 fps gastou 69% no mpv e 9,5% no foot. A regra mudou porque o
 operador quer vídeo e TUI na mesma tela, e o tiling dependeria do window manager. A
-janela do mpv continua sendo o padrão. Nada neste modo liga sozinho.
+janela do mpv continua sendo o padrão quando o modo não está habilitado.
 
 ## Limites
 
 O próprio mpv codifica os frames (`--vo=sixel`), e a TUI só os posiciona na tela, então
-o vídeo segue sem reimplementação. O modo exige `--video=sixel` e detecção nos dois
+o vídeo segue sem reimplementação. O modo exige `video = "sixel"` no config ou
+`--video=sixel`, além de detecção nos dois
 lados: DA1 do terminal e `--vo=help` do mpv. Kitty, Alacritty e Terminal.app não têm
 sixel. Windows e tmux ficam fora desta fase. Sixel é o único backend.
 
@@ -18,16 +19,19 @@ taxa nunca foi medida fora do foot. O iTerm2 e o ConPTY têm risco de backpressu
 
 ## Ciclo de vida
 
-A flag habilita a capacidade e o layout decide o uso. O VO é escolhido no início da
-reprodução: modo `video` usa sixel, qualquer outro modo usa a janela GPU. Reiniciar
-custa reconexão e possivelmente um anúncio, por isso mudar de layout nunca reinicia o
-player. Com uma sessão no ar, só `r` reinicia, com o VO do layout corrente.
+Com `video = "sixel"` no config ou `--video=sixel`, e suporte confirmado no
+terminal e no mpv, o app abre no layout `video`, com a lista sobre o painel. A
+barra mostra `Vídeo embutido ativo: escolha um canal`. O primeiro canal abre
+embutido, sem janela do mpv. Quem habilita o modo espera ver o vídeo no terminal.
+Sem a chave, sem suporte ou sem TTY, o app abre em split e informa o motivo.
 
-A lista fica oculta no modo `video`, então um canal costuma nascer fora dele. Entrar no
-modo com sessão GPU mostra no painel a oferta de `r` e a tecla da lista. Reiniciar o mesmo
-canal mantém o volume, e só outro canal volta ao baseline de 100. O `Manager` guarda canal
-e volume da última sessão, porque um retry pode vir depois de um início que falhou e não
-deixou sessão para consultar.
+O VO é escolhido no início da reprodução: modo `video` usa sixel, qualquer outro
+modo usa a janela GPU. Mudar de layout não reinicia o player, pois isso custa
+reconexão e possivelmente um anúncio. Ao entrar no modo com uma sessão GPU, o
+painel oferece `r` para reiniciá-la embutida. Reiniciar o mesmo canal mantém o
+volume, e só outro canal volta ao baseline de 100. O `Manager` guarda canal e
+volume da última sessão, pois um retry pode vir depois de um início que falhou e
+não deixou sessão para consultar.
 
 `Esc` ou `l` abre a lista sem sair do modo, no desenho normal de lista e chat. O painel
 fica coberto: nenhum frame sai, então nenhuma linha é disputada com a lista. Coberto conta
