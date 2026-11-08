@@ -9,14 +9,14 @@ import (
 
 func TestPanelColumnsRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	if err := SaveTo(path, Config{ListColumns: 52, ChatColumns: 60}); err != nil {
+	if err := SaveTo(path, Config{ListColumns: 52, ChatColumns: 60, ChatOverlay: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := LoadFrom(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ListColumns != 52 || got.ChatColumns != 60 {
+	if got.ListColumns != 52 || got.ChatColumns != 60 || !got.ChatOverlay {
 		t.Fatalf("voltou lista %d, chat %d", got.ListColumns, got.ChatColumns)
 	}
 }
@@ -52,5 +52,27 @@ func TestAutomaticPanelColumnsAreNotWritten(t *testing.T) {
 	}
 	if strings.Contains(string(body), "_columns") {
 		t.Fatalf("largura automática foi gravada: %q", body)
+	}
+}
+
+func TestChatOverlayAcceptsQuotedTrue(t *testing.T) {
+	for body, want := range map[string]bool{
+		"chat_overlay = true\n":     true,
+		"chat_overlay = \"true\"\n": true,
+		"chat_overlay = 'true'\n":   true,
+		"chat_overlay = false\n":    false,
+		"chat_overlay = 7\n":        false,
+	} {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := LoadFrom(path)
+		if err != nil {
+			t.Fatalf("%q: %v", body, err)
+		}
+		if got.ChatOverlay != want {
+			t.Fatalf("%q: overlay %v", body, got.ChatOverlay)
+		}
 	}
 }

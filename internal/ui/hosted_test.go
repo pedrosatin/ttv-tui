@@ -8,9 +8,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-type recordingHost struct{ panels []VideoPanel }
+type recordingHost struct{ panels []HostPanel }
 
-func (h *recordingHost) SetPanel(p VideoPanel) { h.panels = append(h.panels, p) }
+func (h *recordingHost) SetPanel(p HostPanel) { h.panels = append(h.panels, p) }
 
 // hostedModel is a model hosted in a window of the given size, with a chat panel.
 func hostedModel(t *testing.T, width, height int, withChat bool) Model {
@@ -64,19 +64,19 @@ func TestHostedWidths(t *testing.T) {
 
 func TestHostedPanelFollowsTheToggles(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	if got, want := m.hostedPanel(), (VideoPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true}); got != want {
 		t.Fatalf("três colunas: %+v, quero %+v", got, want)
 	}
 	m.toggleListPanel()
-	if got, want := m.hostedPanel(), (VideoPanel{Row: 1, Col: 1, Rows: 48, Cols: 165, Visible: true}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 1, Rows: 48, Cols: 165, Visible: true}); got != want {
 		t.Fatalf("sem lista: %+v, quero %+v", got, want)
 	}
 	m.toggleChatPanel()
-	if got, want := m.hostedPanel(), (VideoPanel{Row: 1, Col: 1, Rows: 48, Cols: 212, Visible: true}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 1, Rows: 48, Cols: 212, Visible: true}); got != want {
 		t.Fatalf("sem lista e sem chat: %+v, quero %+v", got, want)
 	}
 	m.toggleListPanel()
-	if got, want := m.hostedPanel(), (VideoPanel{Row: 1, Col: 44, Rows: 48, Cols: 169, Visible: true}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 169, Visible: true}); got != want {
 		t.Fatalf("lista de volta, sem chat: %+v, quero %+v", got, want)
 	}
 }
@@ -84,11 +84,11 @@ func TestHostedPanelFollowsTheToggles(t *testing.T) {
 func TestHostedPanelGivesWayToOverlays(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.helpVisible = true
-	if got := m.hostedPanel(); got != (VideoPanel{}) {
+	if got := m.hostedPanel(); got != (HostPanel{}) {
 		t.Fatalf("com a ajuda aberta: %+v", got)
 	}
 	m.helpVisible, m.channelFilterMenu = false, true
-	if got := m.hostedPanel(); got != (VideoPanel{}) {
+	if got := m.hostedPanel(); got != (HostPanel{}) {
 		t.Fatalf("com o menu de filtros aberto: %+v", got)
 	}
 }
@@ -135,11 +135,11 @@ func TestHostedResizeMovesTheDividers(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 
 	m.resizeHostedList(hostedResizeStep)
-	if got, want := m.hostedPanel(), (VideoPanel{Row: 1, Col: 46, Rows: 48, Cols: 120, Visible: true}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 46, Rows: 48, Cols: 120, Visible: true}); got != want {
 		t.Fatalf("lista mais larga: %+v, quero %+v", got, want)
 	}
 	m.resizeHostedChat(hostedResizeStep)
-	if got, want := m.hostedPanel(), (VideoPanel{Row: 1, Col: 46, Rows: 48, Cols: 118, Visible: true}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 46, Rows: 48, Cols: 118, Visible: true}); got != want {
 		t.Fatalf("chat mais largo: %+v, quero %+v", got, want)
 	}
 	m.resizeHostedChat(-2 * hostedResizeStep)
@@ -201,7 +201,7 @@ func TestHostedResizeOfHiddenPanelWarns(t *testing.T) {
 func TestHostedSaveKeepsOnlyTheLastChange(t *testing.T) {
 	var saved [][2]int
 	m := hostedModel(t, 212, 49, true)
-	m.hostedPersist = func(list, chat int) error {
+	m.hostedPersist = func(list, chat int, _ bool) error {
 		saved = append(saved, [2]int{list, chat})
 		return nil
 	}

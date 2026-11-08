@@ -43,6 +43,8 @@ type keyMap struct {
 	ListNarrower  key.Binding
 	ChatWider     key.Binding
 	ChatNarrower  key.Binding
+	// ToggleChatOverlay only acts in the hosted window.
+	ToggleChatOverlay key.Binding
 	// ToggleVideoChat shows or hides the chat strip, only in the video mode.
 	ToggleVideoChat key.Binding
 }
@@ -151,10 +153,11 @@ func defaultKeyMap() keyMap {
 		),
 		// The arrow moves the divider: the list's is to the right of it, the
 		// chat's to the left, so each panel grows toward the video.
-		ListWider:    key.NewBinding(key.WithKeys("ctrl+right")),
-		ListNarrower: key.NewBinding(key.WithKeys("ctrl+left")),
-		ChatWider:    key.NewBinding(key.WithKeys("alt+left")),
-		ChatNarrower: key.NewBinding(key.WithKeys("alt+right")),
+		ListWider:         key.NewBinding(key.WithKeys("ctrl+right")),
+		ListNarrower:      key.NewBinding(key.WithKeys("ctrl+left")),
+		ChatWider:         key.NewBinding(key.WithKeys("alt+left")),
+		ChatNarrower:      key.NewBinding(key.WithKeys("alt+right")),
+		ToggleChatOverlay: key.NewBinding(key.WithKeys("ctrl+o")),
 		// c (chat) is free in every other screen. It only acts on the video body,
 		// and an input on screen keeps it as text.
 		ToggleVideoChat: key.NewBinding(

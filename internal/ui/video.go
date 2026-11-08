@@ -260,9 +260,9 @@ func (m Model) videoImageOnScreen() bool {
 // is cleared for that, and the frames stopped first so none can follow the clear.
 func (m Model) syncVideoPanel(before Model, cmd tea.Cmd) (Model, tea.Cmd) {
 	if m.videoHost != nil {
-		if panel := m.hostedPanel(); panel != m.videoPublished {
+		if panel := m.hostedPanel(); panel != m.hostPublished {
 			m.videoHost.SetPanel(panel)
-			m.videoPublished = panel
+			m.hostPublished = panel
 		}
 		return m, cmd
 	}

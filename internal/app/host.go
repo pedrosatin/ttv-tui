@@ -17,7 +17,7 @@ const videoHostEnv = "TTV_TUI_VIDEO_HOST"
 // that stops reading costs stale geometry, never a frozen UI.
 type videoHost struct {
 	conn    net.Conn
-	updates chan ui.VideoPanel
+	updates chan ui.HostPanel
 	done    chan struct{}
 }
 
@@ -26,7 +26,7 @@ func dialVideoHost(path string) (*videoHost, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := &videoHost{conn: conn, updates: make(chan ui.VideoPanel, 1), done: make(chan struct{})}
+	h := &videoHost{conn: conn, updates: make(chan ui.HostPanel, 1), done: make(chan struct{})}
 	go h.write()
 	return h, nil
 }
@@ -46,7 +46,7 @@ func (h *videoHost) write() {
 }
 
 // SetPanel replaces any panel the writer has not taken yet.
-func (h *videoHost) SetPanel(panel ui.VideoPanel) {
+func (h *videoHost) SetPanel(panel ui.HostPanel) {
 	for {
 		select {
 		case h.updates <- panel:

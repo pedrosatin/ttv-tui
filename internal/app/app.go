@@ -249,17 +249,18 @@ func Run(opts Options) error {
 				c.MinViewers = minViewers
 			})
 		}))
-		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, func(list, chat int) error {
+		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, func(list, chat int, overlay bool) error {
 			return updateConfig(func(c *config.Config) {
 				c.ListColumns = list
 				c.ChatColumns = chat
+				c.ChatOverlay = overlay
 			})
 		}))
 	} else {
 		if len(cfg.FilterLanguages) > 0 || cfg.MinViewers > 0 {
 			uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, nil))
 		}
-		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, nil))
+		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, nil))
 	}
 	if corruptNotice != "" {
 		uiOpts = append(uiOpts, ui.WithCorruptNotice(corruptNotice))

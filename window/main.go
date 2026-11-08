@@ -139,7 +139,12 @@ import (
 
 func init() { runtime.LockOSThread() }
 
-const defaultColor = uint32(0xff000000)
+const (
+	defaultColor = uint32(0xff000000)
+	// Opacidade do chat sobre o vídeo: fundo comum e fundo com cor própria (seleção).
+	glassAlpha      = uint32(150)
+	glassSolidAlpha = uint32(225)
+)
 
 var (
 	bgR, bgG, bgB byte = 0x1c, 0x1c, 0x1e
@@ -314,12 +319,14 @@ type cellKey struct {
 	width   int
 	cursor  bool
 	hole    bool
+	glass   bool // chat sobre o vídeo: fundo translúcido, texto opaco
 }
 
 // hostPanel é a região do vídeo que o TUI publica, em células com base 1.
 type hostPanel struct {
 	Row, Col, Rows, Cols int
 	Visible              bool
+	OverlayCols          int
 }
 
 type ctlMsg struct {
@@ -416,11 +423,14 @@ func toRGB(c color.Color) uint32 {
 func (a *app) keyAt(x, y, cx, cy int, showCur bool) cellKey {
 	c := a.term.CellAt(x, y)
 	hole := a.holeOn && x >= a.host.Col-1 && x < a.host.Col-1+a.host.Cols && y >= a.host.Row-1 && y < a.host.Row-1+a.host.Rows
+	glass := hole && a.host.OverlayCols > 0 && x >= a.host.Col-1+a.host.Cols-a.host.OverlayCols
+	hole = hole && !glass
 	if c == nil {
-		return cellKey{content: " ", fg: defaultColor, bg: defaultColor, width: 1, hole: hole}
+		return cellKey{content: " ", fg: defaultColor, bg: defaultColor, width: 1, hole: hole, glass: glass}
 	}
 	return cellKey{
 		hole:    hole,
+		glass:   glass,
 		content: c.Content,
 		fg:      toRGB(c.Style.Fg),
 		bg:      toRGB(c.Style.Bg),
@@ -490,22 +500,35 @@ func (a *app) drawCell(x, y int, k cellKey) {
 	if k.attrs&uv.AttrFaint != 0 {
 		fr, fg, fb = fr*2/3, fg*2/3, fb*2/3
 	}
+	if k.width == 0 { // continuação de um caractere largo, já desenhado pela célula anterior
+		return
+	}
 	span := 1
 	if k.width == 2 {
 		span = 2
 	}
 	stride := a.pw * 4
 	px0, py0 := x*cw, y*ch
+	bgA := uint32(255)
+	if k.glass { // a textura é pré-multiplicada, então a cor cai junto com o alfa
+		bgA = glassAlpha
+		if k.bg == defaultColor && k.attrs&uv.AttrReverse == 0 && !k.cursor {
+			br, bg, bb = 0, 0, 0
+		} else {
+			bgA = glassSolidAlpha
+		}
+		br, bg, bb = br*bgA/255, bg*bgA/255, bb*bgA/255
+	}
 	for yy := py0; yy < py0+ch && yy < a.ph; yy++ {
 		off := yy*stride + px0*4
 		for xx := 0; xx < cw*span && px0+xx < a.pw; xx++ {
 			a.buf[off+xx*4] = byte(bb)
 			a.buf[off+xx*4+1] = byte(bg)
 			a.buf[off+xx*4+2] = byte(br)
-			a.buf[off+xx*4+3] = 255
+			a.buf[off+xx*4+3] = byte(bgA)
 		}
 	}
-	if k.width == 0 || k.content == "" || k.content == " " {
+	if k.content == "" || k.content == " " {
 		return
 	}
 	r := []rune(k.content)[0]
@@ -537,6 +560,7 @@ func (a *app) drawCell(x, y int, k cellKey) {
 				a.buf[off] = byte((uint32(a.buf[off])*(255-al) + fb*al) / 255)
 				a.buf[off+1] = byte((uint32(a.buf[off+1])*(255-al) + fg*al) / 255)
 				a.buf[off+2] = byte((uint32(a.buf[off+2])*(255-al) + fr*al) / 255)
+				a.buf[off+3] = byte((uint32(a.buf[off+3])*(255-al) + 255*al) / 255)
 			}
 		}
 	}
@@ -552,7 +576,7 @@ func (a *app) setPx(x, y int, r, g, b uint32) {
 		return
 	}
 	off := y*a.pw*4 + x*4
-	a.buf[off], a.buf[off+1], a.buf[off+2] = byte(b), byte(g), byte(r)
+	a.buf[off], a.buf[off+1], a.buf[off+2], a.buf[off+3] = byte(b), byte(g), byte(r), 255
 }
 
 // relayout recalcula painel, PTY e emulador a partir do tamanho da janela.
@@ -1086,6 +1110,20 @@ func (a *app) serveTest(path string) {
 					a.writeInput(b)
 					fmt.Fprintln(c, "ok")
 				}
+			case "pixel": // BGRA do canto da célula e o maior alfa dentro dela
+				var x, y int
+				_, _ = fmt.Sscan(rest, &x, &y)
+				a.paintMu.Lock()
+				cw, ch := a.fs.cellW, a.fs.cellH
+				off := y*ch*a.pw*4 + x*cw*4
+				top := byte(0)
+				for yy := y * ch; yy < (y+1)*ch; yy++ {
+					for xx := x * cw; xx < (x+1)*cw; xx++ {
+						top = max(top, a.buf[yy*a.pw*4+xx*4+3])
+					}
+				}
+				fmt.Fprintf(c, "%d %d %d %d %d\n", a.buf[off], a.buf[off+1], a.buf[off+2], a.buf[off+3], top)
+				a.paintMu.Unlock()
 			case "quit": // mesmo caminho de fechar a janela
 				C.push_quit()
 				fmt.Fprintln(c, "ok")
@@ -1098,7 +1136,7 @@ func (a *app) serveTest(path string) {
 					"panelPaints": a.panelPaints, "paintMs": a.paintNs / 1e6, "uploadMs": a.uploadNs / 1e6,
 					"sessions": a.sessions, "ttffMs": a.lastTtff, "ipc": a.lastIpc, "cols": a.cols,
 					"rows": a.rows, "W": a.W, "H": a.H, "cellW": a.fs.cellW, "cellH": a.fs.cellH,
-					"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
+					"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "overlay": a.host.OverlayCols, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
 				}
 				if len(a.latMs) > 0 {
 					out["latMs"] = a.latMs

@@ -301,7 +301,9 @@ type Model struct {
 	// the terminal height at the last resize. See videoStateLines.
 	videoStateRows int
 	videoSurface   VideoSurface
-	videoHost      VideoSurface
+	videoHost      VideoHost
+	hostPublished  HostPanel
+	chatOverlay    bool
 	// hostedListCols and hostedChatCols are the widths asked for; 0 means automatic.
 	hostedListCols int
 	hostedChatCols int

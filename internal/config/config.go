@@ -30,6 +30,8 @@ type Config struct {
 	// automatic. TOML keys: list_columns, chat_columns.
 	ListColumns int
 	ChatColumns int
+	// ChatOverlay draws the chat over the video in the hosted window. TOML key: chat_overlay.
+	ChatOverlay bool
 	// VideoChatPosition places the chat strip of the video mode: VideoChatBottom
 	// or VideoChatTop. Empty means VideoChatBottom. TOML key:
 	// video_chat_position.
@@ -295,6 +297,9 @@ func formatTOML(cfg Config) string {
 	if cols := normalizePanelColumns(cfg.ChatColumns); cols > 0 {
 		fmt.Fprintf(&b, "chat_columns = %d\n", cols)
 	}
+	if cfg.ChatOverlay {
+		b.WriteString("chat_overlay = true\n")
+	}
 	if pos := normalizeVideoChatPosition(cfg.VideoChatPosition); pos != "" {
 		fmt.Fprintf(&b, "video_chat_position = %s\n", quoteTOML(pos))
 	}
@@ -435,6 +440,8 @@ func parseTOML(input string) (Config, error) {
 				n = 0
 			}
 			cfg.ListColumns = normalizePanelColumns(n)
+		case "chat_overlay", "ui.chat_overlay":
+			cfg.ChatOverlay = strings.Trim(strings.TrimSpace(rawVal), "\"'") == "true"
 		case "chat_columns", "ui.chat_columns":
 			n, err := parseTOMLInt(rawVal)
 			if err != nil {

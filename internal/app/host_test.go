@@ -29,10 +29,10 @@ func TestVideoHostDeliversPanels(t *testing.T) {
 	}
 	defer func() { _ = conn.Close() }()
 
-	want := ui.VideoPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true}
+	want := ui.HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true}
 	h.SetPanel(want)
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	var got ui.VideoPanel
+	var got ui.HostPanel
 	line, err := bufio.NewReader(conn).ReadBytes('\n')
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func TestVideoHostSetPanelNeverBlocks(t *testing.T) {
 	go func() {
 		defer close(done)
 		for i := 0; i < 200000; i++ {
-			h.SetPanel(ui.VideoPanel{Cols: i})
+			h.SetPanel(ui.HostPanel{Cols: i})
 		}
 	}()
 	select {

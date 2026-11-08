@@ -25,20 +25,34 @@ const (
 	hostedSaveDelay  = 400 * time.Millisecond
 )
 
-// HostedColumnsPersist saves the list and chat widths; 0 means automatic.
-type HostedColumnsPersist func(list, chat int) error
+// HostPanel is the video's region in the hosted window, in 1-based cells. The last
+// OverlayCols columns of it carry the chat, drawn translucent over the picture.
+type HostPanel struct {
+	Row, Col, Rows, Cols int
+	Visible              bool
+	OverlayCols          int
+}
 
-// WithHostedColumns sets the saved widths and what saves them when they change.
-func WithHostedColumns(list, chat int, persist HostedColumnsPersist) Option {
+// VideoHost is the window that draws the video. SetPanel runs inside Update, so it
+// must not block.
+type VideoHost interface {
+	SetPanel(HostPanel)
+}
+
+// HostedColumnsPersist saves the panel widths (0 means automatic) and the chat placement.
+type HostedColumnsPersist func(list, chat int, overlay bool) error
+
+// WithHostedColumns sets the saved layout and what saves it when it changes.
+func WithHostedColumns(list, chat int, overlay bool, persist HostedColumnsPersist) Option {
 	return func(m *Model) {
-		m.hostedListCols, m.hostedChatCols, m.hostedPersist = list, chat, persist
+		m.hostedListCols, m.hostedChatCols, m.chatOverlay, m.hostedPersist = list, chat, overlay, persist
 	}
 }
 
 // WithVideoHost attaches the window that draws the video itself. The TUI then keeps
 // the list on the left and the chat on the right, and tells the host which cells
 // between them are the video's.
-func WithVideoHost(host VideoSurface) Option {
+func WithVideoHost(host VideoHost) Option {
 	return func(m *Model) { m.videoHost = host }
 }
 
@@ -74,6 +88,9 @@ func (m Model) hostedWidths() (listW, chatW, videoW int) {
 		}
 		separators += hostedSepWidth
 	}
+	if m.chatOverlay && chatW > 0 {
+		return m.hostedOverlayWidths(listW, chatW)
+	}
 	for over := listW + chatW + separators + hostedMinVideo - m.width; over > 0; over-- {
 		switch {
 		case listW > hostedMinList && listW >= chatW:
@@ -89,12 +106,64 @@ func (m Model) hostedWidths() (listW, chatW, videoW int) {
 	return listW, chatW, max(m.width-listW-chatW-separators, 0)
 }
 
+// hostedOverlayWidths is the layout with the chat over the video: only the list
+// takes columns from the picture, and the chat always leaves part of it uncovered.
+func (m Model) hostedOverlayWidths(listW, chatW int) (int, int, int) {
+	separators := 0
+	if listW > 0 {
+		separators = hostedSepWidth
+	}
+	videoW := func() int { return max(m.width-listW-separators, 0) }
+	for videoW()-chatW < hostedMinVideo {
+		switch {
+		case listW > hostedMinList && listW >= chatW:
+			listW--
+		case chatW > hostedMinChat:
+			chatW--
+		case listW > hostedMinList:
+			listW--
+		default:
+			return listW, min(chatW, videoW()), videoW()
+		}
+	}
+	return listW, chatW, videoW()
+}
+
+// toggleChatOverlay moves the chat between the side column and over the video.
+func (m *Model) toggleChatOverlay() tea.Cmd {
+	if !m.chatColumnVisible() {
+		m.warnChatUnavailable()
+		return nil
+	}
+	m.chatOverlay = !m.chatOverlay
+	notice := "layout.chat_side"
+	if m.chatOverlay {
+		notice = "layout.chat_overlay"
+	}
+	m.statusNotice, m.statusNoticeWarns = m.t(notice), false
+	return m.scheduleHostedSave()
+}
+
+// warnChatUnavailable says why a chat key cannot act.
+func (m *Model) warnChatUnavailable() {
+	if m.warnChatHiddenByWidth() {
+		return
+	}
+	if m.hasChatPanel() {
+		m.warnStatus(m.t("layout.hidden_chat_key"))
+	} else {
+		m.warnStatus(m.t("layout.no_chat"))
+	}
+}
+
 // handleHostedResizeKey moves a divider. It reports whether msg was one of its keys.
 func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.videoHost == nil {
 		return false, nil
 	}
 	switch {
+	case key.Matches(msg, m.keys.ToggleChatOverlay):
+		return true, m.toggleChatOverlay()
 	case key.Matches(msg, m.keys.ListWider):
 		return true, m.resizeHostedList(hostedResizeStep)
 	case key.Matches(msg, m.keys.ListNarrower):
@@ -107,16 +176,22 @@ func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-// hostedRoomToGrow is what a panel can take from the video, which keeps its minimum.
-func hostedRoomToGrow(videoW int) int { return max(videoW-hostedMinVideo, 0) }
+// hostedRoomToGrow is what a panel can still take: the picture outside the panels
+// keeps its minimum.
+func (m Model) hostedRoomToGrow(chatW, videoW int) int {
+	if m.chatOverlay {
+		videoW -= chatW
+	}
+	return max(videoW-hostedMinVideo, 0)
+}
 
 func (m *Model) resizeHostedList(delta int) tea.Cmd {
-	listW, _, videoW := m.hostedWidths()
+	listW, chatW, videoW := m.hostedWidths()
 	if listW == 0 {
 		m.warnStatus(m.t("layout.hidden_list_key"))
 		return nil
 	}
-	listW = max(min(listW+delta, listW+hostedRoomToGrow(videoW)), hostedMinList)
+	listW = max(min(listW+delta, listW+m.hostedRoomToGrow(chatW, videoW)), hostedMinList)
 	m.hostedListCols = listW
 	m.statusNotice, m.statusNoticeWarns = fmt.Sprintf(m.t("layout.list_columns"), listW), false
 	return m.scheduleHostedSave()
@@ -125,14 +200,10 @@ func (m *Model) resizeHostedList(delta int) tea.Cmd {
 func (m *Model) resizeHostedChat(delta int) tea.Cmd {
 	_, chatW, videoW := m.hostedWidths()
 	if chatW == 0 {
-		if m.hasChatPanel() {
-			m.warnStatus(m.t("layout.hidden_chat_key"))
-		} else {
-			m.warnStatus(m.t("layout.no_chat"))
-		}
+		m.warnChatUnavailable()
 		return nil
 	}
-	chatW = max(min(chatW+delta, chatW+hostedRoomToGrow(videoW)), hostedMinChat)
+	chatW = max(min(chatW+delta, chatW+m.hostedRoomToGrow(chatW, videoW)), hostedMinChat)
 	m.hostedChatCols = chatW
 	m.statusNotice, m.statusNoticeWarns = fmt.Sprintf(m.t("layout.chat_columns"), chatW), false
 	return m.scheduleHostedSave()
@@ -157,28 +228,32 @@ func (m Model) saveHostedColumns(gen int) tea.Cmd {
 	if m.hostedPersist == nil || gen != m.hostedSaveGen {
 		return nil
 	}
-	persist, list, chat := m.hostedPersist, m.hostedListCols, m.hostedChatCols
+	persist, list, chat, overlay := m.hostedPersist, m.hostedListCols, m.hostedChatCols, m.chatOverlay
 	return func() tea.Msg {
-		_ = persist(list, chat)
+		_ = persist(list, chat, overlay)
 		return nil
 	}
 }
 
 // hostedPanel is the video's region, in 1-based cells. An overlay takes the screen
 // over, so the zero value tells the host to draw the TUI's cells there instead.
-func (m Model) hostedPanel() VideoPanel {
+func (m Model) hostedPanel() HostPanel {
 	if m.videoHost == nil || m.quitting || m.width <= 0 || m.height <= 1 || m.helpVisible || m.channelFilterMenu {
-		return VideoPanel{}
+		return HostPanel{}
 	}
-	listW, _, videoW := m.hostedWidths()
+	listW, chatW, videoW := m.hostedWidths()
 	if videoW == 0 {
-		return VideoPanel{}
+		return HostPanel{}
 	}
 	col := 1
 	if listW > 0 {
 		col += listW + hostedSepWidth
 	}
-	return VideoPanel{Row: 1, Col: col, Rows: m.height - 1, Cols: videoW, Visible: true}
+	panel := HostPanel{Row: 1, Col: col, Rows: m.height - 1, Cols: videoW, Visible: true}
+	if m.chatOverlay {
+		panel.OverlayCols = chatW
+	}
+	return panel
 }
 
 // hostedIdleText is what the video column says while no playback owns it.
@@ -205,11 +280,17 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 	if chatW > 0 {
 		chat = m.renderChatLines(available, chatW)
 	}
-	idle := TruncateVisual(m.hostedIdleText(), videoW)
-	if videoW == 0 {
+	// With the chat over the video, its cells come out of the video column.
+	overlaid := m.chatOverlay && chatW > 0
+	openW := videoW
+	if overlaid {
+		openW = max(videoW-chatW, 0)
+	}
+	idle := TruncateVisual(m.hostedIdleText(), openW)
+	if openW == 0 {
 		idle = ""
 	}
-	idle = strings.Repeat(" ", max(videoW-ansi.StringWidth(idle), 0)/2) + idle
+	idle = strings.Repeat(" ", max(openW-ansi.StringWidth(idle), 0)/2) + idle
 
 	separator := strings.TrimSpace(panelSeparator)
 	cell := func(rows []string, i, width int) string {
@@ -226,13 +307,15 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 			row.WriteString(separator)
 		}
 		switch {
-		case i == available/2 && videoW > 0:
-			row.WriteString(padOrTruncateVisual(idle, videoW))
+		case i == available/2 && openW > 0:
+			row.WriteString(padOrTruncateVisual(idle, openW))
 		default:
-			row.WriteString(strings.Repeat(" ", videoW))
+			row.WriteString(strings.Repeat(" ", openW))
 		}
 		if chatW > 0 {
-			row.WriteString(separator)
+			if !overlaid {
+				row.WriteString(separator)
+			}
 			row.WriteString(cell(chat, i, chatW))
 		}
 		lines[i] = row.String()
