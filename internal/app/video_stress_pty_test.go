@@ -397,3 +397,30 @@ func TestVideoStressThroughRun(t *testing.T) {
 	r.await("frames after the resize", func() bool { return r.term.frameCount() > mark })
 	r.awaitPicture()
 }
+
+// The config moves the strip: Run reads video_chat_position and video_chat_rows,
+// and the image lands under a strip of that height, on the real wire.
+func TestVideoChatOnTopThroughRun(t *testing.T) {
+	const strip = 5
+	r := startStressRig(t, stressOptions{viaRun: true, config: "video_chat_position = \"top\"\nvideo_chat_rows = 5\n"})
+	r.play()
+	first, last := strip, r.rows-1
+	clean := time.Now()
+	r.await("the image under the strip", func() bool {
+		inside, outside := r.term.imageCellsIn(first, last)
+		if inside == 0 || outside > 0 || len(r.term.panelTextIn(first, last)) > 0 {
+			clean = time.Now()
+			return false
+		}
+		return time.Since(clean) >= 300*time.Millisecond
+	})
+	lines := strings.Split(r.term.text(), "\n")
+	if !strings.Contains(lines[0], "Chat") {
+		t.Fatalf("the strip is not on the first row:\n%s", r.term.picture())
+	}
+	for _, f := range r.term.framesSince(0) {
+		if f.row < first || f.height > (last-first)*wireCellHeight {
+			t.Fatalf("frame at row %d, %d px high, outside the panel on rows %d..%d", f.row+1, f.height, first+1, last)
+		}
+	}
+}

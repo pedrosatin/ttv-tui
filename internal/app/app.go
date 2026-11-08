@@ -206,6 +206,8 @@ func Run(opts Options) error {
 		ui.WithStore(appStore),
 		ui.WithFavorites(store.ToTwitchChannels(st.Favorites)),
 		ui.WithRecents(store.ToTwitchChannels(st.Recents)),
+		ui.WithVideoChatRows(cfg.VideoChatRows),
+		ui.WithVideoChatOnTop(cfg.VideoChatOnTop()),
 	}
 	if cfgPath != "" {
 		persistPath := cfgPath

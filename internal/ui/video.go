@@ -53,6 +53,12 @@ func WithVideoChatRows(rows int) Option {
 	}
 }
 
+// WithVideoChatOnTop puts the chat strip of the video mode above the panel. The
+// default is under it.
+func WithVideoChatOnTop(top bool) Option {
+	return func(m *Model) { m.videoChatTop = top }
+}
+
 // videoChatStripRows is how many of the mode's available rows go to the chat: the
 // configured height, never more than there is, and none while the chat is off.
 func (m Model) videoChatStripRows(available int) int {
@@ -67,7 +73,7 @@ func (m Model) videoChatStripRows(available int) int {
 }
 
 // videoRows is the panel's height: every row the chat strip leaves. The strip is
-// opaque and full width under the panel, so the two never share a line.
+// opaque and full width above or under the panel, so the two never share a line.
 func (m Model) videoRows(available int) int {
 	return max(available-m.videoChatStripRows(available), 0)
 }
@@ -156,11 +162,15 @@ func (m Model) videoPanel() VideoPanel {
 	if m.videoSurface == nil || !m.showVideo || m.quitting || m.width <= 0 || m.height <= 1 {
 		return VideoPanel{}
 	}
-	rows := m.videoRows(m.height - 1)
+	available := m.height - 1
+	rows := m.videoRows(available)
 	if rows == 0 {
 		return VideoPanel{}
 	}
 	panel := VideoPanel{Row: 1, Col: 1, Rows: rows, Cols: m.width, Still: m.videoHasImage()}
+	if m.videoChatTop {
+		panel.Row += available - rows
+	}
 	if m.videoListOpen {
 		return panel
 	}
@@ -222,13 +232,25 @@ func (m Model) videoPanelText() string {
 
 func (m Model) videoView(available int, overlay []string, status string) string {
 	rows := m.videoRows(available)
-	lines := make([]string, rows)
+	panel := make([]string, rows)
 	if rows > 0 && !m.videoImageOnScreen() {
-		lines[0] = m.videoPanelText()
+		panel[0] = m.videoPanelText()
 	}
-	if strip := available - rows; strip > 0 {
-		lines = append(lines, m.renderChatLines(strip, m.width)...)
+	var strip []string
+	if n := available - rows; n > 0 {
+		strip = m.renderChatLines(n, m.width)
+		for len(strip) < n {
+			strip = append(strip, "")
+		}
+		strip = strip[:n]
 	}
+	first, second := panel, strip
+	if m.videoChatTop {
+		first, second = strip, panel
+	}
+	lines := make([]string, 0, available)
+	lines = append(lines, first...)
+	lines = append(lines, second...)
 	for len(lines) < available {
 		lines = append(lines, "")
 	}

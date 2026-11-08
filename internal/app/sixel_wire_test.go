@@ -646,10 +646,15 @@ func (w *wireTerminal) contains(want string) bool {
 
 // panelText returns the lines of the panel that hold any text.
 func (w *wireTerminal) panelText(panelRows int) []string {
+	return w.panelTextIn(0, panelRows)
+}
+
+// panelTextIn is panelText for a panel on rows first..last-1, 0-based.
+func (w *wireTerminal) panelTextIn(first, last int) []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	var dirty []string
-	for row := range min(panelRows, w.rows) {
+	for row := max(first, 0); row < min(last, w.rows); row++ {
 		if line := w.lineLocked(row); line != "" {
 			dirty = append(dirty, fmt.Sprintf("row %d: %q", row+1, line))
 		}
@@ -659,13 +664,18 @@ func (w *wireTerminal) panelText(panelRows int) []string {
 
 // imageCells counts the cells the image covers inside and outside the panel.
 func (w *wireTerminal) imageCells(panelRows int) (inside, outside int) {
+	return w.imageCellsIn(0, panelRows)
+}
+
+// imageCellsIn is imageCells for a panel on rows first..last-1, 0-based.
+func (w *wireTerminal) imageCellsIn(first, last int) (inside, outside int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for row, line := range w.cells {
 		for _, cell := range line {
 			switch {
 			case !cell.image:
-			case row < panelRows:
+			case row >= first && row < last:
 				inside++
 			default:
 				outside++

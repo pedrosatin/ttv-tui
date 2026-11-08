@@ -288,3 +288,103 @@ func TestVideoChatOffKeepsComposeShut(t *testing.T) {
 		t.Fatalf("chat back but focus %q", m.Focus())
 	}
 }
+
+// configuredVideoSession is playingVideoSession with the strip options applied
+// before the mode opens, as Run applies them from the config.
+func configuredVideoSession(t *testing.T, opts ...Option) (Model, *fakeSurface) {
+	t.Helper()
+	m, _, surface := windowVideoModel(t)
+	for _, opt := range opts {
+		opt(&m)
+	}
+	m = pressRestart(t, enterVideoLayout(t, m))
+	return applyMsg(t, m, playerState(PlayerStatePlaying)), surface
+}
+
+func TestVideoChatRowsFallBackToTheDefault(t *testing.T) {
+	for _, rows := range []int{0, -3} {
+		m, surface := configuredVideoSession(t, WithVideoChatRows(rows))
+		if got := surface.last(t); got.Rows != m.height-1-defaultVideoChatRows {
+			t.Fatalf("rows %d: panel = %+v, want the default strip of %d", rows, got, defaultVideoChatRows)
+		}
+	}
+	m, surface := configuredVideoSession(t, WithVideoChatRows(12))
+	if got := surface.last(t); got.Rows != m.height-1-12 {
+		t.Fatalf("rows 12: panel = %+v", got)
+	}
+}
+
+func TestVideoChatOnTopRendersTheStripAboveThePanel(t *testing.T) {
+	for _, tc := range []struct {
+		size [2]int
+		rows int
+	}{{[2]int{120, 32}, 0}, {[2]int{80, 24}, 5}, {[2]int{90, 15}, 12}, {[2]int{200, 60}, 30}} {
+		m, surface := configuredVideoSession(t, WithVideoChatOnTop(true), WithVideoChatRows(tc.rows))
+		m = applyMsg(t, m, tea.WindowSizeMsg{Width: tc.size[0], Height: tc.size[1]})
+		available := tc.size[1] - 1
+		strip := tc.rows
+		if strip == 0 {
+			strip = defaultVideoChatRows
+		}
+		panel := surface.last(t)
+		if panel.Row != strip+1 || panel.Rows != available-strip || panel.Col != 1 || panel.Cols != tc.size[0] || !panel.Visible || !panel.Playing {
+			t.Fatalf("%v rows %d: panel = %+v, want rows %d..%d", tc.size, tc.rows, panel, strip+1, available)
+		}
+		lines := strings.Split(ansi.Strip(m.View()), "\n")
+		if len(lines) != tc.size[1] {
+			t.Fatalf("%v: %d lines", tc.size, len(lines))
+		}
+		if !strings.Contains(lines[0], "Chat") {
+			t.Fatalf("%v: the strip does not start on the first row:\n%s", tc.size, strings.Join(lines, "\n"))
+		}
+		for i, line := range lines[strip:available] {
+			if strings.TrimSpace(line) != "" {
+				t.Fatalf("%v: panel row %d carries %q", tc.size, strip+i+1, line)
+			}
+		}
+		for i, line := range lines[:strip] {
+			if ansi.StringWidth(line) > tc.size[0] {
+				t.Fatalf("%v: strip row %d is wider than the screen", tc.size, i)
+			}
+		}
+		if lines[available] != ansi.Strip(m.StatusBar()) {
+			t.Fatalf("%v: the bar left the last row: %q", tc.size, lines[available])
+		}
+	}
+}
+
+func TestVideoChatOnTopToggle(t *testing.T) {
+	m, surface := configuredVideoSession(t, WithVideoChatOnTop(true))
+	on := surface.last(t)
+	if on.Row != defaultVideoChatRows+1 {
+		t.Fatalf("panel with the chat on = %+v", on)
+	}
+	m, cmd := pressVideoChat(t, m)
+	if off := surface.last(t); off.Row != 1 || off.Rows != m.height-1 {
+		t.Fatalf("panel with the chat off = %+v", off)
+	}
+	if !clearsScreen(cmd) {
+		t.Fatal("the image moved up without a clear")
+	}
+	_, cmd = pressVideoChat(t, m)
+	if got := surface.last(t); got != on {
+		t.Fatalf("panel after the chat came back = %+v, want %+v", got, on)
+	}
+	if !clearsScreen(cmd) {
+		t.Fatal("the image moved down without a clear")
+	}
+}
+
+func TestVideoChatBottomIsTheDefault(t *testing.T) {
+	for _, opts := range [][]Option{nil, {WithVideoChatOnTop(false)}} {
+		m, surface := configuredVideoSession(t, opts...)
+		panel := surface.last(t)
+		if panel.Row != 1 || panel.Rows != m.height-1-defaultVideoChatRows {
+			t.Fatalf("panel = %+v", panel)
+		}
+		lines := strings.Split(ansi.Strip(m.View()), "\n")
+		if !strings.Contains(lines[panel.Rows], "Chat") || strings.Contains(lines[0], "Chat") {
+			t.Fatalf("the strip is not under the panel:\n%s", strings.Join(lines, "\n"))
+		}
+	}
+}

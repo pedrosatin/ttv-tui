@@ -307,11 +307,13 @@ type Model struct {
 	// videoChatRows is the height of the chat strip; zero means
 	// defaultVideoChatRows.
 	videoChatRows int
-	showList      bool
-	showChat      bool
-	width         int
-	height        int
-	quitting      bool
+	// videoChatTop puts the chat strip above the panel instead of under it.
+	videoChatTop bool
+	showList     bool
+	showChat     bool
+	width        int
+	height       int
+	quitting     bool
 }
 
 // New creates a new UI Model backed by the given i18n catalog and options.

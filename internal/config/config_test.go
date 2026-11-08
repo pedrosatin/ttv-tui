@@ -378,3 +378,95 @@ func TestLoadLegacyConfigWithRefreshToken(t *testing.T) {
 		t.Fatalf("saved config missing access_token, got:\n%s", savedStr)
 	}
 }
+
+func TestVideoChatKeysLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	for _, tc := range []struct {
+		raw     string
+		rows    int
+		pos     string
+		onTop   bool
+		comment string
+	}{
+		{"", 0, "", false, "absent keys keep the defaults"},
+		{"video_chat_rows = 12\n", 12, "", false, "a valid height"},
+		{"video_chat_rows = 3\n", 3, "", false, "the lowest height"},
+		{"video_chat_rows = 30\n", 30, "", false, "the highest height"},
+		{"video_chat_rows = 2\n", 0, "", false, "below the range"},
+		{"video_chat_rows = 31\n", 0, "", false, "above the range"},
+		{"video_chat_rows = -5\n", 0, "", false, "negative"},
+		{"video_chat_rows = \"ten\"\n", 0, "", false, "not a number"},
+		{"video_chat_rows = 4.5\n", 0, "", false, "not an integer"},
+		{"video_chat_position = \"top\"\n", 0, "top", true, "top"},
+		{"video_chat_position = \"TOP\"\n", 0, "top", true, "case does not matter"},
+		{"video_chat_position = \"bottom\"\n", 0, "bottom", false, "explicit bottom"},
+		{"video_chat_position = \"left\"\n", 0, "", false, "unknown position"},
+		{"video_chat_position = top\n", 0, "", false, "unquoted position"},
+		{"[ui]\nvideo_chat_rows = 6\nvideo_chat_position = 'top'\n", 6, "top", true, "inside [ui]"},
+		{"language = \"en\"\nvideo_chat_rows = 99\nvideo_chat_position = \"middle\"\nmin_viewers = 7\n", 0, "", false, "bad values leave the rest alone"},
+	} {
+		if err := os.WriteFile(path, []byte(tc.raw), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		got, err := LoadFrom(path)
+		if err != nil {
+			t.Fatalf("%s: a bad video chat value must not fail the load: %v", tc.comment, err)
+		}
+		if got.VideoChatRows != tc.rows || got.VideoChatPosition != tc.pos || got.VideoChatOnTop() != tc.onTop {
+			t.Fatalf("%s: rows %d pos %q top %v, want %d %q %v", tc.comment, got.VideoChatRows, got.VideoChatPosition, got.VideoChatOnTop(), tc.rows, tc.pos, tc.onTop)
+		}
+		if strings.Contains(tc.raw, "min_viewers") && (got.Language != "en" || got.MinViewers != 7) {
+			t.Fatalf("%s: other keys lost: %+v", tc.comment, got)
+		}
+	}
+}
+
+func TestVideoChatKeysRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	want := Config{Language: "en", MinViewers: 50, VideoChatRows: 12, VideoChatPosition: VideoChatTop}
+	if err := SaveTo(path, want); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	for _, line := range []string{"video_chat_rows = 12\n", "video_chat_position = \"top\"\n"} {
+		if !strings.Contains(string(raw), line) {
+			t.Fatalf("missing %q in %q", line, raw)
+		}
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	assertConfigEqual(t, got, want)
+
+	// A later save of another setting, as the channel filter does, keeps them.
+	got.MinViewers = 100
+	if err := SaveTo(path, got); err != nil {
+		t.Fatalf("SaveTo again: %v", err)
+	}
+	again, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom again: %v", err)
+	}
+	want.MinViewers = 100
+	assertConfigEqual(t, again, want)
+
+	// An explicit bottom survives too; the defaults write nothing.
+	if err := SaveTo(path, Config{VideoChatPosition: VideoChatBottom}); err != nil {
+		t.Fatalf("SaveTo bottom: %v", err)
+	}
+	if raw, _ = os.ReadFile(path); string(raw) != "video_chat_position = \"bottom\"\n" {
+		t.Fatalf("explicit bottom saved as %q", raw)
+	}
+	if err := SaveTo(path, Config{VideoChatRows: 99, VideoChatPosition: "left"}); err != nil {
+		t.Fatalf("SaveTo invalid: %v", err)
+	}
+	if raw, _ = os.ReadFile(path); len(raw) != 0 {
+		t.Fatalf("invalid values were written: %q", raw)
+	}
+}

@@ -21,6 +21,51 @@ type Config struct {
 	// MinViewers is the minimum audience for channel lists. 0 means no floor.
 	// TOML key: min_viewers.
 	MinViewers int
+	// VideoChatRows is the height of the chat strip in the video mode, within
+	// MinVideoChatRows..MaxVideoChatRows. 0 means the default
+	// (DefaultVideoChatRows). TOML key: video_chat_rows.
+	VideoChatRows int
+	// VideoChatPosition places the chat strip of the video mode: VideoChatBottom
+	// or VideoChatTop. Empty means VideoChatBottom. TOML key:
+	// video_chat_position.
+	VideoChatPosition string
+}
+
+// Limits and values of the video chat strip keys. A value out of range or
+// unknown loads as the default, never as an error.
+const (
+	DefaultVideoChatRows = 8
+	MinVideoChatRows     = 3
+	MaxVideoChatRows     = 30
+
+	VideoChatBottom = "bottom"
+	VideoChatTop    = "top"
+)
+
+// normalizeVideoChatRows keeps rows inside the accepted range; anything else is
+// 0, the default.
+func normalizeVideoChatRows(rows int) int {
+	if rows < MinVideoChatRows || rows > MaxVideoChatRows {
+		return 0
+	}
+	return rows
+}
+
+// normalizeVideoChatPosition lowercases and trims pos; an unknown value is "",
+// the default.
+func normalizeVideoChatPosition(pos string) string {
+	switch p := strings.ToLower(strings.TrimSpace(pos)); p {
+	case VideoChatBottom, VideoChatTop:
+		return p
+	default:
+		return ""
+	}
+}
+
+// VideoChatOnTop reports whether the chat strip of the video mode goes above the
+// video.
+func (c Config) VideoChatOnTop() bool {
+	return normalizeVideoChatPosition(c.VideoChatPosition) == VideoChatTop
 }
 
 // Default returns a Config initialized with in-memory defaults.
@@ -140,6 +185,8 @@ func SaveTo(path string, cfg Config) error {
 	if cfg.MinViewers < 0 {
 		cfg.MinViewers = 0
 	}
+	cfg.VideoChatRows = normalizeVideoChatRows(cfg.VideoChatRows)
+	cfg.VideoChatPosition = normalizeVideoChatPosition(cfg.VideoChatPosition)
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -203,6 +250,12 @@ func formatTOML(cfg Config) string {
 	}
 	if cfg.MinViewers > 0 {
 		fmt.Fprintf(&b, "min_viewers = %d\n", cfg.MinViewers)
+	}
+	if rows := normalizeVideoChatRows(cfg.VideoChatRows); rows > 0 {
+		fmt.Fprintf(&b, "video_chat_rows = %d\n", rows)
+	}
+	if pos := normalizeVideoChatPosition(cfg.VideoChatPosition); pos != "" {
+		fmt.Fprintf(&b, "video_chat_position = %s\n", quoteTOML(pos))
 	}
 	return b.String()
 }
@@ -324,6 +377,20 @@ func parseTOML(input string) (Config, error) {
 				n = 0
 			}
 			cfg.MinViewers = n
+		case "video_chat_rows", "ui.video_chat_rows", "video.chat_rows":
+			// A bad value falls back to the default: the strip is cosmetic and
+			// must never keep the app from starting.
+			n, err := parseTOMLInt(rawVal)
+			if err != nil {
+				n = 0
+			}
+			cfg.VideoChatRows = normalizeVideoChatRows(n)
+		case "video_chat_position", "ui.video_chat_position", "video.chat_position":
+			val, err := unquoteTOML(rawVal)
+			if err != nil {
+				val = ""
+			}
+			cfg.VideoChatPosition = normalizeVideoChatPosition(val)
 		case "window_control", "player.window_control", "ui.window_control":
 			// Removed in v1.6: geometry belongs to the compositor. Accept the
 			// legacy key so old configs keep loading without error.

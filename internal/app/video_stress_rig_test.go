@@ -309,6 +309,8 @@ type stressOptions struct {
 	// viaRun goes through Run, detection included, instead of a program built here.
 	// Such a run has no handle to send messages to.
 	viaRun bool
+	// config is the config file Run reads; only with viaRun.
+	config string
 }
 
 // stressRig is the application on a PTY, with the terminal above on the far end:
@@ -386,6 +388,11 @@ func startStressRig(t *testing.T, opts stressOptions) *stressRig {
 	stopProgram := func() {}
 	if opts.viaRun {
 		dir := t.TempDir()
+		if opts.config != "" {
+			if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(opts.config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		go func() {
 			finished <- Run(Options{
 				Video: "sixel", Lang: i18n.LangEN,
