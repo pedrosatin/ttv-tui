@@ -17,7 +17,7 @@ Twitch no terminal para Linux, macOS e Windows. Navegue por categorias e canais 
 | macOS Intel (darwin/amd64) | Experimental; compila, sem compromisso de suporte |
 | Windows ARM (windows/arm64) | Experimental; compila, sem compromisso de suporte |
 
-A matriz define os alvos da v1.8. Compilação cruzada não comprova reprodução, áudio, login, clipboard ou encerramento em máquina real. A release v0.5.2 inclui arquivos para os três sistemas operacionais.
+A matriz define os alvos da v1.8. Compilação cruzada não comprova reprodução, áudio, login, clipboard ou encerramento em máquina real. A release v0.6.0 inclui arquivos para os três sistemas operacionais.
 
 Navegação, busca, favoritos locais, chat IRC e vídeo externo com pausa/volume compõem o escopo nos alvos suportados. Use um terminal com Unicode e cores ANSI, com pelo menos 80 colunas para a divisão lado a lado; o modo só-chat funciona abaixo dessa largura. No Linux, vídeo exige uma sessão gráfica e áudio configurados. No Windows, use Windows Terminal; testes automatizados de ConPTY ficam fora desta versão.
 
@@ -28,32 +28,32 @@ Navegação, busca, favoritos locais, chat IRC e vídeo externo com pausa/volume
 O script [`packaging/install.sh`](../packaging/install.sh) baixa o tarball da release e o arquivo `checksums.txt`, valida o hash SHA-256 com `sha256sum` ou `shasum -a 256` e instala o binário em `~/.local/bin/ttv-tui`, o atalho `.desktop` em `~/.local/share/applications/ttv-tui.desktop` e o ícone em `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
 
 ```bash
-# Instalar a release mais recente ou informar uma versão como 0.5.2
+# Instalar a release mais recente ou informar uma versão como 0.6.0
 ./packaging/install.sh
-./packaging/install.sh 0.5.2
+./packaging/install.sh 0.6.0
 
 # Exibir o plano de instalação sem baixar arquivos nem alterar o sistema
-./packaging/install.sh --dry-run 0.5.2
+./packaging/install.sh --dry-run 0.6.0
 
 # Instalar em um prefixo personalizado
-./packaging/install.sh --prefix "$HOME/.local" 0.5.2
+./packaging/install.sh --prefix "$HOME/.local" 0.6.0
 ```
 
 Também é possível executar o script diretamente do GitHub:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.5.2
+curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.6.0
 ```
 
 No macOS, o script instala apenas o binário em `~/.local/bin`; atalho e ícone são exclusivos do Linux. Use o arquivo `darwin_arm64` para Apple Silicon. Binários sem notarização baixados pelo navegador podem exigir liberação em Ajustes do Sistema → Privacidade e Segurança (Gatekeeper), após conferir origem e checksum. Não há notarização paga. Downloads pelo script/Homebrew não aplicam a quarentena do navegador.
 
 ### Windows x64: PowerShell
 
-Em um checkout, instale a versão 0.5.2:
+Em um checkout, instale a versão 0.6.0:
 
 ```powershell
 .\packaging\install.ps1 -DryRun
-.\packaging\install.ps1 -Version 0.5.2
+.\packaging\install.ps1 -Version 0.6.0
 winget install --id shinchiro.mpv -e
 winget install --id streamlink.streamlink -e
 ```
@@ -62,13 +62,13 @@ O script verifica SHA-256, instala em `%LOCALAPPDATA%\Programs\ttv-tui\bin` e ad
 
 ### Homebrew (macOS) e Scoop (Windows)
 
-A [fórmula Homebrew](../packaging/homebrew/README.md) usa a release v0.5.2 para macOS em Apple Silicon e Intel. Ela ainda não foi publicada nem validada no macOS. Após publicar o tap, o comando previsto é `brew install pedrosatin/tap/ttv-tui`. As dependências podem ser instaladas com `brew install mpv streamlink`.
+A [fórmula Homebrew](../packaging/homebrew/README.md) usa a release v0.6.0 para macOS em Apple Silicon e Intel. Ela ainda não foi publicada nem validada no macOS. Após publicar o tap, o comando previsto é `brew install pedrosatin/tap/ttv-tui`. As dependências podem ser instaladas com `brew install mpv streamlink`.
 
-O [manifesto Scoop](../packaging/scoop/ttv-tui.json) usa a release v0.5.2 para Windows amd64 e seu SHA-256. Para as dependências, use `scoop bucket add extras` e `scoop install extras/mpv extras/streamlink`.
+O [manifesto Scoop](../packaging/scoop/ttv-tui.json) usa a release v0.6.0 para Windows amd64 e seu SHA-256. Para as dependências, use `scoop bucket add extras` e `scoop install extras/mpv extras/streamlink`.
 
-### Binário da release (v0.5.2)
+### Binário da release (v0.6.0)
 
-Baixe o arquivo do seu sistema e arquitetura e o `checksums.txt` da [release v0.5.2](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.5.2). Exemplos: `ttv-tui_0.5.2_linux_amd64.tar.gz`, `ttv-tui_0.5.2_darwin_arm64.tar.gz` e `ttv-tui_0.5.2_windows_amd64.zip`. Linux e macOS também têm a outra arquitetura em tar.gz; Windows arm64 está disponível em zip. Consulte a matriz de suporte acima.
+Baixe o arquivo do seu sistema e arquitetura e o `checksums.txt` da [release v0.6.0](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.6.0). Exemplos: `ttv-tui_0.6.0_linux_amd64.tar.gz`, `ttv-tui_0.6.0_darwin_arm64.tar.gz` e `ttv-tui_0.6.0_windows_amd64.zip`. Linux e macOS também têm a outra arquitetura em tar.gz; Windows arm64 está disponível em zip. Consulte a matriz de suporte acima.
 
 Confira o SHA-256 do arquivo com a entrada correspondente em `checksums.txt` antes de extraí-lo. No Linux use `sha256sum`, no macOS `shasum -a 256` ou, no PowerShell do Windows, `Get-FileHash -Algorithm SHA256`. Extraia `ttv-tui` (ou `ttv-tui.exe` no Windows) e coloque-o em um diretório no `PATH`.
 
@@ -77,7 +77,7 @@ Confira o SHA-256 do arquivo com a entrada correspondente em `checksums.txt` ant
 Requer Go 1.27 ou superior:
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.5.2
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.6.0
 ```
 
 ### Arch Linux (AUR)
@@ -96,7 +96,7 @@ Requer Go 1.27:
 ```bash
 git clone https://github.com/pedrosatin/ttv-tui.git
 cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.5.2" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.6.0" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
 ### Atalho de desktop
@@ -123,6 +123,18 @@ O atalho executa `xdg-terminal-exec ttv-tui` com `Terminal=false` e `StartupWMCl
 
 - `sqlite3` no `PATH`. O `ttv-tui` executa o binário `sqlite3` apenas durante `ttv-tui login --from-browser` para copiar e consultar o banco de cookies do navegador pelo comando `.backup` do SQLite sem disputar lock com o navegador aberto. Não é necessário para navegar e assistir de forma anônima nem para importar credenciais via `ttv-tui login --import twt`.
 - Um navegador compatível logado em `twitch.tv` (Brave, Chrome, Chromium, Edge, Vivaldi, Opera ou Firefox) caso queira enviar mensagens no chat via `--from-browser`. No Linux, nos navegadores da família Chromium, `secret-tool` (`libsecret`) também precisa estar no `PATH` para ler o segredo OSCrypt Safe Storage no keyring da sessão. Navegar pelas categorias, assistir aos vídeos e ler o chat funcionam de forma anônima sem login.
+
+## Janela única (Linux, Wayland)
+
+No Linux com Wayland, o `ttv-tui` abre uma janela só, com a lista à esquerda, o vídeo no centro e o chat à direita. Não existe janela separada do mpv. Ela precisa de SDL3 e libmpv; sem eles, ou com `--terminal`, o app fica no terminal.
+
+| Tecla | Ação |
+|---|---|
+| `Ctrl+H` / `Ctrl+L` | Mostra ou esconde a lista / o chat |
+| `Ctrl+→` / `Ctrl+←` | Alarga / estreita a lista |
+| `Alt+←` / `Alt+→` | Alarga / estreita o chat |
+
+As larguras ficam salvas em `list_columns` e `chat_columns` no `config.toml`. Emoji colorido aparece como caixa por enquanto. Veja o [ADR 0011](adr/0011-janela-unica.md).
 
 ## Uso rápido
 
