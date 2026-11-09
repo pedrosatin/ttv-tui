@@ -48,8 +48,6 @@ type keyMap struct {
 	SwapSides         key.Binding
 	ChatMoreOpaque    key.Binding
 	ChatLessOpaque    key.Binding
-	// ToggleVideoChat shows or hides the chat strip, only in the video mode.
-	ToggleVideoChat key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -164,11 +162,6 @@ func defaultKeyMap() keyMap {
 		SwapSides:         key.NewBinding(key.WithKeys("ctrl+p")),
 		ChatMoreOpaque:    key.NewBinding(key.WithKeys("alt+up")),
 		ChatLessOpaque:    key.NewBinding(key.WithKeys("alt+down")),
-		// c (chat) is free in every other screen. It only acts on the video body,
-		// and an input on screen keeps it as text.
-		ToggleVideoChat: key.NewBinding(
-			key.WithKeys("c"),
-		),
 	}
 }
 
@@ -301,32 +294,10 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	if m.videoChatKey(msg) {
-		m.toggleVideoChat()
-		return m, nil
-	}
-
-	// r answers the panel's or the bar's offer before the list can claim the key,
-	// because the video layout hides the list. An input on screen keeps the letter.
-	if key.Matches(msg, m.keys.Retry) && m.videoRestartOffered() && !m.typingText() {
-		return m.retryPlayback()
-	}
-
-	// The mode hides the list, and this is the way to another channel without
-	// leaving it.
-	if m.videoListKey(msg) {
-		m.openVideoList()
-		return m, nil
-	}
-
 	// The filter menu is a visible overlay in every layout. Other list
 	// inputs stay suspended until the list is shown again.
 	if m.hiddenListKey(msg) {
-		if m.showVideo {
-			m.warnStatus(m.t("video.hidden_list_key"))
-		} else {
-			m.warnStatus(m.t("layout.hidden_list_key"))
-		}
+		m.warnStatus(m.t("layout.hidden_list_key"))
 		return m, nil
 	}
 
@@ -370,10 +341,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Clear):
-		if m.videoListOpen {
-			m.closeVideoList()
-			return m, nil
-		}
 		if m.Focus() == FocusChat {
 			m.focus = FocusList
 			m.composing = false
@@ -566,10 +533,6 @@ func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {
-	if m.videoChatHidden() {
-		m.warnStatus(m.t("video.chat_off_key"))
-		return m, nil
-	}
 	if m.warnChatHiddenByWidth() || !m.showChat || m.chatHiddenByWidth() {
 		return m, nil
 	}

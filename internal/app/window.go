@@ -28,8 +28,8 @@ func installedWindow() string {
 
 // openWindow starts the window and reports whether it took over. Anything short of
 // a confirmed window leaves the app in the terminal, as it always worked.
-func openWindow(opts Options, video string) bool {
-	if opts.Terminal || video != "" || os.Getenv(videoHostEnv) != "" ||
+func openWindow(opts Options) bool {
+	if opts.Terminal || os.Getenv(videoHostEnv) != "" ||
 		runtime.GOOS != "linux" || os.Getenv("WAYLAND_DISPLAY") == "" {
 		return false
 	}

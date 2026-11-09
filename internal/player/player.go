@@ -162,8 +162,6 @@ type Manager struct {
 	stopped  *sync.Cond
 	// inputConfErr is the last input.conf write failure, for the exit log.
 	inputConfErr error
-	// video is what StartEmbedded draws through.
-	video *SixelOutput
 	// keptLogin and keptVolume are the channel of the last session to end and the
 	// volume it ended on. They outlive the session: a retry may follow a start that
 	// failed and left none.
@@ -238,16 +236,6 @@ func (m *Manager) Generation() uint64 {
 // Start stops any previous session and starts playback for login in the mpv
 // window. It returns the new generation. The first event is StateStarting.
 func (m *Manager) Start(login string) (uint64, error) {
-	return m.start(login, false)
-}
-
-// StartEmbedded is Start with the video drawn through the output given to
-// SetVideoOutput. Without one it falls back to the window.
-func (m *Manager) StartEmbedded(login string) (uint64, error) {
-	return m.start(login, true)
-}
-
-func (m *Manager) start(login string, embedded bool) (uint64, error) {
 	if login == "" {
 		return 0, fmt.Errorf("player: empty channel login")
 	}
@@ -282,25 +270,10 @@ func (m *Manager) start(login string, embedded bool) (uint64, error) {
 		return gen, err
 	}
 
-	var video *SixelOutput
-	var videoWidth, videoHeight int
-	if embedded {
-		m.mu.Lock()
-		video = m.video
-		m.mu.Unlock()
-	}
-	if video != nil {
-		videoWidth, videoHeight = video.FrameSize()
-	}
-
 	command := sessionCommandOf(m.opts.Command)
 	noInputConf := sessionCommandOf(m.opts.CommandNoInputConf)
 	if m.defaultCommand {
 		command = defaultSessionCommand
-		if video != nil {
-			command = sixelSessionCommand(videoWidth, videoHeight, true)
-			noInputConf = sixelSessionCommand(videoWidth, videoHeight, false)
-		}
 	}
 	sess, err := startSession(sessionConfig{
 		Generation:         gen,
@@ -308,10 +281,6 @@ func (m *Manager) start(login string, embedded bool) (uint64, error) {
 		RuntimeDir:         m.opts.RuntimeDir,
 		Command:            command,
 		CommandNoInputConf: noInputConf,
-		PlayerLog:          m.defaultCommand && video != nil,
-		Video:              video,
-		VideoWidth:         videoWidth,
-		VideoHeight:        videoHeight,
 		Volume:             m.startVolume(login),
 		WriteInputConf:     m.opts.WriteInputConf,
 		SocketWait:         m.opts.SocketWait,
@@ -434,39 +403,6 @@ func (m *Manager) SetVolume(v int) error {
 	return sess.setVolume(clampVolume(v))
 }
 
-// SetVideoOutput gives StartEmbedded somewhere to draw. It only enables that
-// choice: Start keeps using the window. Call it before the first Start.
-func (m *Manager) SetVideoOutput(out *SixelOutput) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.video = out
-}
-
-// ResizeVideo asks the active session for frames of a new size. A session still
-// starting picks the size up when its IPC connects. A window session ignores it.
-func (m *Manager) ResizeVideo(width, height int) error {
-	m.mu.Lock()
-	sess := m.session
-	m.mu.Unlock()
-	if sess == nil {
-		return fmt.Errorf("player: no active session")
-	}
-	return sess.resizeVideo(width, height)
-}
-
-// SetVideoTrack turns the active session's video off and back on while its audio
-// goes on. A session still starting applies it when its IPC connects. A window
-// session ignores it: the panel says nothing about the window.
-func (m *Manager) SetVideoTrack(on bool) error {
-	m.mu.Lock()
-	sess := m.session
-	m.mu.Unlock()
-	if sess == nil {
-		return fmt.Errorf("player: no active session")
-	}
-	return sess.setVideoTrack(on)
-}
-
 // Volume returns the last known volume for the active session, or 0.
 func (m *Manager) Volume() int {
 	m.mu.Lock()
@@ -543,59 +479,6 @@ func commandNoInputConf(login, endpoint string) *exec.Cmd {
 // playerCommand omits --input-conf when inputConf is empty.
 func playerCommand(login, endpoint, inputConf string) *exec.Cmd {
 	return streamlinkCommand(login, mpvArgs(endpoint, inputConf))
-}
-
-// sixelSessionCommand is the session command that draws in the terminal.
-func sixelSessionCommand(width, height int, withInputConf bool) sessionCommand {
-	return func(login string, layout sessionLayout) *exec.Cmd {
-		inputConf := ""
-		if withInputConf {
-			inputConf = inputConfPath(layout.Dir)
-		}
-		return sixelCommand(login, layout.Endpoint, inputConf, playerLogPath(layout.Dir), width, height)
-	}
-}
-
-// sixelCommand runs mpv with its sixel output on stdout, which reaches a pipe of
-// ours instead of the terminal.
-//
-// --no-terminal keeps mpv away from /dev/tty and off stdout with its own messages;
-// the sixel output is not affected. -v hands the player's stdout to streamlink's,
-// so --logfile moves streamlink's log off it: a line landing inside a frame would
-// corrupt it, and the frame would swallow the line that announces an ad.
-//
-// logFile has to be a real file. streamlink resolves the path before opening it,
-// and /dev/stderr on a pipe resolves to /proc/PID/fd/pipe:[N], which nothing can
-// open: streamlink then dies in its logging setup, before any stream.
-func sixelCommand(login, endpoint, inputConf, logFile string, width, height int) *exec.Cmd {
-	return streamlinkCommand(login, sixelMPVArgs(endpoint, inputConf, width, height),
-		"-v", "--logfile", logFile)
-}
-
-// sixelBox is the height and row count that make mpv draw frames exactly height
-// tall. mpv keeps the last terminal row free and, with no terminal to ask, counts
-// 25 rows: 360 would come out as 342. So each row is one sixel band, plus one band
-// for the row it gives up. height is a multiple of the band.
-func sixelBox(height int) (boxHeight, rows int) {
-	return height + sixelBandHeight, height/sixelBandHeight + 1
-}
-
-// sixelMPVArgs undoes --force-window: it would keep the video output alive across
-// vid=no, and resizeVideo depends on mpv rebuilding it.
-func sixelMPVArgs(endpoint, inputConf string, width, height int) []string {
-	boxHeight, rows := sixelBox(height)
-	return append(mpvArgs(endpoint, inputConf),
-		"--force-window=no",
-		"--no-terminal",
-		"--vo=sixel",
-		fmt.Sprintf("--vo-sixel-width=%d", width),
-		fmt.Sprintf("--vo-sixel-height=%d", boxHeight),
-		fmt.Sprintf("--vo-sixel-rows=%d", rows),
-		"--vo-sixel-buffered=yes",
-		"--vo-sixel-alt-screen=no",
-		"--vo-sixel-config-clear=no",
-		fmt.Sprintf("--vf=fps=%d", sixelFPS),
-	)
 }
 
 func mpvArgs(endpoint, inputConf string) []string {

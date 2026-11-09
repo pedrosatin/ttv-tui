@@ -53,6 +53,25 @@ func TestVolumeFromMPVWindowUpdatesStatusBar(t *testing.T) {
 	}
 }
 
+// The bar is judged before the player answers: the fake always says 100.
+func TestReopeningAChannelKeepsTheVolumeOnTheBar(t *testing.T) {
+	m := playingModel(t, i18n.LangEN, &fakePlayback{})
+	updated, _ := m.Update(PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 40})
+	m = updated.(Model)
+
+	updated, _ = m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	m = updated.(Model)
+	if m.PlayerVolume() != 40 {
+		t.Fatalf("same channel again: volume %d", m.PlayerVolume())
+	}
+
+	updated, _ = m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "alanzoka"}})
+	m = updated.(Model)
+	if m.PlayerVolume() != 100 {
+		t.Fatalf("another channel: volume %d", m.PlayerVolume())
+	}
+}
+
 // A pause in the mpv window never reaches the TUI as a key, so the one-time
 // window notice cannot wait for one.
 func TestPauseFromMPVWindowDismissesWindowNotice(t *testing.T) {

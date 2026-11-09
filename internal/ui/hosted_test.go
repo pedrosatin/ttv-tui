@@ -101,13 +101,13 @@ func TestHostedPanelGivesWayToTheFilterMenu(t *testing.T) {
 func TestHostedPublishesOnlyChanges(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	host := m.videoHost.(*recordingHost)
-	m, _ = m.syncVideoPanel(m, nil)
-	m, _ = m.syncVideoPanel(m, nil)
+	m = m.syncHostPanel()
+	m = m.syncHostPanel()
 	if len(host.panels) != 1 {
 		t.Fatalf("publicou %d vezes sem mudança: %+v", len(host.panels), host.panels)
 	}
 	m.toggleChatPanel()
-	m, _ = m.syncVideoPanel(m, nil)
+	m = m.syncHostPanel()
 	if len(host.panels) != 2 || host.panels[1].Cols != 169 {
 		t.Fatalf("depois de esconder o chat: %+v", host.panels)
 	}

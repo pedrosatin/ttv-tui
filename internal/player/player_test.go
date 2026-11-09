@@ -543,10 +543,6 @@ func runPlayerHelper() {
 			InitialPause:     os.Getenv("TTV_PLAYER_HELPER_INIT_PAUSE") == "1",
 			ExternalVolume:   helperEnvFloat("TTV_PLAYER_HELPER_EXTERNAL_VOLUME"),
 		})
-	case "sixel-play":
-		helperSixelPlay(socket, login)
-	case "fake-streamlink":
-		helperFakeStreamlink(login)
 	case "ad-then-play":
 		fmt.Println("[plugins.twitch][info] Waiting for pre-roll ads to finish, be patient")
 		fmt.Println("[stream.hls][info] Filtering out segments and pausing stream output")
@@ -608,21 +604,6 @@ func runPlayerHelper() {
 		fmt.Fprintf(os.Stderr, "unknown helper mode %q\n", mode)
 		os.Exit(2)
 	}
-}
-
-// helperSixelPlay writes what mpv writes to a pipe, plus one streamlink line
-// between two frames, while the fake IPC runs.
-func helperSixelPlay(socket, login string) {
-	go func() {
-		for i := 0; ; i++ {
-			_, _ = os.Stdout.WriteString(mpvStream)
-			if i == 40 {
-				fmt.Println("[stream.hls][info] Filtering out segments and pausing stream output")
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
-	}()
-	helperPlay(socket, login, false, helperIPCOptions{LogCommandsPath: os.Getenv("TTV_PLAYER_HELPER_CMDS")})
 }
 
 func helperDelay() time.Duration {
@@ -1316,6 +1297,14 @@ func TestRestartKeepsTheVolumeOfTheSameChannel(t *testing.T) {
 	// Another channel is the only thing that goes back to the baseline.
 	settled(start("alanzoka"), 100)
 	settled(start("gaules"), 100)
+}
+
+func TestDefaultSocketWaitCoversASlowNetwork(t *testing.T) {
+	// streamlink took 15.6s to reach mpv behind a VPN at 380ms RTT.
+	const measured = 15600 * time.Millisecond
+	if got := New(Options{}).opts.SocketWait; got < measured*3/2 {
+		t.Fatalf("SocketWait = %v, too close to the %v measured", got, measured)
+	}
 }
 
 func TestVolumeZeroSurvivesTheRestart(t *testing.T) {

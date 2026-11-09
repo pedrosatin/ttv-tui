@@ -264,13 +264,10 @@ type Model struct {
 	// pendingRecents is the store-ordered recent list after a channel is opened.
 	// VisibleItems keeps using recents until the next list load (refresh, back
 	// to categories, reopen) applies this slice, so selection does not jump rows.
-	pendingRecents  []twitch.Channel
-	playback        Playback
-	playerGen       uint64
-	playerSwitching bool
-	// playerEmbedded is the output of the current playback: the panel or, when
-	// false, the mpv window. The layout picks it at Start and never after.
-	playerEmbedded     bool
+	pendingRecents     []twitch.Channel
+	playback           Playback
+	playerGen          uint64
+	playerSwitching    bool
 	playerState        PlayerState
 	playerLogin        string
 	playerLastLine     string
@@ -291,20 +288,13 @@ type Model struct {
 	chatPanel                  chatPanel
 	composing                  bool
 	composeDraft               string
-	// showList / showChat are the session layout flags (ticket 02). Both start
-	// true (split) unless the video layout can draw (see openInVideoLayout).
+	// showList / showChat are the session layout flags (ticket 02). Both start true.
 	// Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag independently.
 	// Layout is not persisted to disk.
-	videoRequested bool
-	videoReason    string
-	// videoStateRows is how many rows the persistent video state line took from
-	// the terminal height at the last resize. See videoStateLines.
-	videoStateRows int
-	videoSurface   VideoSurface
-	videoHost      VideoHost
-	hostPublished  HostPanel
-	chatOverlay    bool
-	panelsSwapped  bool
+	videoHost     VideoHost
+	hostPublished HostPanel
+	chatOverlay   bool
+	panelsSwapped bool
 	// chatOverlayOpacity is the percent asked for; 0 means the default.
 	chatOverlayOpacity int
 	// hostedListCols and hostedChatCols are the widths asked for; 0 means automatic.
@@ -312,23 +302,11 @@ type Model struct {
 	hostedChatCols int
 	hostedPersist  HostedColumnsPersist
 	hostedSaveGen  int
-	videoPublished VideoPanel
-	showVideo      bool
-	// videoListOpen is the list opened over the panel. It implies showVideo.
-	videoListOpen bool
-	// videoChatOff hides the chat strip of the video mode, so the panel takes
-	// every row. It outlives leaving the mode, for the rest of the session.
-	videoChatOff bool
-	// videoChatRows is the height of the chat strip; zero means
-	// defaultVideoChatRows.
-	videoChatRows int
-	// videoChatTop puts the chat strip above the panel instead of under it.
-	videoChatTop bool
-	showList     bool
-	showChat     bool
-	width        int
-	height       int
-	quitting     bool
+	showList       bool
+	showChat       bool
+	width          int
+	height         int
+	quitting       bool
 }
 
 // New creates a new UI Model backed by the given i18n catalog and options.
@@ -368,7 +346,6 @@ func New(catalog *i18n.Catalog, opts ...Option) Model {
 	if m.invalidTokenInit {
 		m.authNotice = m.t("auth.token_invalid_notice")
 	}
-	m.openInVideoLayout()
 	return m
 }
 
@@ -504,7 +481,7 @@ func (m Model) checkTokenCmd() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	if model, ok := next.(Model); ok {
-		return model.syncVideoPanel(m, cmd)
+		return model.syncHostPanel(), cmd
 	}
 	return next, cmd
 }
@@ -546,7 +523,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.clearCopyNoticeIfExpired(msg.gen), nil
 
 	case tea.WindowSizeMsg:
-		m.applyWindowSize(msg.Width, msg.Height)
+		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 
 	case CategoriesLoadedMsg:
@@ -656,7 +633,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.store != nil {
 			cmds = append(cmds, m.saveStoreCmd())
 		}
-		m.closeVideoList()
 		if m.playback != nil {
 			// The player keeps the volume of a channel it restarts.
 			if selected.Login != m.playerLogin {
@@ -668,8 +644,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerFailure = PlayerFailureNone
 			m.playerBreakElapsed = 0
 			m.playerSwitching = true
-			m.playerEmbedded = m.embeddedLayout()
-			cmds = append(cmds, m.playback.Start(selected.Login, m.playerEmbedded))
+			cmds = append(cmds, m.playback.Start(selected.Login))
 		}
 		if m.chat != nil || m.chatPanel.channel != "" {
 			if chatCmd := m.startChatChannel(selected.Login); chatCmd != nil {
@@ -743,7 +718,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerKeysWarnedGen = msg.Generation
 			m.warnStatus(m.t("player.warn.input_conf"))
 		}
-		if msg.State == PlayerStatePlaying && !m.playerWindowNotified && !m.playerEmbedded && m.videoHost == nil {
+		if msg.State == PlayerStatePlaying && !m.playerWindowNotified && m.videoHost == nil {
 			// mpv opens its own window; someone new to the app may not notice it.
 			m.playerWindowNotified = true
 			m.playerWindowNotice = true

@@ -143,8 +143,6 @@ var allowedExceptions = map[string]bool{
 	"_":          true,
 	// LayoutMode identifiers (internal; the screen shows layout.mode.* labels)
 	"split": true,
-	"video": true, // layout identifier and CLI flag
-	"sixel": true, // backend identifier
 	"focus": true,
 
 	// Twitch, IRC, browser, and external tool protocols / tokens

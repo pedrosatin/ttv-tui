@@ -30,13 +30,6 @@ type sessionConfig struct {
 	BreakMaxHold time.Duration
 	RegistryDir  string
 	Emit         func(Event)
-	// PlayerLog means Command logs to playerLogPath instead of its output, and the
-	// session follows that file as it does stderr.
-	PlayerLog bool
-	// Video receives the frames on the player's stdout. Nil reads stdout as lines.
-	Video *SixelOutput
-	// VideoWidth and VideoHeight are the frame size in Command's arguments.
-	VideoWidth, VideoHeight int
 	// Volume is what the player is set to once its IPC connects.
 	Volume int
 }
@@ -108,8 +101,6 @@ type Session struct {
 	ipcConn net.Conn
 	nextReq atomic.Int64
 	pending map[int64]pendingCommand
-	// videoOff means the panel is hidden and mpv's video track stays off.
-	videoOff bool
 }
 
 // readerDrainWait bounds how long the exit path waits for the reader goroutines
@@ -189,17 +180,6 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	cmd.Stdout = stdoutW
 	cmd.Stderr = stderrW
 	s.outputs = []*os.File{stdout, stderr}
-	var playerLog *os.File
-	if cfg.PlayerLog {
-		playerLog, err = openPlayerLog(playerLogPath(dir))
-		if err != nil {
-			closeFiles(stdout, stdoutW, stderr, stderrW)
-			s.cleanupFiles()
-			cancel()
-			return nil, err
-		}
-		s.outputs = append(s.outputs, playerLog)
-	}
 
 	s.emit(Event{
 		Generation: cfg.Generation,
@@ -253,16 +233,8 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	}
 
 	s.readers.Add(2)
-	if cfg.Video != nil {
-		go s.consumeVideo(ctx, stdout)
-	} else {
-		go s.consumeLines(ctx, stdout)
-	}
+	go s.consumeLines(ctx, stdout)
 	go s.consumeLines(ctx, stderr)
-	if playerLog != nil {
-		s.readers.Add(1)
-		go s.consumeLines(ctx, &logFollower{ctx: ctx, file: playerLog, gone: s.waitDone})
-	}
 	go s.waitProcess()
 	go s.superviseIPC(ctx)
 	go s.superviseBreak(ctx)
@@ -397,27 +369,6 @@ func (s *Session) consumeLines(ctx context.Context, r io.Reader) {
 	}
 }
 
-// consumeVideo reads a stdout that carries sixel frames: frames go to the video
-// output and whatever text is left takes the path of any other line.
-func (s *Session) consumeVideo(ctx context.Context, r io.Reader) {
-	defer s.readers.Done()
-	demux := sixelDemux{onLine: s.handleLine, onFrame: s.cfg.Video.Submit}
-	defer demux.flush()
-	buf := make([]byte, 64*1024)
-	for {
-		n, err := r.Read(buf)
-		demux.feed(buf[:n])
-		if err != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-	}
-}
-
 func (s *Session) handleLine(line string) {
 	f := FailureNone
 	if strings.Contains(strings.ToLower(line), "error") {
@@ -491,17 +442,6 @@ func (s *Session) superviseIPC(ctx context.Context) {
 	// without reading get_property; later observe_property events still track
 	// manual/window changes.
 	s.applyPlaybackBaseline()
-	if s.cfg.Video != nil {
-		// The panel may have changed while mpv was starting. ipcConn is already
-		// set, so a change after this read reaches mpv through setVideoTrack.
-		if !s.cfg.Video.PanelVisible() {
-			_ = s.setVideoTrack(false)
-		}
-		if w, h := s.cfg.Video.FrameSize(); w != s.cfg.VideoWidth || h != s.cfg.VideoHeight {
-			_ = s.resizeVideo(w, h)
-		}
-	}
-
 	readErr := make(chan error, 1)
 	go func() {
 		readErr <- readIPCMessages(conn, s.handleIPCMessage)
@@ -718,62 +658,6 @@ func (s *Session) togglePause() error {
 		paused: want,
 		osd:    true,
 	})
-}
-
-// resizeVideo changes the size of the frames mpv produces. mpv reads the
-// vo-sixel size only when it builds the video output, and setting vo to the value
-// it already has is a no-op, so the video track goes off and back on. With the
-// track off the new size just waits for it: turning it on here would bring video
-// back to a hidden panel.
-func (s *Session) resizeVideo(width, height int) error {
-	if s.cfg.Video == nil {
-		return nil
-	}
-	s.cmdMu.Lock()
-	defer s.cmdMu.Unlock()
-	if s.ipcConn == nil {
-		return fmt.Errorf("player: ipc not connected")
-	}
-	boxHeight, rows := sixelBox(height)
-	commands := [][]any{
-		{"set_property", "options/vo-sixel-width", width},
-		{"set_property", "options/vo-sixel-height", boxHeight},
-		{"set_property", "options/vo-sixel-rows", rows},
-	}
-	if !s.videoOff {
-		commands = append(commands,
-			[]any{"set_property", "vid", "no"},
-			[]any{"set_property", "vid", "auto"},
-		)
-	}
-	for _, cmd := range commands {
-		if err := writeIPC(s.ipcConn, map[string]any{"command": cmd}); err != nil {
-			return fmt.Errorf("player: ipc write: %w", err)
-		}
-	}
-	return nil
-}
-
-// setVideoTrack stops mpv decoding and encoding video for a hidden panel, and
-// brings it back. mpv refuses vid=yes: auto selects the track again.
-func (s *Session) setVideoTrack(on bool) error {
-	if s.cfg.Video == nil {
-		return nil
-	}
-	s.cmdMu.Lock()
-	defer s.cmdMu.Unlock()
-	s.videoOff = !on
-	if s.ipcConn == nil {
-		return nil
-	}
-	value := "no"
-	if on {
-		value = "auto"
-	}
-	if err := writeIPC(s.ipcConn, map[string]any{"command": []any{"set_property", "vid", value}}); err != nil {
-		return fmt.Errorf("player: ipc write: %w", err)
-	}
-	return nil
 }
 
 func (s *Session) adjustVolume(delta int) error {

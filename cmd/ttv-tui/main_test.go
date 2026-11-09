@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -270,37 +269,5 @@ func TestDoctorCLI(t *testing.T) {
 	}
 	if code := run([]string{"doctor", "extra"}, &stdout, &stderr); code != 2 {
 		t.Fatalf("argument exit = %d", code)
-	}
-}
-
-func TestVideoFlagGivenEmptyIsTold(t *testing.T) {
-	for _, tc := range []struct {
-		args []string
-		want bool
-	}{
-		{nil, false},
-		{[]string{"--lang", "en"}, false},
-		{[]string{"--video="}, true},
-		{[]string{"--video=sixel"}, true},
-	} {
-		fs := flag.NewFlagSet("t", flag.ContinueOnError)
-		fs.String("video", "", "")
-		fs.String("lang", "", "")
-		if err := fs.Parse(tc.args); err != nil {
-			t.Fatal(err)
-		}
-		if got := flagGiven(fs, "video"); got != tc.want {
-			t.Fatalf("%v: got %v", tc.args, got)
-		}
-	}
-}
-
-func TestVideoConfigHintInRootHelp(t *testing.T) {
-	for _, lang := range []string{"en", "pt-BR"} {
-		var out, errOut bytes.Buffer
-		code := runWithIO([]string{"--lang", lang, "--help"}, strings.NewReader(""), &out, &errOut, app.LoginOptions{ConfigPath: filepath.Join(t.TempDir(), "config.toml")})
-		if code != 0 || !strings.Contains(out.String(), `video = "sixel"`) || !strings.Contains(out.String(), "--video=sixel") {
-			t.Fatalf("%s: help does not explain config and flag: %s", lang, out.String())
-		}
 	}
 }

@@ -299,6 +299,18 @@ func (m Model) saveHostedColumns(gen int) tea.Cmd {
 	}
 }
 
+// syncHostPanel tells the window about a changed video region.
+func (m Model) syncHostPanel() Model {
+	if m.videoHost == nil {
+		return m
+	}
+	if panel := m.hostedPanel(); panel != m.hostPublished {
+		m.videoHost.SetPanel(panel)
+		m.hostPublished = panel
+	}
+	return m
+}
+
 // hostedPanel is the video's region, in 1-based cells. An overlay takes the screen
 // over, so the zero value tells the host to draw the TUI's cells there instead.
 func (m Model) hostedPanel() HostPanel {

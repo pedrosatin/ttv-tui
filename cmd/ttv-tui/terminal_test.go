@@ -64,7 +64,4 @@ func TestDoctorWithRedirectedStdinAndStdout(t *testing.T) {
 	if bytes.Contains(report, []byte("\x1b")) {
 		t.Fatalf("terminal escapes in a redirected report: %q", report)
 	}
-	if !bytes.Contains(report, []byte("Sixel in terminal: NOT TESTED")) || !bytes.Contains(report, []byte("Next step:")) {
-		t.Fatalf("no sixel diagnostic: %q", report)
-	}
 }

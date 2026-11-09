@@ -25,12 +25,7 @@ import (
 
 // Options configures a single invocation of the application.
 type Options struct {
-	// Video is the --video flag. It overrides the config when not empty or when
-	// VideoSet says the flag was given empty, which turns the mode off for this run.
-	Video      string
-	VideoSet   bool
-	SixelProbe player.SixelProbe
-	Lang       string
+	Lang string
 	// Terminal keeps the app in the terminal even where the window could open.
 	Terminal   bool
 	ConfigPath string
@@ -55,9 +50,6 @@ func earlyCatalog() *i18n.Catalog {
 
 // Run composes config, i18n, Source, player, chat, and the UI model and runs the TUI program.
 func Run(opts Options) error {
-	if opts.Video != "" && opts.Video != "sixel" {
-		return errors.New(earlyCatalog().T("video.invalid_backend"))
-	}
 	if opts.Lang != "" && !i18n.IsSupportedFlag(opts.Lang) {
 		return fmt.Errorf(earlyCatalog().T("app.err_unsupported_lang"), opts.Lang, i18n.LangEN, i18n.LangPTBR)
 	}
@@ -79,16 +71,14 @@ func Run(opts Options) error {
 	if cfgPath == "" {
 		cfgPath, _ = config.DefaultPath()
 	}
-	video := videoBackend(opts, cfg)
-	if openWindow(opts, video) {
+	if openWindow(opts) {
 		return nil
 	}
 	var hostOption ui.Option
 	if path := os.Getenv(videoHostEnv); path != "" {
-		// The hosting window draws the video, so no terminal backend applies.
 		if host, err := dialVideoHost(path); err == nil {
 			defer host.Close()
-			hostOption, video = ui.WithVideoHost(host), ""
+			hostOption = ui.WithVideoHost(host)
 		}
 	}
 
@@ -203,21 +193,7 @@ func Run(opts Options) error {
 		}
 	}
 
-	videoReason := ""
-	programOutput := output
-	var videoSurface ui.Option
-	if video != "" {
-		videoReason = detectVideo(ctx, opts, input, output)
-		if videoReason == "" {
-			var stopVideo func()
-			programOutput, videoSurface, stopVideo = startVideo(output, playerMgr, probeCell(ctx, input, output))
-			defer stopVideo()
-		}
-	}
-
 	uiOpts := []ui.Option{
-		ui.WithVideo(video != "", videoReason),
-		videoSurface,
 		hostOption,
 		ui.WithSource(source),
 		ui.WithPlayback(newPlaybackBridge(playerMgr)),
@@ -225,8 +201,6 @@ func Run(opts Options) error {
 		ui.WithStore(appStore),
 		ui.WithFavorites(store.ToTwitchChannels(st.Favorites)),
 		ui.WithRecents(store.ToTwitchChannels(st.Recents)),
-		ui.WithVideoChatRows(cfg.VideoChatRows),
-		ui.WithVideoChatOnTop(cfg.VideoChatOnTop()),
 	}
 	if cfgPath != "" {
 		// Reread before each save: a `ttv-tui login` in another terminal must not be
@@ -292,7 +266,7 @@ func Run(opts Options) error {
 	progOpts = append(progOpts, tea.WithAltScreen())
 	progOpts = append(progOpts,
 		tea.WithInput(input),
-		tea.WithOutput(programOutput),
+		tea.WithOutput(output),
 		tea.WithContext(ctx),
 		tea.WithoutSignalHandler(),
 	)

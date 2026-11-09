@@ -142,9 +142,6 @@ func (m Model) View() (view string) {
 	if m.quitting {
 		return ""
 	}
-	if state := m.videoStateView(); len(state) > 0 {
-		return strings.Join(state, "\n") + "\n" + m.frame()
-	}
 	return m.frame()
 }
 
@@ -159,14 +156,6 @@ func (m Model) frame() string {
 	overlayLines := m.helpViewLines()
 	if len(overlayLines) == 0 {
 		overlayLines = m.renderChannelFilterMenuLines(m.width)
-	}
-
-	if m.videoBodyShown() {
-		available := m.height - 1
-		if m.height <= 0 {
-			available = 24
-		}
-		return m.videoView(available, overlayLines, status)
 	}
 
 	if m.videoHost != nil && m.width > 0 && m.height > 1 {
@@ -420,15 +409,6 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		if m.videoHost != nil && line == m.t("help.layout") {
 			out = append(out, wrapChatRow("  ", m.t("help.hosted_resize"), maxWidth)...)
 		}
-	}
-	if m.videoRequested {
-		key := m.videoReason
-		if key == "" {
-			key = "video.help"
-		}
-		out = append(out, wrapChatRow("  ", m.t(key), maxWidth)...)
-	} else if m.videoHost == nil {
-		out = append(out, wrapChatRow("  ", m.t("help.video_enable"), maxWidth)...)
 	}
 	out = append(out, m.renderHelpColorLines(maxWidth)...)
 	if line := m.playerErrorLine(); line != "" {

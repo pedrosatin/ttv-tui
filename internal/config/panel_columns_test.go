@@ -106,3 +106,28 @@ func TestChatOverlayOpacityBadValuesMeanDefault(t *testing.T) {
 		}
 	}
 }
+
+func TestRemovedVideoKeysAreIgnored(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	body := "video = \"sixel\"\nvideo_chat_rows = 12\nvideo_chat_position = \"top\"\nmin_viewers = 7\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("config antigo precisa continuar abrindo: %v", err)
+	}
+	if got.MinViewers != 7 {
+		t.Fatalf("as outras chaves se perderam: %+v", got)
+	}
+	if err := SaveTo(path, got); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(saved), "video") {
+		t.Fatalf("a chave antiga voltou ao arquivo: %q", saved)
+	}
+}
