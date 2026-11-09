@@ -304,6 +304,9 @@ type Model struct {
 	videoHost      VideoHost
 	hostPublished  HostPanel
 	chatOverlay    bool
+	panelsSwapped  bool
+	// chatOverlayOpacity is the percent asked for; 0 means the default.
+	chatOverlayOpacity int
 	// hostedListCols and hostedChatCols are the widths asked for; 0 means automatic.
 	hostedListCols int
 	hostedChatCols int
@@ -508,6 +511,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case hostedNoticeMsg:
+		if m.statusNotice == msg.text {
+			m.clearStatusNotice()
+		}
+		return m, nil
 	case hostedSaveMsg:
 		return m, m.saveHostedColumns(msg.gen)
 	case tea.BatchMsg:

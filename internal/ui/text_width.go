@@ -35,11 +35,16 @@ func sanitizeScreenText(s string) string {
 	return normalizeScreenText(sanitizeChatText(s))
 }
 
+// exactCellWidths is set in the hosted window. Its terminal emulator measures text
+// the same way this package does, so the guards for terminals that draw ambiguous
+// glyphs two cells wide only cost columns there, and cut text that fits.
+var exactCellWidths bool
+
 // fitScreenLines leaves one cell unused on rows containing wide characters:
 // even isolated emoji can occupy one or two cells depending on the terminal.
 // Apply after panel composition so the separator keeps its fixed column.
 func fitScreenLines(view string, width int) string {
-	if width <= 0 {
+	if width <= 0 || exactCellWidths {
 		return view
 	}
 	rows := strings.Split(view, "\n")

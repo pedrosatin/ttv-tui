@@ -584,7 +584,8 @@ func (s *Session) showControlOSD(kind pendingKind) {
 	s.cmdMu.Lock()
 	defer s.cmdMu.Unlock()
 	if s.ipcConn != nil {
-		_ = writeIPC(s.ipcConn, map[string]any{"command": []any{"show-text", text}})
+		// A plain list reaches the screen as the literal text; the flag asks mpv to expand it.
+		_ = writeIPC(s.ipcConn, map[string]any{"command": map[string]any{"name": "show-text", "text": text, "_flags": []any{"expand-properties"}}})
 	}
 }
 

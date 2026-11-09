@@ -45,6 +45,9 @@ type keyMap struct {
 	ChatNarrower  key.Binding
 	// ToggleChatOverlay only acts in the hosted window.
 	ToggleChatOverlay key.Binding
+	SwapSides         key.Binding
+	ChatMoreOpaque    key.Binding
+	ChatLessOpaque    key.Binding
 	// ToggleVideoChat shows or hides the chat strip, only in the video mode.
 	ToggleVideoChat key.Binding
 }
@@ -158,6 +161,9 @@ func defaultKeyMap() keyMap {
 		ChatWider:         key.NewBinding(key.WithKeys("alt+left")),
 		ChatNarrower:      key.NewBinding(key.WithKeys("alt+right")),
 		ToggleChatOverlay: key.NewBinding(key.WithKeys("ctrl+o")),
+		SwapSides:         key.NewBinding(key.WithKeys("ctrl+p")),
+		ChatMoreOpaque:    key.NewBinding(key.WithKeys("alt+up")),
+		ChatLessOpaque:    key.NewBinding(key.WithKeys("alt+down")),
 		// c (chat) is free in every other screen. It only acts on the video body,
 		// and an input on screen keeps it as text.
 		ToggleVideoChat: key.NewBinding(
@@ -533,7 +539,7 @@ func (m *Model) toggleHelp() {
 // updateHelpKey consumes every key while the help is open: it closes, scrolls,
 // or does nothing. Nothing here may touch the state behind the help.
 func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	total := len(m.renderHelpLines(m.width))
+	total := len(m.renderHelpLines(m.helpTextWidth()))
 	page := max(m.helpPageRows(total)-1, 1)
 	offset := m.helpOffset(total)
 	switch {

@@ -362,11 +362,12 @@ func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth, selectedIdx
 		return nil
 	}
 	var rows []string
+	var starts []bool
 	for i := len(msgs) - 1; i >= 0 && len(rows) < budget; i-- {
 		msg := msgs[i]
 		lead, content := m.formatChatMessageParts(msg, i == selectedIdx)
 		limit := maxWidth
-		if limit > 1 && hasWideRune(lead+content) {
+		if limit > 1 && hasWideRune(lead+content) && !exactCellWidths {
 			limit--
 		}
 		// Drop the secondary author badge before it would force content to wrap.
@@ -375,12 +376,37 @@ func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth, selectedIdx
 			msg.Badges = nil
 			lead, content = m.formatChatMessageParts(msg, i == selectedIdx)
 		}
-		rows = append(wrapChatRow(lead, content, maxWidth), rows...)
+		wrapped := wrapChatRow(lead, content, maxWidth)
+		first := make([]bool, len(wrapped))
+		first[0] = true
+		rows = append(wrapped, rows...)
+		starts = append(first, starts...)
+	}
+	if m.videoHost != nil {
+		return trimToMessageStart(rows, starts, budget)
 	}
 	if len(rows) > budget {
 		rows = rows[len(rows)-budget:]
 	}
 	return rows
+}
+
+// trimToMessageStart keeps the last budget rows without opening on the tail of a
+// message, whose author would be off screen. The rows it gives up become blanks at
+// the top, so the newest message stays against the input line.
+func trimToMessageStart(rows []string, starts []bool, budget int) []string {
+	if len(rows) <= budget {
+		return rows
+	}
+	base := len(rows) - budget
+	cut := base
+	for cut < len(rows) && !starts[cut] {
+		cut++
+	}
+	if cut == len(rows) { // one message taller than the panel: show its end
+		return rows[base:]
+	}
+	return append(make([]string, cut-base), rows[cut:]...)
 }
 
 // wrapChatRow wraps lead+content into rows no wider than maxWidth cells. The
@@ -395,7 +421,7 @@ func wrapChatRow(lead, content string, maxWidth int) []string {
 	content = normalizeScreenText(content)
 	// Leave the final cell free before wrapping, so the screen-level guard
 	// removes padding only and never drops the end of a chat message.
-	if maxWidth > 1 && hasWideRune(lead+content) {
+	if maxWidth > 1 && hasWideRune(lead+content) && !exactCellWidths {
 		maxWidth--
 	}
 	if maxWidth <= 0 {

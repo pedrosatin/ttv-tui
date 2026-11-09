@@ -284,7 +284,9 @@ func (m Model) statusParts() statusContent {
 		}
 		c.extra = append(c.extra, context...)
 	}
-	if m.playerState != PlayerStateError && m.playerInfoLine != "" {
+	// A streamlink log line ("[plugins.twitch][info] ...") says nothing to the viewer.
+	rawLog := m.videoHost != nil && strings.HasPrefix(m.playerInfoLine, "[")
+	if m.playerState != PlayerStateError && m.playerInfoLine != "" && !rawLog {
 		c.extra = append(c.extra, fmt.Sprintf(m.t("player.info"), m.playerInfoLine))
 	}
 	c.primary = primary
@@ -342,6 +344,14 @@ func (m Model) chatChannelRef() string {
 
 // focusStatusText names the focused panel when both panels are visible.
 func (m Model) focusStatusText() string {
+	if m.videoHost != nil {
+		if m.shouldShowNarrowChatNotice() {
+			return m.t("status.chat_narrow")
+		}
+		if !m.listVisible() && !m.chatColumnVisible() {
+			return m.t("status.video_only")
+		}
+	}
 	if !m.listVisible() || !m.chatColumnVisible() {
 		return ""
 	}
@@ -395,13 +405,19 @@ func (m Model) statusLadder(lang string) []statusChrome {
 	if focus := m.focusStatusText(); focus != "" && m.err == nil {
 		focusHints = fmt.Sprintf(" | %s · %s · %s ", focus, help, quit)
 	}
+	last := " | " + quit + " "
+	// The window is narrow exactly when this hint matters: it outlasts the help hint.
+	if m.videoHost != nil && m.shouldShowNarrowChatNotice() {
+		last = fmt.Sprintf(" | %s · %s ", m.t("status.chat_narrow"), quit)
+		hints, focusHints = last, last
+	}
 	return []statusChrome{
 		{fmt.Sprintf(" %s | [%s] ", m.t("app.title"), lang), focusHints, true},
 		{fmt.Sprintf(" [%s] ", lang), focusHints, true},
 		{" ", focusHints, true},
 		{" ", focusHints, false},
 		{" ", hints, false},
-		{" ", " | " + quit + " ", false},
+		{" ", last, false},
 	}
 }
 

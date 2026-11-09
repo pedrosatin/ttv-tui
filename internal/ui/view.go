@@ -64,7 +64,7 @@ func fitListRow(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return s
 	}
-	if !hasWideRune(s) {
+	if !hasWideRune(s) || exactCellWidths {
 		return TruncateVisual(s, maxWidth)
 	}
 	s = strings.ReplaceAll(s, listRowEmDash, "-")
@@ -355,10 +355,21 @@ func (m Model) helpOffset(total int) int {
 	return min(max(m.helpScroll, 0), total-m.helpPageRows(total))
 }
 
+// helpTextWidth is the width the help wraps to: the video column in the hosted
+// window, where it lies over the picture, and the whole screen elsewhere.
+func (m Model) helpTextWidth() int {
+	if m.videoHost != nil {
+		if _, _, videoW := m.hostedWidths(); videoW > hostedHelpPadding {
+			return videoW - hostedHelpPadding
+		}
+	}
+	return m.width
+}
+
 // helpViewLines returns the help rows to draw: all of them when they fit, else
 // the scrolled window and, when there is room for it, the position indicator.
 func (m Model) helpViewLines() []string {
-	lines := m.renderHelpLines(m.width)
+	lines := m.renderHelpLines(m.helpTextWidth())
 	total := len(lines)
 	rows := m.helpPageRows(total)
 	if rows == total {
@@ -367,7 +378,7 @@ func (m Model) helpViewLines() []string {
 	offset := m.helpOffset(total)
 	window := lines[offset : offset+rows]
 	if m.height > 2 {
-		window = append(window, positionRow(offset+rows, total, m.width))
+		window = append(window, positionRow(offset+rows, total, m.helpTextWidth()))
 	}
 	return window
 }
@@ -406,9 +417,9 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		m.t("help.nocolor"),
 	} {
 		out = append(out, wrapChatRow("  ", line, maxWidth)...)
-	}
-	if m.videoHost != nil {
-		out = append(out, wrapChatRow("  ", m.t("help.hosted_resize"), maxWidth)...)
+		if m.videoHost != nil && line == m.t("help.layout") {
+			out = append(out, wrapChatRow("  ", m.t("help.hosted_resize"), maxWidth)...)
+		}
 	}
 	if m.videoRequested {
 		key := m.videoReason
@@ -416,7 +427,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 			key = "video.help"
 		}
 		out = append(out, wrapChatRow("  ", m.t(key), maxWidth)...)
-	} else {
+	} else if m.videoHost == nil {
 		out = append(out, wrapChatRow("  ", m.t("help.video_enable"), maxWidth)...)
 	}
 	out = append(out, m.renderHelpColorLines(maxWidth)...)
@@ -701,7 +712,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	if m.loading && !isSearch {
 		budget--
 	}
-	if m.shouldShowNarrowChatNotice() {
+	if m.shouldShowNarrowChatNotice() && m.videoHost == nil {
 		budget -= len(m.narrowChatNoticeLines(maxWidth))
 	}
 	if budget < 1 {

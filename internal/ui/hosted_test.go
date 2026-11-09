@@ -81,13 +81,18 @@ func TestHostedPanelFollowsTheToggles(t *testing.T) {
 	}
 }
 
-func TestHostedPanelGivesWayToOverlays(t *testing.T) {
+func TestHostedPanelCarriesTheHelpOverTheVideo(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.helpVisible = true
-	if got := m.hostedPanel(); got != (HostPanel{}) {
-		t.Fatalf("com a ajuda aberta: %+v", got)
+	want := HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true, OverlayCols: 122, OverlayOpacity: 70}
+	if got := m.hostedPanel(); got != want {
+		t.Fatalf("com a ajuda aberta: %+v, quero %+v", got, want)
 	}
-	m.helpVisible, m.channelFilterMenu = false, true
+}
+
+func TestHostedPanelGivesWayToTheFilterMenu(t *testing.T) {
+	m := hostedModel(t, 212, 49, true)
+	m.channelFilterMenu = true
 	if got := m.hostedPanel(); got != (HostPanel{}) {
 		t.Fatalf("com o menu de filtros aberto: %+v", got)
 	}
@@ -201,7 +206,7 @@ func TestHostedResizeOfHiddenPanelWarns(t *testing.T) {
 func TestHostedSaveKeepsOnlyTheLastChange(t *testing.T) {
 	var saved [][2]int
 	m := hostedModel(t, 212, 49, true)
-	m.hostedPersist = func(list, chat int, _ bool) error {
+	m.hostedPersist = func(list, chat int, _, _ bool, _ int) error {
 		saved = append(saved, [2]int{list, chat})
 		return nil
 	}

@@ -249,18 +249,20 @@ func Run(opts Options) error {
 				c.MinViewers = minViewers
 			})
 		}))
-		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, func(list, chat int, overlay bool) error {
+		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, func(list, chat int, overlay, swapped bool, opacity int) error {
 			return updateConfig(func(c *config.Config) {
 				c.ListColumns = list
 				c.ChatColumns = chat
 				c.ChatOverlay = overlay
+				c.PanelsSwapped = swapped
+				c.ChatOverlayOpacity = opacity
 			})
 		}))
 	} else {
 		if len(cfg.FilterLanguages) > 0 || cfg.MinViewers > 0 {
 			uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, nil))
 		}
-		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, nil))
+		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, nil))
 	}
 	if corruptNotice != "" {
 		uiOpts = append(uiOpts, ui.WithCorruptNotice(corruptNotice))

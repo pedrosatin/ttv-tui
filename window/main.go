@@ -141,8 +141,7 @@ func init() { runtime.LockOSThread() }
 
 const (
 	defaultColor = uint32(0xff000000)
-	// Opacidade do chat sobre o vídeo: fundo comum e fundo com cor própria (seleção).
-	glassAlpha      = uint32(150)
+	// Fundo com cor própria (seleção) no chat sobre o vídeo nunca fica mais fraco que isto.
 	glassSolidAlpha = uint32(225)
 )
 
@@ -320,6 +319,7 @@ type cellKey struct {
 	cursor  bool
 	hole    bool
 	glass   bool // chat sobre o vídeo: fundo translúcido, texto opaco
+	veil    uint8
 }
 
 // hostPanel é a região do vídeo que o TUI publica, em células com base 1.
@@ -327,6 +327,8 @@ type hostPanel struct {
 	Row, Col, Rows, Cols int
 	Visible              bool
 	OverlayCols          int
+	OverlayLeft          bool
+	OverlayOpacity       int
 }
 
 type ctlMsg struct {
@@ -423,14 +425,23 @@ func toRGB(c color.Color) uint32 {
 func (a *app) keyAt(x, y, cx, cy int, showCur bool) cellKey {
 	c := a.term.CellAt(x, y)
 	hole := a.holeOn && x >= a.host.Col-1 && x < a.host.Col-1+a.host.Cols && y >= a.host.Row-1 && y < a.host.Row-1+a.host.Rows
-	glass := hole && a.host.OverlayCols > 0 && x >= a.host.Col-1+a.host.Cols-a.host.OverlayCols
+	inChat := x >= a.host.Col-1+a.host.Cols-a.host.OverlayCols
+	if a.host.OverlayLeft {
+		inChat = x < a.host.Col-1+a.host.OverlayCols
+	}
+	glass := hole && a.host.OverlayCols > 0 && inChat
 	hole = hole && !glass
+	veil := uint8(0)
+	if glass {
+		veil = uint8(a.host.OverlayOpacity * 255 / 100)
+	}
 	if c == nil {
-		return cellKey{content: " ", fg: defaultColor, bg: defaultColor, width: 1, hole: hole, glass: glass}
+		return cellKey{content: " ", fg: defaultColor, bg: defaultColor, width: 1, hole: hole, glass: glass, veil: veil}
 	}
 	return cellKey{
 		hole:    hole,
 		glass:   glass,
+		veil:    veil,
 		content: c.Content,
 		fg:      toRGB(c.Style.Fg),
 		bg:      toRGB(c.Style.Bg),
@@ -449,8 +460,12 @@ func (a *app) paint() (int, int) {
 	pos := a.term.CursorPosition()
 	show := !a.term.CursorHidden()
 	for y := 0; y < a.rows; y++ {
+		textEnd := a.glassRowEnd(y)
 		for x := 0; x < a.cols; x++ {
 			k := a.keyAt(x, y, pos.X, pos.Y, show)
+			if k.glass && (textEnd < 0 || x > textEnd+1) { // o fundo só existe atrás do texto
+				k.glass, k.hole, k.veil = false, true, 0
+			}
 			i := y*a.cols + x
 			if a.prev[i] == k {
 				continue
@@ -475,6 +490,55 @@ func (a *app) paint() (int, int) {
 	}
 	a.mu.Unlock()
 	return y0, y1
+}
+
+// glassRowEnd é a última coluna com texto do chat sobreposto nesta linha, ou -1.
+func (a *app) glassRowEnd(y int) int {
+	if !a.holeOn || a.host.OverlayCols == 0 || y < a.host.Row-1 || y >= a.host.Row-1+a.host.Rows {
+		return -1
+	}
+	start := a.host.Col - 1
+	if !a.host.OverlayLeft {
+		start += a.host.Cols - a.host.OverlayCols
+	}
+	for x := start + a.host.OverlayCols - 1; x >= start; x-- {
+		c := a.term.CellAt(x, y)
+		if c == nil {
+			continue
+		}
+		if (c.Content != "" && c.Content != " ") || c.Width == 0 || toRGB(c.Style.Bg) != defaultColor {
+			return x
+		}
+	}
+	return -1
+}
+
+// outlineGlyph escurece 1 px em volta do glifo, para o texto se destacar sobre o
+// vídeo claro. Fica dentro da célula: a seguinte repintaria o que passasse dela.
+func (a *app) outlineGlyph(g *glyph, px0, py0, span int) {
+	cw, ch := a.fs.cellW, a.fs.cellH
+	mw, mh := g.mask.Rect.Dx(), g.mask.Rect.Dy()
+	for my := 0; my < mh; my++ {
+		for mx := 0; mx < mw; mx++ {
+			al := uint32(g.mask.Pix[g.mask.PixOffset(mx, my)])
+			if al < 96 {
+				continue
+			}
+			for ny := -1; ny <= 1; ny++ {
+				for nx := -1; nx <= 1; nx++ {
+					tx, ty := px0+g.x+mx+nx, py0+a.fs.base+g.y+my+ny
+					if (nx == 0 && ny == 0) || tx < px0 || ty < py0 || tx >= px0+cw*span || ty >= py0+ch || tx >= a.pw || ty >= a.ph {
+						continue
+					}
+					off := ty*a.pw*4 + tx*4
+					for i := range 3 {
+						a.buf[off+i] = byte(uint32(a.buf[off+i]) * (255 - al) / 255)
+					}
+					a.buf[off+3] = byte(al + uint32(a.buf[off+3])*(255-al)/255)
+				}
+			}
+		}
+	}
 }
 
 func (a *app) drawCell(x, y int, k cellKey) {
@@ -511,11 +575,11 @@ func (a *app) drawCell(x, y int, k cellKey) {
 	px0, py0 := x*cw, y*ch
 	bgA := uint32(255)
 	if k.glass { // a textura é pré-multiplicada, então a cor cai junto com o alfa
-		bgA = glassAlpha
+		bgA = uint32(k.veil)
 		if k.bg == defaultColor && k.attrs&uv.AttrReverse == 0 && !k.cursor {
 			br, bg, bb = 0, 0, 0
 		} else {
-			bgA = glassSolidAlpha
+			bgA = max(bgA, glassSolidAlpha)
 		}
 		br, bg, bb = br*bgA/255, bg*bgA/255, bb*bgA/255
 	}
@@ -545,6 +609,9 @@ func (a *app) drawCell(x, y int, k cellKey) {
 		return
 	}
 	if g.mask != nil {
+		if k.glass {
+			a.outlineGlyph(g, px0, py0, span)
+		}
 		mw, mh := g.mask.Rect.Dx(), g.mask.Rect.Dy()
 		for my := 0; my < mh; my++ {
 			for mx := 0; mx < mw; mx++ {
@@ -639,6 +706,18 @@ func (a *app) applyMargins() {
 	ratio("right", a.W-x-w)
 	ratio("top", y)
 	ratio("bottom", a.H-y-h)
+	// O OSD do mpv é relativo à janela: a margem o traz para dentro do vídeo, e ele fica
+	// no canto oposto ao chat sobreposto. A margem é limitada a 300 unidades pelo mpv.
+	osdSide, edge := "left", x
+	if a.host.OverlayLeft {
+		osdSide, edge = "right", a.W-x-w
+	}
+	margin := max(edge+16, 0) * 720 / a.H
+	if margin > 300 {
+		osdSide, margin = "center", 0
+	}
+	a.setOpt(a.sess.m, "osd-align-x", osdSide)
+	a.setOpt(a.sess.m, "osd-margin-x", strconv.Itoa(margin))
 }
 
 // refreshHole recalcula se as células do vídeo ficam transparentes agora.
@@ -1136,7 +1215,7 @@ func (a *app) serveTest(path string) {
 					"panelPaints": a.panelPaints, "paintMs": a.paintNs / 1e6, "uploadMs": a.uploadNs / 1e6,
 					"sessions": a.sessions, "ttffMs": a.lastTtff, "ipc": a.lastIpc, "cols": a.cols,
 					"rows": a.rows, "W": a.W, "H": a.H, "cellW": a.fs.cellW, "cellH": a.fs.cellH,
-					"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "overlay": a.host.OverlayCols, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
+					"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "overlay": a.host.OverlayCols, "overlayLeft": a.host.OverlayLeft, "overlayOpacity": a.host.OverlayOpacity, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
 				}
 				if len(a.latMs) > 0 {
 					out["latMs"] = a.latMs

@@ -32,6 +32,11 @@ type Config struct {
 	ChatColumns int
 	// ChatOverlay draws the chat over the video in the hosted window. TOML key: chat_overlay.
 	ChatOverlay bool
+	// PanelsSwapped puts the chat on the left and the list on the right. TOML key: panels_swapped.
+	PanelsSwapped bool
+	// ChatOverlayOpacity is the percent opacity behind the chat over the video,
+	// within MinChatOpacity..100. 0 means the default. TOML key: chat_overlay_opacity.
+	ChatOverlayOpacity int
 	// VideoChatPosition places the chat strip of the video mode: VideoChatBottom
 	// or VideoChatTop. Empty means VideoChatBottom. TOML key:
 	// video_chat_position.
@@ -59,6 +64,17 @@ const (
 	MinPanelColumns = 20
 	MaxPanelColumns = 400
 )
+
+// MinChatOpacity keeps some background: without any, the text has only its outline.
+const MinChatOpacity = 10
+
+// normalizeChatOpacity keeps a saved opacity in range; anything else means the default.
+func normalizeChatOpacity(percent int) int {
+	if percent < MinChatOpacity || percent > 100 {
+		return 0
+	}
+	return percent
+}
 
 // normalizePanelColumns keeps a saved width in range; anything else means automatic.
 func normalizePanelColumns(cols int) int {
@@ -224,6 +240,7 @@ func SaveTo(path string, cfg Config) error {
 	cfg.Video = normalizeVideo(cfg.Video)
 	cfg.ListColumns = normalizePanelColumns(cfg.ListColumns)
 	cfg.ChatColumns = normalizePanelColumns(cfg.ChatColumns)
+	cfg.ChatOverlayOpacity = normalizeChatOpacity(cfg.ChatOverlayOpacity)
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -299,6 +316,12 @@ func formatTOML(cfg Config) string {
 	}
 	if cfg.ChatOverlay {
 		b.WriteString("chat_overlay = true\n")
+	}
+	if cfg.PanelsSwapped {
+		b.WriteString("panels_swapped = true\n")
+	}
+	if percent := normalizeChatOpacity(cfg.ChatOverlayOpacity); percent > 0 {
+		fmt.Fprintf(&b, "chat_overlay_opacity = %d\n", percent)
 	}
 	if pos := normalizeVideoChatPosition(cfg.VideoChatPosition); pos != "" {
 		fmt.Fprintf(&b, "video_chat_position = %s\n", quoteTOML(pos))
@@ -440,6 +463,14 @@ func parseTOML(input string) (Config, error) {
 				n = 0
 			}
 			cfg.ListColumns = normalizePanelColumns(n)
+		case "chat_overlay_opacity", "ui.chat_overlay_opacity":
+			n, err := parseTOMLInt(rawVal)
+			if err != nil {
+				n = 0
+			}
+			cfg.ChatOverlayOpacity = normalizeChatOpacity(n)
+		case "panels_swapped", "ui.panels_swapped":
+			cfg.PanelsSwapped = strings.Trim(strings.TrimSpace(rawVal), "\"'") == "true"
 		case "chat_overlay", "ui.chat_overlay":
 			cfg.ChatOverlay = strings.Trim(strings.TrimSpace(rawVal), "\"'") == "true"
 		case "chat_columns", "ui.chat_columns":

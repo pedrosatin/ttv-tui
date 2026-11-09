@@ -961,8 +961,8 @@ func TestPlaybackBaselineSyncsVolumeAndPause(t *testing.T) {
 	}
 	waitVolume(t, mgr, gen, 95, 3*time.Second)
 	waitCommands(t, cmdLog, 5*time.Second,
-		`["show-text","${?pause==yes:‖}${?pause==no:▶}"]`,
-		`["show-text","${volume}%"]`)
+		`{"_flags":["expand-properties"],"name":"show-text","text":"${?pause==yes:‖}${?pause==no:▶}"}`,
+		`{"_flags":["expand-properties"],"name":"show-text","text":"${volume}%"}`)
 }
 
 func TestPauseCommandCorrelatesByRequestID(t *testing.T) {
