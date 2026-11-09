@@ -49,37 +49,25 @@ func earlyCatalog() *i18n.Catalog {
 }
 
 // Run composes config, i18n, Source, player, chat, and the UI model and runs the TUI program.
+//
+// Each stage lives in its own function, but every defer stays here: cleanup
+// has to wait for the program to end, and its order is part of the shutdown.
 func Run(opts Options) error {
 	if opts.Lang != "" && !i18n.IsSupportedFlag(opts.Lang) {
 		return fmt.Errorf(earlyCatalog().T("app.err_unsupported_lang"), opts.Lang, i18n.LangEN, i18n.LangPTBR)
 	}
 
-	var (
-		cfg config.Config
-		err error
-	)
-	if opts.ConfigPath != "" {
-		cfg, err = config.LoadFrom(opts.ConfigPath)
-	} else {
-		cfg, err = config.Load()
-	}
+	cfg, cfgPath, err := loadConfig(opts.ConfigPath)
 	if err != nil {
 		return fmt.Errorf(earlyCatalog().T("app.err_load_config"), err)
-	}
-
-	cfgPath := opts.ConfigPath
-	if cfgPath == "" {
-		cfgPath, _ = config.DefaultPath()
 	}
 	if openWindow(opts) {
 		return nil
 	}
 	var hostOption ui.Option
-	if path := os.Getenv(videoHostEnv); path != "" {
-		if host, err := dialVideoHost(path); err == nil {
-			defer host.Close()
-			hostOption = ui.WithVideoHost(host)
-		}
+	if host := connectVideoHost(); host != nil {
+		defer host.Close()
+		hostOption = ui.WithVideoHost(host)
 	}
 
 	resolvedLang := i18n.Resolve(opts.Lang, cfg.Language, i18n.EnvLocale())
@@ -89,28 +77,14 @@ func Run(opts Options) error {
 		return fmt.Errorf("initialize i18n catalog: %w", err)
 	}
 
-	input := opts.Input
-	if input == nil {
-		input = os.Stdin
-	}
-	output := opts.Output
-	if output == nil {
-		output = os.Stdout
-	}
+	input, output, logw := streams(opts)
 	if !isTerminal(input) || !isTerminal(output) {
 		return errors.New(catalog.T("app.err_tty_required"))
 	}
 
-	if opts.Lang != "" {
-		norm := i18n.NormalizeLocale(opts.Lang)
-		if norm != "" && cfg.Language != norm {
-			cfg.Language = norm
-			if cfgPath != "" {
-				if err := config.SaveTo(cfgPath, cfg); err != nil {
-					return fmt.Errorf(catalog.T("app.err_persist_lang"), err)
-				}
-			}
-		}
+	// Only after the terminal check: a run that cannot start must not write.
+	if err := persistLang(opts.Lang, &cfg, cfgPath); err != nil {
+		return fmt.Errorf(catalog.T("app.err_persist_lang"), err)
 	}
 
 	source := opts.Source
@@ -118,20 +92,11 @@ func Run(opts Options) error {
 		source = twitch.NewGQLSource(twitch.GQLConfig{})
 	}
 
-	statePath := opts.StatePath
-	if statePath == "" {
-		var err error
-		statePath, err = store.DefaultPath()
-		if err != nil {
-			return fmt.Errorf(catalog.T("app.err_resolve_state_path"), err)
-		}
+	statePath, err := resolveStatePath(opts.StatePath)
+	if err != nil {
+		return fmt.Errorf(catalog.T("app.err_resolve_state_path"), err)
 	}
 	registryDir := playerRegistryDir(statePath)
-
-	logw := opts.Log
-	if logw == nil {
-		logw = os.Stderr
-	}
 
 	// A player left by a run that died without cleanup would play alongside
 	// the next one; deal with it before anything can start playback.
@@ -147,51 +112,15 @@ func Run(opts Options) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
-	var caught atomic.Value
-	go func() {
-		select {
-		case sig := <-sigCh:
-			caught.Store(sig)
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
+	caught := cancelOnSignal(ctx, cancel, sigCh)
 
-	playerMgr := opts.Player
-	ownsPlayer := false
-	if playerMgr == nil {
-		playerMgr = player.New(player.Options{RegistryDir: registryDir})
-		ownsPlayer = true
-	}
-	if ownsPlayer {
-		defer playerMgr.Close()
-	} else {
-		defer playerMgr.Stop()
-	}
-
-	chatMgr := opts.Chat
-	ownsChat := false
-	if chatMgr == nil {
-		chatMgr = chat.New(chat.Options{
-			Token:    cfg.AccessToken,
-			Username: cfg.Username,
-		})
-		ownsChat = true
-	}
-	if ownsChat {
-		defer chatMgr.Close()
-	} else {
-		defer chatMgr.Stop()
-	}
+	playerMgr, stopPlayer := playerManager(opts.Player, registryDir)
+	defer stopPlayer()
+	chatMgr, stopChat := chatManager(opts.Chat, cfg)
+	defer stopChat()
 
 	appStore := store.New(statePath)
-	st, err := appStore.Load()
-	var corruptNotice string
-	if err != nil {
-		if errors.Is(err, store.ErrCorrupt) {
-			corruptNotice = catalog.T("store.corrupt_notice")
-		}
-	}
+	st, corruptNotice := loadState(appStore, catalog)
 
 	uiOpts := []ui.Option{
 		hostOption,
@@ -202,76 +131,22 @@ func Run(opts Options) error {
 		ui.WithFavorites(store.ToTwitchChannels(st.Favorites)),
 		ui.WithRecents(store.ToTwitchChannels(st.Recents)),
 	}
-	if cfgPath != "" {
-		// Reread before each save: a `ttv-tui login` in another terminal must not be
-		// undone by a change of panel width here.
-		persistPath := cfgPath
-		persistCfg := cfg
-		var persistMu sync.Mutex
-		updateConfig := func(change func(*config.Config)) error {
-			persistMu.Lock()
-			defer persistMu.Unlock()
-			if fresh, err := config.LoadFrom(persistPath); err == nil {
-				persistCfg = fresh
-			}
-			change(&persistCfg)
-			return config.SaveTo(persistPath, persistCfg)
-		}
-		uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, func(languages []string, minViewers int) error {
-			return updateConfig(func(c *config.Config) {
-				c.FilterLanguages = languages
-				c.MinViewers = minViewers
-			})
-		}))
-		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, func(list, chat int, overlay, swapped bool, opacity int) error {
-			return updateConfig(func(c *config.Config) {
-				c.ListColumns = list
-				c.ChatColumns = chat
-				c.ChatOverlay = overlay
-				c.PanelsSwapped = swapped
-				c.ChatOverlayOpacity = opacity
-			})
-		}))
-	} else {
-		if len(cfg.FilterLanguages) > 0 || cfg.MinViewers > 0 {
-			uiOpts = append(uiOpts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, nil))
-		}
-		uiOpts = append(uiOpts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, nil))
-	}
+	uiOpts = append(uiOpts, configOptions(cfg, cfgPath)...)
 	if corruptNotice != "" {
 		uiOpts = append(uiOpts, ui.WithCorruptNotice(corruptNotice))
 	}
 	if cfg.AccessToken != "" {
-		validateFn := opts.Validate
-		if validateFn == nil {
-			validateFn = auth.Validate
-		}
-		tok := cfg.AccessToken
-		uiOpts = append(uiOpts, ui.WithTokenCheck(func(ctx context.Context) error {
-			vCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-			_, err := validateFn(vCtx, tok)
-			if err != nil {
-				if errors.Is(err, auth.ErrValidateTimeout) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-					return nil
-				}
-				return auth.ErrTokenInvalid
-			}
-			return nil
-		}))
+		uiOpts = append(uiOpts, ui.WithTokenCheck(tokenCheck(opts.Validate, cfg.AccessToken)))
 	}
 
 	model := ui.New(catalog, uiOpts...)
-	var progOpts []tea.ProgramOption
-	progOpts = append(progOpts, tea.WithAltScreen())
-	progOpts = append(progOpts,
+	p := tea.NewProgram(model,
+		tea.WithAltScreen(),
 		tea.WithInput(input),
 		tea.WithOutput(output),
 		tea.WithContext(ctx),
 		tea.WithoutSignalHandler(),
 	)
-
-	p := tea.NewProgram(model, progOpts...)
 	go forwardPlayerEvents(ctx, p, playerMgr)
 	go forwardChatEvents(ctx, p, chatMgr)
 	_, runErr := p.Run()
@@ -285,4 +160,196 @@ func Run(opts Options) error {
 		return fmt.Errorf(catalog.T("app.err_run_tui"), runErr)
 	}
 	return nil
+}
+
+// loadConfig reads the config from path, or from the default location when path
+// is empty, and returns the path later saves go to. That path is empty when the
+// default location cannot be resolved.
+func loadConfig(path string) (config.Config, string, error) {
+	if path != "" {
+		cfg, err := config.LoadFrom(path)
+		return cfg, path, err
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return cfg, "", err
+	}
+	path, _ = config.DefaultPath()
+	return cfg, path, nil
+}
+
+// connectVideoHost dials the window hosting this TUI. It returns nil in an
+// ordinary terminal and when the window does not answer.
+func connectVideoHost() *videoHost {
+	path := os.Getenv(videoHostEnv)
+	if path == "" {
+		return nil
+	}
+	host, err := dialVideoHost(path)
+	if err != nil {
+		return nil
+	}
+	return host
+}
+
+// streams returns the input, the output and the log, each falling back to the
+// process stream.
+func streams(opts Options) (input io.Reader, output, logw io.Writer) {
+	input, output, logw = opts.Input, opts.Output, opts.Log
+	if input == nil {
+		input = os.Stdin
+	}
+	if output == nil {
+		output = os.Stdout
+	}
+	if logw == nil {
+		logw = os.Stderr
+	}
+	return input, output, logw
+}
+
+// persistLang saves a --lang that differs from the configured language. cfg
+// takes the new language even with no path to save it to.
+func persistLang(lang string, cfg *config.Config, cfgPath string) error {
+	if lang == "" {
+		return nil
+	}
+	norm := i18n.NormalizeLocale(lang)
+	if norm == "" || cfg.Language == norm {
+		return nil
+	}
+	cfg.Language = norm
+	if cfgPath == "" {
+		return nil
+	}
+	return config.SaveTo(cfgPath, *cfg)
+}
+
+func resolveStatePath(path string) (string, error) {
+	if path != "" {
+		return path, nil
+	}
+	return store.DefaultPath()
+}
+
+// cancelOnSignal cancels the run on the first signal from sigCh and keeps that
+// signal in the returned value. The goroutine ends with ctx.
+func cancelOnSignal(ctx context.Context, cancel context.CancelFunc, sigCh <-chan os.Signal) *atomic.Value {
+	caught := new(atomic.Value)
+	go func() {
+		select {
+		case sig := <-sigCh:
+			caught.Store(sig)
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return caught
+}
+
+// playerManager returns the player and what ends it when Run returns. A manager
+// the caller injected is only stopped: closing it is the caller's job.
+func playerManager(injected *player.Manager, registryDir string) (*player.Manager, func()) {
+	if injected != nil {
+		return injected, injected.Stop
+	}
+	mgr := player.New(player.Options{RegistryDir: registryDir})
+	return mgr, mgr.Close
+}
+
+// chatManager is playerManager for the chat.
+func chatManager(injected *chat.Manager, cfg config.Config) (*chat.Manager, func()) {
+	if injected != nil {
+		return injected, injected.Stop
+	}
+	mgr := chat.New(chat.Options{
+		Token:    cfg.AccessToken,
+		Username: cfg.Username,
+	})
+	return mgr, mgr.Close
+}
+
+// loadState reads the saved favorites and recents. The notice is set only when
+// the state file was corrupt; any other read error starts from an empty state.
+func loadState(s *store.Store, catalog *i18n.Catalog) (store.State, string) {
+	st, err := s.Load()
+	if errors.Is(err, store.ErrCorrupt) {
+		return st, catalog.T("store.corrupt_notice")
+	}
+	return st, ""
+}
+
+// configOptions hands the UI the saved channel filters and panel layout. With a
+// config path the UI can also save them; without one they last for this run.
+func configOptions(cfg config.Config, cfgPath string) []ui.Option {
+	if cfgPath == "" {
+		var opts []ui.Option
+		if len(cfg.FilterLanguages) > 0 || cfg.MinViewers > 0 {
+			opts = append(opts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, nil))
+		}
+		return append(opts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, nil))
+	}
+	w := &configWriter{path: cfgPath, cfg: cfg}
+	return []ui.Option{
+		ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, w.saveFilters),
+		ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, w.saveColumns),
+	}
+}
+
+// configWriter saves the settings the UI changes while it runs.
+type configWriter struct {
+	mu   sync.Mutex
+	path string
+	cfg  config.Config
+}
+
+// update rereads the config before each save: a `ttv-tui login` in another
+// terminal must not be undone by a change of panel width here. If the reread
+// fails, the change goes on top of the last config this run saw.
+func (w *configWriter) update(change func(*config.Config)) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if fresh, err := config.LoadFrom(w.path); err == nil {
+		w.cfg = fresh
+	}
+	change(&w.cfg)
+	return config.SaveTo(w.path, w.cfg)
+}
+
+func (w *configWriter) saveFilters(languages []string, minViewers int) error {
+	return w.update(func(c *config.Config) {
+		c.FilterLanguages = languages
+		c.MinViewers = minViewers
+	})
+}
+
+func (w *configWriter) saveColumns(list, chat int, overlay, swapped bool, opacity int) error {
+	return w.update(func(c *config.Config) {
+		c.ListColumns = list
+		c.ChatColumns = chat
+		c.ChatOverlay = overlay
+		c.PanelsSwapped = swapped
+		c.ChatOverlayOpacity = opacity
+	})
+}
+
+// tokenCheck builds the startup check of the saved token. Only an answer that
+// rejects the token counts as invalid: a timeout or a cancelled check says
+// nothing about it. A nil validate means auth.Validate.
+func tokenCheck(validate func(ctx context.Context, token string) (auth.Validation, error), token string) ui.TokenCheckFunc {
+	if validate == nil {
+		validate = auth.Validate
+	}
+	return func(ctx context.Context) error {
+		vCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		_, err := validate(vCtx, token)
+		if err != nil {
+			if errors.Is(err, auth.ErrValidateTimeout) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return auth.ErrTokenInvalid
+		}
+		return nil
+	}
 }
