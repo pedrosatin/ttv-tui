@@ -276,6 +276,345 @@ func TestParseLine_Table(t *testing.T) {
 			wantKind: EventMalformed,
 			check:    func(t *testing.T, ev Event) {},
 		},
+		{
+			name:     "Malformed blank line keeps Raw without the line ending",
+			line:     "   \r\n",
+			wantKind: EventMalformed,
+			check: func(t *testing.T, ev Event) {
+				if ev.Raw != "   " || ev.Command != "" || ev.Tags != nil {
+					t.Fatalf("Raw=%q Command=%q Tags=%v", ev.Raw, ev.Command, ev.Tags)
+				}
+				if ev.RoomState.FollowersOnly != -1 {
+					t.Fatalf("FollowersOnly=%d, want the -1 default", ev.RoomState.FollowersOnly)
+				}
+			},
+		},
+		{
+			name:     "Malformed tags with nothing after them still parse the tags",
+			line:     "@a=b;c  ",
+			wantKind: EventMalformed,
+			check: func(t *testing.T, ev Event) {
+				want := map[string]string{"a": "b", "c": ""}
+				if !reflect.DeepEqual(ev.Tags, want) {
+					t.Fatalf("Tags=%v, want %v", ev.Tags, want)
+				}
+			},
+		},
+		{
+			name:     "Malformed prefix without command",
+			line:     ":tmi.twitch.tv",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed prefix followed only by spaces",
+			line:     ":tmi.twitch.tv   ",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed empty prefix",
+			line:     ": PRIVMSG #gaules :oi",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed lowercase command leaves Command and User empty",
+			line:     ":nick!nick@host privmsg #gaules :oi",
+			wantKind: EventMalformed,
+			check: func(t *testing.T, ev Event) {
+				if ev.Command != "" || ev.User != "" {
+					t.Fatalf("Command=%q User=%q", ev.Command, ev.User)
+				}
+			},
+		},
+		{
+			name:     "Malformed line starting with a space has an empty command",
+			line:     " PRIVMSG #gaules :oi",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "PING without payload",
+			line:     "PING",
+			wantKind: EventPing,
+			check: func(t *testing.T, ev Event) {
+				if ev.Command != "PING" || ev.PingPayload != "" {
+					t.Fatalf("Command=%q PingPayload=%q", ev.Command, ev.PingPayload)
+				}
+				if got := FormatPong(ev.PingPayload); got != "PONG\r\n" {
+					t.Fatalf("FormatPong = %q", got)
+				}
+			},
+		},
+		{
+			name:     "PING after tags keeps the payload",
+			line:     "@a=b PING :tmi.twitch.tv",
+			wantKind: EventPing,
+			check: func(t *testing.T, ev Event) {
+				if ev.PingPayload != " :tmi.twitch.tv" || ev.Tags["a"] != "b" {
+					t.Fatalf("PingPayload=%q Tags=%v", ev.PingPayload, ev.Tags)
+				}
+			},
+		},
+		{
+			name:     "PING behind a prefix",
+			line:     ":nick!nick@host PING :tmi.twitch.tv\r\n",
+			wantKind: EventPing,
+			check: func(t *testing.T, ev Event) {
+				if ev.Command != "PING" || ev.User != "nick" {
+					t.Fatalf("Command=%q User=%q", ev.Command, ev.User)
+				}
+				if ev.PingPayload != " :tmi.twitch.tv" {
+					t.Fatalf("PingPayload = %q", ev.PingPayload)
+				}
+			},
+		},
+		{
+			name:     "PING behind a prefix without payload",
+			line:     ":tmi.twitch.tv PING",
+			wantKind: EventPing,
+			check: func(t *testing.T, ev Event) {
+				if ev.PingPayload != "" {
+					t.Fatalf("PingPayload = %q, want empty", ev.PingPayload)
+				}
+			},
+		},
+		{
+			name:     "PINGX is an ordinary command, not a PING",
+			line:     "PINGX abc",
+			wantKind: EventOther,
+			check: func(t *testing.T, ev Event) {
+				if ev.Command != "PINGX" || ev.PingPayload != "" {
+					t.Fatalf("Command=%q PingPayload=%q", ev.Command, ev.PingPayload)
+				}
+				if got := FormatPong("abc"); got != "PONG abc\r\n" {
+					t.Fatalf("FormatPong = %q", got)
+				}
+			},
+		},
+		{
+			name:     "Repeated spaces between tags, prefix, command and arguments",
+			line:     "@display-name=Nick   :nick!nick@host   PRIVMSG   #gaules   :oi  tribo",
+			wantKind: EventPrivMsg,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "gaules" || ev.User != "nick" || ev.Body != "oi  tribo" {
+					t.Fatalf("Channel=%q User=%q Body=%q", ev.Channel, ev.User, ev.Body)
+				}
+			},
+		},
+		{
+			name:     "Malformed PRIVMSG without channel",
+			line:     ":nick!nick@host PRIVMSG :oi",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed PRIVMSG whose target is not a channel",
+			line:     ":nick!nick@host PRIVMSG gaules :oi",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed PRIVMSG with no display name and no nick",
+			line:     ":tmi.twitch.tv PRIVMSG #gaules :oi",
+			wantKind: EventMalformed,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "gaules" || ev.Body != "oi" || ev.DisplayName != "" {
+					t.Fatalf("Channel=%q Body=%q DisplayName=%q", ev.Channel, ev.Body, ev.DisplayName)
+				}
+			},
+		},
+		{
+			name:     "PRIVMSG blank display-name falls back to prefix nick",
+			line:     "@display-name=\\s :nick!nick@host PRIVMSG #gaules :oi",
+			wantKind: EventPrivMsg,
+			check: func(t *testing.T, ev Event) {
+				if ev.DisplayName != "nick" {
+					t.Fatalf("DisplayName = %q, want nick", ev.DisplayName)
+				}
+			},
+		},
+		{
+			name:     "PRIVMSG with custom-reward-id and no msg-id is highlighted",
+			line:     "@custom-reward-id=abc;display-name=Nick :nick!nick@host PRIVMSG #gaules :resgate",
+			wantKind: EventPrivMsg,
+			check: func(t *testing.T, ev Event) {
+				if !ev.Highlighted || ev.MsgID != "custom-reward" {
+					t.Fatalf("Highlighted=%v MsgID=%q", ev.Highlighted, ev.MsgID)
+				}
+			},
+		},
+		{
+			name:     "PRIVMSG drops a color that is not #RRGGBB and empty badge items",
+			line:     "@badges=,vip/1,;color=#GGGGGG;display-name=Nick :nick!nick@host PRIVMSG #gaules :oi",
+			wantKind: EventPrivMsg,
+			check: func(t *testing.T, ev Event) {
+				if ev.Color != "" {
+					t.Fatalf("Color = %q, want empty", ev.Color)
+				}
+				if want := []string{"vip/1"}; !reflect.DeepEqual(ev.Badges, want) {
+					t.Fatalf("Badges = %v, want %v", ev.Badges, want)
+				}
+			},
+		},
+		{
+			name:     "Tag values unescape every IRCv3 sequence and skip empty items",
+			line:     "@;a=x\\:y;b=x\\\\y;c=x\\ry;d=x\\ny;e=x\\qy;f=x\\;flag;display-name=Nick :nick!nick@host PRIVMSG #gaules :oi",
+			wantKind: EventPrivMsg,
+			check: func(t *testing.T, ev Event) {
+				want := map[string]string{
+					"a": "x;y", "b": "x\\y", "c": "x\ry", "d": "x\ny", "e": "xqy", "f": "x",
+					"flag": "", "display-name": "Nick",
+				}
+				if !reflect.DeepEqual(ev.Tags, want) {
+					t.Fatalf("Tags = %q, want %q", ev.Tags, want)
+				}
+			},
+		},
+		{
+			name:     "NOTICE addressed to * without tags",
+			line:     ":tmi.twitch.tv NOTICE * :Login authentication failed",
+			wantKind: EventNotice,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "*" || ev.MsgID != "" || ev.Body != "Login authentication failed" {
+					t.Fatalf("Channel=%q MsgID=%q Body=%q", ev.Channel, ev.MsgID, ev.Body)
+				}
+			},
+		},
+		{
+			name:     "Malformed NOTICE without target",
+			line:     ":tmi.twitch.tv NOTICE :sem alvo",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed NOTICE without text",
+			line:     ":tmi.twitch.tv NOTICE #gaules",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "ROOMSTATE without tags keeps followers-only off",
+			line:     ":tmi.twitch.tv ROOMSTATE #gaules",
+			wantKind: EventRoomState,
+			check: func(t *testing.T, ev Event) {
+				if want := (RoomState{FollowersOnly: -1}); ev.RoomState != want {
+					t.Fatalf("RoomState = %+v, want %+v", ev.RoomState, want)
+				}
+				if ev.RoomDelta != (RoomStateDelta{}) {
+					t.Fatalf("RoomDelta = %+v, want empty", ev.RoomDelta)
+				}
+			},
+		},
+		{
+			name:     "Malformed ROOMSTATE without channel",
+			line:     "@slow=30 :tmi.twitch.tv ROOMSTATE",
+			wantKind: EventMalformed,
+			check: func(t *testing.T, ev Event) {
+				if ev.RoomState.FollowersOnly != -1 || ev.RoomState.Slow != 0 {
+					t.Fatalf("RoomState = %+v, want the default", ev.RoomState)
+				}
+			},
+		},
+		{
+			name:     "CLEARCHAT ignores a ban-duration that is not a non-negative integer",
+			line:     "@ban-duration=-5 :tmi.twitch.tv CLEARCHAT #gaules : baduser ",
+			wantKind: EventClearChat,
+			check: func(t *testing.T, ev Event) {
+				if ev.TargetUser != "baduser" || ev.BanDuration != nil {
+					t.Fatalf("TargetUser=%q BanDuration=%v", ev.TargetUser, ev.BanDuration)
+				}
+			},
+		},
+		{
+			name:     "CLEARCHAT without tags",
+			line:     ":tmi.twitch.tv CLEARCHAT #gaules :baduser",
+			wantKind: EventClearChat,
+			check: func(t *testing.T, ev Event) {
+				if ev.TargetUser != "baduser" || ev.BanDuration != nil {
+					t.Fatalf("TargetUser=%q BanDuration=%v", ev.TargetUser, ev.BanDuration)
+				}
+			},
+		},
+		{
+			name:     "Malformed CLEARCHAT whose target is not a channel",
+			line:     ":tmi.twitch.tv CLEARCHAT gaules :baduser",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "CLEARMSG without tags keeps the removed text",
+			line:     ":tmi.twitch.tv CLEARMSG #gaules :mensagem removida",
+			wantKind: EventClearMsg,
+			check: func(t *testing.T, ev Event) {
+				if ev.TargetUser != "" || ev.TargetMsgID != "" || ev.Body != "mensagem removida" {
+					t.Fatalf("TargetUser=%q TargetMsgID=%q Body=%q", ev.TargetUser, ev.TargetMsgID, ev.Body)
+				}
+			},
+		},
+		{
+			name:     "Malformed CLEARMSG without channel",
+			line:     "@login=baduser;target-msg-id=abc :tmi.twitch.tv CLEARMSG",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "USERNOTICE gift falls back to the recipient user name",
+			line:     "@login=gifter;msg-id=subgift;msg-param-recipient-display-name=;msg-param-recipient-user-name=sortudo :tmi.twitch.tv USERNOTICE #gaules",
+			wantKind: EventUserNotice,
+			check: func(t *testing.T, ev Event) {
+				if ev.GiftRecipient != "sortudo" || ev.User != "gifter" || ev.DisplayName != "gifter" {
+					t.Fatalf("GiftRecipient=%q User=%q DisplayName=%q", ev.GiftRecipient, ev.User, ev.DisplayName)
+				}
+			},
+		},
+		{
+			name:     "USERNOTICE mass gift carries the count and the gift id",
+			line:     "@login=gifter;msg-id=submysterygift;msg-param-community-gift-id=g1;msg-param-mass-gift-count=5 :tmi.twitch.tv USERNOTICE #gaules",
+			wantKind: EventUserNotice,
+			check: func(t *testing.T, ev Event) {
+				if ev.GiftCount != 5 || ev.CommunityGiftID != "g1" {
+					t.Fatalf("GiftCount=%d CommunityGiftID=%q", ev.GiftCount, ev.CommunityGiftID)
+				}
+			},
+		},
+		{
+			name:     "USERNOTICE without tags keeps only channel and text",
+			line:     ":nick!nick@host USERNOTICE #gaules :texto",
+			wantKind: EventUserNotice,
+			check: func(t *testing.T, ev Event) {
+				if ev.Channel != "gaules" || ev.Body != "texto" || ev.User != "nick" || ev.DisplayName != "" {
+					t.Fatalf("Channel=%q Body=%q User=%q DisplayName=%q", ev.Channel, ev.Body, ev.User, ev.DisplayName)
+				}
+			},
+		},
+		{
+			name:     "Malformed USERNOTICE without channel",
+			line:     "@login=raider;msg-id=raid :tmi.twitch.tv USERNOTICE",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Numeric reply is kept as other, without channel",
+			line:     ":tmi.twitch.tv 001 justinfan123 :Welcome, GLHF!",
+			wantKind: EventOther,
+			check: func(t *testing.T, ev Event) {
+				if ev.Command != "001" || ev.Channel != "" || ev.Body != "Welcome, GLHF!" {
+					t.Fatalf("Command=%q Channel=%q Body=%q", ev.Command, ev.Channel, ev.Body)
+				}
+			},
+		},
+		{
+			name:     "Unhandled command with a channel parameter",
+			line:     ":nick!nick@host JOIN #gaules",
+			wantKind: EventOther,
+			check: func(t *testing.T, ev Event) {
+				if ev.Command != "JOIN" || ev.Channel != "gaules" || ev.User != "nick" || ev.Body != "" {
+					t.Fatalf("Command=%q Channel=%q User=%q Body=%q", ev.Command, ev.Channel, ev.User, ev.Body)
+				}
+			},
+		},
 	}
 
 	for _, tc := range cases {

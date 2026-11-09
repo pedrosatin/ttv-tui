@@ -106,23 +106,56 @@ func ParseLine(rawLine string) Event {
 			FollowersOnly: -1,
 		},
 	}
+	argsPart, ok := parseEnvelope(&ev, line)
+	if !ok {
+		return ev
+	}
+
+	var args lineArgs
+	args.params, args.trailing, args.hasTrailing = splitParamsAndTrailing(argsPart)
+
+	switch ev.Command {
+	case "PRIVMSG":
+		parsePrivMsg(&ev, args)
+	case "NOTICE":
+		parseNotice(&ev, args)
+	case "ROOMSTATE":
+		parseRoomState(&ev, args)
+	case "RECONNECT":
+		ev.Kind = EventReconnect
+	case "CLEARCHAT":
+		parseClearChat(&ev, args)
+	case "CLEARMSG":
+		parseClearMsg(&ev, args)
+	case "USERNOTICE":
+		parseUserNotice(&ev, args)
+	default:
+		parseOther(&ev, args)
+	}
+	return ev
+}
+
+// parseEnvelope reads the tags, prefix and command of line into ev and returns
+// the text after the command. ok is false when ev is already final: the line
+// is malformed or a PING, which has no arguments to dispatch.
+func parseEnvelope(ev *Event, line string) (argsPart string, ok bool) {
 	if strings.TrimSpace(line) == "" {
 		ev.Kind = EventMalformed
-		return ev
+		return "", false
 	}
 
 	rest := line
 	if strings.HasPrefix(rest, "@") {
-		sp := strings.IndexByte(rest, ' ')
-		if sp <= 1 {
+		var rawTags string
+		rawTags, rest = cutLead(rest)
+		if rawTags == "" {
 			ev.Kind = EventMalformed
-			return ev
+			return "", false
 		}
-		ev.Tags = parseTags(rest[1:sp])
-		rest = strings.TrimLeft(rest[sp+1:], " ")
+		ev.Tags = parseTags(rawTags)
 		if rest == "" {
 			ev.Kind = EventMalformed
-			return ev
+			return "", false
 		}
 	}
 
@@ -133,152 +166,167 @@ func ParseLine(rawLine string) Event {
 		if len(rest) > 4 {
 			ev.PingPayload = rest[4:] // includes leading space and ':' if present
 		}
-		return ev
+		return "", false
 	}
 
 	prefix := ""
 	if strings.HasPrefix(rest, ":") {
-		sp := strings.IndexByte(rest, ' ')
-		if sp <= 1 {
+		prefix, rest = cutLead(rest)
+		if prefix == "" || rest == "" {
 			ev.Kind = EventMalformed
-			return ev
-		}
-		prefix = rest[1:sp]
-		rest = strings.TrimLeft(rest[sp+1:], " ")
-		if rest == "" {
-			ev.Kind = EventMalformed
-			return ev
+			return "", false
 		}
 	}
 
-	// Extract command and arguments.
-	var cmd string
-	var argsPart string
-	if sp := strings.IndexByte(rest, ' '); sp >= 0 {
-		cmd = rest[:sp]
-		argsPart = strings.TrimLeft(rest[sp+1:], " ")
-	} else {
-		cmd = rest
+	cmd, argsPart, hasArgs := strings.Cut(rest, " ")
+	if hasArgs {
+		argsPart = strings.TrimLeft(argsPart, " ")
 	}
-
 	if cmd == "" || !isValidCommand(cmd) {
 		ev.Kind = EventMalformed
-		return ev
+		return "", false
 	}
 	ev.Command = cmd
 	ev.User = extractNick(prefix)
 
+	// A PING behind a prefix. The payload is whatever follows the first "PING"
+	// in the whole line, tags and prefix included.
 	if cmd == "PING" {
 		ev.Kind = EventPing
 		if idx := strings.Index(line, "PING"); idx >= 0 {
 			ev.PingPayload = line[idx+4:]
 		}
-		return ev
+		return "", false
 	}
+	return argsPart, true
+}
 
-	params, trailing, hasTrailing := splitParamsAndTrailing(argsPart)
+// cutLead splits s, which starts with a one-byte marker ('@' or ':'), into the
+// word after the marker and the text after the spaces that follow it. lead is
+// empty when the word is empty or no space ends it; rest is then meaningless.
+func cutLead(s string) (lead, rest string) {
+	sp := strings.IndexByte(s, ' ')
+	if sp <= 1 {
+		return "", ""
+	}
+	return s[1:sp], strings.TrimLeft(s[sp+1:], " ")
+}
 
-	switch cmd {
-	case "PRIVMSG":
-		if len(params) < 1 || !strings.HasPrefix(params[0], "#") || !hasTrailing {
-			ev.Kind = EventMalformed
-			return ev
-		}
-		ev.Kind = EventPrivMsg
-		ev.Channel = strings.TrimPrefix(params[0], "#")
-		body, isAction := unwrapAction(trailing)
-		ev.Body = body
-		ev.Action = isAction
-		populatePrivMsgTags(&ev)
-		if ev.DisplayName == "" {
-			ev.DisplayName = ev.User
-		}
-		if ev.DisplayName == "" {
-			ev.Kind = EventMalformed
-		}
-		return ev
+// lineArgs is what follows the command: the middle parameters and the trailing
+// one, which starts at " :".
+type lineArgs struct {
+	params      []string
+	trailing    string
+	hasTrailing bool
+}
 
-	case "NOTICE":
-		if len(params) < 1 || !hasTrailing {
-			ev.Kind = EventMalformed
-			return ev
-		}
-		ev.Kind = EventNotice
-		ev.Channel = strings.TrimPrefix(params[0], "#")
-		ev.Body = trailing
-		if ev.Tags != nil {
-			ev.MsgID = ev.Tags["msg-id"]
-		}
-		return ev
+// channel returns the first parameter without its '#'. ok is false when the
+// parameter is missing or does not start with '#'.
+func (a lineArgs) channel() (name string, ok bool) {
+	if len(a.params) < 1 {
+		return "", false
+	}
+	return strings.CutPrefix(a.params[0], "#")
+}
 
-	case "ROOMSTATE":
-		if len(params) < 1 || !strings.HasPrefix(params[0], "#") {
-			ev.Kind = EventMalformed
-			return ev
-		}
-		ev.Kind = EventRoomState
-		ev.Channel = strings.TrimPrefix(params[0], "#")
-		populateRoomState(&ev)
-		return ev
+func parsePrivMsg(ev *Event, args lineArgs) {
+	channel, ok := args.channel()
+	if !ok || !args.hasTrailing {
+		ev.Kind = EventMalformed
+		return
+	}
+	ev.Kind = EventPrivMsg
+	ev.Channel = channel
+	ev.Body, ev.Action = unwrapAction(args.trailing)
+	populatePrivMsgTags(ev)
+	if ev.DisplayName == "" {
+		ev.DisplayName = ev.User
+	}
+	if ev.DisplayName == "" {
+		ev.Kind = EventMalformed
+	}
+}
 
-	case "RECONNECT":
-		ev.Kind = EventReconnect
-		return ev
+// parseNotice accepts a target without '#': Twitch addresses some notices to "*".
+func parseNotice(ev *Event, args lineArgs) {
+	if len(args.params) < 1 || !args.hasTrailing {
+		ev.Kind = EventMalformed
+		return
+	}
+	ev.Kind = EventNotice
+	ev.Channel = strings.TrimPrefix(args.params[0], "#")
+	ev.Body = args.trailing
+	if ev.Tags != nil {
+		ev.MsgID = ev.Tags["msg-id"]
+	}
+}
 
-	case "CLEARCHAT":
-		if len(params) < 1 || !strings.HasPrefix(params[0], "#") {
-			ev.Kind = EventMalformed
-			return ev
-		}
-		ev.Kind = EventClearChat
-		ev.Channel = strings.TrimPrefix(params[0], "#")
-		if hasTrailing {
-			ev.TargetUser = strings.TrimSpace(trailing)
-		}
-		if ev.Tags != nil {
-			if raw, ok := ev.Tags["ban-duration"]; ok {
-				if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
-					ev.BanDuration = &n
-				}
+func parseRoomState(ev *Event, args lineArgs) {
+	channel, ok := args.channel()
+	if !ok {
+		ev.Kind = EventMalformed
+		return
+	}
+	ev.Kind = EventRoomState
+	ev.Channel = channel
+	populateRoomState(ev)
+}
+
+func parseClearChat(ev *Event, args lineArgs) {
+	channel, ok := args.channel()
+	if !ok {
+		ev.Kind = EventMalformed
+		return
+	}
+	ev.Kind = EventClearChat
+	ev.Channel = channel
+	if args.hasTrailing {
+		ev.TargetUser = strings.TrimSpace(args.trailing)
+	}
+	if ev.Tags != nil {
+		if raw, ok := ev.Tags["ban-duration"]; ok {
+			if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+				ev.BanDuration = &n
 			}
 		}
-		return ev
-
-	case "CLEARMSG":
-		if len(params) < 1 || !strings.HasPrefix(params[0], "#") {
-			ev.Kind = EventMalformed
-			return ev
-		}
-		ev.Kind = EventClearMsg
-		ev.Channel = strings.TrimPrefix(params[0], "#")
-		ev.Body = trailing
-		if ev.Tags != nil {
-			ev.TargetUser = ev.Tags["login"]
-			ev.TargetMsgID = ev.Tags["target-msg-id"]
-		}
-		return ev
-
-	case "USERNOTICE":
-		if len(params) < 1 || !strings.HasPrefix(params[0], "#") {
-			ev.Kind = EventMalformed
-			return ev
-		}
-		ev.Kind = EventUserNotice
-		ev.Channel = strings.TrimPrefix(params[0], "#")
-		if hasTrailing {
-			ev.Body = trailing
-		}
-		populateUserNoticeTags(&ev)
-		return ev
-
-	default:
-		ev.Kind = EventOther
-		if len(params) > 0 && strings.HasPrefix(params[0], "#") {
-			ev.Channel = strings.TrimPrefix(params[0], "#")
-		}
-		ev.Body = trailing
-		return ev
 	}
+}
+
+func parseClearMsg(ev *Event, args lineArgs) {
+	channel, ok := args.channel()
+	if !ok {
+		ev.Kind = EventMalformed
+		return
+	}
+	ev.Kind = EventClearMsg
+	ev.Channel = channel
+	ev.Body = args.trailing
+	if ev.Tags != nil {
+		ev.TargetUser = ev.Tags["login"]
+		ev.TargetMsgID = ev.Tags["target-msg-id"]
+	}
+}
+
+func parseUserNotice(ev *Event, args lineArgs) {
+	channel, ok := args.channel()
+	if !ok {
+		ev.Kind = EventMalformed
+		return
+	}
+	ev.Kind = EventUserNotice
+	ev.Channel = channel
+	ev.Body = args.trailing
+	populateUserNoticeTags(ev)
+}
+
+// parseOther keeps every command the client has no handler for. The channel is
+// set only when the first parameter names one.
+func parseOther(ev *Event, args lineArgs) {
+	ev.Kind = EventOther
+	if channel, ok := args.channel(); ok {
+		ev.Channel = channel
+	}
+	ev.Body = args.trailing
 }
 
 func parseTags(raw string) map[string]string {
