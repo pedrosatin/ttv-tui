@@ -580,7 +580,7 @@ func TestParseLine_Table(t *testing.T) {
 			},
 		},
 		{
-			name:     "USERNOTICE without tags keeps only channel and text",
+			name:     "USERNOTICE without tags keeps channel, text and prefix nick, with no DisplayName",
 			line:     ":nick!nick@host USERNOTICE #gaules :texto",
 			wantKind: EventUserNotice,
 			check: func(t *testing.T, ev Event) {
