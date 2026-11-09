@@ -195,6 +195,61 @@ func TestNoDuplicatesAcrossSections(t *testing.T) {
 	}
 }
 
+func TestRenamedRecentIsSeenByID(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+
+	// The store kept the favorite under its old login; the recent has the same
+	// ID with the new one. No listing is loaded to resolve either.
+	m := New(catEN,
+		WithFavorites([]twitch.Channel{
+			{ID: "ch-1", Login: "old_login", DisplayName: "Old Login"},
+		}),
+		WithRecents([]twitch.Channel{
+			{ID: "ch-1", Login: "new_login", DisplayName: "New Login"},
+		}),
+	)
+
+	items := m.VisibleItems()
+	if len(items) != 1 {
+		t.Fatalf("expected the recent to be skipped by ID, got %d items", len(items))
+	}
+	if items[0].Type != ItemTypeFavorite || items[0].Login() != "old_login" {
+		t.Errorf("expected items[0] to be Favorite 'old_login', got %+v", items[0])
+	}
+}
+
+func TestFilteredRecentDoesNotHideListedChannel(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+
+	m := New(catEN,
+		WithRecents([]twitch.Channel{
+			{ID: "ch-1", Login: "quiet", DisplayName: "Quiet"},
+		}),
+	)
+
+	// A search hit without availability evidence does not replace the stored
+	// recent, so the text filter sees the recent without a title.
+	title := "Speedrun any%"
+	m.list.mode = ModeSearch
+	m.list.channels = []twitch.Channel{
+		{ID: "ch-1", Login: "quiet", DisplayName: "Quiet", Title: &title},
+	}
+	m.list.filter = "speedrun"
+
+	items := m.VisibleItems()
+	if len(items) != 1 {
+		t.Fatalf("expected only the listed channel, got %d items", len(items))
+	}
+	if items[0].Type != ItemTypeChannel || items[0].Login() != "quiet" {
+		t.Errorf("expected items[0] to be Channel 'quiet', got %+v", items[0])
+	}
+
+	m.list.filter = "zzz"
+	if items := m.VisibleItems(); items != nil {
+		t.Errorf("expected a nil list when nothing matches, got %+v", items)
+	}
+}
+
 func TestEnterSemanticsByItemType(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	fs := &fakeStore{}

@@ -156,179 +156,180 @@ func channelMatches(a, b twitch.Channel) bool {
 // A channel present in Favorites is omitted from Recents and Content.
 // A channel present in Recents is omitted from Content.
 func (m Model) VisibleItems() []ListItem {
-	var items []ListItem
-	seenLogins := make(map[string]struct{})
-	seenIDs := make(map[string]struct{})
-
-	markSeen := func(ch twitch.Channel) {
-		if ch.Login != "" {
-			seenLogins[strings.ToLower(ch.Login)] = struct{}{}
-		}
-		if ch.ID != "" {
-			seenIDs[ch.ID] = struct{}{}
-		}
+	p := itemPass{
+		query:      strings.ToLower(strings.TrimSpace(m.list.filter)),
+		prefs:      m.list.prefs,
+		seenLogins: make(map[string]struct{}),
+		seenIDs:    make(map[string]struct{}),
 	}
+	items := m.appendFavorites(nil, p)
+	items = m.appendRecents(items, p)
+	return m.appendContent(items, p)
+}
 
-	isSeen := func(ch twitch.Channel) bool {
-		if ch.Login != "" {
-			if _, ok := seenLogins[strings.ToLower(ch.Login)]; ok {
-				return true
-			}
-		}
-		if ch.ID != "" {
-			if _, ok := seenIDs[ch.ID]; ok {
-				return true
-			}
-		}
-		return false
+// itemPass is the state of one VisibleItems call: the filters a row has to
+// pass and the channels already listed, which a later origin skips.
+type itemPass struct {
+	query      string // text filter, trimmed and lowercased
+	prefs      channelPrefs
+	seenLogins map[string]struct{}
+	seenIDs    map[string]struct{}
+}
+
+func (p itemPass) markSeen(ch twitch.Channel) {
+	if ch.Login != "" {
+		p.seenLogins[strings.ToLower(ch.Login)] = struct{}{}
 	}
-
-	// findLoaded returns the loaded copy of ch when the current listing has
-	// evidence about its availability.
-	findLoaded := func(ch twitch.Channel) (twitch.Channel, bool) {
-		for _, c := range m.list.channels {
-			if channelMatches(c, ch) && m.listingAvailability(c) != twitch.AvailabilityUnknown {
-				return c, true
-			}
-		}
-		return ch, false
+	if ch.ID != "" {
+		p.seenIDs[ch.ID] = struct{}{}
 	}
+}
 
-	savedItem := func(saved twitch.Channel) (twitch.Channel, twitch.Availability) {
-		ch := saved
-		avail := saved.Availability
-		if loaded, ok := findLoaded(saved); ok {
-			ch = loaded
-			avail = m.listingAvailability(loaded)
-		}
-		if m.player.isPlaying(ch) {
-			avail = twitch.AvailabilityLive
-		}
-		return ch, avail
-	}
-
-	matchesFilter := func(name, login, title string) bool {
-		q := strings.ToLower(strings.TrimSpace(m.list.filter))
-		if q == "" {
+func (p itemPass) isSeen(ch twitch.Channel) bool {
+	if ch.Login != "" {
+		if _, ok := p.seenLogins[strings.ToLower(ch.Login)]; ok {
 			return true
 		}
-		return strings.Contains(strings.ToLower(name), q) ||
-			strings.Contains(strings.ToLower(login), q) ||
-			(title != "" && strings.Contains(strings.ToLower(title), q))
 	}
+	if ch.ID != "" {
+		if _, ok := p.seenIDs[ch.ID]; ok {
+			return true
+		}
+	}
+	return false
+}
 
-	// 1. Favorites
+// matchesFilter reports whether one of the fields contains the text filter.
+func (p itemPass) matchesFilter(name, login, title string) bool {
+	if p.query == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(name), p.query) ||
+		strings.Contains(strings.ToLower(login), p.query) ||
+		(title != "" && strings.Contains(strings.ToLower(title), p.query))
+}
+
+// passes reports whether ch survives the text filter and the language and
+// audience preference filters.
+func (p itemPass) passes(ch twitch.Channel) bool {
+	title := ""
+	if ch.Title != nil {
+		title = *ch.Title
+	}
+	return p.matchesFilter(ch.DisplayName, ch.Login, title) && p.prefs.passes(ch)
+}
+
+// channelItem builds a channel row that owns its copy of ch.
+func channelItem(itemType ListItemType, ch twitch.Channel, avail twitch.Availability) ListItem {
+	return ListItem{Type: itemType, Channel: &ch, Availability: avail}
+}
+
+// findLoaded returns the loaded copy of ch when the current listing has
+// evidence about its availability.
+func (m Model) findLoaded(ch twitch.Channel) (twitch.Channel, bool) {
+	for _, c := range m.list.channels {
+		if channelMatches(c, ch) && m.listingAvailability(c) != twitch.AvailabilityUnknown {
+			return c, true
+		}
+	}
+	return ch, false
+}
+
+// resolveSaved returns the channel and the availability to show for a favorite
+// or a recent: the loaded copy when the listing has one, the stored one
+// otherwise.
+func (m Model) resolveSaved(saved twitch.Channel) (twitch.Channel, twitch.Availability) {
+	ch := saved
+	avail := saved.Availability
+	if loaded, ok := m.findLoaded(saved); ok {
+		ch = loaded
+		avail = m.listingAvailability(loaded)
+	}
+	if m.player.isPlaying(ch) {
+		avail = twitch.AvailabilityLive
+	}
+	return ch, avail
+}
+
+// appendFavorites appends the favorites that pass the filters. A filtered
+// favorite is not marked as seen, so it does not hide a later row.
+func (m Model) appendFavorites(items []ListItem, p itemPass) []ListItem {
 	for _, fav := range m.list.favorites {
-		ch, avail := savedItem(fav)
-		title := ""
-		if ch.Title != nil {
-			title = *ch.Title
-		}
-		if !matchesFilter(ch.DisplayName, ch.Login, title) {
+		ch, avail := m.resolveSaved(fav)
+		if !p.passes(ch) {
 			continue
 		}
-		if !m.list.prefs.passes(ch) {
-			continue
-		}
-		chCopy := ch
-		items = append(items, ListItem{
-			Type:         ItemTypeFavorite,
-			Channel:      &chCopy,
-			Availability: avail,
-		})
-		markSeen(ch)
+		items = append(items, channelItem(ItemTypeFavorite, ch, avail))
+		p.markSeen(ch)
 	}
+	return items
+}
 
-	// 2. Recents (excluding any already seen in Favorites)
+// appendRecents appends the recents that are not favorites. The seen check
+// runs on the stored channel; the seen mark comes from the resolved one.
+func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 	for _, rec := range m.list.recents {
-		if isSeen(rec) {
+		if p.isSeen(rec) {
 			continue
 		}
-		ch, avail := savedItem(rec)
-		title := ""
-		if ch.Title != nil {
-			title = *ch.Title
-		}
-		if !matchesFilter(ch.DisplayName, ch.Login, title) {
+		ch, avail := m.resolveSaved(rec)
+		if !p.passes(ch) {
 			continue
 		}
-		if !m.list.prefs.passes(ch) {
-			continue
-		}
-		chCopy := ch
-		items = append(items, ListItem{
-			Type:         ItemTypeRecent,
-			Channel:      &chCopy,
-			Availability: avail,
-		})
-		markSeen(ch)
+		items = append(items, channelItem(ItemTypeRecent, ch, avail))
+		p.markSeen(ch)
 	}
+	return items
+}
 
-	addChannel := func(ch twitch.Channel, itemType ListItemType) {
-		if isSeen(ch) {
-			return
+// appendContent appends what the current screen lists below the saved
+// channels.
+func (m Model) appendContent(items []ListItem, p itemPass) []ListItem {
+	switch m.Mode() {
+	case ModeCategories:
+		items = appendCategories(items, m.list.categories, p)
+	case ModeSearch:
+		// An exact channel hit first (v1.9 ticket 11), then categories, then the
+		// other channels (ticket 09).
+		items = m.appendListed(items, p, ItemTypeExactChannel)
+		items = appendCategories(items, m.list.search.categories, p)
+		items = m.appendListed(items, p, ItemTypeChannel)
+	case ModeChannels:
+		items = m.appendListed(items, p, ItemTypeChannel)
+	}
+	return items
+}
+
+// appendCategories appends the categories that match the text filter.
+// Categories are not deduplicated.
+func appendCategories(items []ListItem, cats []twitch.Category, p itemPass) []ListItem {
+	for _, cat := range cats {
+		if !p.matchesFilter(cat.Name, "", "") {
+			continue
 		}
-		title := ""
-		if ch.Title != nil {
-			title = *ch.Title
+		items = append(items, ListItem{Type: ItemTypeCategory, Category: &cat})
+	}
+	return items
+}
+
+// appendListed appends the channels of the loaded listing that are not in the
+// list yet and pass the filters. With ItemTypeExactChannel it takes only the
+// channels the search query names exactly.
+func (m Model) appendListed(items []ListItem, p itemPass, itemType ListItemType) []ListItem {
+	for _, ch := range m.list.channels {
+		if itemType == ItemTypeExactChannel && !twitch.ExactChannelMatch(m.list.search.query, ch) {
+			continue
 		}
-		if !matchesFilter(ch.DisplayName, ch.Login, title) {
-			return
+		if p.isSeen(ch) || !p.passes(ch) {
+			continue
 		}
-		if !m.list.prefs.passes(ch) {
-			return
-		}
-		chCopy := ch
 		avail := m.listingAvailability(ch)
 		if m.player.isPlaying(ch) {
 			avail = twitch.AvailabilityLive
 		}
-		items = append(items, ListItem{
-			Type:         itemType,
-			Channel:      &chCopy,
-			Availability: avail,
-		})
-		markSeen(ch)
+		items = append(items, channelItem(itemType, ch, avail))
+		p.markSeen(ch)
 	}
-
-	// 3. Conteúdo da tela
-	switch m.Mode() {
-	case ModeCategories:
-		for _, cat := range m.list.categories {
-			if !matchesFilter(cat.Name, "", "") {
-				continue
-			}
-			catCopy := cat
-			items = append(items, ListItem{
-				Type:     ItemTypeCategory,
-				Category: &catCopy,
-			})
-		}
-	case ModeSearch:
-		// An exact channel hit first (v1.9 ticket 11), then categories, then the
-		// other channels (ticket 09).
-		for _, ch := range m.list.channels {
-			if twitch.ExactChannelMatch(m.list.search.query, ch) {
-				addChannel(ch, ItemTypeExactChannel)
-			}
-		}
-		for _, cat := range m.list.search.categories {
-			if !matchesFilter(cat.Name, "", "") {
-				continue
-			}
-			catCopy := cat
-			items = append(items, ListItem{
-				Type:     ItemTypeCategory,
-				Category: &catCopy,
-			})
-		}
-		fallthrough
-	case ModeChannels:
-		for _, ch := range m.list.channels {
-			addChannel(ch, ItemTypeChannel)
-		}
-	}
-
 	return items
 }
 
