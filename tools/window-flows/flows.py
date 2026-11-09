@@ -9,11 +9,11 @@ falha não interrompe os demais fluxos.
 Códigos de saída:
   0  todas as verificações passaram
   1  falha de produto (algum FAIL, ou a janela caiu no meio)
-  2  falta pré-requisito no ambiente (Hyprland, grim, foot, rede…)
+  2  falta pré-requisito no ambiente (Hyprland, grim, foot, rede…) ou há outra execução em curso
   3  rodada inválida (janela fora do monitor de teste, tempo esgotado, hyprctl recusou)
   4  o checkout não compilou
 """
-import argparse, json, os, re, shutil, signal, socket, subprocess, sys, time, traceback
+import argparse, fcntl, glob, json, os, re, shutil, signal, socket, subprocess, sys, tempfile, time, traceback
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MON = "TTVFLOWS"  # monitor virtual criado e removido pela bateria
@@ -21,6 +21,7 @@ CLASS = "ttvflows"  # classe da janela de teste; a do operador é "ttv-tui"
 FOOT_CLASS = "ttvflows-foot"
 MARK = "TTV_FLOWS_RUN"  # variável herdada por todo processo que a bateria cria
 RUN = ""  # diretório desta execução
+TMP = ""  # temporários da janela: a limpeza alcança até o que um SIGKILL deixa
 TEST = ""  # socket de teste da janela
 PROC = None  # janela em execução
 # Os critérios foram calibrados numa grade de 159 colunas: 1920x1080, escala 5/3 e a
@@ -32,6 +33,7 @@ BASELINE = set()
 MPV_BASE = set()
 made_monitor = False
 made_rules = False
+lock_file = None  # fica aberto: a trava dura até o processo sair
 
 
 class Missing(Exception):
@@ -66,7 +68,7 @@ class Tee:
 def sh(cmd):
     """Roda o comando; nas listas de processos ignora o que já existia antes do teste."""
     out = subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout
-    if BASELINE and ("pgrep" in cmd or "ttv-shell-" in cmd):
+    if BASELINE and "pgrep" in cmd:
         out = "".join(l + "\n" for l in out.splitlines() if l.split(" ", 1)[0] not in BASELINE)
     return out
 
@@ -248,7 +250,7 @@ def launch():
     for k in ("TTV_TUI_VIDEO_HOST", "TTV_WINDOW_SOCK"):
         env.pop(k, None)
     env.update(
-        XDG_CONFIG_HOME=f"{RUN}/cfg", XDG_STATE_HOME=f"{RUN}/state", XDG_CACHE_HOME=f"{RUN}/cache",
+        XDG_CONFIG_HOME=f"{RUN}/cfg", XDG_STATE_HOME=f"{RUN}/state", XDG_CACHE_HOME=f"{RUN}/cache", TMPDIR=TMP,
         TTV_WINDOW_APPID=CLASS, TTV_WINDOW_MUTE="1", TTV_WINDOW_TEST=TEST, TTV_WINDOW_TUI=f"{RUN}/bin/ttv-tui",
         TTV_WINDOW_PT=f"{CAL_PT * CAL_SCALE / test_monitor()['scale']:.4f}",
     )
@@ -439,23 +441,29 @@ def flows():
     if lat:
         p50, p95 = lat[len(lat) // 2], lat[int(len(lat) * 0.95)]
         check(role, "tecla até tela < 60 ms (p50)", p50 < 60, f"p50 {p50:.0f} ms, p95 {p95:.0f} ms, n={len(lat)}, max {max(lat):.0f}")
+    else:
+        check(role, "tecla até tela < 60 ms (p50)", False, "nenhuma amostra de latência nas 30 teclas")
 
     # ---- Leitura do chat e da lista, com várias amostras ao longo do tempo
     role = "leitura"
     cut_chat, no_author, list_cut, tops = [], 0, [], []
+    seen_chat, seen_list = 0, 0  # amostra sem conteúdo não aprova nada
     for _ in range(12):
         rows = screen().splitlines()
         body = [l.rsplit("│", 1)[-1].rstrip() for l in rows[2:-3] if "│" in l]
         cut_chat += [l.strip() for l in body if l.endswith("…")]
         first = next((l for l in body if l.strip()), "")
+        seen_chat += bool(first)
         if first and ":" not in first and not first.lstrip().startswith("["):
             no_author += 1
             tops.append(first.strip()[:40])
-        list_cut += [l.split("│")[0].strip() for l in rows[:-1] if "│" in l and (".…" in l.split("│")[0] or "..." in l.split("│")[0])]
+        left = [l.split("│")[0].strip() for l in rows[:-1] if "│" in l]
+        seen_list += any(left)
+        list_cut += [l for l in left if ".…" in l or "..." in l]
         time.sleep(0.8)
-    check(role, "o chat não corta palavras com reticências", not cut_chat, str(cut_chat[:2]))
-    check(role, "o topo do chat sempre começa pelo autor", no_author == 0, f"{no_author} de 12 amostras{'; topo: ' + str(tops[:3]) if tops else ''}")
-    check(role, "a lista usa um corte só", not list_cut, str(list_cut[:2]))
+    check(role, "o chat não corta palavras com reticências", seen_chat > 0 and not cut_chat, f"chat em {seen_chat} de 12 amostras; {cut_chat[:2]}")
+    check(role, "o topo do chat sempre começa pelo autor", seen_chat > 0 and no_author == 0, f"{no_author} de {seen_chat} amostras{'; topo: ' + str(tops[:3]) if tops else ''}")
+    check(role, "a lista usa um corte só", seen_list > 0 and not list_cut, f"lista em {seen_list} de 12 amostras; {list_cut[:2]}")
 
     # ---- Quem quer só o vídeo: esconder e mostrar lista e chat
     role = "toggles"
@@ -769,7 +777,7 @@ def flows():
     left = [f"{p}:{comm(p)}" for p in descendants if comm(p)]
     check(role, "sem processo órfão", not left, str(left))
     check(role, "sem janela restante", not ours(), str(len(ours())))
-    check(role, "sem temporário restante", not sh("ls -d /tmp/ttv-shell-* 2>/dev/null").strip(), sh("ls -d /tmp/ttv-shell-* 2>/dev/null")[:80])
+    check(role, "sem temporário restante", not glob.glob(f"{TMP}/ttv-shell-*"), str(glob.glob(f"{TMP}/ttv-shell-*"))[:80])
 
     # ---- A largura sobrevive a fechar e abrir
     role = "memoria"
@@ -800,11 +808,13 @@ def preflight():
         missing.append("sessão do Hyprland (HYPRLAND_INSTANCE_SIGNATURE e WAYLAND_DISPLAY vazios)")
     tools = {
         "hyprctl": "Hyprland", "grim": "grim", "magick": "ImageMagick", "foot": "foot", "streamlink": "streamlink",
-        "go": "Go", "gcc": "gcc (cgo)", "pkg-config": "pkgconf", "pgrep": "procps",
+        "go": "Go", "gcc": "gcc (cgo)", "pkg-config": "pkgconf", "pgrep": "procps", "setsid": "util-linux",
     }
     for exe, pkg in tools.items():
         if not shutil.which(exe):
             missing.append(f"{exe} ({pkg})")
+    if not glob.glob("/dev/dri/renderD*"):
+        missing.append("GPU para VA-API (nenhum /dev/dri/renderD*)")
     if missing:
         raise Missing("; ".join(missing))
     try:
@@ -868,13 +878,17 @@ def cleanup():
             PROC.wait(2)
         except subprocess.TimeoutExpired:
             pass
+    rules_off = True
     if made_rules:
-        subprocess.run(["hyprctl", "eval", "for _, r in pairs(_G.ttvflows or {}) do r:set_enabled(false) end; _G.ttvflows = nil"], capture_output=True)
+        r = subprocess.run(["hyprctl", "eval", "for _, r in pairs(_G.ttvflows or {}) do r:set_enabled(false) end; _G.ttvflows = nil"], capture_output=True, text=True)
+        rules_off = r.stdout.strip() == "ok"
+        if not rules_off:
+            notes.append(f"hyprctl recusou desativar as regras: {r.stdout.strip()[:120]}")
     if made_monitor:
         subprocess.run(["hyprctl", "output", "remove", MON], capture_output=True)
         wait(lambda: not any(m["name"] == MON for m in monitors()), 5)
-    if TEST and os.path.exists(TEST):
-        os.remove(TEST)
+    if TMP:
+        shutil.rmtree(TMP, ignore_errors=True)  # inclui o socket de teste e o que a janela não apagou ao ser morta
     shutil.rmtree(f"{RUN}/bin", ignore_errors=True)  # o binário se recompila; a evidência fica
     shutil.rmtree(f"{RUN}/cache", ignore_errors=True)
     try:
@@ -883,9 +897,10 @@ def cleanup():
     except (OSError, ValueError):
         mon_left, win_left = ["?"], ["?"]
     proc_left = [f"{p}:{comm(p)}" for p in marked()]
-    clean = not (made_monitor and mon_left) and not win_left and not proc_left
+    tmp_left = bool(TMP) and os.path.exists(TMP)
+    clean = not (made_monitor and mon_left) and not win_left and not proc_left and rules_off and not tmp_left
     print(f"LIMPEZA: {'ok' if clean else 'INCOMPLETA'}; monitor {MON}: {mon_left or 'removido'}; janelas de teste: {win_left or 'nenhuma'}; "
-          f"processos da execução: {proc_left or 'nenhum'}{'; ' + '; '.join(notes) if notes else ''}", flush=True)
+          f"processos da execução: {proc_left or 'nenhum'}; temporários: {TMP if tmp_left else 'removidos'}{'; ' + '; '.join(notes) if notes else ''}", flush=True)
     return clean
 
 
@@ -893,8 +908,18 @@ def on_signal(num, _frame):
     raise Invalid("tempo esgotado" if num == signal.SIGALRM else f"interrompido por {signal.Signals(num).name}")
 
 
+def take_lock():
+    """Uma execução por vez: o monitor, as regras e as medições são da máquina inteira."""
+    global lock_file
+    lock_file = open(os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(), "ttv-tui-window-flows.lock"), "w")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise Missing("outra execução da bateria está em curso")
+
+
 def main():
-    global RUN, TEST, made_monitor
+    global RUN, TMP, TEST, made_monitor
     ap = argparse.ArgumentParser(description="Bateria de ponta a ponta da janela única (Hyprland, live real).")
     ap.add_argument("--max-load", type=float, default=6, help="espera o load de 1 min ficar abaixo disto antes de medir (padrão 6)")
     ap.add_argument("--load-wait", type=int, default=900, help="quanto esperar pela carga, em segundos (padrão 900; 0 não espera)")
@@ -905,14 +930,15 @@ def main():
 
     code = 1
     try:
+        take_lock()
         preflight()
         RUN = os.path.join(os.path.abspath(args.out), time.strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}")
         os.makedirs(RUN)
         os.chdir(RUN)
         os.environ[MARK] = os.path.basename(RUN)
-        TEST = f"{RUN}/test.sock"
-        if len(TEST.encode()) > 100:  # sun_path tem 108 bytes
-            TEST = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), f"ttvflows-{os.getpid()}.sock")
+        # Curto de propósito: sun_path tem 108 bytes e os sockets da janela ficam aqui.
+        TMP = tempfile.mkdtemp(prefix="ttvflows-", dir=os.environ.get("XDG_RUNTIME_DIR") or None)
+        TEST = f"{TMP}/test.sock"
         sys.stdout = Tee(sys.__stdout__, open("flows.log", "w"))
         print(f"INFO [exec] diretório: {RUN}", flush=True)
         build()
@@ -922,15 +948,17 @@ def main():
             wait_load(args.max_load, args.load_wait)
         load_start = load1()
 
-        BASELINE.update(l.split(" ", 1)[0] for l in sh("pgrep -a ttv-tui; pgrep -a streamlink; pgrep -a mpv; ls -d /tmp/ttv-shell-* 2>/dev/null").splitlines())
+        BASELINE.update(l.split(" ", 1)[0] for l in sh("pgrep -a ttv-tui; pgrep -a streamlink; pgrep -a mpv").splitlines())
         MPV_BASE.update(c["address"] for c in clients() if "mpv" in c["class"].lower())
         print(f"INFO [base] {len(BASELINE)} processos e temporários já existentes ignorados", flush=True)
 
         for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGALRM):
             signal.signal(s, on_signal)
         signal.alarm(args.timeout)
+        if any(m["name"] == MON for m in monitors()):  # a compilação e a espera de carga levam minutos
+            raise Missing(f"o monitor {MON} apareceu durante a preparação (hyprctl output remove {MON})")
+        made_monitor = True  # antes de criar: um sinal logo depois ainda precisa removê-lo
         r = subprocess.run(["hyprctl", "output", "create", "headless", MON], capture_output=True, text=True)
-        made_monitor = True
         if not wait(lambda: any(m["name"] == MON for m in monitors()), 5, 0.1):
             raise Invalid(f"o Hyprland não criou o monitor virtual: {r.stdout.strip()[:200]}")
         m = test_monitor()
