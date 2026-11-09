@@ -511,7 +511,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case hostedNoticeMsg:
 		return m.applyHostedNotice(msg)
 	case hostedSaveMsg:
-		return m, m.saveHostedColumns(msg.gen)
+		return m, m.hosted.saveColumns(msg.gen)
 	case tea.BatchMsg:
 		return m.applyBatch(msg)
 

@@ -110,7 +110,7 @@ func (m Model) VisibleChannels() []twitch.Channel {
 	q := strings.ToLower(strings.TrimSpace(m.list.filter))
 	out := make([]twitch.Channel, 0, len(m.list.channels))
 	for _, c := range m.list.channels {
-		if !m.channelPassesPrefs(c) {
+		if !m.list.prefs.passes(c) {
 			continue
 		}
 		if q == "" {
@@ -201,7 +201,7 @@ func (m Model) VisibleItems() []ListItem {
 			ch = loaded
 			avail = m.listingAvailability(loaded)
 		}
-		if m.isPlayingChannel(ch) {
+		if m.player.isPlaying(ch) {
 			avail = twitch.AvailabilityLive
 		}
 		return ch, avail
@@ -227,7 +227,7 @@ func (m Model) VisibleItems() []ListItem {
 		if !matchesFilter(ch.DisplayName, ch.Login, title) {
 			continue
 		}
-		if !m.channelPassesPrefs(ch) {
+		if !m.list.prefs.passes(ch) {
 			continue
 		}
 		chCopy := ch
@@ -252,7 +252,7 @@ func (m Model) VisibleItems() []ListItem {
 		if !matchesFilter(ch.DisplayName, ch.Login, title) {
 			continue
 		}
-		if !m.channelPassesPrefs(ch) {
+		if !m.list.prefs.passes(ch) {
 			continue
 		}
 		chCopy := ch
@@ -275,12 +275,12 @@ func (m Model) VisibleItems() []ListItem {
 		if !matchesFilter(ch.DisplayName, ch.Login, title) {
 			return
 		}
-		if !m.channelPassesPrefs(ch) {
+		if !m.list.prefs.passes(ch) {
 			return
 		}
 		chCopy := ch
 		avail := m.listingAvailability(ch)
-		if m.isPlayingChannel(ch) {
+		if m.player.isPlaying(ch) {
 			avail = twitch.AvailabilityLive
 		}
 		items = append(items, ListItem{
@@ -349,15 +349,15 @@ func (m Model) listingAvailability(ch twitch.Channel) twitch.Availability {
 	return twitch.AvailabilityUnknown
 }
 
-// isPlayingChannel reports whether ch is the channel the player is showing now.
+// isPlaying reports whether ch is the channel the player is showing now.
 // A channel being played is live regardless of what the store says.
-func (m Model) isPlayingChannel(ch twitch.Channel) bool {
-	if m.player.login == "" || ch.Login == "" {
+func (p playbackState) isPlaying(ch twitch.Channel) bool {
+	if p.login == "" || ch.Login == "" {
 		return false
 	}
-	switch m.player.state {
+	switch p.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
-		return strings.EqualFold(m.player.login, ch.Login)
+		return strings.EqualFold(p.login, ch.Login)
 	default:
 		return false
 	}
@@ -639,13 +639,13 @@ func (m *Model) ToggleFavorite(ch twitch.Channel) bool {
 	return true
 }
 
-func (m Model) toStoreState() store.State {
-	recs := m.list.recents
-	if m.list.pendingRecents != nil {
-		recs = m.list.pendingRecents
+func (l listState) toStoreState() store.State {
+	recs := l.recents
+	if l.pendingRecents != nil {
+		recs = l.pendingRecents
 	}
 	return store.State{
-		Favorites: store.FromTwitchChannels(m.list.favorites),
+		Favorites: store.FromTwitchChannels(l.favorites),
 		Recents:   store.FromTwitchChannels(recs),
 	}
 }
@@ -659,7 +659,7 @@ func (m Model) saveStoreCmd(notice ...string) tea.Cmd {
 	if m.store == nil {
 		return nil
 	}
-	st := m.toStoreState()
+	st := m.list.toStoreState()
 	s := m.store
 	confirmation := ""
 	if len(notice) > 0 {
@@ -772,7 +772,7 @@ func (m *Model) moveHighlight(delta int) {
 		m.clearHighlight()
 		return
 	}
-	idx := m.indexOfHighlighted(items)
+	idx := m.list.indexOfHighlighted(items)
 	if idx < 0 {
 		m.setHighlightToItem(items, 0)
 		return
@@ -818,17 +818,17 @@ func (m *Model) setHighlightToItem(items []ListItem, idx int) {
 
 // indexOfHighlighted finds the highlighted row by stable ID, then by channel
 // login. Returns -1 when neither identity is present in items.
-func (m Model) indexOfHighlighted(items []ListItem) int {
-	if m.list.highlightedID != "" {
+func (l listState) indexOfHighlighted(items []ListItem) int {
+	if l.highlightedID != "" {
 		for i, it := range items {
-			if it.ID() == m.list.highlightedID {
+			if it.ID() == l.highlightedID {
 				return i
 			}
 		}
 	}
-	if m.list.highlightedLogin != "" {
+	if l.highlightedLogin != "" {
 		for i, it := range items {
-			if it.Channel != nil && strings.EqualFold(it.Channel.Login, m.list.highlightedLogin) {
+			if it.Channel != nil && strings.EqualFold(it.Channel.Login, l.highlightedLogin) {
 				return i
 			}
 		}
@@ -848,7 +848,7 @@ func (m *Model) reconcileHighlight() {
 		}
 		return
 	}
-	if idx := m.indexOfHighlighted(items); idx >= 0 {
+	if idx := m.list.indexOfHighlighted(items); idx >= 0 {
 		m.setHighlightToItem(items, idx)
 		return
 	}
@@ -1047,10 +1047,10 @@ func (m Model) withHydrate(cmd tea.Cmd) tea.Cmd {
 }
 
 // savedLogins returns unique non-empty logins from favorites and recents.
-func (m Model) savedLogins() []string {
-	n := len(m.list.favorites) + len(m.list.recents)
-	if m.list.pendingRecents != nil {
-		n += len(m.list.pendingRecents)
+func (l listState) savedLogins() []string {
+	n := len(l.favorites) + len(l.recents)
+	if l.pendingRecents != nil {
+		n += len(l.pendingRecents)
 	}
 	seen := make(map[string]struct{}, n)
 	out := make([]string, 0, n)
@@ -1066,13 +1066,13 @@ func (m Model) savedLogins() []string {
 		seen[key] = struct{}{}
 		out = append(out, login)
 	}
-	for _, ch := range m.list.favorites {
+	for _, ch := range l.favorites {
 		add(ch)
 	}
-	for _, ch := range m.list.recents {
+	for _, ch := range l.recents {
 		add(ch)
 	}
-	for _, ch := range m.list.pendingRecents {
+	for _, ch := range l.pendingRecents {
 		add(ch)
 	}
 	return out
@@ -1085,7 +1085,7 @@ func (m Model) fetchHydrateCmd(gen uint64) tea.Cmd {
 	if src == nil {
 		return nil
 	}
-	logins := m.savedLogins()
+	logins := m.list.savedLogins()
 	if len(logins) == 0 {
 		return nil
 	}

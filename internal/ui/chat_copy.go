@@ -129,9 +129,9 @@ func truncateRunes(s string, max int) string {
 	return b.String()
 }
 
-func (m Model) now() time.Time {
-	if m.chat.nowFunc != nil {
-		return m.chat.nowFunc()
+func (c chatState) now() time.Time {
+	if c.nowFunc != nil {
+		return c.nowFunc()
 	}
 	return time.Now()
 }
@@ -231,7 +231,7 @@ func (m Model) applyCopyResult(msg copyResultMsg) (Model, tea.Cmd) {
 	if msg.gen != m.chat.copyNoticeGen {
 		return m, nil
 	}
-	m.chat.copyNoticeUntil = m.now().Add(copyNoticeTTL)
+	m.chat.copyNoticeUntil = m.chat.now().Add(copyNoticeTTL)
 	if msg.err != nil {
 		m.chat.copyNotice = m.t("chat.copy.failed")
 	} else {
@@ -272,7 +272,7 @@ func (m Model) clearCopyNoticeIfExpired(gen uint64) Model {
 	}
 	// Injectable clock: a clear tick that arrives early (or a test advancing
 	// time) only dismisses once now reaches copyNoticeUntil.
-	if !m.chat.copyNoticeUntil.IsZero() && m.now().Before(m.chat.copyNoticeUntil) {
+	if !m.chat.copyNoticeUntil.IsZero() && m.chat.now().Before(m.chat.copyNoticeUntil) {
 		return m
 	}
 	m.chat.copyNotice = ""
@@ -283,7 +283,7 @@ func (m Model) clearCopyNoticeIfExpired(gen uint64) Model {
 func (m Model) showCopyFocusWarning() (tea.Model, tea.Cmd) {
 	m.chat.copyNoticeGen++
 	m.chat.copyNotice = m.t("chat.copy.focus_chat")
-	m.chat.copyNoticeUntil = m.now().Add(copyNoticeTTL)
+	m.chat.copyNoticeUntil = m.chat.now().Add(copyNoticeTTL)
 	gen := m.chat.copyNoticeGen
 	return m, tea.Tick(copyNoticeTTL, func(time.Time) tea.Msg { return copyNoticeClearMsg{gen: gen} })
 }

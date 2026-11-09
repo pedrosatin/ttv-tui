@@ -62,7 +62,7 @@ func TestHostedSwapIsSaved(t *testing.T) {
 		return nil
 	}
 	m.togglePanelSides()
-	m.saveHostedColumns(m.hosted.saveGen)()
+	m.hosted.saveColumns(m.hosted.saveGen)()
 	if got != [2]bool{false, true} {
 		t.Fatalf("salvou %v", got)
 	}

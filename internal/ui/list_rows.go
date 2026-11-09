@@ -37,7 +37,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 
 	start, end := 0, len(rows)
 	if m.height > 0 {
-		start, end = m.listRowWindow(rows, m.listRowBudget(len(lines), isSearch, maxWidth))
+		start, end = m.list.rowWindow(rows, m.listRowBudget(len(lines), isSearch, maxWidth))
 	}
 	for _, r := range rows[start:end] {
 		lines = append(lines, r.text)
@@ -67,7 +67,7 @@ func (m Model) appendListEmptyLines(lines []string, maxWidth int) []string {
 			TruncateVisual(fmt.Sprintf(m.t("filter.search_hint"), sanitizeScreenText(strings.TrimSpace(m.list.filter))), maxWidth),
 		)
 	case m.preferenceFilterHidesChannels():
-		summary := m.activeChannelFilterSummary()
+		summary := m.list.prefs.summary()
 		lines = append(lines,
 			TruncateVisual(fmt.Sprintf(m.t("channel_filter.empty"), summary), maxWidth),
 			TruncateVisual(m.t("channel_filter.empty_hint"), maxWidth),
@@ -80,7 +80,7 @@ func (m Model) appendListEmptyLines(lines []string, maxWidth int) []string {
 
 // listEmptyText is the one-line reason for an empty list.
 func (m Model) listEmptyText() string {
-	if m.hasListData() && m.list.filter != "" {
+	if m.list.hasData() && m.list.filter != "" {
 		return m.t("filter.empty")
 	}
 	switch m.Mode() {
@@ -93,9 +93,9 @@ func (m Model) listEmptyText() string {
 	}
 }
 
-// hasListData reports whether anything was loaded or saved, shown or not.
-func (m Model) hasListData() bool {
-	return len(m.list.categories) > 0 || len(m.list.channels) > 0 || len(m.list.search.categories) > 0 || len(m.list.favorites) > 0 || len(m.list.recents) > 0
+// hasData reports whether anything was loaded or saved, shown or not.
+func (l listState) hasData() bool {
+	return len(l.categories) > 0 || len(l.channels) > 0 || len(l.search.categories) > 0 || len(l.favorites) > 0 || len(l.recents) > 0
 }
 
 // listRows formats every visible item, with a header where the section changes.
@@ -211,15 +211,15 @@ func (m Model) listRowBudget(used int, isSearch bool, maxWidth int) int {
 	return max(budget, 1)
 }
 
-// listRowWindow picks the slice of rows to draw, centred on the highlighted
+// rowWindow picks the slice of rows to draw, centred on the highlighted
 // item and clamped to both ends.
-func (m Model) listRowWindow(rows []listRow, budget int) (start, end int) {
+func (l listState) rowWindow(rows []listRow, budget int) (start, end int) {
 	if len(rows) <= budget {
 		return 0, len(rows)
 	}
 	hiRow := 0
 	for idx, r := range rows {
-		if !r.isHeader && r.itemID == m.list.highlightedID {
+		if !r.isHeader && r.itemID == l.highlightedID {
 			hiRow = idx
 			break
 		}

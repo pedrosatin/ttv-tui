@@ -113,21 +113,21 @@ func newChatPanel() chatPanel {
 	}
 }
 
-func (m Model) chatHasToken() bool {
-	if m.chat.panel.anonymous {
+func (c chatState) hasToken() bool {
+	if c.panel.anonymous {
 		return false
 	}
-	if sender, ok := m.chat.session.(ChatSender); ok {
+	if sender, ok := c.session.(ChatSender); ok {
 		return sender.HasToken()
 	}
 	return false
 }
 
-func (m Model) hasPendingOutgoing() bool {
-	if m.chat.panel.buf == nil {
+func (c chatState) hasPendingOutgoing() bool {
+	if c.panel.buf == nil {
 		return false
 	}
-	for _, msg := range m.chat.panel.buf.Messages() {
+	for _, msg := range c.panel.buf.Messages() {
 		if msg.Self && msg.Delivery == chat.DeliverySending {
 			return true
 		}
@@ -140,7 +140,7 @@ func (m *Model) startChatChannel(login string) tea.Cmd {
 	if m.chat.panel.buf == nil {
 		m.chat.panel = newChatPanel()
 	}
-	hadPending := m.hasPendingOutgoing() && m.chat.panel.channel != "" && m.chat.panel.channel != norm
+	hadPending := m.chat.hasPendingOutgoing() && m.chat.panel.channel != "" && m.chat.panel.channel != norm
 	m.chat.panel.buf.Clear()
 	m.chat.panel.channel = norm
 	m.chat.panel.state = ChatStateConnecting
@@ -170,7 +170,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if !m.chatHasToken() {
+	if !m.chat.hasToken() {
 		m.chat.panel.sendWarning = m.t("chat.warn.no_token")
 		return m, nil
 	}
@@ -212,7 +212,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 	appended := m.chat.panel.buf.Append(ChatMessage{
 		Generation:  m.chat.panel.gen,
 		Kind:        chat.MessageChat,
-		ReceivedAt:  m.now(),
+		ReceivedAt:  m.chat.now(),
 		Nonce:       nonce,
 		User:        m.chat.panel.username,
 		DisplayName: displayName,
@@ -302,7 +302,7 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	}
 	for _, item := range msg.Messages {
 		if item.ReceivedAt.IsZero() {
-			item.ReceivedAt = m.now()
+			item.ReceivedAt = m.chat.now()
 		}
 		if item.Generation == 0 {
 			item.Generation = msg.Generation

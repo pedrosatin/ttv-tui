@@ -95,8 +95,8 @@ func TestFeedbackPlayerInfo(t *testing.T) {
 	for _, line := range []string{"[cli][info] Stream ended", "[plugins.twitch][info] Will skip ad segments"} {
 		m := New(mustCatalog(t, i18n.LangPTBR))
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{State: PlayerStatePlaying, LastLine: line})
-		if m.playerErrorLine() != "" {
-			t.Errorf("info exposed as last error: %q", m.playerErrorLine())
+		if m.player.errorLine() != "" {
+			t.Errorf("info exposed as last error: %q", m.player.errorLine())
 		}
 		if !strings.Contains(ansi.Strip(m.StatusBar()), fmt.Sprintf(m.t("player.info"), line)) {
 			t.Errorf("info not displayed separately: %q", ansi.Strip(m.StatusBar()))
@@ -109,7 +109,7 @@ func TestFeedbackPlayerInfo(t *testing.T) {
 		if m.PlayerState() != PlayerStateError || m.statusParts().tone != toneError {
 			t.Fatal("unexpected exit hidden by info")
 		}
-		if m.playerErrorLine() != "" {
+		if m.player.errorLine() != "" {
 			t.Fatal("info labelled as error detail")
 		}
 	}

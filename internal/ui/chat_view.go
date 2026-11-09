@@ -16,8 +16,8 @@ const (
 	twitchMessageRuneLimit = 500
 )
 
-func (m Model) hasChatPanel() bool {
-	return m.chat.panel.channel != "" || m.chat.panel.state != ChatStateNone || m.chat.composing
+func (c chatState) hasPanel() bool {
+	return c.panel.channel != "" || c.panel.state != ChatStateNone || c.composing
 }
 
 func (m Model) chatStatusSummary() string {
@@ -31,9 +31,9 @@ func (m Model) chatStatusSummary() string {
 		}
 		return fmt.Sprintf(m.t("chat.connected"), ch)
 	case ChatStateReconnecting:
-		return m.chatConnectionReason(fmt.Sprintf(m.t("chat.reconnecting"), ch))
+		return m.chat.connectionReason(fmt.Sprintf(m.t("chat.reconnecting"), ch))
 	case ChatStateDisconnected:
-		return m.chatConnectionReason(m.t("chat.disconnected"))
+		return m.chat.connectionReason(m.t("chat.disconnected"))
 	case ChatStateError:
 		errText := sanitizeScreenText(m.chat.panel.errText)
 		if errText == "" {
@@ -45,8 +45,8 @@ func (m Model) chatStatusSummary() string {
 	}
 }
 
-func (m Model) chatConnectionReason(state string) string {
-	if reason := strings.TrimSpace(sanitizeScreenText(m.chat.panel.errText)); reason != "" {
+func (c chatState) connectionReason(state string) string {
+	if reason := strings.TrimSpace(sanitizeScreenText(c.panel.errText)); reason != "" {
 		return state + ": " + reason
 	}
 	return state
@@ -77,9 +77,9 @@ func (m Model) chatHeaderState() string {
 		}
 		return m.t("chat.state.connected")
 	case ChatStateReconnecting:
-		return m.chatConnectionReason(m.t("chat.state.reconnecting"))
+		return m.chat.connectionReason(m.t("chat.state.reconnecting"))
 	case ChatStateDisconnected:
-		return m.chatConnectionReason(m.t("chat.disconnected"))
+		return m.chat.connectionReason(m.t("chat.disconnected"))
 	case ChatStateError:
 		errText := sanitizeScreenText(m.chat.panel.errText)
 		if errText == "" {
@@ -153,7 +153,7 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 }
 
 func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
-	if !m.hasChatPanel() {
+	if !m.chat.hasPanel() {
 		return nil
 	}
 	headerLines := m.renderChatHeaderLines(maxWidth)
@@ -177,9 +177,9 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 			}
 		}
 	}
-	if m.chat.composing && m.chatHasToken() {
+	if m.chat.composing && m.chat.hasToken() {
 		hint := m.renderComposeHintLine(maxWidth)
-		if m.composeDraftOverLimit() {
+		if m.chat.draftOverLimit() {
 			footer = append(footer, styleWarning(hint))
 		} else {
 			footer = append(footer, lipgloss.NewStyle().Faint(true).Render(hint))
@@ -204,8 +204,8 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 			body = append(body, TruncateVisual(emptyLine, maxWidth))
 		}
 	} else {
-		end := m.chatViewportEnd(len(msgs))
-		body = m.chatMessageRows(msgs[:end], msgBudget, maxWidth, m.chatSelectedIndex(len(msgs)))
+		end := m.chat.viewportEnd(len(msgs))
+		body = m.chatMessageRows(msgs[:end], msgBudget, maxWidth, m.chat.selectedIndex(len(msgs)))
 	}
 
 	lines := make([]string, 0, maxLines)
@@ -227,16 +227,16 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 // composeCursor marks the insertion point; it is drawn only while composing.
 const composeCursor = "█"
 
-func (m Model) composeDraftRuneCount() int {
-	return utf8.RuneCountInString(m.chat.composeDraft)
+func (c chatState) draftRuneCount() int {
+	return utf8.RuneCountInString(c.composeDraft)
 }
 
-func (m Model) composeDraftOverLimit() bool {
-	return utf8.RuneCountInString(strings.TrimSpace(m.chat.composeDraft)) > twitchMessageRuneLimit
+func (c chatState) draftOverLimit() bool {
+	return utf8.RuneCountInString(strings.TrimSpace(c.composeDraft)) > twitchMessageRuneLimit
 }
 
 func (m Model) composeCounterLabel() string {
-	return fmt.Sprintf(m.t("chat.input.counter"), m.composeDraftRuneCount(), twitchMessageRuneLimit)
+	return fmt.Sprintf(m.t("chat.input.counter"), m.chat.draftRuneCount(), twitchMessageRuneLimit)
 }
 
 // renderComposeHintLine shows the compose hint and the live N/500 counter on one
@@ -270,7 +270,7 @@ func (m Model) renderChatInputLine(maxWidth int) string {
 	if maxWidth > 1 && hasWideRune(ch+normalizeScreenText(m.chat.composeDraft)) {
 		maxWidth--
 	}
-	if !m.chatHasToken() {
+	if !m.chat.hasToken() {
 		hint := m.t("chat.input.no_token")
 		if maxWidth > 0 && ansi.StringWidth("  > "+hint) > maxWidth {
 			hint = m.t("chat.input.no_token_short")
@@ -587,7 +587,7 @@ func (m Model) formatChatRow(msg ChatMessage, selected bool) (string, string) {
 		suffix = " " + deliveryBadge
 	}
 
-	mentions := m.mentionsSelf(body)
+	mentions := m.chat.mentionsSelf(body)
 	if msg.Highlighted || mentions {
 		tag := m.t("chat.highlight_tag")
 		styleTag := styleChatHighlight

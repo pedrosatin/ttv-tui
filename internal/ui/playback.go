@@ -157,13 +157,13 @@ func (m Model) playerVolumeText() string {
 	}
 }
 
-// playerWindowNoticeShown reports whether the one-time "video opened in a
+// windowNoticeShown reports whether the one-time "video opened in a
 // separate window" notice should lead the status bar now.
-func (m Model) playerWindowNoticeShown() bool {
-	if !m.player.windowNotice {
+func (p playbackState) windowNoticeShown() bool {
+	if !p.windowNotice {
 		return false
 	}
-	switch m.player.state {
+	switch p.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
 		return true
 	default:
@@ -174,7 +174,7 @@ func (m Model) playerWindowNoticeShown() bool {
 // PlayerWindowNotice reports whether the one-time separate-window notice is
 // currently shown.
 func (m Model) PlayerWindowNotice() bool {
-	return m.playerWindowNoticeShown()
+	return m.player.windowNoticeShown()
 }
 
 // PlayerFailure returns the classified cause of the current player error.
@@ -201,11 +201,11 @@ func (m Model) playerFailureText() string {
 	}
 }
 
-// playerErrorLine is the original streamlink/mpv line of the last player
+// errorLine is the original streamlink/mpv line of the last player
 // error, or "" when there is none. Kept after the status bar dismisses the
 // error so help (?) can still show the technical detail.
-func (m Model) playerErrorLine() string {
-	line := strings.TrimSpace(sanitizeChatText(m.player.lastLine))
+func (p playbackState) errorLine() string {
+	line := strings.TrimSpace(sanitizeChatText(p.lastLine))
 	if strings.Contains(strings.ToLower(line), "[info]") {
 		return ""
 	}
@@ -215,7 +215,7 @@ func (m Model) playerErrorLine() string {
 // playerErrorDetail is the technical detail shown after the main message in
 // the status bar, or "" when there is none.
 func (m Model) playerErrorDetail() string {
-	line := m.playerErrorLine()
+	line := m.player.errorLine()
 	if line == "" {
 		return ""
 	}

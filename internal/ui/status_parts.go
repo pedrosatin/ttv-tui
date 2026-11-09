@@ -28,11 +28,11 @@ func (m Model) statusParts() statusContent {
 	c.keep = m.statusKeep(primary, c.tone)
 
 	chatStatus := m.statusChatLine(primary)
-	channelInPrimary := m.primaryNamesChatChannel(primary)
+	channelInPrimary := m.chat.primaryNamesChannel(primary)
 
 	// Soft states yield the lead to a channel-bearing chat status so the name
 	// is not truncated behind category/ready context on narrow terminals.
-	if chatStatus != "" && m.chatStatusHasChannel() && m.softStatusPrimary() && !channelInPrimary {
+	if chatStatus != "" && m.chat.statusHasChannel() && m.softStatusPrimary() && !channelInPrimary {
 		c.extra = append(c.extra, primary)
 		primary = chatStatus
 		chatStatus = ""
@@ -114,7 +114,7 @@ func (m Model) noticeStatusLead() (statusLead, bool) {
 func (m Model) activityStatusLead() (statusLead, bool) {
 	lead := statusLead{}
 	switch {
-	case m.playerWindowNoticeShown():
+	case m.player.windowNoticeShown():
 		lead.primary = m.t("player.window_notice")
 		lead.tone = playerTone(m.player.state)
 		lead.context = append(lead.context, m.playerStatusBase())
@@ -183,7 +183,7 @@ func (m Model) statusKeep(primary string, tone statusTone) []string {
 		volume = ""
 	}
 	var keep []string
-	for _, s := range []string{volume, m.activeChannelFilterSummary()} {
+	for _, s := range []string{volume, m.list.prefs.summary()} {
 		if s != "" && !strings.Contains(primary, s) {
 			keep = append(keep, s)
 		}

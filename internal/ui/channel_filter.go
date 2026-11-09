@@ -73,9 +73,9 @@ func normalizeUIFilterLanguages(in []string) []string {
 	return out
 }
 
-// channelPrefsActive reports whether any channel preference filter is set.
-func (m Model) channelPrefsActive() bool {
-	return len(m.list.prefs.languages) > 0 || m.list.prefs.minViewers > 0
+// active reports whether any channel preference filter is set.
+func (p channelPrefs) active() bool {
+	return len(p.languages) > 0 || p.minViewers > 0
 }
 
 // channelLanguageUnknown reports whether ch has no usable language metadata.
@@ -83,27 +83,27 @@ func channelLanguageUnknown(ch twitch.Channel) bool {
 	return ch.Language == nil || twitch.NormalizeLanguage(*ch.Language) == ""
 }
 
-// channelPassesPrefs reports whether ch survives the language and audience
+// passes reports whether ch survives the language and audience
 // preference filters.
 //
 // Choice for unknown language (documented for ticket 01): when one or more
 // languages are selected, channels without a reported language stay visible
 // and are marked in the row as unknown. Hiding them would look like a silent
 // data loss when the API omits language.
-func (m Model) channelPassesPrefs(ch twitch.Channel) bool {
-	if m.list.prefs.minViewers > 0 {
-		if ch.Viewers == nil || *ch.Viewers < m.list.prefs.minViewers {
+func (p channelPrefs) passes(ch twitch.Channel) bool {
+	if p.minViewers > 0 {
+		if ch.Viewers == nil || *ch.Viewers < p.minViewers {
 			return false
 		}
 	}
-	if len(m.list.prefs.languages) == 0 {
+	if len(p.languages) == 0 {
 		return true
 	}
 	if channelLanguageUnknown(ch) {
 		return true
 	}
 	lang := twitch.NormalizeLanguage(*ch.Language)
-	for _, want := range m.list.prefs.languages {
+	for _, want := range p.languages {
 		if want == lang {
 			return true
 		}
@@ -111,9 +111,9 @@ func (m Model) channelPassesPrefs(ch twitch.Channel) bool {
 	return false
 }
 
-// languageFilterSelected reports whether lang (already normalized) is selected.
-func (m Model) languageFilterSelected(lang string) bool {
-	for _, l := range m.list.prefs.languages {
+// languageSelected reports whether lang (already normalized) is selected.
+func (p channelPrefs) languageSelected(lang string) bool {
+	for _, l := range p.languages {
 		if l == lang {
 			return true
 		}
@@ -121,14 +121,14 @@ func (m Model) languageFilterSelected(lang string) bool {
 	return false
 }
 
-// activeChannelFilterSummary returns a short status fragment such as "PT · 500+".
-func (m Model) activeChannelFilterSummary() string {
+// summary returns a short status fragment such as "PT · 500+".
+func (p channelPrefs) summary() string {
 	var parts []string
-	for _, lang := range m.list.prefs.languages {
+	for _, lang := range p.languages {
 		parts = append(parts, strings.ToUpper(lang))
 	}
-	if m.list.prefs.minViewers > 0 {
-		parts = append(parts, fmt.Sprintf("%d", m.list.prefs.minViewers)+string('+'))
+	if p.minViewers > 0 {
+		parts = append(parts, fmt.Sprintf("%d", p.minViewers)+string('+'))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -141,7 +141,7 @@ type langCount struct {
 // languagesInCurrentList returns language codes present among currently loaded
 // channel rows (listing + favorites + recents), with counts, sorted by code.
 // Unknown-language channels are omitted from the menu counts.
-func (m Model) languagesInCurrentList() []langCount {
+func (l listState) languagesInCurrentList() []langCount {
 	counts := make(map[string]int)
 	add := func(ch twitch.Channel) {
 		if channelLanguageUnknown(ch) {
@@ -149,15 +149,15 @@ func (m Model) languagesInCurrentList() []langCount {
 		}
 		counts[twitch.NormalizeLanguage(*ch.Language)]++
 	}
-	for _, ch := range m.list.channels {
+	for _, ch := range l.channels {
 		add(ch)
 	}
-	for _, ch := range m.list.favorites {
+	for _, ch := range l.favorites {
 		add(ch)
 	}
-	baseRecents := m.list.recents
-	if m.list.pendingRecents != nil {
-		baseRecents = m.list.pendingRecents
+	baseRecents := l.recents
+	if l.pendingRecents != nil {
+		baseRecents = l.pendingRecents
 	}
 	for _, ch := range baseRecents {
 		add(ch)
@@ -184,8 +184,8 @@ type channelFilterMenuItem struct {
 	Audience int    // for filterMenuAudience
 }
 
-func (m Model) buildChannelFilterMenuItems() []channelFilterMenuItem {
-	langs := m.languagesInCurrentList()
+func (l listState) buildChannelFilterMenuItems() []channelFilterMenuItem {
+	langs := l.languagesInCurrentList()
 	items := make([]channelFilterMenuItem, 0, 1+len(langs)+len(channelAudienceThresholds))
 	items = append(items, channelFilterMenuItem{Kind: filterMenuAllLangs})
 	for _, lc := range langs {
@@ -203,7 +203,7 @@ func (m Model) openChannelFilterMenu() Model {
 	m.list.filtering = false
 	m.list.search.active = false
 	m.list.prefs.menuOpen = true
-	m.list.prefs.menuItems = m.buildChannelFilterMenuItems()
+	m.list.prefs.menuItems = m.list.buildChannelFilterMenuItems()
 	if m.list.prefs.menuIndex >= len(m.list.prefs.menuItems) {
 		m.list.prefs.menuIndex = 0
 	}
@@ -234,7 +234,7 @@ func (m Model) persistChannelFilters() tea.Cmd {
 func (m Model) toggleChannelFilterMenuItem() (Model, tea.Cmd) {
 	items := m.list.prefs.menuItems
 	if len(items) == 0 {
-		items = m.buildChannelFilterMenuItems()
+		items = m.list.buildChannelFilterMenuItems()
 		m.list.prefs.menuItems = items
 	}
 	if len(items) == 0 {
@@ -253,7 +253,7 @@ func (m Model) toggleChannelFilterMenuItem() (Model, tea.Cmd) {
 	case filterMenuAllLangs:
 		m.list.prefs.languages = nil
 	case filterMenuLang:
-		if m.languageFilterSelected(item.Language) {
+		if m.list.prefs.languageSelected(item.Language) {
 			next := make([]string, 0, len(m.list.prefs.languages))
 			for _, l := range m.list.prefs.languages {
 				if l != item.Language {
@@ -367,24 +367,24 @@ func (m Model) renderChannelFilterMenuLines(maxWidth int) []string {
 	out = append(out, head[:pinned]...)
 	out = append(out, rows[start:end]...)
 	if m.height > 2 {
-		out = append(out, positionRow(m.list.prefs.menuIndex+1, len(m.channelFilterMenuEntries()), maxWidth))
+		out = append(out, positionRow(m.list.prefs.menuIndex+1, len(m.list.channelFilterMenuEntries()), maxWidth))
 	}
 	return out
 }
 
 // channelFilterMenuEntries returns the items the open menu shows.
-func (m Model) channelFilterMenuEntries() []channelFilterMenuItem {
-	if len(m.list.prefs.menuItems) > 0 {
-		return m.list.prefs.menuItems
+func (l listState) channelFilterMenuEntries() []channelFilterMenuItem {
+	if len(l.prefs.menuItems) > 0 {
+		return l.prefs.menuItems
 	}
-	return m.buildChannelFilterMenuItems()
+	return l.buildChannelFilterMenuItems()
 }
 
 // channelFilterMenuRows returns the fixed rows of the menu, the rows that
 // scroll, and the index in rows of the one holding the cursor.
 func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor int) {
-	items := m.channelFilterMenuEntries()
-	langCounts := m.languagesInCurrentList()
+	items := m.list.channelFilterMenuEntries()
+	langCounts := m.list.languagesInCurrentList()
 	countBy := make(map[string]int, len(langCounts))
 	for _, lc := range langCounts {
 		countBy[lc.Code] = lc.Count
@@ -415,7 +415,7 @@ func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor 
 			line = marker + box + " " + m.t("channel_filter.all_languages")
 		case filterMenuLang:
 			box := unchecked
-			if m.languageFilterSelected(item.Language) {
+			if m.list.prefs.languageSelected(item.Language) {
 				box = checked
 			}
 			line = marker + box + " " + fmt.Sprintf(m.t("channel_filter.language_count"), strings.ToUpper(item.Language), countBy[item.Language])
@@ -447,7 +447,7 @@ func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor 
 // Categories are never filtered; an empty channel section with only category
 // rows remaining still counts when channel sources exist.
 func (m Model) preferenceFilterHidesChannels() bool {
-	if !m.channelPrefsActive() {
+	if !m.list.prefs.active() {
 		return false
 	}
 	hasChannelSource := len(m.list.channels) > 0 || len(m.list.favorites) > 0 || len(m.list.recents) > 0 || len(m.list.pendingRecents) > 0

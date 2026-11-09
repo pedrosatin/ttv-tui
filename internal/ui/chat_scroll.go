@@ -33,7 +33,7 @@ func (m Model) SelectedChatMessage() (ChatMessage, bool) {
 	if len(msgs) == 0 {
 		return ChatMessage{}, false
 	}
-	idx := m.chatSelectedIndex(len(msgs))
+	idx := m.chat.selectedIndex(len(msgs))
 	if idx < 0 || idx >= len(msgs) {
 		return ChatMessage{}, false
 	}
@@ -54,14 +54,14 @@ func (m Model) ChatPendingNew() int {
 	return m.chat.panel.pendingNew
 }
 
-func (m Model) chatSelectedIndex(n int) int {
+func (c chatState) selectedIndex(n int) int {
 	if n <= 0 {
 		return -1
 	}
-	if m.chat.panel.followLive {
+	if c.panel.followLive {
 		return n - 1
 	}
-	idx := m.chat.panel.bottomIdx
+	idx := c.panel.bottomIdx
 	if idx < 0 {
 		return 0
 	}
@@ -218,16 +218,16 @@ func (m Model) renderChatPendingNotice(maxWidth int) string {
 	return lipgloss.NewStyle().Faint(true).Render(line)
 }
 
-// chatViewportEnd returns the exclusive end index into msgs for the scrolled
+// viewportEnd returns the exclusive end index into msgs for the scrolled
 // viewport (messages after this index are hidden below the fold).
-func (m Model) chatViewportEnd(msgCount int) int {
+func (c chatState) viewportEnd(msgCount int) int {
 	if msgCount <= 0 {
 		return 0
 	}
-	if m.chat.panel.followLive {
+	if c.panel.followLive {
 		return msgCount
 	}
-	end := m.chat.panel.bottomIdx + 1
+	end := c.panel.bottomIdx + 1
 	if end > msgCount {
 		end = msgCount
 	}

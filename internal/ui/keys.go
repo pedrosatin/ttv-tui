@@ -316,19 +316,19 @@ func (m Model) enterCompose() (tea.Model, tea.Cmd) {
 	if m.warnChatHiddenByWidth() || !m.layout.showChat || m.chatHiddenByWidth() {
 		return m, nil
 	}
-	if !m.chatHasToken() && (m.chat.session != nil || m.chat.panel.channel != "") {
+	if !m.chat.hasToken() && (m.chat.session != nil || m.chat.panel.channel != "") {
 		m.chat.panel.sendWarning = m.t("chat.warn.no_token")
 		return m, nil
 	}
-	if m.hasChatPanel() || m.chat.session != nil {
+	if m.chat.hasPanel() || m.chat.session != nil {
 		m.layout.focus = FocusChat
 	}
 	m.chat.composing = true
 	return m, nil
 }
 
-func (m Model) playerControllable() bool {
-	switch m.player.state {
+func (p playbackState) controllable() bool {
+	switch p.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak, PlayerStateStarting:
 		return true
 	default:
@@ -340,7 +340,7 @@ func (m Model) playerControllable() bool {
 // the bar says so. The command still goes out: the volume here can lag one in
 // flight, and the player clamps on its own.
 func (m Model) adjustVolume(delta int) (tea.Model, tea.Cmd) {
-	if m.playback == nil || !m.playerControllable() {
+	if m.playback == nil || !m.player.controllable() {
 		return m, nil
 	}
 	switch {
@@ -396,7 +396,7 @@ func (m *Model) clearResolvedComposeWarning() {
 	switch m.chat.panel.sendWarning {
 	case "":
 	case m.t("chat.warn.too_long"):
-		if !m.composeDraftOverLimit() {
+		if !m.chat.draftOverLimit() {
 			m.chat.panel.sendWarning = ""
 		}
 	case m.t("chat.warn.command_blocked"):

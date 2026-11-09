@@ -143,7 +143,7 @@ func (m Model) softStatusPrimary() bool {
 	if m.notices.auth != "" || m.notices.corrupt != "" || m.chat.copyNotice != "" || m.notices.status != "" || m.notices.ctrlC != "" {
 		return false
 	}
-	if m.playerWindowNoticeShown() || m.player.state == PlayerStateError || m.player.state == PlayerStateEnded {
+	if m.player.windowNoticeShown() || m.player.state == PlayerStateError || m.player.state == PlayerStateEnded {
 		return false
 	}
 	if m.player.state != PlayerStateNone && m.player.state != PlayerStateEnded {
@@ -152,20 +152,20 @@ func (m Model) softStatusPrimary() bool {
 	return true
 }
 
-// chatStatusHasChannel reports whether the chat summary includes a room name.
-func (m Model) chatStatusHasChannel() bool {
-	switch m.chat.panel.state {
+// statusHasChannel reports whether the chat summary includes a room name.
+func (c chatState) statusHasChannel() bool {
+	switch c.panel.state {
 	case ChatStateConnecting, ChatStateConnected, ChatStateReconnecting:
-		return m.chat.panel.channel != ""
+		return c.panel.channel != ""
 	default:
 		return false
 	}
 }
 
-// primaryNamesChatChannel reports whether primary already cites the chat room
+// primaryNamesChannel reports whether primary already cites the chat room
 // (playing/selected), so promoting the chat status would only duplicate it.
-func (m Model) primaryNamesChatChannel(primary string) bool {
-	ch := strings.TrimSpace(m.chat.panel.channel)
+func (c chatState) primaryNamesChannel(primary string) bool {
+	ch := strings.TrimSpace(c.panel.channel)
 	if ch == "" {
 		return false
 	}
@@ -176,7 +176,7 @@ func (m Model) primaryNamesChatChannel(primary string) bool {
 // does not fit but the channel name still can.
 func (m Model) chatChannelRef() string {
 	ch := strings.TrimSpace(m.chat.panel.channel)
-	if ch == "" || !m.chatStatusHasChannel() {
+	if ch == "" || !m.chat.statusHasChannel() {
 		return ""
 	}
 	return fmt.Sprintf(m.t("status.channel_ref"), ch)

@@ -288,7 +288,7 @@ func TestHomeScreenStaysOperableAfterCtrlW(t *testing.T) {
 func TestLeavingComposeWithoutChannelKeepsTheList(t *testing.T) {
 	m := setupHomeModel(t, 80, &fakeChat{hasToken: true, username: "tester"})
 	m = sendKeys(m, keyI, keyCtrlW, keyEsc)
-	if m.hasChatPanel() {
+	if m.chat.hasPanel() {
 		t.Fatal("test expects no chat panel after Esc")
 	}
 	if plain := plainView(m); !strings.Contains(plain, "Counter-Strike") {

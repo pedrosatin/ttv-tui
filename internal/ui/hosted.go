@@ -162,9 +162,9 @@ func (m *Model) toggleChatOverlay() tea.Cmd {
 }
 
 // chatOpacity is the percent opacity of the overlaid chat's background.
-func (m Model) chatOpacity() int {
-	if m.hosted.chatOverlayOpacity > 0 {
-		return m.hosted.chatOverlayOpacity
+func (h hostedState) chatOpacity() int {
+	if h.chatOverlayOpacity > 0 {
+		return h.chatOverlayOpacity
 	}
 	return hostedDefaultOpacity
 }
@@ -175,7 +175,7 @@ func (m *Model) adjustChatOpacity(delta int) tea.Cmd {
 		m.warnStatus(m.t("layout.opacity_needs_overlay"))
 		return nil
 	}
-	m.hosted.chatOverlayOpacity = min(max(m.chatOpacity()+delta, hostedMinOpacity), 100)
+	m.hosted.chatOverlayOpacity = min(max(m.hosted.chatOpacity()+delta, hostedMinOpacity), 100)
 	return m.announceHosted(fmt.Sprintf(m.t("layout.chat_opacity"), m.hosted.chatOverlayOpacity))
 }
 
@@ -194,7 +194,7 @@ func (m *Model) warnChatUnavailable() {
 	if m.warnChatHiddenByWidth() {
 		return
 	}
-	if m.hasChatPanel() {
+	if m.chat.hasPanel() {
 		m.warnStatus(m.t("layout.hidden_chat_key"))
 	} else {
 		m.warnStatus(m.t("layout.no_chat"))
@@ -232,10 +232,10 @@ func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-// hostedRoomToGrow is what a panel can still take: the picture outside the panels
+// roomToGrow is what a panel can still take: the picture outside the panels
 // keeps its minimum.
-func (m Model) hostedRoomToGrow(chatW, videoW int) int {
-	if m.hosted.chatOverlay {
+func (h hostedState) roomToGrow(chatW, videoW int) int {
+	if h.chatOverlay {
 		videoW -= chatW
 	}
 	return max(videoW-hostedMinVideo, 0)
@@ -247,7 +247,7 @@ func (m *Model) resizeHostedList(delta int) tea.Cmd {
 		m.warnStatus(m.t("layout.hidden_list_key"))
 		return nil
 	}
-	listW = max(min(listW+delta, listW+m.hostedRoomToGrow(chatW, videoW)), hostedMinList)
+	listW = max(min(listW+delta, listW+m.hosted.roomToGrow(chatW, videoW)), hostedMinList)
 	m.hosted.listCols = listW
 	return m.announceHosted(fmt.Sprintf(m.t("layout.list_columns"), listW))
 }
@@ -258,7 +258,7 @@ func (m *Model) resizeHostedChat(delta int) tea.Cmd {
 		m.warnChatUnavailable()
 		return nil
 	}
-	chatW = max(min(chatW+delta, chatW+m.hostedRoomToGrow(chatW, videoW)), hostedMinChat)
+	chatW = max(min(chatW+delta, chatW+m.hosted.roomToGrow(chatW, videoW)), hostedMinChat)
 	m.hosted.chatCols = chatW
 	return m.announceHosted(fmt.Sprintf(m.t("layout.chat_columns"), chatW))
 }
@@ -287,12 +287,12 @@ func (m *Model) scheduleHostedSave() tea.Cmd {
 	return tea.Tick(hostedSaveDelay, func(time.Time) tea.Msg { return hostedSaveMsg{gen: gen} })
 }
 
-// saveHostedColumns writes the widths, off the update loop, if gen is still the newest.
-func (m Model) saveHostedColumns(gen int) tea.Cmd {
-	if m.hosted.persist == nil || gen != m.hosted.saveGen {
+// saveColumns writes the widths, off the update loop, if gen is still the newest.
+func (h hostedState) saveColumns(gen int) tea.Cmd {
+	if h.persist == nil || gen != h.saveGen {
 		return nil
 	}
-	persist, list, chat, overlay, swapped, opacity := m.hosted.persist, m.hosted.listCols, m.hosted.chatCols, m.hosted.chatOverlay, m.hosted.panelsSwapped, m.hosted.chatOverlayOpacity
+	persist, list, chat, overlay, swapped, opacity := h.persist, h.listCols, h.chatCols, h.chatOverlay, h.panelsSwapped, h.chatOverlayOpacity
 	return func() tea.Msg {
 		_ = persist(list, chat, overlay, swapped, opacity)
 		return nil
@@ -332,10 +332,10 @@ func (m Model) hostedPanel() HostPanel {
 	}
 	panel := HostPanel{Row: 1, Col: col, Rows: m.height - 1, Cols: videoW, Visible: true}
 	if overlaid {
-		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = chatW, m.hosted.panelsSwapped, m.chatOpacity()
+		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = chatW, m.hosted.panelsSwapped, m.hosted.chatOpacity()
 	}
 	if m.helpOpen() { // a ajuda ocupa a coluna do vídeo inteira, com a opacidade do chat
-		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = videoW, false, m.chatOpacity()
+		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = videoW, false, m.hosted.chatOpacity()
 	}
 	return panel
 }

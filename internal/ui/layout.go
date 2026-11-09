@@ -46,19 +46,19 @@ func (m Model) layoutModeLabel(mode LayoutMode) string {
 // the list is all there is to draw, so no flag can hide it and leave the screen
 // empty.
 func (m Model) listVisible() bool {
-	return m.layout.showList || !m.hasChatPanel()
+	return m.layout.showList || !m.chat.hasPanel()
 }
 
 // chatColumnVisible reports whether the chat panel occupies a column (layout
 // wants it, a chat session exists, and the terminal is wide enough).
 func (m Model) chatColumnVisible() bool {
-	return m.layout.showChat && m.hasChatPanel() && !m.chatHiddenByWidth()
+	return m.layout.showChat && m.chat.hasPanel() && !m.chatHiddenByWidth()
 }
 
 // shouldShowNarrowChatNotice is true only when width hides chat. Hiding chat
 // via layout must not show the "<80 cols" warning.
 func (m Model) shouldShowNarrowChatNotice() bool {
-	return m.layout.showChat && m.hasChatPanel() && m.chatHiddenByWidth()
+	return m.layout.showChat && m.chat.hasPanel() && m.chatHiddenByWidth()
 }
 
 // warnChatHiddenByWidth answers a chat key the split cannot serve, and reports

@@ -142,7 +142,7 @@ func TestClearStaleStatusErrorsKeepsTransientNotice(t *testing.T) {
 	if m.StatusNotice() != m.t("favorites.added") {
 		t.Fatalf("transient notice cleared early: %q", m.StatusNotice())
 	}
-	if got := m.playerErrorLine(); got != offlineLine {
+	if got := m.player.errorLine(); got != offlineLine {
 		t.Fatalf("player last line = %q, want kept for help", got)
 	}
 }

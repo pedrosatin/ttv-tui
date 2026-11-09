@@ -100,7 +100,7 @@ func (m Model) keyReconnectChat() (tea.Model, tea.Cmd) {
 // handleLayoutKey answers the layout controls, which work from any mode
 // (compose, search, filter), and the hosted window's own.
 func (m Model) handleLayoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	if key.Matches(msg, m.keys.CycleLayout, m.keys.ToggleList, m.keys.ToggleChat) && !m.hasChatPanel() {
+	if key.Matches(msg, m.keys.CycleLayout, m.keys.ToggleList, m.keys.ToggleChat) && !m.chat.hasPanel() {
 		m.keepListWithoutChat()
 		return m, nil, true
 	}
@@ -277,7 +277,7 @@ func (m Model) handlePlayerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 }
 
 func (m Model) keyPause() (tea.Model, tea.Cmd) {
-	if m.playback == nil || !m.playerControllable() {
+	if m.playback == nil || !m.player.controllable() {
 		return m, nil
 	}
 	return m, m.playback.TogglePause()

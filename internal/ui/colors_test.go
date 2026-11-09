@@ -409,7 +409,7 @@ func TestMentionsSelfDetection(t *testing.T) {
 		{"", false},
 	}
 	for _, tc := range cases {
-		if got := m.mentionsSelf(tc.body); got != tc.want {
+		if got := m.chat.mentionsSelf(tc.body); got != tc.want {
 			t.Errorf("mentionsSelf(%q)=%v, want %v", tc.body, got, tc.want)
 		}
 	}

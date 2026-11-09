@@ -24,13 +24,13 @@ func TestHostedOpacityStaysInRange(t *testing.T) {
 	for range 40 {
 		m.adjustChatOpacity(hostedOpacityStep)
 	}
-	if got := m.chatOpacity(); got != 100 {
+	if got := m.hosted.chatOpacity(); got != 100 {
 		t.Fatalf("máximo: %d", got)
 	}
 	for range 40 {
 		m.adjustChatOpacity(-hostedOpacityStep)
 	}
-	if got := m.chatOpacity(); got != hostedMinOpacity {
+	if got := m.hosted.chatOpacity(); got != hostedMinOpacity {
 		t.Fatalf("mínimo: %d", got)
 	}
 }
@@ -51,7 +51,7 @@ func TestHostedOpacityIsSaved(t *testing.T) {
 		return nil
 	}
 	m.adjustChatOpacity(hostedOpacityStep)
-	m.saveHostedColumns(m.hosted.saveGen)()
+	m.hosted.saveColumns(m.hosted.saveGen)()
 	if got != 75 {
 		t.Fatalf("salvou %d", got)
 	}

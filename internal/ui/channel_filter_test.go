@@ -128,7 +128,7 @@ func TestChannelFilterMenuToggleClearClose(t *testing.T) {
 	if cmd != nil {
 		cmd()
 	}
-	if !m.languageFilterSelected("pt") {
+	if !m.list.prefs.languageSelected("pt") {
 		t.Fatalf("Enter must select PT, langs=%v", m.FilterLanguages())
 	}
 	if persistCalls != 1 || len(persistedLangs) != 1 || persistedLangs[0] != "pt" {

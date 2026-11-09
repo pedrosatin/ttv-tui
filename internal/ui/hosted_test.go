@@ -20,8 +20,8 @@ func hostedModel(t *testing.T, width, height int, withChat bool) Model {
 	if withChat {
 		m.chat.panel.channel = "canal"
 	}
-	if withChat != m.hasChatPanel() {
-		t.Fatalf("hasChatPanel = %v, quero %v", m.hasChatPanel(), withChat)
+	if withChat != m.chat.hasPanel() {
+		t.Fatalf("hasPanel = %v, quero %v", m.chat.hasPanel(), withChat)
 	}
 	return m
 }
@@ -213,10 +213,10 @@ func TestHostedSaveKeepsOnlyTheLastChange(t *testing.T) {
 	m.resizeHostedList(hostedResizeStep)
 	first := m.hosted.saveGen
 	m.resizeHostedList(hostedResizeStep)
-	if cmd := m.saveHostedColumns(first); cmd != nil {
+	if cmd := m.hosted.saveColumns(first); cmd != nil {
 		t.Fatal("uma mudança mais nova cancela o salvamento antigo")
 	}
-	cmd := m.saveHostedColumns(m.hosted.saveGen)
+	cmd := m.hosted.saveColumns(m.hosted.saveGen)
 	if cmd == nil {
 		t.Fatal("a última mudança precisa ser salva")
 	}

@@ -410,7 +410,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		}
 	}
 	out = append(out, m.renderHelpColorLines(maxWidth)...)
-	if line := m.playerErrorLine(); line != "" {
+	if line := m.player.errorLine(); line != "" {
 		out = append(out, wrapChatRow("  ", fmt.Sprintf(m.t("help.player_error"), line), maxWidth)...)
 	}
 	return out
@@ -572,7 +572,7 @@ func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.A
 	if len(tagWidths) > 0 {
 		tagWidth = max(tagWidth, tagWidths[0])
 	}
-	return fitChannelRow(marker, viewers, identity, tag, title, m.isPlayingChannel(ch), maxWidth, tagWidth)
+	return fitChannelRow(marker, viewers, identity, tag, title, m.player.isPlaying(ch), maxWidth, tagWidth)
 }
 
 // formatLiveViewersCell reserves one space after the live dot at every magnitude.
