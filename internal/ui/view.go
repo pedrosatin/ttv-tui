@@ -160,26 +160,8 @@ func (m Model) frame() string {
 	if m.hosted.host != nil && m.width > 0 && m.height > 1 {
 		return m.hostedView(m.height-1, overlayLines, status)
 	}
-
-	// Unsized fallback (m.width <= 0 and m.height <= 0): used by unit tests that don't send WindowSizeMsg.
 	if m.width <= 0 && m.height <= 0 {
-		var bodyLines []string
-		if m.listVisible() {
-			bodyLines = m.renderBodyLines(0)
-		}
-		if m.shouldShowNarrowChatNotice() {
-			bodyLines = append(bodyLines, m.narrowChatNoticeLines(0)...)
-		} else if m.layout.showChat {
-			chatLines := m.renderChatLines(defaultChatPreviewLines, 0)
-			bodyLines = append(bodyLines, chatLines...)
-		} else if !m.listVisible() {
-			bodyLines = append(bodyLines, m.focusModeHintLines(0)...)
-		}
-		bodyLines = append(bodyLines, overlayLines...)
-		if len(bodyLines) == 0 {
-			return status
-		}
-		return strings.Join(bodyLines, "\n") + "\n" + status
+		return m.unsizedFrame(overlayLines, status)
 	}
 
 	available := m.height - 1
@@ -188,101 +170,116 @@ func (m Model) frame() string {
 	}
 
 	listW, chatW := m.panelWidths()
-
-	// Side-by-side split.
-	if listW > 0 && chatW > 0 {
-		chatLines := m.renderChatLines(available, chatW)
-		listLines := m.renderBodyLines(listW)
-		rows := available
-		if m.height <= 0 {
-			rows = len(listLines)
-			if len(chatLines) > rows {
-				rows = len(chatLines)
-			}
-		}
-		combined := make([]string, 0, rows)
-		for i := 0; i < rows; i++ {
-			var left, right string
-			if i < len(listLines) {
-				left = listLines[i]
-			}
-			if i < len(chatLines) {
-				right = chatLines[i]
-			}
-			leftCell := padOrTruncateVisual(left, listW)
-			rightCell := padOrTruncateVisual(right, chatW)
-			combined = append(combined, leftCell+panelSeparator+rightCell)
-		}
-		combined = m.overlayHelpLines(combined, overlayLines, m.width, available)
-		return strings.Join(combined, "\n") + "\n" + status
+	var rows []string
+	switch {
+	case listW > 0 && chatW > 0:
+		rows = m.splitRows(listW, chatW, available, overlayLines)
+	case chatW > 0:
+		rows = m.fitRows(m.renderChatLines(available, chatW), overlayLines, chatW, available)
+	case listW == 0:
+		rows = m.focusRows(available, overlayLines)
+	default:
+		rows = m.listOnlyRows(listW, available, overlayLines)
 	}
+	return strings.Join(rows, "\n") + "\n" + status
+}
 
-	// Chat-only layout: full width chat column.
-	if listW == 0 && chatW > 0 {
-		bodyLines := m.renderChatLines(available, chatW)
-		if m.height <= 0 {
-			bodyLines = append(bodyLines, overlayLines...)
-			for i := range bodyLines {
-				bodyLines[i] = padOrTruncateVisual(bodyLines[i], chatW)
-			}
-			return strings.Join(bodyLines, "\n") + "\n" + status
-		}
-		for len(bodyLines) < available {
-			bodyLines = append(bodyLines, "")
-		}
-		if len(bodyLines) > available {
-			bodyLines = bodyLines[:available]
-		}
-		for i := range bodyLines {
-			bodyLines[i] = padOrTruncateVisual(bodyLines[i], chatW)
-		}
-		bodyLines = m.overlayHelpLines(bodyLines, overlayLines, chatW, available)
-		return strings.Join(bodyLines, "\n") + "\n" + status
+// unsizedFrame draws without a terminal size, as unit tests that send no
+// WindowSizeMsg see it: every panel in full, one under the other.
+func (m Model) unsizedFrame(overlayLines []string, status string) string {
+	var bodyLines []string
+	if m.listVisible() {
+		bodyLines = m.renderBodyLines(0)
 	}
-
-	// Focus mode: both panels hidden — only a short hint and the status bar.
-	if listW == 0 && chatW == 0 {
-		bodyLines := m.focusModeHintLines(m.width)
-		if m.height <= 0 {
-			bodyLines = append(bodyLines, overlayLines...)
-			return strings.Join(bodyLines, "\n") + "\n" + status
-		}
-		for len(bodyLines) < available {
-			bodyLines = append(bodyLines, "")
-		}
-		if len(bodyLines) > available {
-			bodyLines = bodyLines[:available]
-		}
-		for i := range bodyLines {
-			bodyLines[i] = padOrTruncateVisual(bodyLines[i], m.width)
-		}
-		bodyLines = m.overlayHelpLines(bodyLines, overlayLines, m.width, available)
-		return strings.Join(bodyLines, "\n") + "\n" + status
+	if m.shouldShowNarrowChatNotice() {
+		bodyLines = append(bodyLines, m.narrowChatNoticeLines(0)...)
+	} else if m.layout.showChat {
+		chatLines := m.renderChatLines(defaultChatPreviewLines, 0)
+		bodyLines = append(bodyLines, chatLines...)
+	} else if !m.listVisible() {
+		bodyLines = append(bodyLines, m.focusModeHintLines(0)...)
 	}
+	bodyLines = append(bodyLines, overlayLines...)
+	if len(bodyLines) == 0 {
+		return status
+	}
+	return strings.Join(bodyLines, "\n") + "\n" + status
+}
 
-	// List-only (or chat hidden by width with optional narrow notice).
+// fitRows turns the lines of a single panel into the rows above the status
+// bar: exactly available of them, each width cells wide, with the overlay over
+// the last ones. Without a height nothing is cut and the overlay goes below.
+func (m Model) fitRows(lines, overlayLines []string, width, available int) []string {
+	if m.height <= 0 {
+		return padRows(append(lines, overlayLines...), width)
+	}
+	for len(lines) < available {
+		lines = append(lines, "")
+	}
+	if len(lines) > available {
+		lines = lines[:available]
+	}
+	return m.overlayHelpLines(padRows(lines, width), overlayLines, width, available)
+}
+
+// padRows pads or truncates every row to width, in place. A width of zero
+// leaves the rows as they are.
+func padRows(rows []string, width int) []string {
+	for i := range rows {
+		rows[i] = padOrTruncateVisual(rows[i], width)
+	}
+	return rows
+}
+
+// splitRows draws the list and the chat side by side.
+func (m Model) splitRows(listW, chatW, available int, overlayLines []string) []string {
+	chatLines := m.renderChatLines(available, chatW)
+	listLines := m.renderBodyLines(listW)
+	rows := available
+	if m.height <= 0 {
+		rows = max(len(listLines), len(chatLines))
+	}
+	combined := make([]string, 0, rows)
+	for i := 0; i < rows; i++ {
+		var left, right string
+		if i < len(listLines) {
+			left = listLines[i]
+		}
+		if i < len(chatLines) {
+			right = chatLines[i]
+		}
+		leftCell := padOrTruncateVisual(left, listW)
+		rightCell := padOrTruncateVisual(right, chatW)
+		combined = append(combined, leftCell+panelSeparator+rightCell)
+	}
+	return m.overlayHelpLines(combined, overlayLines, m.width, available)
+}
+
+// focusRows draws focus mode: both panels hidden, only a short hint above the
+// status bar.
+func (m Model) focusRows(available int, overlayLines []string) []string {
+	hint := m.focusModeHintLines(m.width)
+	if m.height <= 0 {
+		// The hint is already wrapped to the width, and nothing pads it here.
+		return append(hint, overlayLines...)
+	}
+	return m.fitRows(hint, overlayLines, m.width, available)
+}
+
+// listOnlyRows draws the list alone, with the narrow-chat notice under it when the
+// width is what hides the chat.
+func (m Model) listOnlyRows(listW, available int, overlayLines []string) []string {
 	bodyLines := m.renderBodyLines(listW)
 	var noticeLines []string
 	if m.shouldShowNarrowChatNotice() {
 		noticeLines = m.narrowChatNoticeLines(listW)
 	}
-
 	if m.height <= 0 {
-		bodyLines = append(bodyLines, noticeLines...)
-		bodyLines = append(bodyLines, overlayLines...)
-		if listW > 0 {
-			for i := range bodyLines {
-				bodyLines[i] = padOrTruncateVisual(bodyLines[i], listW)
-			}
-		}
-		return strings.Join(bodyLines, "\n") + "\n" + status
+		return m.fitRows(append(bodyLines, noticeLines...), overlayLines, listW, available)
 	}
 
 	// The notice takes rows from the list, but the list keeps at least one row.
-	listBudget := available - len(noticeLines)
-	if listBudget < 1 {
-		listBudget = 1
-	}
+	listBudget := max(available-len(noticeLines), 1)
 	if len(bodyLines) > listBudget {
 		bodyLines = bodyLines[:listBudget]
 	}
@@ -292,16 +289,7 @@ func (m Model) frame() string {
 		}
 		bodyLines = append(bodyLines, line)
 	}
-	for len(bodyLines) < available {
-		bodyLines = append(bodyLines, "")
-	}
-	if listW > 0 {
-		for i := range bodyLines {
-			bodyLines[i] = padOrTruncateVisual(bodyLines[i], listW)
-		}
-	}
-	bodyLines = m.overlayHelpLines(bodyLines, overlayLines, listW, available)
-	return strings.Join(bodyLines, "\n") + "\n" + status
+	return m.fitRows(bodyLines, overlayLines, listW, available)
 }
 
 // focusModeHintLines explains how to leave total-focus layout.
