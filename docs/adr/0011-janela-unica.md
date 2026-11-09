@@ -26,8 +26,9 @@ Dois contratos ligam os processos:
 
 - `TTV_TUI_VIDEO_HOST` aponta para um socket em que o TUI publica, em JSON, as células do vídeo.
   Enquanto há reprodução, essas células ficam transparentes e o libmpv desenha por baixo.
-- Com o chat sobre o vídeo (`Ctrl+O`), o TUI publica quantas colunas finais do retângulo são do
-  chat. A janela as desenha com fundo translúcido e texto opaco, e o vídeo não perde largura.
+- Com o chat sobre o vídeo (`Ctrl+O`), o TUI publica quantas colunas do retângulo são do chat, de
+  que lado ficam e a opacidade do fundo. A janela desenha o fundo só atrás de cada linha de texto,
+  com contorno nas letras, e o vídeo não perde largura. A ajuda usa o mesmo mecanismo.
 - Um executável chamado `mpv` entra primeiro no `PATH` do TUI. Ele entrega o stdin do streamlink ao
   core embutido por `SCM_RIGHTS` e fica vivo enquanto a sessão existir. O IPC JSON, o streamlink e
   o filtro de anúncio continuam iguais (regra 1).
@@ -40,6 +41,8 @@ config. A janela só existe em Linux amd64 por enquanto.
 
 - Windows e macOS não têm janela: o `SCM_RIGHTS` e o OpenGL de pipeline fixa não se aplicam lá.
 - X11 fica no terminal.
+- Na janela a largura do texto é exata, então as proteções para terminais que desenham glifos
+  ambíguos com duas células ficam desligadas.
 - Emoji colorido aparece como caixa, pois o rasterizador não lê fontes CBDT.
 - O binário é gerado em um container Arch, então exige glibc e SDL3 recentes. Onde o carregamento
   falha, o `--probe` falha e o app fica no terminal.
