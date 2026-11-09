@@ -260,22 +260,6 @@ Adaptação à largura do terminal:
 - **80 a 99 colunas.** Divisão lado a lado com coluna de chat compacta de no mínimo 34 colunas para manter a leitura da lista.
 - **Menos de 80 colunas.** Na divisão lado a lado, o chat fica oculto e aparece um aviso. Pressione `Ctrl+L` para abrir o chat em largura total ou alargue o terminal para restaurar a divisão.
 
-
-## Vídeo embutido experimental
-
-Definir `video = "sixel"` no `config.toml` acrescenta um layout que desenha o vídeo no terminal com uma faixa de chat. Ele vem desligado, e todos os outros layouts continuam com a janela do `mpv`. O modo embutido é experimental e ainda não foi verificado visualmente em todos os terminais.
-
-A chave de config vale também para o atalho de desktop, que abre o `ttv-tui` sem flags. Valor inválido conta como desligado e o app abre normalmente. Como alternativa avançada, `--video=sixel` liga o modo em uma execução e `--video=` desliga em uma execução; a flag vence o config.
-
-- **Requisitos.** Um terminal com sixel e um `mpv` com a saída de vídeo `sixel`. Os dois são verificados ao iniciar. Se faltar algum, o app funciona como sempre e uma linha no topo da tela diz, desde a abertura e durante toda a sessão, qual lado falhou e o que fazer. `ttv-tui doctor` informa o mesmo sem abrir a TUI.
-- **Como iniciar o vídeo.** Com o modo ligado e o suporte confirmado, o app abre no layout de vídeo com a lista de canais sobre o painel. Escolha um canal e ele começa embutido, sem janela do `mpv` e sem precisar pressionar `Ctrl+W` ou `r`. Sem a chave, sem suporte ou sem TTY, o app abre em split e informa o motivo. Se um canal já estiver tocando em uma janela do `mpv` ao entrar no layout de vídeo, `r` o reinicia embutido com o mesmo volume.
-- **Área de vídeo e chat.** O vídeo ocupa toda a área disponível do modo `video`, descontada a faixa de chat e a barra de status. `c` oculta ou mostra o chat sem reiniciar o player; em campos de texto, continua sendo uma letra. No `config.toml`, `video_chat_rows = 8` define a altura da faixa, de 3 a 30 linhas, limitada ao espaço disponível. `video_chat_position = "bottom"` coloca o chat abaixo do vídeo; `"top"` o coloca acima. Valores ausentes ou inválidos usam 8 e `"bottom"`. Com o chat oculto, o vídeo ocupa também as linhas da faixa.
-- **Como trocar de canal.** `Esc` ou `l` abre a lista sobre o vídeo. Os frames param enquanto ela está aberta e o áudio continua. Escolher um canal ou pressionar `Esc` volta ao vídeo. `Ctrl+R` volta às categorias.
-- **Como sair.** `Ctrl+W`, `Ctrl+H` ou `Ctrl+L` deixa o layout. O áudio continua sem imagem e a barra avisa: `r` reinicia o canal na janela do `mpv` e `Ctrl+X` encerra.
-- **Limitações.** A 15 fps, o frame é a maior imagem 16:9 que cabe no painel, centralizada. O painel não tem mais teto de 18 linhas; seu tamanho acompanha o terminal e a faixa de chat. Na medição anterior com frames de 480x270 e 640x360, em uma live real, o uso de CPU do `mpv` passou de cerca de 105% para 125%, e a saída de 2,0 para 3,2 MB/s. Não há suporte em kitty, Alacritty, Terminal.app, Windows e tmux. Em terminal que não informa o tamanho da célula, o vídeo fica menor que o painel para a imagem não invadir o chat.
-- **Inicialização do player.** Um início travado sem linha de log leva 30 s para informar erro; um socket presente que recusa conexões continua falhando rápido (cerca de 2 s). O log do streamlink vai para um arquivo na sessão.
-- **Espera pela imagem.** Depois de redimensionar, ou ao fechar a ajuda, a imagem pode levar cerca de 2,5 s para voltar, porque o `mpv` espera o próximo keyframe. Se a janela encolheu, o painel fica em branco nessa espera, e a lista deixa o último frame na tela. Os frames também dividem a linha com as teclas: em um terminal ou link SSH que aguenta 300 KB/s, uma tecla levou cerca de meio segundo para aparecer.
-
 ## Chat
 
 - **Leitura anônima.** A conexão e a leitura do chat de qualquer canal usam login IRC anônimo da Twitch (`justinfan...`) sobre TLS (`irc.chat.twitch.tv:6697`) com tags IRCv3 habilitadas. Nenhuma conta ou token é exigido para ler o chat.
@@ -317,7 +301,7 @@ Consulte [SECURITY.md](../SECURITY.md) para instruções de relato privado de vu
 
 ## Solução de problemas
 
-Execute `ttv-tui doctor --lang pt-BR` (ou `--lang en`) antes de relatar uma falha. O comando mostra versão, SO/arquitetura, presença e versão numérica de `streamlink`/`mpv`, diretórios efetivos, token apenas como SIM/NÃO e se o vídeo embutido pode rodar: o terminal atual (`TERM` e o emulador, quando dá para identificar), sixel no terminal (SIM, NÃO ou NÃO TESTADO, com o motivo), sixel no `mpv` (por `--vo=help`), o veredito e o próximo passo quando falta algo, como `abra com foot ttv-tui` ou `instale um mpv com --vo=sixel`. O terminal é consultado com uma pergunta curta que nunca espera mais de um segundo; com stdin ou stdout redirecionado, ele não é consultado e aparece como NÃO TESTADO. As linhas de vídeo embutido não mudam o código de saída. Não valida o token na rede. Configuração ilegível é informada sem reproduzir o erro ou conteúdo. Dependência ausente ou diretório de estado/configuração ilegível retorna código 1; diagnóstico concluído retorna 0.
+Execute `ttv-tui doctor --lang pt-BR` (ou `--lang en`) antes de relatar uma falha. O comando mostra versão, SO/arquitetura, presença e versão numérica de `streamlink`/`mpv`, diretórios efetivos e token apenas como SIM/NÃO. Não valida o token na rede. Configuração ilegível é informada sem reproduzir o erro ou conteúdo. Dependência ausente ou diretório de estado/configuração ilegível retorna código 1; diagnóstico concluído retorna 0.
 
 “Limpo” significa ausência de registros pendentes; “pendente” também pode ser uma instância ativa. O comando não altera registros nem testa IPC anterior, áudio ou reprodução. Ferramenta encontrada cuja versão falha é informada como versão indisponível.
 

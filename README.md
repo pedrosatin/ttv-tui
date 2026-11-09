@@ -260,22 +260,6 @@ Column width adaptation:
 - **80 to 99 columns.** Side-by-side split with a compact chat column of at least 34 columns so the list stays readable.
 - **Under 80 columns.** In split view, chat is hidden and the notice `Chat hidden (<80 cols) — Ctrl+L opens chat only, or widen the terminal` appears. Press `Ctrl+L` for full-width chat, or widen the terminal to restore the split.
 
-
-## Experimental embedded video
-
-Setting `video = "sixel"` in `config.toml` adds a layout that draws the video in the terminal with a chat strip. It is off by default, and every other layout keeps the `mpv` window. The embedded mode is experimental and has not been visually verified in every terminal.
-
-The config key works from the desktop shortcut too, which starts `ttv-tui` with no flags. An invalid value counts as off and the app starts normally. As an advanced alternative, `--video=sixel` turns the mode on for one run and `--video=` turns it off for one run; the flag wins over the config.
-
-- **Requirements.** A terminal with sixel support and an `mpv` with the `sixel` video output. Both are checked at startup. If either is missing, the app runs as usual and a line at the top of the screen says, from the opening and for the whole session, which side failed and what to do. `ttv-tui doctor` reports the same without opening the TUI.
-- **Starting video.** With the mode enabled and support confirmed, the app opens in the video layout with the channel list over the panel. Choose a channel and it starts embedded, without an `mpv` window or pressing `Ctrl+W` or `r`. Without the key, support, or a TTY, the app opens in split layout and shows the reason. If a channel is already playing in an `mpv` window when you enter the video layout, `r` restarts it embedded at the same volume.
-- **Video and chat area.** Video uses all available space in `video` mode, minus the chat strip and status bar. `c` hides or shows the chat without restarting the player; in text fields, it still types a letter. In `config.toml`, `video_chat_rows = 8` sets the strip height, from 3 to 30 lines, capped by the available space. `video_chat_position = "bottom"` puts chat below the video; `"top"` puts it above. Missing or invalid values use 8 and `"bottom"`. With chat hidden, video also uses the strip rows.
-- **Choosing another channel.** `Esc` or `l` opens the list over the video. Frames stop while it is open and the audio goes on. Choosing a channel or pressing `Esc` returns to the video. `Ctrl+R` goes back to the categories.
-- **Getting out.** `Ctrl+W`, `Ctrl+H` or `Ctrl+L` leaves the layout. The audio goes on without a picture and the status bar says so: `r` restarts the channel in the `mpv` window and `Ctrl+X` stops it.
-- **Limitations.** At 15 fps, the frame is the largest 16:9 image that fits in the panel, centered. The panel no longer has an 18-line cap; its size follows the terminal and chat strip. In the earlier measurement with 480x270 and 640x360 frames on a real live stream, `mpv` CPU usage rose from about 105% to 125%, and output from 2.0 to 3.2 MB/s. kitty, Alacritty, Terminal.app, Windows and tmux are not supported. A terminal that does not report its cell size gets a video smaller than the panel, so the picture stays clear of the chat.
-- **Player startup.** A stalled start with no log line takes 30 s to report an error; a present socket that refuses connections still fails quickly (about 2 s). The streamlink log goes to a file in the session.
-- **Waiting for the picture.** After a resize, or when help closes, the picture can take up to about 2.5 s to come back, because `mpv` waits for the next keyframe. A window that shrank leaves the panel blank during that wait, and the list leaves the last frame on screen. The frames also share the line with the keys: on a terminal or SSH link that takes 300 KB/s, a key took about half a second to show.
-
 ## Chat
 
 - **Anonymous reading.** Connecting to and reading any channel's chat uses an anonymous Twitch IRC login (`justinfan...`) over TLS (`irc.chat.twitch.tv:6697`) with IRCv3 tags enabled. No account or token is required to read chat.
@@ -317,7 +301,7 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting and revocation instru
 
 ## Troubleshooting
 
-Run `ttv-tui doctor --lang en` (or `--lang pt-BR`) before reporting a failure. It shows app version, OS/architecture, presence and numeric version of `streamlink`/`mpv`, effective directories, token presence as YES/NO only, and whether embedded video can run: the current terminal (`TERM`, plus the emulator when it can be named), sixel in the terminal (YES, NO or NOT TESTED, with the reason), sixel in `mpv` (from `--vo=help`), the verdict, and the next step when something is missing, such as `open with foot ttv-tui` or `install an mpv with --vo=sixel`. The terminal is asked with a short query and never waits more than a second; with stdin or stdout redirected it is not asked and shows as NOT TESTED. The embedded video lines do not change the exit code. It does not validate the token over the network. Unreadable configuration is reported without echoing its error or contents. Missing dependencies or unreadable state/configuration return exit code 1; a completed diagnostic returns 0.
+Run `ttv-tui doctor --lang en` (or `--lang pt-BR`) before reporting a failure. It shows app version, OS/architecture, presence and numeric version of `streamlink`/`mpv`, effective directories, and token presence as YES/NO only. It does not validate the token over the network. Unreadable configuration is reported without echoing its error or contents. Missing dependencies or unreadable state/configuration return exit code 1; a completed diagnostic returns 0.
 
 “Clean” means no pending records; “pending” can also mean an active instance. The command does not modify records or test past IPC, audio or playback. A tool found whose version probe fails is reported as version unavailable.
 

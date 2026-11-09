@@ -34,8 +34,8 @@ Dois contratos ligam os processos:
   o filtro de anúncio continuam iguais (regra 1).
 
 O `ttv-tui` abre a janela quando está em Linux com Wayland, tem `ttv-tui-window` ao lado e o
-`--probe` dela passa. Qualquer outro caso fica no terminal, assim como `--terminal` e `video` no
-config. A janela só existe em Linux amd64 por enquanto.
+`--probe` dela passa. Qualquer outro caso fica no terminal, assim como `--terminal`. A janela só existe em Linux
+amd64 por enquanto.
 
 ## Limites
 
@@ -46,3 +46,9 @@ config. A janela só existe em Linux amd64 por enquanto.
 - Emoji colorido aparece como caixa, pois o rasterizador não lê fontes CBDT.
 - O binário é gerado em um container Arch, então exige glibc e SDL3 recentes. Onde o carregamento
   falha, o `--probe` falha e o app fica no terminal.
+
+## Remoção do sixel
+
+O modo sixel saiu do código depois da 0.8.0, junto com `--video`, `video`, `video_chat_rows` e
+`video_chat_position`. Um config antigo com essas chaves continua abrindo, e elas somem no próximo
+salvamento.

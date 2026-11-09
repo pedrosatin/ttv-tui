@@ -1,5 +1,8 @@
 # Vídeo embutido em sixel como experimento opt-in
 
+Substituído pelo ADR 0011. O modo saiu do código depois da 0.8.0, a última versão que o traz; o
+texto abaixo registra a decisão da época.
+
 O ADR 0002 rejeitou vídeo no terminal pelo custo de CPU e pela queda de framerate. A
 medição da v1.10 confirmou o custo: a janela GPU gastou 23% de CPU a cerca de 30 fps,
 e sixel em 480x270 a 15 fps gastou 69% no mpv e 9,5% no foot. A regra mudou porque o

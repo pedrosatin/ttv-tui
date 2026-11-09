@@ -10,9 +10,7 @@ arquitetura.
    filtro de anúncio) e `mpv` (decode/GPU), controlando o player por IPC JSON.
    Nada de HLS próprio. No Linux com Wayland o padrão é a janela única, com o
    libmpv embutido ([ADR 0011](docs/adr/0011-janela-unica.md)); fora dela, a janela
-   do mpv. Vídeo em sixel no terminal é experimental, opt-in por `--video=sixel`,
-   usado só no modo `video` e sempre codificado pelo mpv
-   ([ADR 0010](docs/adr/0010-video-embutido-sixel.md)).
+   do mpv.
 
 2. **Acesso a dados fica atrás de uma interface `Source`.** O v1 fala o GraphQL
    público do site; quando existir um app registrado na Twitch, o adapter Helix
