@@ -24,16 +24,6 @@ func ExtractToken(p Profile) (string, error) {
 	}
 }
 
-// ExtractTokenFrom resolves browser/profile names and extracts the token.
-// profile may be empty to pick the first matching profile for that browser.
-func ExtractTokenFrom(browser, profile string) (string, error) {
-	p, err := FindProfile(browser, profile)
-	if err != nil {
-		return "", err
-	}
-	return ExtractToken(p)
-}
-
 // ExtractChromiumWithPassword decrypts auth-token from cookiesPath using an
 // explicit Safe Storage password. Used by tests and by callers that already
 // resolved the keyring secret.

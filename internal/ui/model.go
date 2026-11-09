@@ -151,13 +151,6 @@ func WithTokenCheck(fn TokenCheckFunc) Option {
 	}
 }
 
-// WithInvalidTokenNotice initializes the Model with the one-time invalid token status bar notice.
-func WithInvalidTokenNotice() Option {
-	return func(m *Model) {
-		m.invalidTokenInit = true
-	}
-}
-
 // WithStore configures a persistent store for favorites and recents.
 func WithStore(s Store) Option {
 	return func(m *Model) {
@@ -185,13 +178,6 @@ func WithRecents(recs []twitch.Channel) Option {
 func WithCorruptNotice(notice string) Option {
 	return func(m *Model) {
 		m.corruptNotice = notice
-	}
-}
-
-// WithStatusNotice initializes the Model with a one-time status-bar notice.
-func WithStatusNotice(notice string) Option {
-	return func(m *Model) {
-		m.statusNotice = notice
 	}
 }
 
@@ -242,7 +228,6 @@ type Model struct {
 	selectedCategory       *twitch.Category
 	selectedChannel        *twitch.Channel
 	tokenCheck             TokenCheckFunc
-	invalidTokenInit       bool
 	authNotice             string
 	corruptNotice          string
 	statusNotice           string
@@ -343,15 +328,7 @@ func New(catalog *i18n.Catalog, opts ...Option) Model {
 			opt(&m)
 		}
 	}
-	if m.invalidTokenInit {
-		m.authNotice = m.t("auth.token_invalid_notice")
-	}
 	return m
-}
-
-// NewWithSource creates a new UI Model wired to a twitch.Source.
-func NewWithSource(catalog *i18n.Catalog, source twitch.Source) Model {
-	return New(catalog, WithSource(source))
 }
 
 // AuthNotice returns the active one-time authentication notice in the status bar, if any.

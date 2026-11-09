@@ -153,15 +153,6 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "state.json"), nil
 }
 
-// Load reads state from DefaultPath().
-func Load() (State, error) {
-	path, err := DefaultPath()
-	if err != nil {
-		return State{}, fmt.Errorf("resolve default state path: %w", err)
-	}
-	return LoadFrom(path)
-}
-
 // LoadFrom reads state from the JSON file at path.
 // If the file does not exist, an empty State is returned without error.
 // If the file is empty or contains invalid JSON, the file is renamed to path+".bak",
@@ -216,15 +207,6 @@ func loadFrom(path string) (State, error) {
 	}
 	st.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), st.Favorites...)}
 	return st, nil
-}
-
-// Save writes state to DefaultPath().
-func Save(st State) error {
-	path, err := DefaultPath()
-	if err != nil {
-		return fmt.Errorf("resolve default state path: %w", err)
-	}
-	return SaveTo(path, st)
 }
 
 // SaveTo merges state with the latest disk contents under an exclusive lock.

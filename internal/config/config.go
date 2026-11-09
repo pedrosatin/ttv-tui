@@ -130,15 +130,6 @@ func LoadFrom(path string) (Config, error) {
 	return cfg, nil
 }
 
-// LoadTwt reads and normalizes credentials from the default twitch-tui config (see DefaultTwtPath).
-func LoadTwt() (Config, error) {
-	path, err := DefaultTwtPath()
-	if err != nil {
-		return Default(), fmt.Errorf("resolve twt config path: %w", err)
-	}
-	return LoadTwtFrom(path)
-}
-
 // LoadTwtFrom reads and normalizes credentials from a twitch-tui config file at path.
 // Unlike LoadFrom, a missing file returns an error wrapping os.ErrNotExist.
 func LoadTwtFrom(path string) (Config, error) {

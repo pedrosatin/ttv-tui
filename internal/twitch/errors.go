@@ -16,33 +16,6 @@ const (
 	Contrato  ErrorKind = "Contrato"
 )
 
-// ErrNotImplemented is the sentinel wrapped by stubbed Source operations.
-var ErrNotImplemented = errors.New("não implementado")
-
-// NotImplementedError indicates that a Source operation is not yet implemented.
-type NotImplementedError struct {
-	Op string
-}
-
-func (e *NotImplementedError) Error() string {
-	if e == nil {
-		return ErrNotImplemented.Error()
-	}
-	if e.Op != "" {
-		return fmt.Sprintf("%s: %s", e.Op, ErrNotImplemented.Error())
-	}
-	return ErrNotImplemented.Error()
-}
-
-func (e *NotImplementedError) Unwrap() error {
-	return ErrNotImplemented
-}
-
-// IsNotImplemented reports whether err wraps ErrNotImplemented.
-func IsNotImplemented(err error) bool {
-	return errors.Is(err, ErrNotImplemented)
-}
-
 // Error is the typed error returned by Source operations, carrying an ErrorKind
 // classification and optional HTTP / rate-limit metadata.
 type Error struct {
