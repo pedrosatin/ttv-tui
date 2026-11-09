@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strings"
 	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -207,33 +206,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyMsgBatch(keys)
 	}
 
-	m.authNotice = ""
-	m.corruptNotice = ""
-	m.clearStatusNotice()
-	m.ctrlCNotice = ""
-	m.copyNotice = ""
-	m.playerWindowNotice = false
-	if key.Matches(msg, m.keys.Quit) {
-		m.tracker.cancelActive()
-		m.generation++
-		m.loading = false
-		m.quitting = true
-		var cmds []tea.Cmd
-		if m.playback != nil {
-			cmds = append(cmds, m.playback.Stop())
-		}
-		if m.chat != nil {
-			cmds = append(cmds, m.chat.Stop())
-		}
-		cmds = append(cmds, tea.Quit)
-		return m, tea.Batch(cmds...)
-	}
-
-	// Ctrl+C reaches a raw-mode TUI as a key, not SIGINT. It never quits;
-	// only Ctrl+Q takes the shutdown path. Show a localized hint instead.
-	if msg.Type == tea.KeyCtrlC {
-		m.ctrlCNotice = m.t("status.ctrl_c_hint")
-		return m, nil
+	m.clearKeyNotices()
+	if next, cmd, ok := m.handleAppKey(msg); ok {
+		return next, cmd
 	}
 
 	// Help is modal: past this point no key reaches the list, chat, filter or
@@ -242,218 +217,23 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateHelpKey(msg)
 	}
 
-	// F1 opens keyboard help at any time, even while typing.
-	if key.Matches(msg, m.keys.HelpGlobal) {
-		m.toggleHelp()
-		return m, nil
+	if next, cmd, ok := m.handleGlobalKey(msg); ok {
+		return next, cmd
 	}
-
-	// Ctrl+R returns to categories from anywhere, including compose.
-	if key.Matches(msg, m.keys.Categories) {
-		return m.returnToCategories()
+	if next, cmd, ok := m.handleLayoutKey(msg); ok {
+		return next, cmd
 	}
-
-	// Ctrl+X ends video without leaving the app (works while composing).
-	if key.Matches(msg, m.keys.StopVideo) {
-		if m.playback == nil {
-			return m, nil
-		}
-		if m.playerState == PlayerStateNone || m.playerState == PlayerStateEnded {
-			return m, nil
-		}
-		return m, m.playback.Stop()
+	if next, cmd, ok := m.handleModeKey(msg); ok {
+		return next, cmd
 	}
-
-	if key.Matches(msg, m.keys.ReconnectChat) {
-		if m.chat == nil || m.chatPanel.channel == "" {
-			return m, nil
-		}
-		m.chatPanel.state = ChatStateConnecting
-		m.chatPanel.switching = true
-		return m, m.chat.Reconnect()
+	if next, cmd, ok := m.handleCommandKey(msg); ok {
+		return next, cmd
 	}
-
-	// Layout controls work from any mode (compose, search, filter).
-	if key.Matches(msg, m.keys.CycleLayout, m.keys.ToggleList, m.keys.ToggleChat) && !m.hasChatPanel() {
-		m.keepListWithoutChat()
-		return m, nil
+	if next, cmd, ok := m.handlePlayerKey(msg); ok {
+		return next, cmd
 	}
-	if key.Matches(msg, m.keys.CycleLayout) {
-		m.cycleLayout()
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.ToggleList) {
-		m.toggleListPanel()
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.ToggleChat) {
-		m.toggleChatPanel()
-		return m, nil
-	}
-	if handled, cmd := m.handleHostedResizeKey(msg); handled {
-		return m, cmd
-	}
-
-	// The filter menu is a visible overlay in every layout. Other list
-	// inputs stay suspended until the list is shown again.
-	if m.hiddenListKey(msg) {
-		m.warnStatus(m.t("layout.hidden_list_key"))
-		return m, nil
-	}
-
-	if m.searching && m.listVisible() {
-		return m.updateSearchingKey(msg)
-	}
-
-	if m.filtering && m.listVisible() {
-		return m.updateFilteringKey(msg)
-	}
-
-	if m.channelFilterMenu {
-		return m.updateChannelFilterMenuKey(msg)
-	}
-
-	// Tab switches list ↔ chat in every panel state: list focus, chat focus,
-	// and composing. It never sends or clears the draft.
-	if isSwitchFocusKey(msg, m.keys) {
-		return m.switchPanelFocus(), nil
-	}
-
-	if m.composing && m.showChat && !m.chatHiddenByWidth() {
-		return m.updateComposingKey(msg)
-	}
-
-	switch {
-	case key.Matches(msg, m.keys.Favorite):
-		if m.Focus() == FocusChat {
-			return m, nil
-		}
-		return m.toggleFavoriteHighlighted()
-
-	case key.Matches(msg, m.keys.ChannelFilter):
-		if m.Focus() == FocusChat {
-			return m, nil
-		}
-		return m.openChannelFilterMenu(), nil
-
-	case key.Matches(msg, m.keys.Help):
-		m.toggleHelp()
-		return m, nil
-
-	case key.Matches(msg, m.keys.Clear):
-		if m.Focus() == FocusChat {
-			m.focus = FocusList
-			m.composing = false
-			return m, nil
-		}
-		if m.filter != "" {
-			m.filter = ""
-			m.reconcileHighlight()
-			return m, nil
-		}
-		// Esc steps back one level (vim-style). Search returns to the list it
-		// left; channels return to categories. Ctrl+R still jumps to categories.
-		switch m.Mode() {
-		case ModeSearch:
-			return m.returnFromSearch()
-		case ModeChannels:
-			return m.returnToCategories()
-		default:
-			return m, nil
-		}
-
-	case key.Matches(msg, m.keys.Compose):
-		return m.enterCompose()
-
-	case key.Matches(msg, m.keys.CopyMessage):
-		if m.Focus() != FocusChat {
-			return m.showCopyFocusWarning()
-		}
-		return m.copyChatMessage()
-
-	case key.Matches(msg, m.keys.Filter):
-		m.focus = FocusList
-		m.clearStaleStatusErrors()
-		m.filtering = true
-		return m, nil
-
-	case key.Matches(msg, m.keys.Search):
-		m.focus = FocusList
-		if q := strings.TrimSpace(m.filter); q != "" {
-			return m.startSearch(q)
-		}
-		m.clearStaleStatusErrors()
-		m.searching = true
-		m.searchInput = ""
-		return m, nil
-
-	case key.Matches(msg, m.keys.Retry):
-		if m.err == nil && m.playerState == PlayerStateError && m.playback != nil && m.playerLogin != "" {
-			return m.retryPlayback()
-		}
-		return m.retryCurrentMode()
-
-	case key.Matches(msg, m.keys.Pause):
-		if m.playback == nil || !m.playerControllable() {
-			return m, nil
-		}
-		return m, m.playback.TogglePause()
-
-	case key.Matches(msg, m.keys.VolUp):
-		return m.adjustVolume(5)
-
-	case key.Matches(msg, m.keys.VolDown):
-		return m.adjustVolume(-5)
-
-	case key.Matches(msg, m.keys.Up):
-		if m.Focus() == FocusChat {
-			return m.scrollChatUp(1), nil
-		}
-		m.moveHighlight(-1)
-		return m, nil
-
-	case key.Matches(msg, m.keys.Down):
-		if m.Focus() == FocusChat {
-			return m.scrollChatDown(1), nil
-		}
-		m.moveHighlight(1)
-		if m.shouldLoadNextPage() {
-			m.generation++
-			m.loading = true
-			if m.Mode() == ModeChannels && m.selectedCategory != nil {
-				return m, m.fetchChannelsCmd(m.generation, *m.selectedCategory, m.nextCursor, true)
-			}
-			return m, m.fetchCategoriesCmd(m.generation, m.nextCursor, true)
-		}
-		return m, nil
-
-	case key.Matches(msg, m.keys.PageUp):
-		if m.Focus() != FocusChat {
-			return m, nil
-		}
-		return m.scrollChatUp(m.chatPageSize()), nil
-
-	case key.Matches(msg, m.keys.Home):
-		if m.Focus() != FocusChat {
-			return m, nil
-		}
-		return m.scrollChatHome(), nil
-
-	case key.Matches(msg, m.keys.GoLive):
-		if m.Focus() != FocusChat {
-			return m, nil
-		}
-		m.chatFollowLiveNow()
-		return m, nil
-
-	case key.Matches(msg, m.keys.Select):
-		// Enter on the chat panel starts composition (same as i), so Tab then
-		// Enter is a natural path into the draft. Enter while composing still
-		// sends, via updateComposingKey.
-		if m.Focus() == FocusChat {
-			return m.enterCompose()
-		}
-		return m.selectHighlighted()
+	if next, cmd, ok := m.handleMoveKey(msg); ok {
+		return next, cmd
 	}
 	return m, nil
 }

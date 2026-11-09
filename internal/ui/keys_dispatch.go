@@ -1,0 +1,365 @@
+package ui
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// The stages below are the steps of handleKeyMsg, in its order. Each reports
+// whether it consumed the key; one that did not leaves the model untouched.
+
+// handled marks a key as consumed by the handler whose result it wraps.
+func handled(next tea.Model, cmd tea.Cmd) (tea.Model, tea.Cmd, bool) {
+	return next, cmd, true
+}
+
+// clearKeyNotices drops the notices that last until the next key.
+func (m *Model) clearKeyNotices() {
+	m.authNotice = ""
+	m.corruptNotice = ""
+	m.clearStatusNotice()
+	m.ctrlCNotice = ""
+	m.copyNotice = ""
+	m.playerWindowNotice = false
+}
+
+// handleAppKey answers the two keys that outrank the help: Ctrl+Q and Ctrl+C.
+func (m Model) handleAppKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	if key.Matches(msg, m.keys.Quit) {
+		return handled(m.quit())
+	}
+	// Ctrl+C reaches a raw-mode TUI as a key, not SIGINT. It never quits;
+	// only Ctrl+Q takes the shutdown path. Show a localized hint instead.
+	if msg.Type == tea.KeyCtrlC {
+		m.ctrlCNotice = m.t("status.ctrl_c_hint")
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
+// quit cancels the request in flight and stops the player and the chat.
+func (m Model) quit() (tea.Model, tea.Cmd) {
+	m.tracker.cancelActive()
+	m.generation++
+	m.loading = false
+	m.quitting = true
+	var cmds []tea.Cmd
+	if m.playback != nil {
+		cmds = append(cmds, m.playback.Stop())
+	}
+	if m.chat != nil {
+		cmds = append(cmds, m.chat.Stop())
+	}
+	cmds = append(cmds, tea.Quit)
+	return m, tea.Batch(cmds...)
+}
+
+// handleGlobalKey answers the keys that work from any mode, even while typing.
+func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	// F1 opens keyboard help at any time, even while typing.
+	case key.Matches(msg, m.keys.HelpGlobal):
+		m.toggleHelp()
+		return m, nil, true
+
+	// Ctrl+R returns to categories from anywhere, including compose.
+	case key.Matches(msg, m.keys.Categories):
+		return handled(m.returnToCategories())
+
+	// Ctrl+X ends video without leaving the app (works while composing).
+	case key.Matches(msg, m.keys.StopVideo):
+		return handled(m.keyStopVideo())
+
+	case key.Matches(msg, m.keys.ReconnectChat):
+		return handled(m.keyReconnectChat())
+	}
+	return m, nil, false
+}
+
+func (m Model) keyStopVideo() (tea.Model, tea.Cmd) {
+	if m.playback == nil {
+		return m, nil
+	}
+	if m.playerState == PlayerStateNone || m.playerState == PlayerStateEnded {
+		return m, nil
+	}
+	return m, m.playback.Stop()
+}
+
+func (m Model) keyReconnectChat() (tea.Model, tea.Cmd) {
+	if m.chat == nil || m.chatPanel.channel == "" {
+		return m, nil
+	}
+	m.chatPanel.state = ChatStateConnecting
+	m.chatPanel.switching = true
+	return m, m.chat.Reconnect()
+}
+
+// handleLayoutKey answers the layout controls, which work from any mode
+// (compose, search, filter), and the hosted window's own.
+func (m Model) handleLayoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	if key.Matches(msg, m.keys.CycleLayout, m.keys.ToggleList, m.keys.ToggleChat) && !m.hasChatPanel() {
+		m.keepListWithoutChat()
+		return m, nil, true
+	}
+	if key.Matches(msg, m.keys.CycleLayout) {
+		m.cycleLayout()
+		return m, nil, true
+	}
+	if key.Matches(msg, m.keys.ToggleList) {
+		m.toggleListPanel()
+		return m, nil, true
+	}
+	if key.Matches(msg, m.keys.ToggleChat) {
+		m.toggleChatPanel()
+		return m, nil, true
+	}
+	if ok, cmd := m.handleHostedResizeKey(msg); ok {
+		return m, cmd, true
+	}
+	return m, nil, false
+}
+
+// handleModeKey hands the key to the input mode that owns it: search, filter,
+// the filter menu or composition. Tab sits between the menu and composition.
+func (m Model) handleModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	// The filter menu is a visible overlay in every layout. Other list
+	// inputs stay suspended until the list is shown again.
+	if m.hiddenListKey(msg) {
+		m.warnStatus(m.t("layout.hidden_list_key"))
+		return m, nil, true
+	}
+
+	if m.searching && m.listVisible() {
+		return handled(m.updateSearchingKey(msg))
+	}
+
+	if m.filtering && m.listVisible() {
+		return handled(m.updateFilteringKey(msg))
+	}
+
+	if m.channelFilterMenu {
+		return handled(m.updateChannelFilterMenuKey(msg))
+	}
+
+	// Tab switches list ↔ chat in every panel state: list focus, chat focus,
+	// and composing. It never sends or clears the draft.
+	if isSwitchFocusKey(msg, m.keys) {
+		return m.switchPanelFocus(), nil, true
+	}
+
+	if m.composing && m.showChat && !m.chatHiddenByWidth() {
+		return handled(m.updateComposingKey(msg))
+	}
+	return m, nil, false
+}
+
+// handleCommandKey answers the keys that start an action on the list or chat.
+func (m Model) handleCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.Favorite):
+		return handled(m.keyFavorite())
+
+	case key.Matches(msg, m.keys.ChannelFilter):
+		return handled(m.keyChannelFilter())
+
+	case key.Matches(msg, m.keys.Help):
+		m.toggleHelp()
+		return m, nil, true
+
+	case key.Matches(msg, m.keys.Clear):
+		return handled(m.keyClear())
+
+	case key.Matches(msg, m.keys.Compose):
+		return handled(m.enterCompose())
+
+	case key.Matches(msg, m.keys.CopyMessage):
+		return handled(m.keyCopyMessage())
+
+	case key.Matches(msg, m.keys.Filter):
+		return handled(m.keyFilter())
+
+	case key.Matches(msg, m.keys.Search):
+		return handled(m.keySearch())
+
+	case key.Matches(msg, m.keys.Retry):
+		return handled(m.keyRetry())
+	}
+	return m, nil, false
+}
+
+func (m Model) keyFavorite() (tea.Model, tea.Cmd) {
+	if m.Focus() == FocusChat {
+		return m, nil
+	}
+	return m.toggleFavoriteHighlighted()
+}
+
+func (m Model) keyChannelFilter() (tea.Model, tea.Cmd) {
+	if m.Focus() == FocusChat {
+		return m, nil
+	}
+	return m.openChannelFilterMenu(), nil
+}
+
+// keyClear is Esc outside any input mode: it leaves the chat, then clears the
+// filter, then steps back one level.
+func (m Model) keyClear() (tea.Model, tea.Cmd) {
+	if m.Focus() == FocusChat {
+		m.focus = FocusList
+		m.composing = false
+		return m, nil
+	}
+	if m.filter != "" {
+		m.filter = ""
+		m.reconcileHighlight()
+		return m, nil
+	}
+	// Esc steps back one level (vim-style). Search returns to the list it
+	// left; channels return to categories. Ctrl+R still jumps to categories.
+	switch m.Mode() {
+	case ModeSearch:
+		return m.returnFromSearch()
+	case ModeChannels:
+		return m.returnToCategories()
+	default:
+		return m, nil
+	}
+}
+
+func (m Model) keyCopyMessage() (tea.Model, tea.Cmd) {
+	if m.Focus() != FocusChat {
+		return m.showCopyFocusWarning()
+	}
+	return m.copyChatMessage()
+}
+
+func (m Model) keyFilter() (tea.Model, tea.Cmd) {
+	m.focus = FocusList
+	m.clearStaleStatusErrors()
+	m.filtering = true
+	return m, nil
+}
+
+func (m Model) keySearch() (tea.Model, tea.Cmd) {
+	m.focus = FocusList
+	if q := strings.TrimSpace(m.filter); q != "" {
+		return m.startSearch(q)
+	}
+	m.clearStaleStatusErrors()
+	m.searching = true
+	m.searchInput = ""
+	return m, nil
+}
+
+func (m Model) keyRetry() (tea.Model, tea.Cmd) {
+	if m.err == nil && m.playerState == PlayerStateError && m.playback != nil && m.playerLogin != "" {
+		return m.retryPlayback()
+	}
+	return m.retryCurrentMode()
+}
+
+// handlePlayerKey answers pause and volume.
+func (m Model) handlePlayerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.Pause):
+		return handled(m.keyPause())
+
+	case key.Matches(msg, m.keys.VolUp):
+		return handled(m.adjustVolume(5))
+
+	case key.Matches(msg, m.keys.VolDown):
+		return handled(m.adjustVolume(-5))
+	}
+	return m, nil, false
+}
+
+func (m Model) keyPause() (tea.Model, tea.Cmd) {
+	if m.playback == nil || !m.playerControllable() {
+		return m, nil
+	}
+	return m, m.playback.TogglePause()
+}
+
+// handleMoveKey answers movement and Enter, in the list or in the chat.
+func (m Model) handleMoveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.Up):
+		return handled(m.keyUp())
+
+	case key.Matches(msg, m.keys.Down):
+		return handled(m.keyDown())
+
+	case key.Matches(msg, m.keys.PageUp):
+		return handled(m.keyPageUp())
+
+	case key.Matches(msg, m.keys.Home):
+		return handled(m.keyHome())
+
+	case key.Matches(msg, m.keys.GoLive):
+		return handled(m.keyGoLive())
+
+	case key.Matches(msg, m.keys.Select):
+		return handled(m.keySelect())
+	}
+	return m, nil, false
+}
+
+func (m Model) keyUp() (tea.Model, tea.Cmd) {
+	if m.Focus() == FocusChat {
+		return m.scrollChatUp(1), nil
+	}
+	m.moveHighlight(-1)
+	return m, nil
+}
+
+// keyDown also asks for the next page when the highlight nears the end.
+func (m Model) keyDown() (tea.Model, tea.Cmd) {
+	if m.Focus() == FocusChat {
+		return m.scrollChatDown(1), nil
+	}
+	m.moveHighlight(1)
+	if m.shouldLoadNextPage() {
+		m.generation++
+		m.loading = true
+		if m.Mode() == ModeChannels && m.selectedCategory != nil {
+			return m, m.fetchChannelsCmd(m.generation, *m.selectedCategory, m.nextCursor, true)
+		}
+		return m, m.fetchCategoriesCmd(m.generation, m.nextCursor, true)
+	}
+	return m, nil
+}
+
+func (m Model) keyPageUp() (tea.Model, tea.Cmd) {
+	if m.Focus() != FocusChat {
+		return m, nil
+	}
+	return m.scrollChatUp(m.chatPageSize()), nil
+}
+
+func (m Model) keyHome() (tea.Model, tea.Cmd) {
+	if m.Focus() != FocusChat {
+		return m, nil
+	}
+	return m.scrollChatHome(), nil
+}
+
+func (m Model) keyGoLive() (tea.Model, tea.Cmd) {
+	if m.Focus() != FocusChat {
+		return m, nil
+	}
+	m.chatFollowLiveNow()
+	return m, nil
+}
+
+// keySelect is Enter. On the chat panel it starts composition (same as i), so
+// Tab then Enter is a natural path into the draft. Enter while composing still
+// sends, via updateComposingKey.
+func (m Model) keySelect() (tea.Model, tea.Cmd) {
+	if m.Focus() == FocusChat {
+		return m.enterCompose()
+	}
+	return m.selectHighlighted()
+}

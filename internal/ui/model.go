@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -466,32 +465,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case hostedNoticeMsg:
-		if m.statusNotice == msg.text {
-			m.clearStatusNotice()
-		}
-		return m, nil
+		return m.applyHostedNotice(msg)
 	case hostedSaveMsg:
 		return m, m.saveHostedColumns(msg.gen)
 	case tea.BatchMsg:
-		var cmds []tea.Cmd
-		var cur tea.Model = m
-		for _, cmd := range msg {
-			if cmd == nil {
-				continue
-			}
-			var nextCmd tea.Cmd
-			cur, nextCmd = cur.Update(cmd())
-			if nextCmd != nil {
-				cmds = append(cmds, nextCmd)
-			}
-		}
-		return cur, tea.Batch(cmds...)
+		return m.applyBatch(msg)
 
 	case AuthValidatedMsg:
-		if msg.Err != nil {
-			m.authNotice = m.t("auth.token_invalid_notice")
-		}
-		return m, nil
+		return m.applyAuthValidated(msg)
 
 	case copyResultMsg:
 		return m.applyCopyResult(msg)
@@ -504,209 +485,28 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case CategoriesLoadedMsg:
-		if msg.Generation != m.generation {
-			return m, nil
-		}
-		m.loading = false
-		if msg.Err != nil {
-			m.err = msg.Err
-			return m, nil
-		}
-		m.err = nil
-		if msg.Append {
-			existing := make(map[string]struct{}, len(m.categories))
-			for _, c := range m.categories {
-				existing[c.ID] = struct{}{}
-			}
-			for _, c := range msg.Page.Items {
-				if _, dup := existing[c.ID]; !dup {
-					m.categories = append(m.categories, c)
-					existing[c.ID] = struct{}{}
-				}
-			}
-		} else {
-			m.categories = make([]twitch.Category, len(msg.Page.Items))
-			copy(m.categories, msg.Page.Items)
-		}
-		m.nextCursor = msg.Page.Cursor
-		m.hasMore = msg.Page.HasMore
-		m.reconcileHighlight()
-		return m, nil
+		return m.applyCategoriesLoaded(msg)
 
 	case ChannelsLoadedMsg:
-		if msg.Generation != m.generation {
-			return m, nil
-		}
-		m.loading = false
-		if msg.Err != nil {
-			m.err = msg.Err
-			return m, nil
-		}
-		m.err = nil
-		if msg.Append {
-			existing := make(map[string]struct{}, len(m.channels))
-			for _, c := range m.channels {
-				existing[c.ID] = struct{}{}
-			}
-			for _, c := range msg.Page.Items {
-				if _, dup := existing[c.ID]; !dup {
-					m.channels = append(m.channels, c)
-					existing[c.ID] = struct{}{}
-				}
-			}
-		} else {
-			m.channels = make([]twitch.Channel, len(msg.Page.Items))
-			copy(m.channels, msg.Page.Items)
-		}
-		m.refreshSavedAvailability(msg.Page.Items)
-		m.nextCursor = msg.Page.Cursor
-		m.hasMore = msg.Page.HasMore
-		m.settleHighlightAfterLoad()
-		return m, nil
+		return m.applyChannelsLoaded(msg)
 
 	case SearchLoadedMsg:
-		if msg.Generation != m.generation {
-			return m, nil
-		}
-		m.loading = false
-		if msg.Err != nil {
-			m.err = msg.Err
-			return m, nil
-		}
-		m.err = nil
-		// Prefer exact name then viewers (twitch.PreferSearchCategories).
-		cats := twitch.PreferSearchCategories(msg.Query, msg.Categories)
-		m.searchCategories = make([]twitch.Category, len(cats))
-		copy(m.searchCategories, cats)
-		// Prefer exact login, exact display name, then live among clones
-		// (twitch.PreferSearchChannels).
-		// Lives here so every Source gets the same Enter/highlight target.
-		items := twitch.PreferSearchChannels(msg.Query, msg.Page.Items)
-		m.channels = make([]twitch.Channel, len(items))
-		copy(m.channels, items)
-		m.refreshSavedAvailability(items)
-		m.nextCursor = msg.Page.Cursor
-		m.hasMore = msg.Page.HasMore
-		m.settleHighlightAfterLoad()
-		return m, nil
+		return m.applySearchLoaded(msg)
 
 	case SavedAvailabilityMsg:
-		if msg.Generation != m.hydrateGen {
-			return m, nil
-		}
-		if msg.Err != nil {
-			// Keep [unverified]; never surface a hard error for this soft check.
-			return m, nil
-		}
-		m.refreshSavedAvailability(msg.Channels)
-		return m, nil
+		return m.applySavedAvailability(msg)
 
 	case ChannelSelectedMsg:
-		selected := msg.Channel
-		m.selectedChannel = &selected
-		m.clearStaleStatusErrors()
-		m.queueRecent(selected)
-		var cmds []tea.Cmd
-		if m.store != nil {
-			cmds = append(cmds, m.saveStoreCmd())
-		}
-		if m.playback != nil {
-			// The player keeps the volume of a channel it restarts.
-			if selected.Login != m.playerLogin {
-				m.playerVolume = 100
-			}
-			m.playerLogin = selected.Login
-			m.playerState = PlayerStateStarting
-			m.playerLastLine = ""
-			m.playerFailure = PlayerFailureNone
-			m.playerBreakElapsed = 0
-			m.playerSwitching = true
-			cmds = append(cmds, m.playback.Start(selected.Login))
-		}
-		if m.chat != nil || m.chatPanel.channel != "" {
-			if chatCmd := m.startChatChannel(selected.Login); chatCmd != nil {
-				cmds = append(cmds, chatCmd)
-			}
-		}
-		return m, tea.Batch(cmds...)
+		return m.applyChannelSelected(msg)
 
 	case storeSavedMsg:
-		if msg.Err != nil {
-			m.warnStatus(m.t("store.save_failed"))
-		} else if msg.Notice != "" {
-			m.clearStatusNotice()
-			m.statusNotice = m.t(msg.Notice)
-		}
-		return m, nil
+		return m.applyStoreSaved(msg)
 
 	case ChatEventMsg:
 		return m.handleChatEvent(msg)
 
 	case PlayerStatusMsg:
-		if m.playerSwitching {
-			if !msg.FromStart {
-				return m, nil
-			}
-			m.playerSwitching = false
-			m.playerGen = msg.Generation
-		} else if msg.Generation != 0 && m.playerGen != 0 && msg.Generation < m.playerGen {
-			// Stale generation from a previous channel — discard.
-			return m, nil
-		} else if msg.Generation > m.playerGen {
-			m.playerGen = msg.Generation
-		}
-		stateBefore, volumeBefore := m.playerState, m.playerVolume
-		if msg.State != m.playerState {
-			// A pause in the mpv window never reaches the TUI as a key, so the
-			// notice cannot wait for one: the bar needs the room for the state.
-			m.playerWindowNotice = false
-		}
-		m.playerState = msg.State
-		if msg.Login != "" {
-			m.playerLogin = msg.Login
-		}
-		if msg.State == PlayerStateError {
-			m.playerLastLine = msg.LastLine
-			m.playerInfoLine = ""
-		} else {
-			m.playerLastLine = ""
-			m.playerInfoLine = ""
-			if strings.Contains(strings.ToLower(msg.LastLine), "[info]") {
-				m.playerInfoLine = sanitizeScreenText(strings.TrimSpace(msg.LastLine))
-			}
-		}
-		if msg.State == PlayerStateError {
-			m.playerFailure = msg.Failure
-			// A classified offline failure is fresh evidence for this channel:
-			// the listing may still show stale viewers from before play.
-			if msg.Failure == PlayerFailureOffline {
-				m.markChannelOffline(m.playerLogin)
-			}
-		} else {
-			m.playerFailure = PlayerFailureNone
-		}
-		m.playerBreakElapsed = msg.BreakElapsed
-		if msg.ContainmentDegraded && msg.Generation != m.playerContainmentWarnedGen {
-			m.playerContainmentWarnedGen = msg.Generation
-			m.warnStatus(m.t("player.warn.containment"))
-		}
-		if msg.InputConfFailed && msg.Generation != m.playerKeysWarnedGen {
-			// Every event of that playback carries the flag; warn once.
-			m.playerKeysWarnedGen = msg.Generation
-			m.warnStatus(m.t("player.warn.input_conf"))
-		}
-		if msg.State == PlayerStatePlaying && !m.playerWindowNotified && m.videoHost == nil {
-			// mpv opens its own window; someone new to the app may not notice it.
-			m.playerWindowNotified = true
-			m.playerWindowNotice = true
-		}
-		if msg.Volume > 0 || msg.State == PlayerStatePlaying || msg.State == PlayerStatePaused || msg.State == PlayerStateBreak {
-			m.playerVolume = clampPlayerVolume(msg.Volume)
-		}
-		if m.playerState != stateBefore || m.playerVolume != volumeBefore {
-			m.clearVolumeLimitNotice()
-		}
-		return m, nil
+		return m.applyPlayerStatus(msg)
 
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
