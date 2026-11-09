@@ -72,10 +72,10 @@ type ChatSender interface {
 // WithChat attaches a Chat bridge to the Model.
 func WithChat(c Chat) Option {
 	return func(m *Model) {
-		m.chat = c
+		m.chat.session = c
 		if sender, ok := c.(ChatSender); ok {
-			m.chatPanel.anonymous = !sender.HasToken()
-			m.chatPanel.username = sender.Username()
+			m.chat.panel.anonymous = !sender.HasToken()
+			m.chat.panel.username = sender.Username()
 		}
 	}
 }
@@ -114,20 +114,20 @@ func newChatPanel() chatPanel {
 }
 
 func (m Model) chatHasToken() bool {
-	if m.chatPanel.anonymous {
+	if m.chat.panel.anonymous {
 		return false
 	}
-	if sender, ok := m.chat.(ChatSender); ok {
+	if sender, ok := m.chat.session.(ChatSender); ok {
 		return sender.HasToken()
 	}
 	return false
 }
 
 func (m Model) hasPendingOutgoing() bool {
-	if m.chatPanel.buf == nil {
+	if m.chat.panel.buf == nil {
 		return false
 	}
-	for _, msg := range m.chatPanel.buf.Messages() {
+	for _, msg := range m.chat.panel.buf.Messages() {
 		if msg.Self && msg.Delivery == chat.DeliverySending {
 			return true
 		}
@@ -137,84 +137,84 @@ func (m Model) hasPendingOutgoing() bool {
 
 func (m *Model) startChatChannel(login string) tea.Cmd {
 	norm := normalizeChatChannel(login)
-	if m.chatPanel.buf == nil {
-		m.chatPanel = newChatPanel()
+	if m.chat.panel.buf == nil {
+		m.chat.panel = newChatPanel()
 	}
-	hadPending := m.hasPendingOutgoing() && m.chatPanel.channel != "" && m.chatPanel.channel != norm
-	m.chatPanel.buf.Clear()
-	m.chatPanel.channel = norm
-	m.chatPanel.state = ChatStateConnecting
-	m.chatPanel.errText = ""
+	hadPending := m.hasPendingOutgoing() && m.chat.panel.channel != "" && m.chat.panel.channel != norm
+	m.chat.panel.buf.Clear()
+	m.chat.panel.channel = norm
+	m.chat.panel.state = ChatStateConnecting
+	m.chat.panel.errText = ""
 	if hadPending {
-		m.chatPanel.sendWarning = m.t("chat.warn.channel_switched")
+		m.chat.panel.sendWarning = m.t("chat.warn.channel_switched")
 	} else {
-		m.chatPanel.sendWarning = ""
+		m.chat.panel.sendWarning = ""
 	}
-	m.chatPanel.roomState = ChatRoomState{FollowersOnly: -1}
-	m.chatPanel.switching = true
-	m.chatPanel.gapPending = false
+	m.chat.panel.roomState = ChatRoomState{FollowersOnly: -1}
+	m.chat.panel.switching = true
+	m.chat.panel.gapPending = false
 	m.resetChatScroll()
-	if sender, ok := m.chat.(ChatSender); ok {
-		m.chatPanel.anonymous = !sender.HasToken()
-		m.chatPanel.username = sender.Username()
+	if sender, ok := m.chat.session.(ChatSender); ok {
+		m.chat.panel.anonymous = !sender.HasToken()
+		m.chat.panel.username = sender.Username()
 	}
-	if m.chat == nil {
+	if m.chat.session == nil {
 		return nil
 	}
-	return m.chat.Join(norm)
+	return m.chat.session.Join(norm)
 }
 
 func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
-	body := strings.TrimSpace(m.composeDraft)
+	body := strings.TrimSpace(m.chat.composeDraft)
 	if body == "" {
 		return m, nil
 	}
 
 	if !m.chatHasToken() {
-		m.chatPanel.sendWarning = m.t("chat.warn.no_token")
+		m.chat.panel.sendWarning = m.t("chat.warn.no_token")
 		return m, nil
 	}
 
 	if chat.IsBlockedCommand(body) {
 		// Keep the draft and stay in compose mode: sending would publish it.
-		m.chatPanel.sendWarning = m.t("chat.warn.command_blocked")
+		m.chat.panel.sendWarning = m.t("chat.warn.command_blocked")
 		return m, nil
 	}
 
 	if utf8.RuneCountInString(body) > twitchMessageRuneLimit {
 		// Keep the draft and stay in compose mode; never truncate on send.
-		m.chatPanel.sendWarning = m.t("chat.warn.too_long")
+		m.chat.panel.sendWarning = m.t("chat.warn.too_long")
 		return m, nil
 	}
 
-	if m.chatPanel.channel == "" || m.chat == nil {
+	if m.chat.panel.channel == "" || m.chat.session == nil {
 		return m, nil
 	}
-	sender, ok := m.chat.(ChatSender)
+	sender, ok := m.chat.session.(ChatSender)
 	if !ok {
 		return m, nil
 	}
 
-	if m.chatPanel.buf == nil {
-		m.chatPanel = newChatPanel()
+	if m.chat.panel.buf == nil {
+		m.chat.panel = newChatPanel()
 	}
 
-	m.chatPanel.nextNonce++
-	nonce := fmt.Sprintf("ui-%d-%d", m.chatPanel.gen, m.chatPanel.nextNonce)
-	displayName := m.chatPanel.username
+	m.chat.panel.nextNonce++
+	nonce := fmt.Sprintf("ui-%d-%d", m.chat.panel.gen, m.chat.panel.nextNonce)
+	displayName := m.chat.panel.username
 	if displayName == "" {
 		displayName = m.t("chat.self_name")
 	}
 
-	m.composeDraft = ""
-	m.chatPanel.sendWarning = ""
-	beforeLen := m.chatPanel.buf.Len()
-	appended := m.chatPanel.buf.Append(ChatMessage{
-		Generation:  m.chatPanel.gen,
+	m.chat.composeDraft = ""
+	m.chat.panel.sendWarning = ""
+	beforeLen := m.chat.panel.buf.Len()
+	appended := m.chat.panel.buf.Append(ChatMessage{
+		Generation:  m.chat.panel.gen,
 		Kind:        chat.MessageChat,
 		ReceivedAt:  m.now(),
 		Nonce:       nonce,
-		User:        m.chatPanel.username,
+		User:        m.chat.panel.username,
 		DisplayName: displayName,
 		Body:        body,
 		Self:        true,
@@ -223,8 +223,8 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 	m.noteChatAppend(beforeLen, appended)
 
 	req := ChatSendRequest{
-		Generation: m.chatPanel.gen,
-		Channel:    m.chatPanel.channel,
+		Generation: m.chat.panel.gen,
+		Channel:    m.chat.panel.channel,
 		Nonce:      nonce,
 		Body:       body,
 	}
@@ -232,69 +232,69 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
-	if m.chatPanel.buf == nil {
-		m.chatPanel = newChatPanel()
+	if m.chat.panel.buf == nil {
+		m.chat.panel = newChatPanel()
 	}
 
-	if m.chatPanel.switching {
-		if !msg.FromJoin && msg.Generation <= m.chatPanel.gen {
+	if m.chat.panel.switching {
+		if !msg.FromJoin && msg.Generation <= m.chat.panel.gen {
 			return m, nil
 		}
-		m.chatPanel.switching = false
+		m.chat.panel.switching = false
 		// Generation 0 is a Join or Reconnect that failed: no session replaced
 		// the current one, so there is nothing to adopt.
 		if msg.Generation != 0 {
 			m.adoptChatGeneration(msg)
 		}
-	} else if msg.Generation != 0 && m.chatPanel.gen != 0 && msg.Generation < m.chatPanel.gen {
+	} else if msg.Generation != 0 && m.chat.panel.gen != 0 && msg.Generation < m.chat.panel.gen {
 		// Stale generation from a previous channel — discard.
 		return m, nil
-	} else if msg.Generation > m.chatPanel.gen {
+	} else if msg.Generation > m.chat.panel.gen {
 		m.adoptChatGeneration(msg)
-	} else if m.chatPanel.gen != 0 && m.chatPanel.buf.Generation() != m.chatPanel.gen {
-		m.chatPanel.buf.SetGeneration(m.chatPanel.gen)
+	} else if m.chat.panel.gen != 0 && m.chat.panel.buf.Generation() != m.chat.panel.gen {
+		m.chat.panel.buf.SetGeneration(m.chat.panel.gen)
 		m.resetChatScroll()
 	}
 
 	if msg.Channel != "" {
-		m.chatPanel.channel = normalizeChatChannel(msg.Channel)
+		m.chat.panel.channel = normalizeChatChannel(msg.Channel)
 	}
 	if msg.State != ChatStateNone {
-		m.chatPanel.state = msg.State
+		m.chat.panel.state = msg.State
 	}
-	if msg.State == ChatStateReconnecting && m.chatPanel.buf.Len() > 0 {
-		m.chatPanel.gapPending = true
+	if msg.State == ChatStateReconnecting && m.chat.panel.buf.Len() > 0 {
+		m.chat.panel.gapPending = true
 	}
-	if msg.State == ChatStateConnected && m.chatPanel.gapPending {
+	if msg.State == ChatStateConnected && m.chat.panel.gapPending {
 		m.markReconnectGap()
 	}
 	if msg.Anonymous {
-		m.chatPanel.anonymous = true
-	} else if sender, ok := m.chat.(ChatSender); ok {
-		m.chatPanel.anonymous = !sender.HasToken()
+		m.chat.panel.anonymous = true
+	} else if sender, ok := m.chat.session.(ChatSender); ok {
+		m.chat.panel.anonymous = !sender.HasToken()
 	}
 	if msg.ErrText != "" {
-		m.chatPanel.errText = msg.ErrText
+		m.chat.panel.errText = msg.ErrText
 	} else if msg.State == ChatStateConnected {
-		m.chatPanel.errText = ""
+		m.chat.panel.errText = ""
 	}
 	if msg.RoomState != nil {
-		m.chatPanel.roomState = *msg.RoomState
+		m.chat.panel.roomState = *msg.RoomState
 	}
 	if msg.ClearChat {
-		m.chatPanel.buf.ClearChat(msg.Generation, msg.ClearUser)
+		m.chat.panel.buf.ClearChat(msg.Generation, msg.ClearUser)
 		if msg.ClearUser == "" {
 			// Full clear empties the buffer; scroll returns to live.
 			m.resetChatScroll()
 		}
-		beforeLen := m.chatPanel.buf.Len()
-		appended := m.chatPanel.buf.Append(m.moderationClearChatMessage(msg))
+		beforeLen := m.chat.panel.buf.Len()
+		appended := m.chat.panel.buf.Append(m.moderationClearChatMessage(msg))
 		m.noteChatAppend(beforeLen, appended)
 	}
 	if msg.ClearMsgID != "" {
-		m.chatPanel.buf.ClearMsg(msg.Generation, msg.ClearMsgID)
-		beforeLen := m.chatPanel.buf.Len()
-		appended := m.chatPanel.buf.Append(m.moderationClearMsgMessage(msg))
+		m.chat.panel.buf.ClearMsg(msg.Generation, msg.ClearMsgID)
+		beforeLen := m.chat.panel.buf.Len()
+		appended := m.chat.panel.buf.Append(m.moderationClearMsgMessage(msg))
 		m.noteChatAppend(beforeLen, appended)
 	}
 	for _, upd := range msg.SendUpdates {
@@ -310,8 +310,8 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		if item.UserNotice {
 			item = m.userNoticeMessage(item)
 		}
-		beforeLen := m.chatPanel.buf.Len()
-		appended := m.chatPanel.buf.Append(item)
+		beforeLen := m.chat.panel.buf.Len()
+		appended := m.chat.panel.buf.Append(item)
 		m.noteChatAppend(beforeLen, appended)
 	}
 	return m, nil
@@ -325,14 +325,14 @@ func normalizeChatChannel(login string) string {
 // gets a new generation, so only a different channel empties the panel; opening
 // a channel clears the buffer earlier, in startChatChannel.
 func (m *Model) adoptChatGeneration(msg ChatEventMsg) {
-	m.chatPanel.gen = msg.Generation
-	if normalizeChatChannel(msg.Channel) == m.chatPanel.channel {
-		m.chatPanel.buf.AdoptGeneration(msg.Generation)
-		m.chatPanel.gapPending = m.chatPanel.buf.Len() > 0
+	m.chat.panel.gen = msg.Generation
+	if normalizeChatChannel(msg.Channel) == m.chat.panel.channel {
+		m.chat.panel.buf.AdoptGeneration(msg.Generation)
+		m.chat.panel.gapPending = m.chat.panel.buf.Len() > 0
 		return
 	}
-	m.chatPanel.buf.SetGeneration(msg.Generation)
-	m.chatPanel.gapPending = false
+	m.chat.panel.buf.SetGeneration(msg.Generation)
+	m.chat.panel.gapPending = false
 	m.resetChatScroll()
 }
 
@@ -340,13 +340,13 @@ func (m *Model) adoptChatGeneration(msg ChatEventMsg) {
 // session delivers. Back-to-back reconnects with nothing in between share one
 // line. It carries no times: the client has no clock for when the gap began.
 func (m *Model) markReconnectGap() {
-	m.chatPanel.gapPending = false
-	msgs := m.chatPanel.buf.Messages()
+	m.chat.panel.gapPending = false
+	msgs := m.chat.panel.buf.Messages()
 	if len(msgs) == 0 || msgs[len(msgs)-1].MsgID == systemMsgIDReconnect {
 		return
 	}
-	appended := m.chatPanel.buf.Append(ChatMessage{
-		Generation: m.chatPanel.gen,
+	appended := m.chat.panel.buf.Append(ChatMessage{
+		Generation: m.chat.panel.gen,
 		Kind:       chat.MessageSystem,
 		MsgID:      systemMsgIDReconnect,
 		Body:       m.t("chat.reconnected_gap"),
@@ -361,7 +361,7 @@ func (m *Model) markReconnectGap() {
 func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 	gen := item.Generation
 	if gen == 0 {
-		gen = m.chatPanel.gen
+		gen = m.chat.panel.gen
 	}
 	if item.CommunityGiftID != "" && chat.ClassifyUserNotice(item.MsgID) == chat.UserNoticeGift {
 		item.Generation, item.Kind = gen, chat.MessageSystem
@@ -430,7 +430,7 @@ func (m Model) userNoticeFallback(item ChatMessage) string {
 func (m Model) moderationClearChatMessage(msg ChatEventMsg) ChatMessage {
 	gen := msg.Generation
 	if gen == 0 {
-		gen = m.chatPanel.gen
+		gen = m.chat.panel.gen
 	}
 	user := strings.TrimSpace(msg.ClearUser)
 	var body string
@@ -453,7 +453,7 @@ func (m Model) moderationClearChatMessage(msg ChatEventMsg) ChatMessage {
 func (m Model) moderationClearMsgMessage(msg ChatEventMsg) ChatMessage {
 	gen := msg.Generation
 	if gen == 0 {
-		gen = m.chatPanel.gen
+		gen = m.chat.panel.gen
 	}
 	user := strings.TrimSpace(msg.ClearUser)
 	var body string
@@ -495,52 +495,52 @@ func (m Model) formatBanDuration(secs int) string {
 
 func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {
 	if upd.Generation == 0 {
-		upd.Generation = m.chatPanel.gen
+		upd.Generation = m.chat.panel.gen
 	}
-	m.chatPanel.buf.UpdateDelivery(upd)
+	m.chat.panel.buf.UpdateDelivery(upd)
 
 	switch upd.Status {
 	case chat.DeliveryDiscarded:
 		switch upd.Reason {
 		case chat.RejectTimeout, chat.RejectConnectionLost:
-			if m.composeDraft == "" && normalizeChatChannel(upd.Channel) == m.chatPanel.channel {
-				m.composeDraft = upd.Body
+			if m.chat.composeDraft == "" && normalizeChatChannel(upd.Channel) == m.chat.panel.channel {
+				m.chat.composeDraft = upd.Body
 			}
 		case chat.RejectRateLimited:
-			m.chatPanel.sendWarning = m.t("chat.warn.rate_limit")
+			m.chat.panel.sendWarning = m.t("chat.warn.rate_limit")
 		case chat.RejectChannelSwitched:
-			m.chatPanel.sendWarning = m.t("chat.warn.channel_switched")
+			m.chat.panel.sendWarning = m.t("chat.warn.channel_switched")
 		case chat.RejectReconnected:
-			m.chatPanel.sendWarning = m.t("chat.warn.reconnected")
+			m.chat.panel.sendWarning = m.t("chat.warn.reconnected")
 		}
 	case chat.DeliveryRejected:
 		if upd.Reason == chat.RejectUnauthenticated {
-			m.chatPanel.sendWarning = m.t("chat.warn.no_token")
+			m.chat.panel.sendWarning = m.t("chat.warn.no_token")
 		}
 	}
 }
 
 // ChatState returns the current UI-facing chat connection state.
 func (m Model) ChatState() ChatState {
-	return m.chatPanel.state
+	return m.chat.panel.state
 }
 
 // ChatChannel returns the login of the channel currently bound to the chat panel.
 func (m Model) ChatChannel() string {
-	return m.chatPanel.channel
+	return m.chat.panel.channel
 }
 
 // ChatGeneration returns the active chat session generation accepted by the UI.
 func (m Model) ChatGeneration() uint64 {
-	return m.chatPanel.gen
+	return m.chat.panel.gen
 }
 
 // ChatMessages returns a snapshot of the messages currently in the chat buffer.
 func (m Model) ChatMessages() []ChatMessage {
-	if m.chatPanel.buf == nil {
+	if m.chat.panel.buf == nil {
 		return nil
 	}
-	msgs := m.chatPanel.buf.Messages()
+	msgs := m.chat.panel.buf.Messages()
 	for i := range msgs {
 		if msgs[i].CommunityGiftID != "" && chat.ClassifyUserNotice(msgs[i].MsgID) == chat.UserNoticeGift {
 			name := strings.TrimSpace(msgs[i].DisplayName)
@@ -562,23 +562,23 @@ func (m Model) ChatMessages() []ChatMessage {
 
 // ChatRoomState returns the current ROOMSTATE flags for the active channel.
 func (m Model) ChatRoomState() ChatRoomState {
-	return m.chatPanel.roomState
+	return m.chat.panel.roomState
 }
 
 // ComposeDraft returns the current unsent message text in the chat input box.
 func (m Model) ComposeDraft() string {
-	return m.composeDraft
+	return m.chat.composeDraft
 }
 
 // ChatSendWarning returns the active rate-limit, channel-switch, or auth warning on the chat panel.
 func (m Model) ChatSendWarning() string {
-	return m.chatPanel.sendWarning
+	return m.chat.panel.sendWarning
 }
 
 // ChatBufferLimits returns the chat buffer's configured max lines and max bytes.
 func (m Model) ChatBufferLimits() (maxLines, maxBytes int) {
-	if m.chatPanel.buf == nil {
+	if m.chat.panel.buf == nil {
 		return chat.DefaultMaxLines, chat.DefaultMaxBytes
 	}
-	return m.chatPanel.buf.MaxLines(), m.chatPanel.buf.MaxBytes()
+	return m.chat.panel.buf.MaxLines(), m.chat.panel.buf.MaxBytes()
 }

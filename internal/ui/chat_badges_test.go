@@ -60,7 +60,7 @@ func TestAuthorBadgeDistinctFromModerationEvent(t *testing.T) {
 
 func TestAuthorBadgeMessageVariants(t *testing.T) {
 	m := joinChatFixture(t, i18n.LangEN)
-	m.chatPanel.username = "viewer"
+	m.chat.panel.username = "viewer"
 	for _, tc := range []struct {
 		name, body        string
 		action, highlight bool
@@ -85,7 +85,7 @@ func TestAuthorBadgeWidthAt80Columns(t *testing.T) {
 		m, _, _ := setupTwoPanelModel(t)
 		m = resize(m, 80, 24)
 		if !split {
-			m.showList, m.showChat = false, true
+			m.layout.showList, m.layout.showChat = false, true
 		}
 		_, width := m.panelWidths()
 		for _, extra := range []int{0, 1, 6, 90} {

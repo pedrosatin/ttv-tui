@@ -78,7 +78,7 @@ func TestListErrorIn80And120Columns(t *testing.T) {
 					m, _, _ := setupTwoPanelModel(t)
 					m.catalog = cat
 					m = resize(m, width, 20)
-					m.err = tc.err
+					m.list.err = tc.err
 
 					v := m.View()
 					plain := ansi.Strip(v)
@@ -156,9 +156,9 @@ func TestChatHeaderStateIn80Columns(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					m, _, _ := setupTwoPanelModel(t)
 					m.catalog = cat
-					m.focus = focus
-					m.chatPanel.channel = "gaules"
-					m.chatPanel.state = st.state
+					m.layout.focus = focus
+					m.chat.panel.channel = "gaules"
+					m.chat.panel.state = st.state
 					m = resize(m, 80, 20)
 
 					v := m.View()
@@ -271,7 +271,7 @@ func TestSendNoticeIn80Columns(t *testing.T) {
 				m, _, _ := setupTwoPanelModel(t)
 				m.catalog = cat
 				m = resize(m, 80, 20)
-				m.chatPanel.sendWarning = w
+				m.chat.panel.sendWarning = w
 
 				v := m.View()
 				assertAllLinesFit(t, v, 80)
@@ -327,7 +327,7 @@ func TestCapturePTY80Columns(t *testing.T) {
 		m, _, _ := setupTwoPanelModel(t)
 		m.catalog = catPT
 		m = resize(m, 80, 10)
-		m.err = &twitch.Error{
+		m.list.err = &twitch.Error{
 			Kind: twitch.Rede,
 			Op:   "categories",
 			Err:  errors.New("dial tcp: lookup gql.twitch.tv: no such host"),
@@ -340,7 +340,7 @@ func TestCapturePTY80Columns(t *testing.T) {
 		m, _, _ := setupTwoPanelModel(t)
 		m.catalog = catPT
 		m = resize(m, 80, 10)
-		m.err = &twitch.Error{
+		m.list.err = &twitch.Error{
 			Kind: twitch.Contrato,
 			Op:   "categories",
 			Err:  errors.New("unexpected EOF in GraphQL JSON response body"),
@@ -360,8 +360,8 @@ func TestCapturePTY80Columns(t *testing.T) {
 		t.Run("Caso_2_Cabecalho_"+st.name+"_80_Colunas", func(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
 			m.catalog = catPT
-			m.chatPanel.channel = "gaules"
-			m.chatPanel.state = st.state
+			m.chat.panel.channel = "gaules"
+			m.chat.panel.state = st.state
 			m = resize(m, 80, 10)
 			printScreen(t, "Caso 2: Cabeçalho do chat ("+st.name+") em 80 colunas", m.View(), 80)
 		})
@@ -401,7 +401,7 @@ func TestCapturePTY80Columns(t *testing.T) {
 		m, _, _ := setupTwoPanelModel(t)
 		m.catalog = catPT
 		m = resize(m, 80, 12)
-		m.chatPanel.sendWarning = catPT.T("chat.warn.rate_limit")
+		m.chat.panel.sendWarning = catPT.T("chat.warn.rate_limit")
 		printScreen(t, "Caso 3b: Aviso de envio no rodapé (limite de envio atingido) em 80 colunas", m.View(), 80)
 	})
 }

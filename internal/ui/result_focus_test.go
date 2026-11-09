@@ -24,12 +24,12 @@ func focusFixture(t *testing.T, src *fakeSource) Model {
 		WithFavorites([]twitch.Channel{{ID: "fav-1", Login: "xqc", DisplayName: "xQc"}}),
 		WithRecents([]twitch.Channel{{ID: "rec-1", Login: "eslcs", DisplayName: "ESLCS"}}),
 	)
-	m.loading = false
-	m.categories = []twitch.Category{
+	m.list.loading = false
+	m.list.categories = []twitch.Category{
 		{ID: "jc", Name: "Just Chatting"},
 		{ID: "cs", Name: "Counter-Strike"},
 	}
-	m.highlightedID = "cs"
+	m.list.highlightedID = "cs"
 	return m
 }
 
@@ -164,8 +164,8 @@ func TestSearchPrefersExactLoginOverOfflineClones(t *testing.T) {
 	updated, cmd := m.startSearch("landonorris")
 	m = run(t, updated.(Model), cmd)
 
-	if len(m.channels) < 1 || m.channels[0].Login != "landonorris" {
-		t.Fatalf("channels[0] = %+v, want exact landonorris first", m.channels)
+	if len(m.list.channels) < 1 || m.list.channels[0].Login != "landonorris" {
+		t.Fatalf("channels[0] = %+v, want exact landonorris first", m.list.channels)
 	}
 	if got := m.HighlightedID(); got != "exact" {
 		t.Fatalf("highlight = %q, want exact", got)
@@ -195,8 +195,8 @@ func TestSearchExactOfflineStillFirstWhenCloneIsLive(t *testing.T) {
 	updated, cmd := m.startSearch("LandoNorris")
 	m = run(t, updated.(Model), cmd)
 
-	if m.channels[0].Login != "landonorris" {
-		t.Fatalf("channels[0] = %q, want exact first (chosen rule)", m.channels[0].Login)
+	if m.list.channels[0].Login != "landonorris" {
+		t.Fatalf("channels[0] = %q, want exact first (chosen rule)", m.list.channels[0].Login)
 	}
 	if got := m.HighlightedID(); got != "exact-off" {
 		t.Fatalf("highlight = %q, want exact-off", got)
@@ -228,13 +228,13 @@ func TestSearchHighlightsExactEvenWhenFoldedIntoRecents(t *testing.T) {
 		WithSource(src),
 		WithRecents([]twitch.Channel{{ID: "recent-exact", Login: "landonorris", DisplayName: "LandoNorris"}}),
 	)
-	m.loading = false
+	m.list.loading = false
 
 	updated, cmd := m.startSearch("landonorris")
 	m = run(t, updated.(Model), cmd)
 
-	if m.channels[0].Login != "landonorris" {
-		t.Fatalf("channels[0] = %q, want exact", m.channels[0].Login)
+	if m.list.channels[0].Login != "landonorris" {
+		t.Fatalf("channels[0] = %q, want exact", m.list.channels[0].Login)
 	}
 	// Highlight must be the exact channel row (rendered as recent), not clone-0481.
 	got := m.HighlightedID()
@@ -290,8 +290,8 @@ func TestRefreshAndNextPageKeepHighlightByIdentity(t *testing.T) {
 	}
 
 	updated, _ = m.Update(ChannelsLoadedMsg{
-		Generation: m.generation,
-		Category:   *m.selectedCategory,
+		Generation: m.list.generation,
+		Category:   *m.list.selectedCategory,
 		Page:       channelsPage(live("c-3", "third")),
 		Append:     true,
 	})
@@ -337,7 +337,7 @@ func TestRefreshRemovedItemFallsToNearestNeighborNotTop(t *testing.T) {
 	if got := m.HighlightedID(); got != "c-shadow" {
 		t.Fatalf("after Down, highlight = %q, want c-shadow", got)
 	}
-	prevIdx := m.highlightIndex
+	prevIdx := m.list.highlightIndex
 
 	updated, cmd := m.retryCurrentMode()
 	m = run(t, updated.(Model), cmd)
@@ -351,7 +351,7 @@ func TestRefreshRemovedItemFallsToNearestNeighborNotTop(t *testing.T) {
 	// Previous index pointed at c-shadow; after removal the row at that index is c-3 (gaules).
 	// New order: fav-1, rec-1, c-1, c-3, c-9.
 	if got := m.HighlightedID(); got != "c-3" {
-		t.Fatalf("highlight = %q at index %d (was %d), want c-3 (neighbor)", got, m.highlightIndex, prevIdx)
+		t.Fatalf("highlight = %q at index %d (was %d), want c-3 (neighbor)", got, m.list.highlightIndex, prevIdx)
 	}
 
 	_, enterCmd := pressEnter(t, m)
@@ -396,7 +396,7 @@ func TestRefreshDuringSearchKeepsOpenHighlightRules(t *testing.T) {
 	if got := m.HighlightedID(); got != "s-2" {
 		t.Fatalf("search refresh moved highlight to %q, want s-2 by identity", got)
 	}
-	if m.focusResults {
+	if m.list.focusResults {
 		t.Fatal("refresh must not leave focusResults set (that would re-open to first result)")
 	}
 }
@@ -520,7 +520,7 @@ func TestFailedLoadThenRetryStillFocusesFirstResult(t *testing.T) {
 	m := focusFixture(t, src)
 	m, cmd := pressEnter(t, m)
 	m = run(t, m, cmd)
-	if m.err == nil {
+	if m.list.err == nil {
 		t.Fatal("expected load error")
 	}
 	updated, cmd := m.retryCurrentMode()
@@ -555,7 +555,7 @@ func TestEmptyCategoryAndEmptySearchKeepAValidHighlight(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	bare := New(cat, WithSource(src))
-	bare.loading = false
+	bare.list.loading = false
 	updated, cmd := bare.startSearch("ninguem")
 	bare = run(t, updated.(Model), cmd)
 	if got := bare.HighlightedID(); got != "" {

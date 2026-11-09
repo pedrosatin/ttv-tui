@@ -12,29 +12,29 @@ import (
 
 // Filter returns the active filter string.
 func (m Model) Filter() string {
-	return m.filter
+	return m.list.filter
 }
 
 // Filtering reports whether the local filter input is currently active.
 func (m Model) Filtering() bool {
-	return m.filtering
+	return m.list.filtering
 }
 
 // Searching reports whether the global search prompt is currently active.
 func (m Model) Searching() bool {
-	return m.searching
+	return m.list.search.active
 }
 
 // SearchQuery returns the active or last submitted global search query.
 func (m Model) SearchQuery() string {
-	return m.searchQuery
+	return m.list.search.query
 }
 
 // SetFilter updates the active filter while preserving selection by item ID.
 // If the previously highlighted item ID remains in the filtered list, it stays
 // highlighted regardless of its new positional index.
 func (m Model) SetFilter(filter string) Model {
-	m.filter = filter
+	m.list.filter = filter
 	m.reconcileHighlight()
 	return m
 }
@@ -42,28 +42,28 @@ func (m Model) SetFilter(filter string) Model {
 func (m Model) updateSearchingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Clear):
-		m.searching = false
-		m.searchInput = ""
+		m.list.search.active = false
+		m.list.search.input = ""
 		return m, nil
 
 	case key.Matches(msg, m.keys.Select), key.Matches(msg, m.keys.Search):
-		q := strings.TrimSpace(m.searchInput)
+		q := strings.TrimSpace(m.list.search.input)
 		if q == "" {
-			m.searching = false
+			m.list.search.active = false
 			return m, nil
 		}
 		return m.startSearch(q)
 
 	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
-		m.searchInput = trimLastRune(m.searchInput)
+		m.list.search.input = trimLastRune(m.list.search.input)
 		return m, nil
 
 	case msg.Type == tea.KeySpace:
-		m.searchInput += " "
+		m.list.search.input += " "
 		return m, nil
 
 	case msg.Type == tea.KeyRunes:
-		m.searchInput += sanitizeChatText(string(msg.Runes))
+		m.list.search.input += sanitizeChatText(string(msg.Runes))
 		return m, nil
 	}
 	return m, nil
@@ -72,19 +72,19 @@ func (m Model) updateSearchingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Clear):
-		m.filtering = false
-		m.filter = ""
+		m.list.filtering = false
+		m.list.filter = ""
 		m.reconcileHighlight()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Search):
-		if q := strings.TrimSpace(m.filter); q != "" {
+		if q := strings.TrimSpace(m.list.filter); q != "" {
 			return m.startSearch(q)
 		}
 		m.clearStaleStatusErrors()
-		m.filtering = false
-		m.searching = true
-		m.searchInput = ""
+		m.list.filtering = false
+		m.list.search.active = true
+		m.list.search.input = ""
 		return m, nil
 
 	case msg.Type == tea.KeyUp:
@@ -94,12 +94,12 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case msg.Type == tea.KeyDown:
 		m.moveHighlight(1)
 		if m.shouldLoadNextPage() {
-			m.generation++
-			m.loading = true
-			if m.Mode() == ModeChannels && m.selectedCategory != nil {
-				return m, m.fetchChannelsCmd(m.generation, *m.selectedCategory, m.nextCursor, true)
+			m.list.generation++
+			m.list.loading = true
+			if m.Mode() == ModeChannels && m.list.selectedCategory != nil {
+				return m, m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, m.list.nextCursor, true)
 			}
-			return m, m.fetchCategoriesCmd(m.generation, m.nextCursor, true)
+			return m, m.fetchCategoriesCmd(m.list.generation, m.list.nextCursor, true)
 		}
 		return m, nil
 
@@ -107,23 +107,23 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// No local match: Enter runs the same global search as Ctrl+F.
 		// With matches, Enter still opens the highlighted item.
 		if m.filterHasNoMatches() {
-			return m.startSearch(m.filter)
+			return m.startSearch(m.list.filter)
 		}
-		m.filtering = false
+		m.list.filtering = false
 		return m.selectHighlighted()
 
 	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
-		m.filter = trimLastRune(m.filter)
+		m.list.filter = trimLastRune(m.list.filter)
 		m.reconcileHighlight()
 		return m, nil
 
 	case msg.Type == tea.KeySpace:
-		m.filter += " "
+		m.list.filter += " "
 		m.reconcileHighlight()
 		return m, nil
 
 	case msg.Type == tea.KeyRunes:
-		m.filter += sanitizeChatText(string(msg.Runes))
+		m.list.filter += sanitizeChatText(string(msg.Runes))
 		m.reconcileHighlight()
 		return m, nil
 	}
@@ -132,41 +132,41 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	q := strings.TrimSpace(query)
-	m.searching = false
-	m.filtering = false
-	m.searchInput = ""
-	m.filter = ""
+	m.list.search.active = false
+	m.list.filtering = false
+	m.list.search.input = ""
+	m.list.filter = ""
 	if q == "" {
 		return m, nil
 	}
 	// Remember where Esc should land. A fresh search from channels or
 	// categories records that mode; a new query while already in search keeps
 	// the original origin so Esc still steps back one level.
-	if m.mode != ModeSearch {
-		m.searchOrigin = m.Mode()
+	if m.list.mode != ModeSearch {
+		m.list.search.origin = m.Mode()
 	}
-	m.searchQuery = q
-	m.mode = ModeSearch
-	m.channels = nil
-	m.searchCategories = nil
+	m.list.search.query = q
+	m.list.mode = ModeSearch
+	m.list.channels = nil
+	m.list.search.categories = nil
 	m.clearHighlight()
-	m.focusResults = true
-	m.nextCursor = ""
-	m.hasMore = false
+	m.list.focusResults = true
+	m.list.nextCursor = ""
+	m.list.hasMore = false
 	m.clearStaleStatusErrors()
 	if m.source == nil {
-		m.loading = false
+		m.list.loading = false
 		return m, nil
 	}
-	m.tracker.cancelActive()
-	m.generation++
-	m.loading = true
-	return m, m.fetchSearchCmd(m.generation, q)
+	m.list.tracker.cancelActive()
+	m.list.generation++
+	m.list.loading = true
+	return m, m.fetchSearchCmd(m.list.generation, q)
 }
 
 func (m Model) fetchSearchCmd(gen uint64, query string) tea.Cmd {
 	src := m.source
-	tracker := m.tracker
+	tracker := m.list.tracker
 	return func() tea.Msg {
 		ctx := context.Background()
 		var cancel context.CancelFunc
@@ -210,10 +210,10 @@ func (m Model) fetchSearchCmd(gen uint64, query string) tea.Cmd {
 // filterHasNoMatches reports whether a non-empty local filter hides every item
 // of a list that has items. That is when global search is the way forward.
 func (m Model) filterHasNoMatches() bool {
-	if strings.TrimSpace(m.filter) == "" {
+	if strings.TrimSpace(m.list.filter) == "" {
 		return false
 	}
-	if len(m.categories) == 0 && len(m.channels) == 0 && len(m.searchCategories) == 0 && len(m.favorites) == 0 && len(m.recents) == 0 {
+	if len(m.list.categories) == 0 && len(m.list.channels) == 0 && len(m.list.search.categories) == 0 && len(m.list.favorites) == 0 && len(m.list.recents) == 0 {
 		return false
 	}
 	return len(m.VisibleItems()) == 0

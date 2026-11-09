@@ -87,28 +87,28 @@ func WithPlayback(p Playback) Option {
 
 // PlayerState returns the current UI-facing player state.
 func (m Model) PlayerState() PlayerState {
-	return m.playerState
+	return m.player.state
 }
 
 // PlayerLogin returns the login of the channel currently associated with the player.
 func (m Model) PlayerLogin() string {
-	return m.playerLogin
+	return m.player.login
 }
 
 // PlayerGeneration returns the generation of the active playback the UI accepts.
 func (m Model) PlayerGeneration() uint64 {
-	return m.playerGen
+	return m.player.gen
 }
 
 // PlayerVolume returns the last known volume (0..100) shown in the status bar.
 func (m Model) PlayerVolume() int {
-	return m.playerVolume
+	return m.player.volume
 }
 
 // Composing reports whether chat compose mode is active (ticket 09). While
 // composing, Space / + / - are treated as text instead of player controls.
 func (m Model) Composing() bool {
-	return m.composing
+	return m.chat.composing
 }
 
 func (m Model) playerStatusText() string {
@@ -121,18 +121,18 @@ func (m Model) playerStatusText() string {
 
 // playerStatusBase is the player state without the volume.
 func (m Model) playerStatusBase() string {
-	switch m.playerState {
+	switch m.player.state {
 	case PlayerStateStarting:
-		if m.playerLogin == "" {
+		if m.player.login == "" {
 			return m.t("player.starting")
 		}
-		return fmt.Sprintf(m.t("player.starting_channel"), m.playerLogin)
+		return fmt.Sprintf(m.t("player.starting_channel"), m.player.login)
 	case PlayerStatePlaying:
-		return fmt.Sprintf(m.t("player.playing"), m.playerLogin)
+		return fmt.Sprintf(m.t("player.playing"), m.player.login)
 	case PlayerStatePaused:
-		return fmt.Sprintf(m.t("player.paused"), m.playerLogin)
+		return fmt.Sprintf(m.t("player.paused"), m.player.login)
 	case PlayerStateBreak:
-		sec := int(m.playerBreakElapsed.Seconds())
+		sec := int(m.player.breakElapsed.Seconds())
 		if sec < 0 {
 			sec = 0
 		}
@@ -149,9 +149,9 @@ func (m Model) playerStatusBase() string {
 // playerVolumeText is the volume shown next to an active player state, or ""
 // when the player has no volume to report.
 func (m Model) playerVolumeText() string {
-	switch m.playerState {
+	switch m.player.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak, PlayerStateStarting:
-		return fmt.Sprintf(m.t("player.vol"), m.playerVolume)
+		return fmt.Sprintf(m.t("player.vol"), m.player.volume)
 	default:
 		return ""
 	}
@@ -160,10 +160,10 @@ func (m Model) playerVolumeText() string {
 // playerWindowNoticeShown reports whether the one-time "video opened in a
 // separate window" notice should lead the status bar now.
 func (m Model) playerWindowNoticeShown() bool {
-	if !m.playerWindowNotice {
+	if !m.player.windowNotice {
 		return false
 	}
-	switch m.playerState {
+	switch m.player.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
 		return true
 	default:
@@ -179,13 +179,13 @@ func (m Model) PlayerWindowNotice() bool {
 
 // PlayerFailure returns the classified cause of the current player error.
 func (m Model) PlayerFailure() PlayerFailure {
-	return m.playerFailure
+	return m.player.failure
 }
 
 // playerFailureText is the main message for a player error: what happened and
 // the next step, never the raw streamlink line.
 func (m Model) playerFailureText() string {
-	switch m.playerFailure {
+	switch m.player.failure {
 	case PlayerFailureOffline:
 		return m.t("player.fail.offline")
 	case PlayerFailureNetwork:
@@ -205,7 +205,7 @@ func (m Model) playerFailureText() string {
 // error, or "" when there is none. Kept after the status bar dismisses the
 // error so help (?) can still show the technical detail.
 func (m Model) playerErrorLine() string {
-	line := strings.TrimSpace(sanitizeChatText(m.playerLastLine))
+	line := strings.TrimSpace(sanitizeChatText(m.player.lastLine))
 	if strings.Contains(strings.ToLower(line), "[info]") {
 		return ""
 	}
@@ -225,12 +225,12 @@ func (m Model) playerErrorDetail() string {
 // retryPlayback restarts playback of the player's channel with the volume it had:
 // the player keeps that one.
 func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
-	login := m.playerLogin
-	m.playerState = PlayerStateStarting
-	m.playerFailure = PlayerFailureNone
-	m.playerLastLine = ""
-	m.playerBreakElapsed = 0
-	m.playerSwitching = true
+	login := m.player.login
+	m.player.state = PlayerStateStarting
+	m.player.failure = PlayerFailureNone
+	m.player.lastLine = ""
+	m.player.breakElapsed = 0
+	m.player.switching = true
 	return m, m.playback.Start(login)
 }
 

@@ -18,9 +18,9 @@ func TestChannelDensityIdentity(t *testing.T) {
 	if strings.Contains(row, "(alanzoka)") || !strings.Contains(row, "0123456789") {
 		t.Fatalf("80-column split must retain 10+ title cells: %q", row)
 	}
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{ch}
-	m.chatPanel.channel = ch.Login
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{ch}
+	m.chat.panel.channel = ch.Login
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := ansi.Strip(m.View())
 	if strings.Contains(view, "(alanzoka)") || !strings.Contains(view, "Alanzoka — 0123456789") {
@@ -79,9 +79,9 @@ func TestChannelDensitySelection(t *testing.T) {
 			}
 			defer resetOrientationColorsForTest()
 			m := New(mustCatalog(t, i18n.LangPTBR))
-			m.mode = ModeChannels
-			m.channels = []twitch.Channel{{ID: "1", Login: "Canal", DisplayName: "Canal", Viewers: twitch.IntPtr(999)}}
-			m.highlightedID = "1"
+			m.list.mode = ModeChannels
+			m.list.channels = []twitch.Channel{{ID: "1", Login: "Canal", DisplayName: "Canal", Viewers: twitch.IntPtr(999)}}
+			m.list.highlightedID = "1"
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 			for _, row := range strings.Split(m.View(), "\n") {
 				if strings.Contains(row, "Canal") && strings.Contains(row, "▸") {
@@ -106,10 +106,10 @@ func TestChannelDensitySelection(t *testing.T) {
 
 func TestChannelDensityMarkers(t *testing.T) {
 	m := New(mustCatalog(t, i18n.LangPTBR))
-	m.mode = ModeSearch
+	m.list.mode = ModeSearch
 	language := "pt"
-	m.filterLanguages = []string{"pt"}
-	m.channels = []twitch.Channel{{ID: "1", Login: "Short", DisplayName: "Short", Language: &language, Availability: twitch.AvailabilityOffline}, {ID: "2", Login: "LongerName", DisplayName: "LongerName", Language: &language}, {ID: "3", Login: "Live", DisplayName: "Live", Viewers: twitch.IntPtr(10)}}
+	m.list.prefs.languages = []string{"pt"}
+	m.list.channels = []twitch.Channel{{ID: "1", Login: "Short", DisplayName: "Short", Language: &language, Availability: twitch.AvailabilityOffline}, {ID: "2", Login: "LongerName", DisplayName: "LongerName", Language: &language}, {ID: "3", Login: "Live", DisplayName: "Live", Viewers: twitch.IntPtr(10)}}
 	rows := m.renderListBodyLines("", 80)
 	positions := []int{}
 	for _, row := range rows {

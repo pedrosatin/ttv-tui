@@ -25,13 +25,13 @@ func TestStatusBarKeepsLongChannelNameAt80And120(t *testing.T) {
 					m, _, _ := setupTwoPanelModel(t)
 					m.catalog = cat
 					m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: width, Height: 24})
-					m.playerWindowNotice = false
-					m.playerState = PlayerStateNone
-					m.playerLogin = ""
-					m.selectedChannel = nil
-					m.chatPanel.channel = ch
-					m.chatPanel.state = ChatStateConnected
-					m.focus = FocusList
+					m.player.windowNotice = false
+					m.player.state = PlayerStateNone
+					m.player.login = ""
+					m.list.selectedChannel = nil
+					m.chat.panel.channel = ch
+					m.chat.panel.state = ChatStateConnected
+					m.layout.focus = FocusList
 
 					bar := ansi.Strip(m.StatusBar())
 					assertStatusWidth(t, bar, width)
@@ -50,15 +50,15 @@ func TestStatusBarKeepsLongChannelNameAt80And120(t *testing.T) {
 					m, _, _ := setupTwoPanelModel(t)
 					m.catalog = cat
 					m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: width, Height: 24})
-					m.playerWindowNotice = false
-					m.playerState = PlayerStatePlaying
-					m.playerLogin = ch
-					m.playerVolume = 100
-					m.selectedChannel = &twitch.Channel{Login: ch, DisplayName: ch, Viewers: twitch.IntPtr(1234)}
-					m.selectedCategory = &twitch.Category{Name: "Counter-Strike", Viewers: twitch.IntPtr(250000)}
-					m.chatPanel.channel = ch
-					m.chatPanel.state = ChatStateConnected
-					m.focus = FocusList
+					m.player.windowNotice = false
+					m.player.state = PlayerStatePlaying
+					m.player.login = ch
+					m.player.volume = 100
+					m.list.selectedChannel = &twitch.Channel{Login: ch, DisplayName: ch, Viewers: twitch.IntPtr(1234)}
+					m.list.selectedCategory = &twitch.Category{Name: "Counter-Strike", Viewers: twitch.IntPtr(250000)}
+					m.chat.panel.channel = ch
+					m.chat.panel.state = ChatStateConnected
+					m.layout.focus = FocusList
 
 					v := m.View()
 					assertAllLinesFit(t, v, width)
@@ -95,25 +95,25 @@ func TestStatusBarPlayerPhasesWithLongChatChannel(t *testing.T) {
 	}
 	phases := []phase{
 		{"starting", func(t *testing.T, m Model) Model {
-			m.playerWindowNotice = false
-			m.playerState = PlayerStateStarting
-			m.playerLogin = ch
-			m.playerVolume = 85
+			m.player.windowNotice = false
+			m.player.state = PlayerStateStarting
+			m.player.login = ch
+			m.player.volume = 85
 			return m
 		}, func(m Model) string { return fmt.Sprintf(m.t("player.starting_channel"), ch) }},
 		{"playing", func(t *testing.T, m Model) Model {
-			m.playerWindowNotice = false
-			m.playerState = PlayerStatePlaying
-			m.playerLogin = ch
-			m.playerVolume = 100
+			m.player.windowNotice = false
+			m.player.state = PlayerStatePlaying
+			m.player.login = ch
+			m.player.volume = 100
 			return m
 		}, func(m Model) string { return fmt.Sprintf(m.t("player.playing"), ch) }},
 		{"break", func(t *testing.T, m Model) Model {
-			m.playerWindowNotice = false
-			m.playerState = PlayerStateBreak
-			m.playerLogin = ch
-			m.playerVolume = 85
-			m.playerBreakElapsed = 145 * time.Second
+			m.player.windowNotice = false
+			m.player.state = PlayerStateBreak
+			m.player.login = ch
+			m.player.volume = 85
+			m.player.breakElapsed = 145 * time.Second
 			return m
 		}, func(m Model) string { return fmt.Sprintf(m.t("player.break"), 145) }},
 		{"error", func(t *testing.T, m Model) Model {
@@ -127,10 +127,10 @@ func TestStatusBarPlayerPhasesWithLongChatChannel(t *testing.T) {
 				m, _, _ := setupTwoPanelModel(t)
 				m.catalog = mustCatalog(t, lang)
 				m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
-				m.chatPanel.channel = ch
-				m.chatPanel.state = ChatStateConnected
-				m.selectedChannel = &twitch.Channel{Login: ch, DisplayName: ch, Viewers: twitch.IntPtr(1234)}
-				m.focus = FocusChat
+				m.chat.panel.channel = ch
+				m.chat.panel.state = ChatStateConnected
+				m.list.selectedChannel = &twitch.Channel{Login: ch, DisplayName: ch, Viewers: twitch.IntPtr(1234)}
+				m.layout.focus = FocusChat
 				m = p.apply(t, m)
 
 				bar := ansi.Strip(m.StatusBar())
@@ -163,13 +163,13 @@ func TestStatusBarLongChannelPTYCapture80(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
 			m.catalog = catPT
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 12})
-			m.playerWindowNotice = false
-			m.playerState = PlayerStateNone
-			m.playerLogin = ""
-			m.selectedChannel = nil
-			m.chatPanel.channel = ch
-			m.chatPanel.state = ChatStateConnected
-			m.focus = FocusList
+			m.player.windowNotice = false
+			m.player.state = PlayerStateNone
+			m.player.login = ""
+			m.list.selectedChannel = nil
+			m.chat.panel.channel = ch
+			m.chat.panel.state = ChatStateConnected
+			m.layout.focus = FocusList
 			printScreen(t, "Status com canal longo #"+ch+" em 80 colunas", m.View(), 80)
 
 			bar := ansi.Strip(m.StatusBar())

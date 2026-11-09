@@ -23,7 +23,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 
 	if len(items) == 0 {
 		lines := m.appendPromptLines([]string{header}, maxWidth)
-		if m.loading {
+		if m.list.loading {
 			return append(lines, TruncateVisual(m.listLoadingText(), maxWidth))
 		}
 		return m.appendListEmptyLines(lines, maxWidth)
@@ -64,7 +64,7 @@ func (m Model) appendListEmptyLines(lines []string, maxWidth int) []string {
 		// Enter or Ctrl+F (Ctrl+S alias) takes the filter text as the query.
 		lines = append(lines,
 			TruncateVisual(m.t("filter.empty"), maxWidth),
-			TruncateVisual(fmt.Sprintf(m.t("filter.search_hint"), sanitizeScreenText(strings.TrimSpace(m.filter))), maxWidth),
+			TruncateVisual(fmt.Sprintf(m.t("filter.search_hint"), sanitizeScreenText(strings.TrimSpace(m.list.filter))), maxWidth),
 		)
 	case m.preferenceFilterHidesChannels():
 		summary := m.activeChannelFilterSummary()
@@ -80,7 +80,7 @@ func (m Model) appendListEmptyLines(lines []string, maxWidth int) []string {
 
 // listEmptyText is the one-line reason for an empty list.
 func (m Model) listEmptyText() string {
-	if m.hasListData() && m.filter != "" {
+	if m.hasListData() && m.list.filter != "" {
 		return m.t("filter.empty")
 	}
 	switch m.Mode() {
@@ -95,7 +95,7 @@ func (m Model) listEmptyText() string {
 
 // hasListData reports whether anything was loaded or saved, shown or not.
 func (m Model) hasListData() bool {
-	return len(m.categories) > 0 || len(m.channels) > 0 || len(m.searchCategories) > 0 || len(m.favorites) > 0 || len(m.recents) > 0
+	return len(m.list.categories) > 0 || len(m.list.channels) > 0 || len(m.list.search.categories) > 0 || len(m.list.favorites) > 0 || len(m.list.recents) > 0
 }
 
 // listRows formats every visible item, with a header where the section changes.
@@ -164,8 +164,8 @@ func (m Model) listSectionTitle(itemType ListItemType, isSearch bool) (string, b
 		if isSearch {
 			return m.t("search.section_channels"), true
 		}
-		if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-			return fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.selectedCategory.Name)), true
+		if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
+			return fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.list.selectedCategory.Name)), true
 		}
 		return m.t("channels.title"), true
 	}
@@ -179,7 +179,7 @@ func listSectionHeader(title string, maxWidth int) listRow {
 
 // formatListItemRow draws one item, reversed when it is the highlighted one.
 func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth int) string {
-	highlighted := it.ID() == m.highlightedID
+	highlighted := it.ID() == m.list.highlightedID
 	marker := listRowMarker(highlighted, it.Type == ItemTypeFavorite)
 
 	var row string
@@ -202,10 +202,10 @@ func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth 
 // loading line and the narrow-chat notice have their room. Never below one.
 func (m Model) listRowBudget(used int, isSearch bool, maxWidth int) int {
 	budget := m.height - 1 - used
-	if m.loading && !isSearch {
+	if m.list.loading && !isSearch {
 		budget--
 	}
-	if m.shouldShowNarrowChatNotice() && m.videoHost == nil {
+	if m.shouldShowNarrowChatNotice() && m.hosted.host == nil {
 		budget -= len(m.narrowChatNoticeLines(maxWidth))
 	}
 	return max(budget, 1)
@@ -219,7 +219,7 @@ func (m Model) listRowWindow(rows []listRow, budget int) (start, end int) {
 	}
 	hiRow := 0
 	for idx, r := range rows {
-		if !r.isHeader && r.itemID == m.highlightedID {
+		if !r.isHeader && r.itemID == m.list.highlightedID {
 			hiRow = idx
 			break
 		}
@@ -236,7 +236,7 @@ func (m Model) listRowWindow(rows []listRow, budget int) (start, end int) {
 // appendListLoadingMore adds the line shown while another page loads. Search
 // has no further pages.
 func (m Model) appendListLoadingMore(lines []string, maxWidth int) []string {
-	if !m.loading {
+	if !m.list.loading {
 		return lines
 	}
 	switch m.Mode() {

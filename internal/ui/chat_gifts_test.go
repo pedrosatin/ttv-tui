@@ -55,7 +55,7 @@ func TestCommunityGiftsUpdateInPlace(t *testing.T) {
 	if len(msgs) != 4 || !strings.Contains(msgs[2].Body, "Carol") || !strings.Contains(msgs[3].Body, "Dave") {
 		t.Fatalf("isolated gifts = %+v", msgs)
 	}
-	m.chatPanel.buf.ClearMsg(1, "b")
+	m.chat.panel.buf.ClearMsg(1, "b")
 	m = deliver(t, m, giftNotice("e", "community", "Eve"))
 	if !m.ChatMessages()[0].Deleted || !strings.Contains(rowOf(m, m.ChatMessages()[0]), "[deleted]") {
 		t.Fatal("group lost deleted marker")
@@ -64,19 +64,19 @@ func TestCommunityGiftsUpdateInPlace(t *testing.T) {
 
 func TestCommunityGiftsBufferBound(t *testing.T) {
 	m := joinChatFixture(t, i18n.LangEN)
-	m.chatPanel.buf = chat.NewBuffer(3, 1024)
+	m.chat.panel.buf = chat.NewBuffer(3, 1024)
 	for i := 0; i < 200; i++ {
 		m = deliver(t, m, giftNotice(fmt.Sprint(i), fmt.Sprint(i/50), "Recipient"))
-		if m.chatPanel.buf.Len() > 3 || m.chatPanel.buf.Bytes() > 1024 {
+		if m.chat.panel.buf.Len() > 3 || m.chat.panel.buf.Bytes() > 1024 {
 			t.Fatal("buffer exceeded limits")
 		}
 	}
 	var size int
-	for _, msg := range m.chatPanel.buf.Messages() {
+	for _, msg := range m.chat.panel.buf.Messages() {
 		size += msg.ByteSize()
 	}
-	if size != m.chatPanel.buf.Bytes() {
-		t.Fatalf("bytes: calculated %d accounted %d", size, m.chatPanel.buf.Bytes())
+	if size != m.chat.panel.buf.Bytes() {
+		t.Fatalf("bytes: calculated %d accounted %d", size, m.chat.panel.buf.Bytes())
 	}
 }
 
@@ -119,7 +119,7 @@ func TestCommunityGiftsPTY(t *testing.T) {
 	}
 	m := joinChatFixture(t, i18n.LangEN)
 	m.width, m.height = 80, 24
-	m.showList, m.showChat = false, true
+	m.layout.showList, m.layout.showChat = false, true
 	for i := 0; i < 50; i++ {
 		m = deliver(t, m, giftNotice(fmt.Sprint(i), "community", fmt.Sprintf("Recipient%d", i)))
 	}

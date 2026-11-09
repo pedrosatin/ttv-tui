@@ -21,7 +21,7 @@ func TestHostedOverlayGivesTheVideoTheChatColumns(t *testing.T) {
 
 func TestHostedOverlayChatLeavesVideoUncovered(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.chatOverlay = true
+	m.hosted.chatOverlay = true
 	for range 200 {
 		m.resizeHostedChat(hostedResizeStep)
 	}
@@ -34,7 +34,7 @@ func TestHostedOverlayChatLeavesVideoUncovered(t *testing.T) {
 func TestHostedOverlayRowsFitTheWindow(t *testing.T) {
 	for _, width := range []int{80, 120, 212} {
 		m := hostedModel(t, width, 30, true)
-		m.chatOverlay = true
+		m.hosted.chatOverlay = true
 		for i, line := range strings.Split(m.frame(), "\n") {
 			if got := ansi.StringWidth(line); got > width {
 				t.Fatalf("largura %d, linha %d com %d células", width, i, got)
@@ -45,15 +45,15 @@ func TestHostedOverlayRowsFitTheWindow(t *testing.T) {
 
 func TestHostedOverlayNeedsVisibleChat(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.showChat = false
-	if cmd := m.toggleChatOverlay(); cmd != nil || m.chatOverlay || !m.statusNoticeWarns {
-		t.Fatalf("chat oculto: overlay %v, notice %q", m.chatOverlay, m.statusNotice)
+	m.layout.showChat = false
+	if cmd := m.toggleChatOverlay(); cmd != nil || m.hosted.chatOverlay || !m.notices.statusWarns {
+		t.Fatalf("chat oculto: overlay %v, notice %q", m.hosted.chatOverlay, m.notices.status)
 	}
 }
 
 func TestHostedOverlayWiderPanelGivesWayFirst(t *testing.T) {
 	m := hostedModel(t, 150, 49, true)
-	m.chatOverlay, m.hostedListCols, m.hostedChatCols = true, 90, 60
+	m.hosted.chatOverlay, m.hosted.listCols, m.hosted.chatCols = true, 90, 60
 	list, chat, video := m.hostedWidths()
 	if video-chat != hostedMinVideo || list+hostedSepWidth+video != 150 {
 		t.Fatalf("lista %d, chat %d, vídeo %d", list, chat, video)
@@ -65,7 +65,7 @@ func TestHostedOverlayWiderPanelGivesWayFirst(t *testing.T) {
 
 func TestHostedOverlayWarnsAboutNarrowWindow(t *testing.T) {
 	m := hostedModel(t, 70, 49, true)
-	if cmd := m.toggleChatOverlay(); cmd != nil || m.chatOverlay || m.statusNotice != m.t("chat.hidden_narrow_key") {
-		t.Fatalf("janela estreita: overlay %v, notice %q", m.chatOverlay, m.statusNotice)
+	if cmd := m.toggleChatOverlay(); cmd != nil || m.hosted.chatOverlay || m.notices.status != m.t("chat.hidden_narrow_key") {
+		t.Fatalf("janela estreita: overlay %v, notice %q", m.hosted.chatOverlay, m.notices.status)
 	}
 }

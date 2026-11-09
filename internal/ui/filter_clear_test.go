@@ -46,11 +46,11 @@ func filterClearFixture(t *testing.T) Model {
 			{ID: "fav-1", Login: "favorite_one", DisplayName: "Favorite One"},
 		}),
 	)
-	m.mode = ModeChannels
-	m.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
-	m.loading = true
-	m.generation++
-	loadCmd := m.fetchChannelsCmd(m.generation, *m.selectedCategory, "", false)
+	m.list.mode = ModeChannels
+	m.list.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
+	m.list.loading = true
+	m.list.generation++
+	loadCmd := m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, "", false)
 	updated, _ := m.Update(loadCmd())
 	m = updated.(Model)
 	if len(m.Channels()) != 3 {
@@ -152,7 +152,7 @@ func TestRefreshKeepsFilter(t *testing.T) {
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = typeRunes(m, "peere")
 	// Leave the filter prompt so 'r' is Retry, not a typed rune.
-	m.filtering = false
+	m.list.filtering = false
 	if m.Filter() != "peere" {
 		t.Fatalf("precondition filter=%q", m.Filter())
 	}
@@ -207,8 +207,8 @@ func TestOpenChannelPreventsSilentFilterReuseOnNextSearch(t *testing.T) {
 
 	// Next Ctrl+F must open a blank search prompt, not reuse "peere".
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
-	if !m.Searching() || m.searchInput != "" || cmd != nil {
-		t.Fatalf("after open, Ctrl+F must prompt empty: searching=%v input=%q cmd=%v", m.Searching(), m.searchInput, cmd != nil)
+	if !m.Searching() || m.list.search.input != "" || cmd != nil {
+		t.Fatalf("after open, Ctrl+F must prompt empty: searching=%v input=%q cmd=%v", m.Searching(), m.list.search.input, cmd != nil)
 	}
 	if m.Mode() == ModeSearch {
 		t.Fatal("Ctrl+F must not auto-submit a stale filter after opening a channel")

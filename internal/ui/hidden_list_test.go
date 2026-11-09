@@ -17,24 +17,24 @@ func hiddenListModel(t *testing.T, chatVisible bool) Model {
 	m, _, _ := setupTwoPanelModel(t)
 	m.width, m.height = 80, 24
 	m.moveHighlight(1)
-	m.showList, m.showChat = false, chatVisible
+	m.layout.showList, m.layout.showChat = false, chatVisible
 	m.normalizeFocusAfterLayout()
 	return m
 }
 
 func TestHiddenListEnterDoesNotChangeChannel(t *testing.T) {
 	m := hiddenListModel(t, false)
-	before := m.selectedChannel.Login
+	before := m.list.selectedChannel.Login
 	next, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	// Execute a selection message too: selecting a row is asynchronous.
 	if cmd != nil {
 		next, _ = pressKeyMsg(next, cmd())
 	}
-	if next.selectedChannel.Login != before {
-		t.Fatalf("Enter changed hidden channel: %s -> %s", before, next.selectedChannel.Login)
+	if next.list.selectedChannel.Login != before {
+		t.Fatalf("Enter changed hidden channel: %s -> %s", before, next.list.selectedChannel.Login)
 	}
-	if next.statusNotice != next.t("layout.hidden_list_key") || !next.statusNoticeWarns || cmd != nil {
-		t.Fatalf("Enter must warn without a command: notice=%q cmd=%v", next.statusNotice, cmd != nil)
+	if next.notices.status != next.t("layout.hidden_list_key") || !next.notices.statusWarns || cmd != nil {
+		t.Fatalf("Enter must warn without a command: notice=%q cmd=%v", next.notices.status, cmd != nil)
 	}
 }
 
@@ -50,9 +50,9 @@ func TestHiddenListKeys(t *testing.T) {
 				if k.String() == "j" || k.String() == "down" {
 					m.moveHighlight(-1)
 				}
-				id, gen, login, mode := m.highlightedID, m.generation, m.selectedChannel.Login, m.Mode()
+				id, gen, login, mode := m.list.highlightedID, m.list.generation, m.list.selectedChannel.Login, m.Mode()
 				next, _ := pressKey(m, k)
-				if next.highlightedID != id || next.generation != gen || next.selectedChannel.Login != login || next.Mode() != mode || next.filtering || next.searching || next.channelFilterMenu || len(next.favorites) != len(m.favorites) {
+				if next.list.highlightedID != id || next.list.generation != gen || next.list.selectedChannel.Login != login || next.Mode() != mode || next.list.filtering || next.list.search.active || next.list.prefs.menuOpen || len(next.list.favorites) != len(m.list.favorites) {
 					t.Fatalf("hidden list changed after %s", k.String())
 				}
 			})
@@ -64,11 +64,11 @@ func TestHiddenListSuspendsTextInputs(t *testing.T) {
 	for _, chatOn := range []bool{false, true} {
 		for _, searching := range []bool{false, true} {
 			m := hiddenListModel(t, chatOn)
-			m.filtering, m.searching = !searching, searching
-			m.filter, m.searchInput = "ga", "ga"
+			m.list.filtering, m.list.search.active = !searching, searching
+			m.list.filter, m.list.search.input = "ga", "ga"
 			for _, k := range []tea.KeyMsg{{Type: tea.KeyEnter}, {Type: tea.KeyEsc}, {Type: tea.KeyBackspace}, {Type: tea.KeyRunes, Runes: []rune{'j'}}} {
 				next, _ := pressKey(m, k)
-				if next.filter != m.filter || next.searchInput != m.searchInput || next.filtering != m.filtering || next.searching != m.searching {
+				if next.list.filter != m.list.filter || next.list.search.input != m.list.search.input || next.list.filtering != m.list.filtering || next.list.search.active != m.list.search.active {
 					t.Fatal("hidden input changed")
 				}
 			}
@@ -109,7 +109,7 @@ func TestHiddenListGlobalKeys(t *testing.T) {
 					t.Fatal("categories blocked")
 				}
 			case "?":
-				if !next.helpVisible {
+				if !next.layout.helpVisible {
 					t.Fatal("help blocked")
 				}
 			case "+":
@@ -124,9 +124,9 @@ func TestHiddenListGlobalKeys(t *testing.T) {
 func TestHiddenListSplitStillSelectsAndMoves(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
 	m.width, m.height = 120, 24
-	id := m.highlightedID
+	id := m.list.highlightedID
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	if m.highlightedID == id {
+	if m.list.highlightedID == id {
 		t.Fatal("j did not move")
 	}
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -134,11 +134,11 @@ func TestHiddenListSplitStillSelectsAndMoves(t *testing.T) {
 		t.Fatal("Enter did not select")
 	}
 	m, _ = pressKeyMsg(m, cmd())
-	if m.selectedChannel.Login != "alanzoka" {
+	if m.list.selectedChannel.Login != "alanzoka" {
 		t.Fatal("wrong channel selected")
 	}
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
-	if m.highlightedID != id {
+	if m.list.highlightedID != id {
 		t.Fatal("k did not move back")
 	}
 }
@@ -162,7 +162,7 @@ func TestHiddenListNoticeParityAndNoSpam(t *testing.T) {
 			}
 		}
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlH})
-		if m.statusNotice != "" {
+		if m.notices.status != "" {
 			t.Fatal("notice remained after restoring list")
 		}
 	}
@@ -188,17 +188,17 @@ func TestHiddenListPTY(t *testing.T) {
 	}
 	m := hiddenListModel(t, false)
 	m.catalog = testCatalog(t, i18n.LangPTBR)
-	m.source, m.playback, m.chat = nil, nil, nil
+	m.source, m.playback, m.chat.session = nil, nil, nil
 	program := tea.NewProgram(hiddenListPTYModel{m}, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout), tea.WithAltScreen(), tea.WithoutSignalHandler())
 	final, err := program.Run()
 	if err != nil {
 		t.Fatal(err)
 	}
 	result := final.(hiddenListPTYModel)
-	if result.selectedChannel.Login != m.selectedChannel.Login || result.statusNotice != m.t("layout.hidden_list_key") {
+	if result.list.selectedChannel.Login != m.list.selectedChannel.Login || result.notices.status != m.t("layout.hidden_list_key") {
 		t.Fatal("Enter did not preserve the channel and warn")
 	}
-	if _, err := fmt.Fprintln(os.Stdout, "PTY: Enter recusado; canal continua #"+result.selectedChannel.Login+"; "+result.statusNotice); err != nil {
+	if _, err := fmt.Fprintln(os.Stdout, "PTY: Enter recusado; canal continua #"+result.list.selectedChannel.Login+"; "+result.notices.status); err != nil {
 		t.Fatal(err)
 	}
 }

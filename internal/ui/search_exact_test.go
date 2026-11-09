@@ -137,11 +137,11 @@ func TestSearchExactDisplayNameComesFirst(t *testing.T) {
 func TestEnterOnFirstSearchResultOpensExactChannel(t *testing.T) {
 	m := runSearch(t, newSearchCategoriesModel(t, gaulesSource(nil)), "gaules")
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.selectedChannel == nil || m.selectedChannel.Login != "gaules" {
-		t.Fatalf("selected channel = %+v, want gaules", m.selectedChannel)
+	if m.list.selectedChannel == nil || m.list.selectedChannel.Login != "gaules" {
+		t.Fatalf("selected channel = %+v, want gaules", m.list.selectedChannel)
 	}
-	if m.selectedCategory != nil {
-		t.Fatalf("Enter must not open a category: %+v", m.selectedCategory)
+	if m.list.selectedCategory != nil {
+		t.Fatalf("Enter must not open a category: %+v", m.list.selectedCategory)
 	}
 }
 
@@ -242,7 +242,7 @@ func TestSearchExactChannelBeatsExactCategoryWhichStaysNext(t *testing.T) {
 
 func TestSearchExactFavoriteGetsTheCursorWhereItRenders(t *testing.T) {
 	m := newSearchCategoriesModel(t, gaulesSource(nil))
-	m.favorites = []twitch.Channel{
+	m.list.favorites = []twitch.Channel{
 		{ID: "fav", Login: "alanzoka", DisplayName: "alanzoka"},
 		{ID: "exact", Login: "gaules", DisplayName: "Gaules"},
 	}
@@ -251,14 +251,14 @@ func TestSearchExactFavoriteGetsTheCursorWhereItRenders(t *testing.T) {
 		t.Fatalf("highlight = %q, want the favorite row of gaules", m.HighlightedID())
 	}
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.selectedChannel == nil || m.selectedChannel.Login != "gaules" {
-		t.Fatalf("selected channel = %+v, want gaules", m.selectedChannel)
+	if m.list.selectedChannel == nil || m.list.selectedChannel.Login != "gaules" {
+		t.Fatalf("selected channel = %+v, want gaules", m.list.selectedChannel)
 	}
 }
 
 func TestSearchExactHiddenByPreferencesFallsBackToCategory(t *testing.T) {
 	m := newSearchCategoriesModel(t, gaulesSource(nil))
-	m.filterMinViewers = 50000
+	m.list.prefs.minViewers = 50000
 	m = runSearch(t, m, "gaules")
 	if m.HighlightedID() != "xd" {
 		t.Fatalf("highlight = %q, want first category xd", m.HighlightedID())

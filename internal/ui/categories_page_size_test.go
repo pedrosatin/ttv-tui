@@ -20,8 +20,8 @@ func TestDefaultCategoryPageSizeIsAPIMax(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	m := New(cat)
-	if m.pageSize != twitch.MaxGamesFirst {
-		t.Fatalf("default pageSize = %d, want %d (games(first:) API max)", m.pageSize, twitch.MaxGamesFirst)
+	if m.list.pageSize != twitch.MaxGamesFirst {
+		t.Fatalf("default pageSize = %d, want %d (games(first:) API max)", m.list.pageSize, twitch.MaxGamesFirst)
 	}
 	if defaultCategoryPageSize != twitch.MaxGamesFirst {
 		t.Fatalf("defaultCategoryPageSize = %d, want %d", defaultCategoryPageSize, twitch.MaxGamesFirst)
@@ -52,8 +52,8 @@ func TestCategoriesLoadRequestsLimit100(t *testing.T) {
 	if gotLimit != twitch.MaxGamesFirst {
 		t.Fatalf("Categories Limit = %d, want %d", gotLimit, twitch.MaxGamesFirst)
 	}
-	if len(m.categories) != 1 {
-		t.Fatalf("categories loaded = %d, want 1", len(m.categories))
+	if len(m.list.categories) != 1 {
+		t.Fatalf("categories loaded = %d, want 1", len(m.list.categories))
 	}
 }
 
@@ -101,8 +101,8 @@ func TestSlashTeamFindsTeamfightTacticsInTop100(t *testing.T) {
 	m := New(mustCatalog(t, i18n.LangPTBR), WithSource(src))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m, _ = pressKeyMsg(m, m.Init()())
-	if len(m.categories) != twitch.MaxGamesFirst {
-		t.Fatalf("loaded %d categories, want %d", len(m.categories), twitch.MaxGamesFirst)
+	if len(m.list.categories) != twitch.MaxGamesFirst {
+		t.Fatalf("loaded %d categories, want %d", len(m.list.categories), twitch.MaxGamesFirst)
 	}
 
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})

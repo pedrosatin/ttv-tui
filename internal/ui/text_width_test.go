@@ -15,10 +15,10 @@ func TestComposedEmojiListAlignment(t *testing.T) {
 	for _, width := range []int{80, 120} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			m := New(nil)
-			m.width, m.height, m.mode, m.loading = width, 24, ModeChannels, false
-			m.showList, m.showChat = true, false
+			m.width, m.height, m.list.mode, m.list.loading = width, 24, ModeChannels, false
+			m.layout.showList, m.layout.showChat = true, false
 			title := "🫶🏻 " + strings.Repeat("live ", 30)
-			m.channels = []twitch.Channel{
+			m.list.channels = []twitch.Channel{
 				{ID: "1", Login: "first", DisplayName: "First", Title: &title, Viewers: twitch.IntPtr(12)},
 				{ID: "2", Login: "second", DisplayName: "Second", Viewers: twitch.IntPtr(8)},
 			}
@@ -101,23 +101,23 @@ func TestWideScreenLineHasSpareCell(t *testing.T) {
 
 func TestScreenInputsNormalizeWithoutMutatingSource(t *testing.T) {
 	m := New(nil)
-	m.width, m.height, m.loading = 80, 24, false
-	m.categories = []twitch.Category{{ID: "cat", Name: "Categoria👨‍👩‍👧‍👦"}}
+	m.width, m.height, m.list.loading = 80, 24, false
+	m.list.categories = []twitch.Category{{ID: "cat", Name: "Categoria👨‍👩‍👧‍👦"}}
 	if !strings.Contains(ansi.Strip(m.View()), "Categoria👨") || strings.Contains(m.View(), "\u200d") {
 		t.Fatal("category not normalized")
 	}
-	if m.categories[0].Name != "Categoria👨‍👩‍👧‍👦" {
+	if m.list.categories[0].Name != "Categoria👨‍👩‍👧‍👦" {
 		t.Fatal("source mutated")
 	}
-	m.mode = ModeSearch
-	m.searchQuery = "Busca🫶🏻"
-	m.searchCategories = m.categories
+	m.list.mode = ModeSearch
+	m.list.search.query = "Busca🫶🏻"
+	m.list.search.categories = m.list.categories
 	view := m.View()
 	if strings.ContainsAny(view, "🏻\u200d") || !strings.Contains(view, "Busca🫶") {
 		t.Fatal("search not normalized")
 	}
-	m.channelFilterMenu = true
-	m.channels = []twitch.Channel{{ID: "1", Login: "user", Language: twitch.StringPtr("pt👍🏽")}}
+	m.list.prefs.menuOpen = true
+	m.list.channels = []twitch.Channel{{ID: "1", Login: "user", Language: twitch.StringPtr("pt👍🏽")}}
 	if strings.Contains(m.View(), "🏽") {
 		t.Fatal("language menu not normalized")
 	}

@@ -29,7 +29,7 @@ func newSearchCategoriesModel(t *testing.T, src *fakeSource) Model {
 		}
 	}
 	// Load initial categories so / filter has a non-empty local list.
-	if cmd = m.fetchCategoriesCmd(m.generation, "", false); cmd != nil {
+	if cmd = m.fetchCategoriesCmd(m.list.generation, "", false); cmd != nil {
 		updated, _ = m.Update(cmd())
 		m = updated.(Model)
 	}
@@ -82,11 +82,11 @@ func TestCtrlSSearchShowsCategoriesBeforeChannels(t *testing.T) {
 	if m.Mode() != ModeSearch {
 		t.Fatalf("mode = %q, want search", m.Mode())
 	}
-	if len(m.searchCategories) != 3 {
-		t.Fatalf("searchCategories len = %d, want 3", len(m.searchCategories))
+	if len(m.list.search.categories) != 3 {
+		t.Fatalf("searchCategories len = %d, want 3", len(m.list.search.categories))
 	}
-	if m.searchCategories[0].Name != "Teamfight Tactics" {
-		t.Fatalf("first category = %q, want Teamfight Tactics (exact/viewers rank)", m.searchCategories[0].Name)
+	if m.list.search.categories[0].Name != "Teamfight Tactics" {
+		t.Fatalf("first category = %q, want Teamfight Tactics (exact/viewers rank)", m.list.search.categories[0].Name)
 	}
 
 	view := ansi.Strip(m.View())

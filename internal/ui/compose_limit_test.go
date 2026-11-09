@@ -33,7 +33,7 @@ func TestComposeCounterShortLimitAndOver(t *testing.T) {
 			m.catalog = cat
 			m = resize(m, 120, 16)
 			m = sendKeys(m, keyTab, keyI)
-			m.composeDraft = tc.draft
+			m.chat.composeDraft = tc.draft
 
 			col := chatColumn(t, m)
 			hintRow := col[len(col)-2]
@@ -83,7 +83,7 @@ func TestComposeCursorVisibleWithLongDraftAt80And120(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
 			m = resize(m, width, 20)
 			m = sendKeys(m, keyTab, keyI)
-			m.composeDraft = draft
+			m.chat.composeDraft = draft
 
 			col := chatColumn(t, m)
 			last := col[len(col)-1]
@@ -118,7 +118,7 @@ func TestComposeSendBlockedWhenOverLimit(t *testing.T) {
 	fc.sent = nil
 
 	over := strings.Repeat("z", twitchMessageRuneLimit+1)
-	m.composeDraft = over
+	m.chat.composeDraft = over
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
@@ -148,7 +148,7 @@ func TestComposeSendBlockedWhenOverLimit(t *testing.T) {
 
 	// Exact limit sends the full body — no silent truncation.
 	exact := strings.Repeat("z", twitchMessageRuneLimit)
-	m.composeDraft = exact
+	m.chat.composeDraft = exact
 	m.clearResolvedComposeWarning()
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
@@ -176,7 +176,7 @@ func TestComposeFooterAndStatusStayVisibleAt80(t *testing.T) {
 	m = resize(m, 80, 14)
 	m = withMessages(t, m, 40)
 	m = sendKeys(m, keyTab, keyI)
-	m.composeDraft = strings.Repeat("m", 600)
+	m.chat.composeDraft = strings.Repeat("m", 600)
 
 	view := m.View()
 	plain := ansi.Strip(view)
@@ -227,7 +227,7 @@ func TestCapturePTY80LongComposeCounter(t *testing.T) {
 	m.catalog = cat
 	m = resize(m, 80, 16)
 	m = sendKeys(m, keyTab, keyI)
-	m.composeDraft = strings.Repeat("w", 600)
+	m.chat.composeDraft = strings.Repeat("w", 600)
 
 	view := m.View()
 	printScreen(t, "Compose longo com contador N/500 em 80 colunas", view, 80)

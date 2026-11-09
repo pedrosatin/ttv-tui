@@ -12,10 +12,10 @@ func draftModel(t *testing.T, draft string, composing bool, focus Focus) Model {
 	t.Helper()
 	m, _, _ := setupTwoPanelModel(t)
 	m = resize(m, 120, 24)
-	m.composeDraft = draft
-	m.composing = composing
-	m.focus = focus
-	m.helpVisible = false
+	m.chat.composeDraft = draft
+	m.chat.composing = composing
+	m.layout.focus = focus
+	m.layout.helpVisible = false
 	return m
 }
 
@@ -53,7 +53,7 @@ func TestTabSwitchesFocusInFourStatesAndPreservesDraft(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := draftModel(t, draft, tc.composing, tc.focus)
-			m.helpVisible = tc.helpOpen
+			m.layout.helpVisible = tc.helpOpen
 			selected := m.HighlightedID()
 
 			m = pressTab(m)
@@ -162,7 +162,7 @@ func TestTabNeverDropsTypedDraftAcrossCombinations(t *testing.T) {
 		}
 
 		// Help open while composing: Tab belongs to the help, nothing moves.
-		m.helpVisible = true
+		m.layout.helpVisible = true
 		m = pressTab(m)
 		if !m.HelpVisible() || m.Focus() != FocusChat || !m.Composing() || m.ComposeDraft() != draft {
 			t.Fatalf("help+Tab: help=%v focus=%q composing=%v draft=%q", m.HelpVisible(), m.Focus(), m.Composing(), m.ComposeDraft())

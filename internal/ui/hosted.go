@@ -59,8 +59,8 @@ type HostedColumnsPersist func(list, chat int, overlay, swapped bool, opacity in
 // WithHostedColumns sets the saved layout and what saves it when it changes.
 func WithHostedColumns(list, chat int, overlay, swapped bool, opacity int, persist HostedColumnsPersist) Option {
 	return func(m *Model) {
-		m.hostedListCols, m.hostedChatCols, m.chatOverlay, m.panelsSwapped, m.hostedPersist = list, chat, overlay, swapped, persist
-		m.chatOverlayOpacity = opacity
+		m.hosted.listCols, m.hosted.chatCols, m.hosted.chatOverlay, m.hosted.panelsSwapped, m.hosted.persist = list, chat, overlay, swapped, persist
+		m.hosted.chatOverlayOpacity = opacity
 	}
 }
 
@@ -69,7 +69,7 @@ func WithHostedColumns(list, chat int, overlay, swapped bool, opacity int, persi
 // between them are the video's.
 func WithVideoHost(host VideoHost) Option {
 	return func(m *Model) {
-		m.videoHost = host
+		m.hosted.host = host
 		exactCellWidths = true
 	}
 }
@@ -94,19 +94,19 @@ func (m Model) hostedWidths() (listW, chatW, videoW int) {
 	separators := 0
 	if m.listVisible() {
 		listW = m.hostedDefaultList()
-		if m.hostedListCols > 0 {
-			listW = max(m.hostedListCols, hostedMinList)
+		if m.hosted.listCols > 0 {
+			listW = max(m.hosted.listCols, hostedMinList)
 		}
 		separators += hostedSepWidth
 	}
 	if m.chatColumnVisible() {
 		chatW = m.hostedDefaultChat()
-		if m.hostedChatCols > 0 {
-			chatW = max(m.hostedChatCols, hostedMinChat)
+		if m.hosted.chatCols > 0 {
+			chatW = max(m.hosted.chatCols, hostedMinChat)
 		}
 		separators += hostedSepWidth
 	}
-	if m.chatOverlay && chatW > 0 {
+	if m.hosted.chatOverlay && chatW > 0 {
 		return m.hostedOverlayWidths(listW, chatW)
 	}
 	for over := listW + chatW + separators + hostedMinVideo - m.width; over > 0; over-- {
@@ -153,9 +153,9 @@ func (m *Model) toggleChatOverlay() tea.Cmd {
 		m.warnChatUnavailable()
 		return nil
 	}
-	m.chatOverlay = !m.chatOverlay
+	m.hosted.chatOverlay = !m.hosted.chatOverlay
 	notice := "layout.chat_side"
-	if m.chatOverlay {
+	if m.hosted.chatOverlay {
 		notice = "layout.chat_overlay"
 	}
 	return m.announceHosted(m.t(notice))
@@ -163,27 +163,27 @@ func (m *Model) toggleChatOverlay() tea.Cmd {
 
 // chatOpacity is the percent opacity of the overlaid chat's background.
 func (m Model) chatOpacity() int {
-	if m.chatOverlayOpacity > 0 {
-		return m.chatOverlayOpacity
+	if m.hosted.chatOverlayOpacity > 0 {
+		return m.hosted.chatOverlayOpacity
 	}
 	return hostedDefaultOpacity
 }
 
 // adjustChatOpacity changes the background behind the overlaid chat.
 func (m *Model) adjustChatOpacity(delta int) tea.Cmd {
-	if !m.chatOverlay || !m.chatColumnVisible() {
+	if !m.hosted.chatOverlay || !m.chatColumnVisible() {
 		m.warnStatus(m.t("layout.opacity_needs_overlay"))
 		return nil
 	}
-	m.chatOverlayOpacity = min(max(m.chatOpacity()+delta, hostedMinOpacity), 100)
-	return m.announceHosted(fmt.Sprintf(m.t("layout.chat_opacity"), m.chatOverlayOpacity))
+	m.hosted.chatOverlayOpacity = min(max(m.chatOpacity()+delta, hostedMinOpacity), 100)
+	return m.announceHosted(fmt.Sprintf(m.t("layout.chat_opacity"), m.hosted.chatOverlayOpacity))
 }
 
 // togglePanelSides swaps the list and the chat around the video.
 func (m *Model) togglePanelSides() tea.Cmd {
-	m.panelsSwapped = !m.panelsSwapped
+	m.hosted.panelsSwapped = !m.hosted.panelsSwapped
 	notice := "layout.sides_normal"
-	if m.panelsSwapped {
+	if m.hosted.panelsSwapped {
 		notice = "layout.sides_swapped"
 	}
 	return m.announceHosted(m.t(notice))
@@ -203,12 +203,12 @@ func (m *Model) warnChatUnavailable() {
 
 // handleHostedResizeKey moves a divider. It reports whether msg was one of its keys.
 func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	if m.videoHost == nil {
+	if m.hosted.host == nil {
 		return false, nil
 	}
 	// The arrow moves the divider, so with the sides swapped each key does the opposite.
 	step := hostedResizeStep
-	if m.panelsSwapped {
+	if m.hosted.panelsSwapped {
 		step = -step
 	}
 	switch {
@@ -235,7 +235,7 @@ func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 // hostedRoomToGrow is what a panel can still take: the picture outside the panels
 // keeps its minimum.
 func (m Model) hostedRoomToGrow(chatW, videoW int) int {
-	if m.chatOverlay {
+	if m.hosted.chatOverlay {
 		videoW -= chatW
 	}
 	return max(videoW-hostedMinVideo, 0)
@@ -248,7 +248,7 @@ func (m *Model) resizeHostedList(delta int) tea.Cmd {
 		return nil
 	}
 	listW = max(min(listW+delta, listW+m.hostedRoomToGrow(chatW, videoW)), hostedMinList)
-	m.hostedListCols = listW
+	m.hosted.listCols = listW
 	return m.announceHosted(fmt.Sprintf(m.t("layout.list_columns"), listW))
 }
 
@@ -259,7 +259,7 @@ func (m *Model) resizeHostedChat(delta int) tea.Cmd {
 		return nil
 	}
 	chatW = max(min(chatW+delta, chatW+m.hostedRoomToGrow(chatW, videoW)), hostedMinChat)
-	m.hostedChatCols = chatW
+	m.hosted.chatCols = chatW
 	return m.announceHosted(fmt.Sprintf(m.t("layout.chat_columns"), chatW))
 }
 
@@ -268,7 +268,7 @@ type hostedNoticeMsg struct{ text string }
 
 // announceHosted shows a layout notice for a moment and saves the layout.
 func (m *Model) announceHosted(text string) tea.Cmd {
-	m.statusNotice, m.statusNoticeWarns = text, false
+	m.notices.status, m.notices.statusWarns = text, false
 	expire := tea.Tick(hostedNoticeDelay, func(time.Time) tea.Msg { return hostedNoticeMsg{text: text} })
 	return tea.Batch(m.scheduleHostedSave(), expire)
 }
@@ -279,20 +279,20 @@ type hostedSaveMsg struct{ gen int }
 // scheduleHostedSave waits for the key to stop: a held arrow repeats about thirty
 // times a second, and only the last width is worth writing.
 func (m *Model) scheduleHostedSave() tea.Cmd {
-	if m.hostedPersist == nil {
+	if m.hosted.persist == nil {
 		return nil
 	}
-	m.hostedSaveGen++
-	gen := m.hostedSaveGen
+	m.hosted.saveGen++
+	gen := m.hosted.saveGen
 	return tea.Tick(hostedSaveDelay, func(time.Time) tea.Msg { return hostedSaveMsg{gen: gen} })
 }
 
 // saveHostedColumns writes the widths, off the update loop, if gen is still the newest.
 func (m Model) saveHostedColumns(gen int) tea.Cmd {
-	if m.hostedPersist == nil || gen != m.hostedSaveGen {
+	if m.hosted.persist == nil || gen != m.hosted.saveGen {
 		return nil
 	}
-	persist, list, chat, overlay, swapped, opacity := m.hostedPersist, m.hostedListCols, m.hostedChatCols, m.chatOverlay, m.panelsSwapped, m.chatOverlayOpacity
+	persist, list, chat, overlay, swapped, opacity := m.hosted.persist, m.hosted.listCols, m.hosted.chatCols, m.hosted.chatOverlay, m.hosted.panelsSwapped, m.hosted.chatOverlayOpacity
 	return func() tea.Msg {
 		_ = persist(list, chat, overlay, swapped, opacity)
 		return nil
@@ -301,12 +301,12 @@ func (m Model) saveHostedColumns(gen int) tea.Cmd {
 
 // syncHostPanel tells the window about a changed video region.
 func (m Model) syncHostPanel() Model {
-	if m.videoHost == nil {
+	if m.hosted.host == nil {
 		return m
 	}
-	if panel := m.hostedPanel(); panel != m.hostPublished {
-		m.videoHost.SetPanel(panel)
-		m.hostPublished = panel
+	if panel := m.hostedPanel(); panel != m.hosted.published {
+		m.hosted.host.SetPanel(panel)
+		m.hosted.published = panel
 	}
 	return m
 }
@@ -314,7 +314,7 @@ func (m Model) syncHostPanel() Model {
 // hostedPanel is the video's region, in 1-based cells. An overlay takes the screen
 // over, so the zero value tells the host to draw the TUI's cells there instead.
 func (m Model) hostedPanel() HostPanel {
-	if m.videoHost == nil || m.quitting || m.width <= 0 || m.height <= 1 || m.channelFilterMenu {
+	if m.hosted.host == nil || m.quitting || m.width <= 0 || m.height <= 1 || m.list.prefs.menuOpen {
 		return HostPanel{}
 	}
 	listW, chatW, videoW := m.hostedWidths()
@@ -322,17 +322,17 @@ func (m Model) hostedPanel() HostPanel {
 		return HostPanel{}
 	}
 	leftW := listW
-	if m.panelsSwapped {
+	if m.hosted.panelsSwapped {
 		leftW = chatW
 	}
-	overlaid := m.chatOverlay && chatW > 0
+	overlaid := m.hosted.chatOverlay && chatW > 0
 	col := 1
-	if leftW > 0 && (!overlaid || !m.panelsSwapped) {
+	if leftW > 0 && (!overlaid || !m.hosted.panelsSwapped) {
 		col += leftW + hostedSepWidth
 	}
 	panel := HostPanel{Row: 1, Col: col, Rows: m.height - 1, Cols: videoW, Visible: true}
 	if overlaid {
-		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = chatW, m.panelsSwapped, m.chatOpacity()
+		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = chatW, m.hosted.panelsSwapped, m.chatOpacity()
 	}
 	if m.helpOpen() { // a ajuda ocupa a coluna do vídeo inteira, com a opacidade do chat
 		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = videoW, false, m.chatOpacity()
@@ -342,7 +342,7 @@ func (m Model) hostedPanel() HostPanel {
 
 // hostedIdleText is what the video column says while no playback owns it.
 func (m Model) hostedIdleText() string {
-	switch m.playerState {
+	switch m.player.state {
 	case PlayerStateStarting, PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
 		return ""
 	default:
@@ -360,14 +360,14 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 	}
 	// The help takes the video column over, so a chat lying there gives way to it.
 	helpRows := m.helpOpen() && len(overlay) > 0 && videoW > hostedHelpPadding
-	if helpRows && m.chatOverlay {
+	if helpRows && m.hosted.chatOverlay {
 		chatW = 0
 	}
 	if chatW > 0 {
 		chat = m.renderChatLines(available, chatW)
 	}
 	// With the chat over the video, its cells come out of the video column.
-	overlaid := m.chatOverlay && chatW > 0
+	overlaid := m.hosted.chatOverlay && chatW > 0
 	openW := videoW
 	if overlaid {
 		openW = max(videoW-chatW, 0)
@@ -387,7 +387,7 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 	}
 	helpTop := max((available-len(overlay))/2, 0)
 	leftW, rightW, left, right := listW, chatW, list, chat
-	if m.panelsSwapped {
+	if m.hosted.panelsSwapped {
 		leftW, rightW, left, right = chatW, listW, chat, list
 	}
 	lines := make([]string, available)
@@ -395,7 +395,7 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 		var row strings.Builder
 		if leftW > 0 {
 			row.WriteString(cell(left, i, leftW))
-			if !overlaid || !m.panelsSwapped {
+			if !overlaid || !m.hosted.panelsSwapped {
 				row.WriteString(separator)
 			}
 		}
@@ -412,7 +412,7 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 			row.WriteString(strings.Repeat(" ", openW))
 		}
 		if rightW > 0 {
-			if !overlaid || m.panelsSwapped {
+			if !overlaid || m.hosted.panelsSwapped {
 				row.WriteString(separator)
 			}
 			row.WriteString(cell(right, i, rightW))

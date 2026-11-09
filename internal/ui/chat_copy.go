@@ -130,15 +130,15 @@ func truncateRunes(s string, max int) string {
 }
 
 func (m Model) now() time.Time {
-	if m.nowFunc != nil {
-		return m.nowFunc()
+	if m.chat.nowFunc != nil {
+		return m.chat.nowFunc()
 	}
 	return time.Now()
 }
 
 // CopyNotice returns the transient copy status text, if any.
 func (m Model) CopyNotice() string {
-	return m.copyNotice
+	return m.chat.copyNotice
 }
 
 // writeClipboard tries tmux first, then local display helpers outside SSH,
@@ -206,14 +206,14 @@ func (m Model) copyChatMessage() (tea.Model, tea.Cmd) {
 	}
 	plaintext := formatChatCopyText(msg)
 	if plaintext != "" && !msg.ReceivedAt.IsZero() {
-		plaintext = truncateUTF8Bytes(fmt.Sprintf(m.t("chat.copy.context"), sanitizeChatText(m.chatPanel.channel), msg.ReceivedAt.Local().Format(time.DateTime[:16]), plaintext), osc52MaxBytes)
+		plaintext = truncateUTF8Bytes(fmt.Sprintf(m.t("chat.copy.context"), sanitizeChatText(m.chat.panel.channel), msg.ReceivedAt.Local().Format(time.DateTime[:16]), plaintext), osc52MaxBytes)
 	}
 	if plaintext == "" {
 		return m, nil
 	}
 
-	m.copyNoticeGen++
-	gen := m.copyNoticeGen
+	m.chat.copyNoticeGen++
+	gen := m.chat.copyNoticeGen
 	chatMsg := msg
 	return m, func() tea.Msg {
 		method, err := writeClipboard(plaintext)
@@ -228,14 +228,14 @@ func (m Model) copyChatMessage() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) applyCopyResult(msg copyResultMsg) (Model, tea.Cmd) {
-	if msg.gen != m.copyNoticeGen {
+	if msg.gen != m.chat.copyNoticeGen {
 		return m, nil
 	}
-	m.copyNoticeUntil = m.now().Add(copyNoticeTTL)
+	m.chat.copyNoticeUntil = m.now().Add(copyNoticeTTL)
 	if msg.err != nil {
-		m.copyNotice = m.t("chat.copy.failed")
+		m.chat.copyNotice = m.t("chat.copy.failed")
 	} else {
-		m.copyNotice = m.formatCopyNotice(msg.chatMsg, msg.plaintext, msg.method)
+		m.chat.copyNotice = m.formatCopyNotice(msg.chatMsg, msg.plaintext, msg.method)
 	}
 	gen := msg.gen
 	return m, tea.Tick(copyNoticeTTL, func(time.Time) tea.Msg {
@@ -267,23 +267,23 @@ func (m Model) formatCopyNotice(msg ChatMessage, plaintext, method string) strin
 }
 
 func (m Model) clearCopyNoticeIfExpired(gen uint64) Model {
-	if gen != m.copyNoticeGen {
+	if gen != m.chat.copyNoticeGen {
 		return m
 	}
 	// Injectable clock: a clear tick that arrives early (or a test advancing
 	// time) only dismisses once now reaches copyNoticeUntil.
-	if !m.copyNoticeUntil.IsZero() && m.now().Before(m.copyNoticeUntil) {
+	if !m.chat.copyNoticeUntil.IsZero() && m.now().Before(m.chat.copyNoticeUntil) {
 		return m
 	}
-	m.copyNotice = ""
-	m.copyNoticeUntil = time.Time{}
+	m.chat.copyNotice = ""
+	m.chat.copyNoticeUntil = time.Time{}
 	return m
 }
 
 func (m Model) showCopyFocusWarning() (tea.Model, tea.Cmd) {
-	m.copyNoticeGen++
-	m.copyNotice = m.t("chat.copy.focus_chat")
-	m.copyNoticeUntil = m.now().Add(copyNoticeTTL)
-	gen := m.copyNoticeGen
+	m.chat.copyNoticeGen++
+	m.chat.copyNotice = m.t("chat.copy.focus_chat")
+	m.chat.copyNoticeUntil = m.now().Add(copyNoticeTTL)
+	gen := m.chat.copyNoticeGen
 	return m, tea.Tick(copyNoticeTTL, func(time.Time) tea.Msg { return copyNoticeClearMsg{gen: gen} })
 }

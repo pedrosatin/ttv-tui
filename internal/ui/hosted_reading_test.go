@@ -80,7 +80,7 @@ func TestHostedNarrowWindowWarnsOnOneLine(t *testing.T) {
 
 func TestHostedVideoOnlySaysHowToComeBack(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.showList, m.showChat = false, false
+	m.layout.showList, m.layout.showChat = false, false
 	if got := m.focusStatusText(); got != m.t("status.video_only") {
 		t.Fatalf("só o vídeo: %q", got)
 	}
@@ -88,8 +88,8 @@ func TestHostedVideoOnlySaysHowToComeBack(t *testing.T) {
 
 func TestHostedNarrowHintSurvivesATightBar(t *testing.T) {
 	m := hostedModel(t, 70, 49, true)
-	m.playerState = PlayerStatePlaying
-	m.playerLogin = "um_canal_com_nome_bem_comprido"
+	m.player.state = PlayerStatePlaying
+	m.player.login = "um_canal_com_nome_bem_comprido"
 	if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, m.t("status.chat_narrow")) {
 		t.Fatalf("a dica sumiu da barra: %q", bar)
 	}

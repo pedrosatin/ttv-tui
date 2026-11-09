@@ -56,12 +56,12 @@ func TestStatusBarShowsChannelCategoryNotLastVisitedList(t *testing.T) {
 	// Open League of Legends (first category) and select caedrel.
 	m, cmd = pressKeyMsg(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = feedLoadedMsgs(t, m, cmd)
-	if m.Mode() != ModeChannels || m.selectedCategory == nil || m.selectedCategory.Name != "League of Legends" {
-		t.Fatalf("expected League channels, mode=%q cat=%+v", m.Mode(), m.selectedCategory)
+	if m.Mode() != ModeChannels || m.list.selectedCategory == nil || m.list.selectedCategory.Name != "League of Legends" {
+		t.Fatalf("expected League channels, mode=%q cat=%+v", m.Mode(), m.list.selectedCategory)
 	}
 	m = openChannel(t, m)
 	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "caedrel", Volume: 100, FromStart: true})
-	m.playerWindowNotice = false
+	m.player.windowNotice = false
 
 	bar := ansi.Strip(m.StatusBar())
 	if !strings.Contains(bar, "League of Legends") {
@@ -72,13 +72,13 @@ func TestStatusBarShowsChannelCategoryNotLastVisitedList(t *testing.T) {
 	}
 
 	// Leave to categories, open Fortnite list, keep caedrel playing.
-	m.mode = ModeCategories
-	m.channels = nil
-	m.highlightedID = "cat-fn"
+	m.list.mode = ModeCategories
+	m.list.channels = nil
+	m.list.highlightedID = "cat-fn"
 	m, cmd = pressKeyMsg(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = feedLoadedMsgs(t, m, cmd)
-	if m.selectedCategory == nil || m.selectedCategory.Name != "Fortnite" {
-		t.Fatalf("selectedCategory should be Fortnite (list), got %+v", m.selectedCategory)
+	if m.list.selectedCategory == nil || m.list.selectedCategory.Name != "Fortnite" {
+		t.Fatalf("selectedCategory should be Fortnite (list), got %+v", m.list.selectedCategory)
 	}
 
 	bar = ansi.Strip(m.StatusBar())
@@ -104,12 +104,12 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 			WithPlayback(&fakePlayback{}),
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-		m.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
-		m.mode = ModeChannels
-		m.highlightedID = "f1"
+		m.list.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
+		m.list.mode = ModeChannels
+		m.list.highlightedID = "f1"
 		m = openChannel(t, m)
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "favchan", Volume: 80, FromStart: true})
-		m.playerWindowNotice = false
+		m.player.windowNotice = false
 
 		bar := ansi.Strip(m.StatusBar())
 		if !strings.Contains(bar, "Valorant") {
@@ -130,12 +130,12 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 			WithPlayback(&fakePlayback{}),
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-		m.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
-		m.mode = ModeChannels
-		m.highlightedID = "r1"
+		m.list.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
+		m.list.mode = ModeChannels
+		m.list.highlightedID = "r1"
 		m = openChannel(t, m)
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "recchan", Volume: 80, FromStart: true})
-		m.playerWindowNotice = false
+		m.player.windowNotice = false
 
 		bar := ansi.Strip(m.StatusBar())
 		if !strings.Contains(bar, "Dota 2") {
@@ -160,18 +160,18 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 		}
 		m := New(cat, WithSource(src), WithPlayback(&fakePlayback{}))
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-		m.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
-		m.mode = ModeSearch
-		m.searchQuery = "search"
-		m.channels = []twitch.Channel{{
+		m.list.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
+		m.list.mode = ModeSearch
+		m.list.search.query = "search"
+		m.list.channels = []twitch.Channel{{
 			ID: "s1", Login: "searchchan", DisplayName: "SearchChan",
 			CategoryName: twitch.StringPtr("Minecraft"),
 			Availability: twitch.AvailabilityLive,
 		}}
-		m.highlightedID = "s1"
+		m.list.highlightedID = "s1"
 		m = openChannel(t, m)
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "searchchan", Volume: 80, FromStart: true})
-		m.playerWindowNotice = false
+		m.player.windowNotice = false
 
 		bar := ansi.Strip(m.StatusBar())
 		if !strings.Contains(bar, "Minecraft") {
@@ -190,12 +190,12 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 			WithPlayback(&fakePlayback{}),
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-		m.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
-		m.mode = ModeChannels
-		m.highlightedID = "f2"
+		m.list.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
+		m.list.mode = ModeChannels
+		m.list.highlightedID = "f2"
 		m = openChannel(t, m)
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "mystery", Volume: 80, FromStart: true})
-		m.playerWindowNotice = false
+		m.player.windowNotice = false
 
 		bar := ansi.Strip(m.StatusBar())
 		if strings.Contains(bar, "Fortnite") {
@@ -214,19 +214,19 @@ func TestStatusBarCategoryUpdatesOnChannelSwitch(t *testing.T) {
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-	m.mode = ModeChannels
-	m.highlightedID = "a"
+	m.list.mode = ModeChannels
+	m.list.highlightedID = "a"
 	m = openChannel(t, m)
 	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "alpha", Volume: 70, FromStart: true})
-	m.playerWindowNotice = false
+	m.player.windowNotice = false
 	if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, "Chess") || strings.Contains(bar, "Poker") {
 		t.Fatalf("first channel category:\n%q", bar)
 	}
 
-	m.highlightedID = "b"
+	m.list.highlightedID = "b"
 	m = openChannel(t, m)
 	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "bravo", Volume: 70, FromStart: true})
-	m.playerWindowNotice = false
+	m.player.windowNotice = false
 	bar := ansi.Strip(m.StatusBar())
 	if !strings.Contains(bar, "Poker") {
 		t.Fatalf("switch must update category to Poker:\n%q", bar)
@@ -242,10 +242,10 @@ func TestStatusBarCategoryFits80And120(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", width), func(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
 			m.catalog = cat
-			m.playerWindowNotice = false
+			m.player.windowNotice = false
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: width, Height: 24})
-			if m.selectedChannel == nil || channelCategoryName(m.selectedChannel) != "Counter-Strike" {
-				t.Fatalf("selected channel category = %q, want Counter-Strike (stamped from list)", channelCategoryName(m.selectedChannel))
+			if m.list.selectedChannel == nil || channelCategoryName(m.list.selectedChannel) != "Counter-Strike" {
+				t.Fatalf("selected channel category = %q, want Counter-Strike (stamped from list)", channelCategoryName(m.list.selectedChannel))
 			}
 			bar := ansi.Strip(m.StatusBar())
 			assertStatusWidth(t, bar, width)

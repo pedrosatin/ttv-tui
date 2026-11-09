@@ -853,7 +853,7 @@ func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {
 
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: ch})
 	m = updated.(Model)
-	if !m.playerSwitching {
+	if !m.player.switching {
 		t.Fatal("expected playerSwitching after ChannelSelected")
 	}
 	if m.PlayerState() != PlayerStateStarting {
@@ -868,7 +868,7 @@ func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {
 
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
-	if m.playerSwitching {
+	if m.player.switching {
 		t.Fatal("expected playerSwitching cleared after FromStart handshake")
 	}
 	if m.PlayerGeneration() != 1 {
@@ -979,7 +979,7 @@ func TestSpaceDoesNotPauseWhileComposing(t *testing.T) {
 	updated, _ = m.Update(PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
 	m = updated.(Model)
 
-	m.composing = true
+	m.chat.composing = true
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = updated.(Model)
 	if pb.pauses != 0 {
@@ -988,8 +988,8 @@ func TestSpaceDoesNotPauseWhileComposing(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected no player cmd while composing Space")
 	}
-	if m.composeDraft != " " {
-		t.Fatalf("composeDraft=%q want space", m.composeDraft)
+	if m.chat.composeDraft != " " {
+		t.Fatalf("composeDraft=%q want space", m.chat.composeDraft)
 	}
 
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
@@ -997,8 +997,8 @@ func TestSpaceDoesNotPauseWhileComposing(t *testing.T) {
 	if len(pb.volDeltas) != 0 {
 		t.Fatalf("+ while composing must not change volume; deltas=%v", pb.volDeltas)
 	}
-	if m.composeDraft != " +" {
-		t.Fatalf("composeDraft=%q want %q", m.composeDraft, " +")
+	if m.chat.composeDraft != " +" {
+		t.Fatalf("composeDraft=%q want %q", m.chat.composeDraft, " +")
 	}
 	_ = cmd
 }

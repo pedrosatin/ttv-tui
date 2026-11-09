@@ -122,7 +122,7 @@ func TestDeletedMessage_CopyKeepsTheOriginalText(t *testing.T) {
 
 	m := deliver(t, joinChatFixture(t, i18n.LangPTBR), offense("x1", "você é um lixo"))
 	m = moderate(t, m, timeoutEvent("xingador", 600))
-	m.focus = FocusChat
+	m.layout.focus = FocusChat
 
 	// While following live the selection is the [mod] line; one step up is the
 	// message the moderator wants.
@@ -195,7 +195,7 @@ func TestDeletedMessage_MarkerOnEveryRowShape(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := joinChatFixture(t, i18n.LangPTBR)
-			m.chatPanel.username = "eu"
+			m.chat.panel.username = "eu"
 			m = deliver(t, m, tc.msg)
 			m = moderate(t, m, ChatEventMsg{ClearUser: "xingador", ClearMsgID: "x1"})
 			if got := rowOf(m, m.ChatMessages()[0]); !strings.HasPrefix(got, tc.want) {
@@ -254,7 +254,7 @@ func TestDeletedMessage_PurgeKeepsTheScrollAnchor(t *testing.T) {
 		offense("x2", "tres"),
 		ChatMessage{Generation: 1, Kind: chat.MessageChat, ID: "a2", User: "alice", DisplayName: "Alice", Body: "quatro"},
 	)
-	m.focus = FocusChat
+	m.layout.focus = FocusChat
 	for range 2 {
 		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 		m = updated.(Model)
@@ -282,7 +282,7 @@ func TestDeletedMessage_LeavesTheBufferAtItsLimit(t *testing.T) {
 	m := deliver(t, joinChatFixture(t, i18n.LangEN), offense("x1", "evidence"))
 	m = moderate(t, m, ChatEventMsg{ClearUser: "xingador", ClearMsgID: "x1"})
 
-	limit := m.chatPanel.buf.MaxLines()
+	limit := m.chat.panel.buf.MaxLines()
 	for i := range limit {
 		m = deliver(t, m, ChatMessage{Generation: 1, Kind: chat.MessageChat, ID: fmt.Sprint("n", i), User: "alice", DisplayName: "Alice", Body: "hi"})
 	}

@@ -26,8 +26,8 @@ func (s *feedbackStore) Save(store.State) error { s.calls++; return s.err }
 func feedbackModel(t *testing.T, s Store) Model {
 	m := New(mustCatalog(t, i18n.LangPTBR), WithStore(s))
 	m.width, m.height = 80, 24
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{{ID: "1", Login: "demo", DisplayName: "Demo"}}
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{{ID: "1", Login: "demo", DisplayName: "Demo"}}
 	m.reconcileHighlight()
 	return m
 }
@@ -42,7 +42,7 @@ func TestFeedbackFavoriteSave(t *testing.T) {
 				}
 				m := feedbackModel(t, s)
 				if removed {
-					m.favorites = append([]twitch.Channel(nil), m.channels...)
+					m.list.favorites = append([]twitch.Channel(nil), m.list.channels...)
 				}
 				m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 				if m.StatusNotice() != "" {
@@ -63,8 +63,8 @@ func TestFeedbackFavoriteSave(t *testing.T) {
 					if strings.Contains(bar, m.t("favorites.added")) || strings.Contains(bar, m.t("favorites.removed")) {
 						t.Errorf("false success: %q", bar)
 					}
-					m.playerState = PlayerStateError
-					m.playerFailure = PlayerFailureNetwork
+					m.player.state = PlayerStateError
+					m.player.failure = PlayerFailureNetwork
 					if !strings.Contains(ansi.Strip(m.StatusBar()), "✖ "+m.playerFailureText()) {
 						t.Fatal("warning outranks player error")
 					}
@@ -84,7 +84,7 @@ func TestFeedbackFavoriteSave(t *testing.T) {
 
 func TestFeedbackRecentSaveFailure(t *testing.T) {
 	m := feedbackModel(t, &feedbackStore{err: errors.New("disk full")})
-	m.queueRecent(m.channels[0])
+	m.queueRecent(m.list.channels[0])
 	m, _ = pressKeyMsg(m, m.saveStoreCmd()())
 	if !strings.Contains(ansi.Strip(m.StatusBar()), "! ") {
 		t.Fatal("recent save failure swallowed")
@@ -119,10 +119,10 @@ func TestFeedbackLoadingAndEmpty(t *testing.T) {
 	for _, lang := range orientationLangs {
 		for _, mode := range []Mode{ModeCategories, ModeChannels, ModeSearch} {
 			m := New(mustCatalog(t, lang))
-			m.width, m.height, m.mode = 80, 24, mode
-			m.loading = true
+			m.width, m.height, m.list.mode = 80, 24, mode
+			m.list.loading = true
 			loading := ansi.Strip(m.View())
-			m.loading = false
+			m.list.loading = false
 			empty := ansi.Strip(m.View())
 			if loading == empty {
 				t.Fatal("loading and empty identical")
@@ -141,7 +141,7 @@ func TestFeedbackDisconnectedChat(t *testing.T) {
 	for _, lang := range orientationLangs {
 		for _, state := range []ChatState{ChatStateConnecting, ChatStateReconnecting, ChatStateDisconnected, ChatStateError} {
 			m := New(mustCatalog(t, lang))
-			m.chatPanel.channel, m.chatPanel.state, m.chatPanel.errText = "demo", state, "connection refused"
+			m.chat.panel.channel, m.chat.panel.state, m.chat.panel.errText = "demo", state, "connection refused"
 			view := ansi.Strip(strings.Join(m.renderChatLines(12, 80), "\n"))
 			waiting := fmt.Sprintf(m.t("chat.empty"), "demo")
 			if strings.Contains(view, waiting) {
@@ -167,7 +167,7 @@ func TestFeedbackReadOnlyState(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := feedbackModel(t, store.New(filepath.Join(s.Path(), "state.json")))
-	m.favorites = []twitch.Channel{ch.ToTwitch()}
+	m.list.favorites = []twitch.Channel{ch.ToTwitch()}
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 	if m.StatusNotice() != "" {
 		t.Fatal("success before save")
@@ -180,7 +180,7 @@ func TestFeedbackReadOnlyState(t *testing.T) {
 	if string(before) != string(after) {
 		t.Fatal("existing state file changed after failed save")
 	}
-	if len(m.favorites) != 0 {
+	if len(m.list.favorites) != 0 {
 		t.Fatal("in-memory change lost")
 	}
 	if !strings.Contains(ansi.Strip(m.StatusBar()), "! "+m.t("store.save_failed")) {
@@ -213,7 +213,7 @@ func TestFeedbackPTY(t *testing.T) {
 	m.width, m.height = 80, 24
 	switch state {
 	case "loading":
-		m.loading = true
+		m.list.loading = true
 	case "empty":
 	case "save-failure":
 		m = feedbackModel(t, &feedbackStore{err: errors.New("permission denied")})
@@ -221,8 +221,8 @@ func TestFeedbackPTY(t *testing.T) {
 		m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 		m, _ = pressKeyMsg(m, cmd())
 	case "disconnected":
-		m.chatPanel.channel, m.chatPanel.state, m.chatPanel.errText = "demo", ChatStateReconnecting, "connection refused"
-		m.showList, m.showChat = false, true
+		m.chat.panel.channel, m.chat.panel.state, m.chat.panel.errText = "demo", ChatStateReconnecting, "connection refused"
+		m.layout.showList, m.layout.showChat = false, true
 	default:
 		t.Fatal("unknown PTY state")
 	}

@@ -88,8 +88,8 @@ func TestChatOnlyIsUsableAt60Columns(t *testing.T) {
 	}
 	m = sendKeys(m, keyI)
 	m = sendKeys(m, runes("oi tribo")...)
-	if !m.composing || m.ComposeDraft() != "oi tribo" {
-		t.Fatalf("compose did not take keys: composing=%v draft=%q", m.composing, m.ComposeDraft())
+	if !m.chat.composing || m.ComposeDraft() != "oi tribo" {
+		t.Fatalf("compose did not take keys: composing=%v draft=%q", m.chat.composing, m.ComposeDraft())
 	}
 	if !strings.Contains(plainView(m), "oi tribo") {
 		t.Fatalf("draft not on screen:\n%s", plainView(m))
@@ -165,8 +165,8 @@ func TestChatKeysAnswerInNarrowSplit(t *testing.T) {
 			if status := ansi.Strip(m.StatusBar()); !strings.Contains(status, want) {
 				t.Fatalf("no answer in the status bar: %q", status)
 			}
-			if m.composing || m.Focus() != FocusList {
-				t.Fatalf("key reached the hidden chat: composing=%v focus=%q", m.composing, m.Focus())
+			if m.chat.composing || m.Focus() != FocusList {
+				t.Fatalf("key reached the hidden chat: composing=%v focus=%q", m.chat.composing, m.Focus())
 			}
 		})
 	}
@@ -233,8 +233,8 @@ func TestChatOnlyKeepsWorkingWhileNarrowing(t *testing.T) {
 	m = sendKeys(m, keyCtrlW, keyI)
 	m = sendKeys(m, runes("rascunho")...)
 	m = resize(m, 60, 24)
-	if !m.composing || m.Focus() != FocusChat {
-		t.Fatalf("narrowing dropped compose: composing=%v focus=%q", m.composing, m.Focus())
+	if !m.chat.composing || m.Focus() != FocusChat {
+		t.Fatalf("narrowing dropped compose: composing=%v focus=%q", m.chat.composing, m.Focus())
 	}
 	m = sendKeys(m, runes(" novo")...)
 	if got := m.ComposeDraft(); got != "rascunho novo" {
@@ -398,7 +398,7 @@ func TestEscLeavesFocusModeAloneAndHelpNamesTheWayBack(t *testing.T) {
 			t.Fatalf("i18n.New: %v", err)
 		}
 		help := New(cat)
-		help.helpVisible = true
+		help.layout.helpVisible = true
 		help = resize(help, 120, 40)
 		rows := strings.Join(help.renderHelpLines(120), "\n")
 		wants := map[string]string{
@@ -424,10 +424,10 @@ func TestNarrowNoticeNeverHidesTheHighlight(t *testing.T) {
 	if rows := len(m.narrowChatNoticeLines(40)); rows < 2 {
 		t.Fatalf("notice takes %d row, the test needs it wrapped", rows)
 	}
-	m.channels = nil
+	m.list.channels = nil
 	for i := range 12 {
 		login := fmt.Sprintf("canal%02d", i)
-		m.channels = append(m.channels, twitch.Channel{ID: login, Login: login, DisplayName: login, Viewers: twitch.IntPtr(10)})
+		m.list.channels = append(m.list.channels, twitch.Channel{ID: login, Login: login, DisplayName: login, Viewers: twitch.IntPtr(10)})
 	}
 	for range 40 {
 		m = sendKeys(m, tea.KeyMsg{Type: tea.KeyDown})

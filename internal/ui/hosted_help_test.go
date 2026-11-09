@@ -10,7 +10,7 @@ import (
 func TestHostedHelpLiesInTheVideoColumn(t *testing.T) {
 	for name, overlay := range map[string]bool{"chat ao lado": false, "chat sobreposto": true} {
 		m := hostedModel(t, 212, 49, true)
-		m.chatOverlay, m.helpVisible = overlay, true
+		m.hosted.chatOverlay, m.layout.helpVisible = overlay, true
 		frame := m.frame()
 		if !strings.Contains(frame, m.t("help.title")) {
 			t.Fatalf("%s: a ajuda não apareceu", name)
@@ -33,7 +33,7 @@ func TestHostedHelpLiesInTheVideoColumn(t *testing.T) {
 
 func TestHostedHelpFollowsTheChatOpacity(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.helpVisible, m.chatOverlayOpacity = true, 40
+	m.layout.helpVisible, m.hosted.chatOverlayOpacity = true, 40
 	if got := m.hostedPanel().OverlayOpacity; got != 40 {
 		t.Fatalf("opacidade da ajuda: %d", got)
 	}
@@ -49,7 +49,7 @@ func TestHostedHelpWrapsToTheVideoColumn(t *testing.T) {
 
 func TestHostedHelpNeedsAUsableVideoColumn(t *testing.T) {
 	m := hostedModel(t, 24, 30, false)
-	m.helpVisible = true
+	m.layout.helpVisible = true
 	for i, line := range strings.Split(m.frame(), "\n") {
 		if got := ansi.StringWidth(line); got > 24 {
 			t.Fatalf("linha %d com %d células", i, got)

@@ -21,33 +21,33 @@ type ChannelFilterPersistFunc func(languages []string, minViewers int) error
 // optional persist callback used when the user changes them in the menu.
 func WithChannelFilters(languages []string, minViewers int, persist ChannelFilterPersistFunc) Option {
 	return func(m *Model) {
-		m.filterLanguages = normalizeUIFilterLanguages(languages)
+		m.list.prefs.languages = normalizeUIFilterLanguages(languages)
 		if minViewers < 0 {
 			minViewers = 0
 		}
-		m.filterMinViewers = minViewers
-		m.filterPersist = persist
+		m.list.prefs.minViewers = minViewers
+		m.list.prefs.persist = persist
 	}
 }
 
 // FilterLanguages returns a copy of the active language filter (lowercase).
 func (m Model) FilterLanguages() []string {
-	if len(m.filterLanguages) == 0 {
+	if len(m.list.prefs.languages) == 0 {
 		return nil
 	}
-	out := make([]string, len(m.filterLanguages))
-	copy(out, m.filterLanguages)
+	out := make([]string, len(m.list.prefs.languages))
+	copy(out, m.list.prefs.languages)
 	return out
 }
 
 // FilterMinViewers returns the active minimum audience filter (0 = none).
 func (m Model) FilterMinViewers() int {
-	return m.filterMinViewers
+	return m.list.prefs.minViewers
 }
 
 // ChannelFilterMenuOpen reports whether the channel filter menu is visible.
 func (m Model) ChannelFilterMenuOpen() bool {
-	return m.channelFilterMenu
+	return m.list.prefs.menuOpen
 }
 
 func normalizeUIFilterLanguages(in []string) []string {
@@ -75,7 +75,7 @@ func normalizeUIFilterLanguages(in []string) []string {
 
 // channelPrefsActive reports whether any channel preference filter is set.
 func (m Model) channelPrefsActive() bool {
-	return len(m.filterLanguages) > 0 || m.filterMinViewers > 0
+	return len(m.list.prefs.languages) > 0 || m.list.prefs.minViewers > 0
 }
 
 // channelLanguageUnknown reports whether ch has no usable language metadata.
@@ -91,19 +91,19 @@ func channelLanguageUnknown(ch twitch.Channel) bool {
 // and are marked in the row as unknown. Hiding them would look like a silent
 // data loss when the API omits language.
 func (m Model) channelPassesPrefs(ch twitch.Channel) bool {
-	if m.filterMinViewers > 0 {
-		if ch.Viewers == nil || *ch.Viewers < m.filterMinViewers {
+	if m.list.prefs.minViewers > 0 {
+		if ch.Viewers == nil || *ch.Viewers < m.list.prefs.minViewers {
 			return false
 		}
 	}
-	if len(m.filterLanguages) == 0 {
+	if len(m.list.prefs.languages) == 0 {
 		return true
 	}
 	if channelLanguageUnknown(ch) {
 		return true
 	}
 	lang := twitch.NormalizeLanguage(*ch.Language)
-	for _, want := range m.filterLanguages {
+	for _, want := range m.list.prefs.languages {
 		if want == lang {
 			return true
 		}
@@ -113,7 +113,7 @@ func (m Model) channelPassesPrefs(ch twitch.Channel) bool {
 
 // languageFilterSelected reports whether lang (already normalized) is selected.
 func (m Model) languageFilterSelected(lang string) bool {
-	for _, l := range m.filterLanguages {
+	for _, l := range m.list.prefs.languages {
 		if l == lang {
 			return true
 		}
@@ -124,11 +124,11 @@ func (m Model) languageFilterSelected(lang string) bool {
 // activeChannelFilterSummary returns a short status fragment such as "PT · 500+".
 func (m Model) activeChannelFilterSummary() string {
 	var parts []string
-	for _, lang := range m.filterLanguages {
+	for _, lang := range m.list.prefs.languages {
 		parts = append(parts, strings.ToUpper(lang))
 	}
-	if m.filterMinViewers > 0 {
-		parts = append(parts, fmt.Sprintf("%d", m.filterMinViewers)+string('+'))
+	if m.list.prefs.minViewers > 0 {
+		parts = append(parts, fmt.Sprintf("%d", m.list.prefs.minViewers)+string('+'))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -149,15 +149,15 @@ func (m Model) languagesInCurrentList() []langCount {
 		}
 		counts[twitch.NormalizeLanguage(*ch.Language)]++
 	}
-	for _, ch := range m.channels {
+	for _, ch := range m.list.channels {
 		add(ch)
 	}
-	for _, ch := range m.favorites {
+	for _, ch := range m.list.favorites {
 		add(ch)
 	}
-	baseRecents := m.recents
-	if m.pendingRecents != nil {
-		baseRecents = m.pendingRecents
+	baseRecents := m.list.recents
+	if m.list.pendingRecents != nil {
+		baseRecents = m.list.pendingRecents
 	}
 	for _, ch := range baseRecents {
 		add(ch)
@@ -198,33 +198,33 @@ func (m Model) buildChannelFilterMenuItems() []channelFilterMenuItem {
 }
 
 func (m Model) openChannelFilterMenu() Model {
-	m.focus = FocusList
-	m.helpVisible = false
-	m.filtering = false
-	m.searching = false
-	m.channelFilterMenu = true
-	m.channelFilterMenuItems = m.buildChannelFilterMenuItems()
-	if m.channelFilterMenuIndex >= len(m.channelFilterMenuItems) {
-		m.channelFilterMenuIndex = 0
+	m.layout.focus = FocusList
+	m.layout.helpVisible = false
+	m.list.filtering = false
+	m.list.search.active = false
+	m.list.prefs.menuOpen = true
+	m.list.prefs.menuItems = m.buildChannelFilterMenuItems()
+	if m.list.prefs.menuIndex >= len(m.list.prefs.menuItems) {
+		m.list.prefs.menuIndex = 0
 	}
-	if len(m.channelFilterMenuItems) == 0 {
-		m.channelFilterMenuIndex = 0
+	if len(m.list.prefs.menuItems) == 0 {
+		m.list.prefs.menuIndex = 0
 	}
 	return m
 }
 
 func (m Model) closeChannelFilterMenu() Model {
-	m.channelFilterMenu = false
+	m.list.prefs.menuOpen = false
 	return m
 }
 
 func (m Model) persistChannelFilters() tea.Cmd {
-	if m.filterPersist == nil {
+	if m.list.prefs.persist == nil {
 		return nil
 	}
 	langs := m.FilterLanguages()
-	minV := m.filterMinViewers
-	persist := m.filterPersist
+	minV := m.list.prefs.minViewers
+	persist := m.list.prefs.persist
 	return func() tea.Msg {
 		_ = persist(langs, minV)
 		return nil
@@ -232,40 +232,40 @@ func (m Model) persistChannelFilters() tea.Cmd {
 }
 
 func (m Model) toggleChannelFilterMenuItem() (Model, tea.Cmd) {
-	items := m.channelFilterMenuItems
+	items := m.list.prefs.menuItems
 	if len(items) == 0 {
 		items = m.buildChannelFilterMenuItems()
-		m.channelFilterMenuItems = items
+		m.list.prefs.menuItems = items
 	}
 	if len(items) == 0 {
 		return m, nil
 	}
-	idx := m.channelFilterMenuIndex
+	idx := m.list.prefs.menuIndex
 	if idx < 0 {
 		idx = 0
 	}
 	if idx >= len(items) {
 		idx = len(items) - 1
 	}
-	m.channelFilterMenuIndex = idx
+	m.list.prefs.menuIndex = idx
 	item := items[idx]
 	switch item.Kind {
 	case filterMenuAllLangs:
-		m.filterLanguages = nil
+		m.list.prefs.languages = nil
 	case filterMenuLang:
 		if m.languageFilterSelected(item.Language) {
-			next := make([]string, 0, len(m.filterLanguages))
-			for _, l := range m.filterLanguages {
+			next := make([]string, 0, len(m.list.prefs.languages))
+			for _, l := range m.list.prefs.languages {
 				if l != item.Language {
 					next = append(next, l)
 				}
 			}
-			m.filterLanguages = normalizeUIFilterLanguages(next)
+			m.list.prefs.languages = normalizeUIFilterLanguages(next)
 		} else {
-			m.filterLanguages = normalizeUIFilterLanguages(append(append([]string{}, m.filterLanguages...), item.Language))
+			m.list.prefs.languages = normalizeUIFilterLanguages(append(append([]string{}, m.list.prefs.languages...), item.Language))
 		}
 	case filterMenuAudience:
-		m.filterMinViewers = item.Audience
+		m.list.prefs.minViewers = item.Audience
 	}
 	m.reconcileHighlight()
 	return m, m.persistChannelFilters()
@@ -277,23 +277,23 @@ func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.closeChannelFilterMenu(), nil
 
 	case key.Matches(msg, m.keys.Up):
-		if m.channelFilterMenuIndex > 0 {
-			m.channelFilterMenuIndex--
+		if m.list.prefs.menuIndex > 0 {
+			m.list.prefs.menuIndex--
 		}
 		return m, nil
 
 	case key.Matches(msg, m.keys.Down):
-		if m.channelFilterMenuIndex+1 < len(m.channelFilterMenuItems) {
-			m.channelFilterMenuIndex++
+		if m.list.prefs.menuIndex+1 < len(m.list.prefs.menuItems) {
+			m.list.prefs.menuIndex++
 		}
 		return m, nil
 
 	case key.Matches(msg, m.keys.Home):
-		m.channelFilterMenuIndex = 0
+		m.list.prefs.menuIndex = 0
 		return m, nil
 
 	case key.Matches(msg, m.keys.GoLive):
-		m.channelFilterMenuIndex = max(len(m.channelFilterMenuItems)-1, 0)
+		m.list.prefs.menuIndex = max(len(m.list.prefs.menuItems)-1, 0)
 		return m, nil
 
 	case key.Matches(msg, m.keys.PageUp), key.Matches(msg, m.keys.PageDown):
@@ -313,23 +313,23 @@ func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			direction = -1
 		}
 		target := cursor + direction*step
-		original := m.channelFilterMenuIndex
-		for i, item := range m.channelFilterMenuItems {
+		original := m.list.prefs.menuIndex
+		for i, item := range m.list.prefs.menuItems {
 			row := i
 			if item.Kind == filterMenuAudience {
 				row++
 			}
 			if direction > 0 && row <= target || direction < 0 && row >= target {
-				if direction > 0 && i > m.channelFilterMenuIndex || direction < 0 && i < m.channelFilterMenuIndex {
-					m.channelFilterMenuIndex = i
+				if direction > 0 && i > m.list.prefs.menuIndex || direction < 0 && i < m.list.prefs.menuIndex {
+					m.list.prefs.menuIndex = i
 					if direction < 0 {
 						break
 					}
 				}
 			}
 		}
-		if m.channelFilterMenuIndex == original && len(m.channelFilterMenuItems) > 0 {
-			m.channelFilterMenuIndex = min(max(original+direction, 0), len(m.channelFilterMenuItems)-1)
+		if m.list.prefs.menuIndex == original && len(m.list.prefs.menuItems) > 0 {
+			m.list.prefs.menuIndex = min(max(original+direction, 0), len(m.list.prefs.menuItems)-1)
 		}
 		return m, nil
 
@@ -345,7 +345,7 @@ func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // so a resize can never leave the cursor off screen. On very short terminals the
 // title and hint give way first, and the position next, as in the help.
 func (m Model) renderChannelFilterMenuLines(maxWidth int) []string {
-	if !m.channelFilterMenu {
+	if !m.list.prefs.menuOpen {
 		return nil
 	}
 	head, rows, cursor := m.channelFilterMenuRows(maxWidth)
@@ -367,15 +367,15 @@ func (m Model) renderChannelFilterMenuLines(maxWidth int) []string {
 	out = append(out, head[:pinned]...)
 	out = append(out, rows[start:end]...)
 	if m.height > 2 {
-		out = append(out, positionRow(m.channelFilterMenuIndex+1, len(m.channelFilterMenuEntries()), maxWidth))
+		out = append(out, positionRow(m.list.prefs.menuIndex+1, len(m.channelFilterMenuEntries()), maxWidth))
 	}
 	return out
 }
 
 // channelFilterMenuEntries returns the items the open menu shows.
 func (m Model) channelFilterMenuEntries() []channelFilterMenuItem {
-	if len(m.channelFilterMenuItems) > 0 {
-		return m.channelFilterMenuItems
+	if len(m.list.prefs.menuItems) > 0 {
+		return m.list.prefs.menuItems
 	}
 	return m.buildChannelFilterMenuItems()
 }
@@ -401,7 +401,7 @@ func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor 
 	radioOn := string([]rune{'(', '•', ')'})
 	for i, item := range items {
 		marker := "  "
-		selected := i == m.channelFilterMenuIndex
+		selected := i == m.list.prefs.menuIndex
 		if selected {
 			marker = "▸ "
 		}
@@ -409,7 +409,7 @@ func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor 
 		switch item.Kind {
 		case filterMenuAllLangs:
 			box := unchecked
-			if len(m.filterLanguages) == 0 {
+			if len(m.list.prefs.languages) == 0 {
 				box = checked
 			}
 			line = marker + box + " " + m.t("channel_filter.all_languages")
@@ -425,7 +425,7 @@ func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor 
 				audienceHeaderDone = true
 			}
 			radio := radioOff
-			if m.filterMinViewers == item.Audience {
+			if m.list.prefs.minViewers == item.Audience {
 				radio = radioOn
 			}
 			label := m.t("channel_filter.audience_any")
@@ -450,7 +450,7 @@ func (m Model) preferenceFilterHidesChannels() bool {
 	if !m.channelPrefsActive() {
 		return false
 	}
-	hasChannelSource := len(m.channels) > 0 || len(m.favorites) > 0 || len(m.recents) > 0 || len(m.pendingRecents) > 0
+	hasChannelSource := len(m.list.channels) > 0 || len(m.list.favorites) > 0 || len(m.list.recents) > 0 || len(m.list.pendingRecents) > 0
 	if !hasChannelSource {
 		return false
 	}

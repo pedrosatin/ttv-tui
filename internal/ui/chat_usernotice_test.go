@@ -120,7 +120,7 @@ func TestUserNotice_RaidIsDistinctWithoutColor(t *testing.T) {
 
 func TestUserNotice_RaidLeadKeepsSelectionMarker(t *testing.T) {
 	m := deliver(t, joinChatFixture(t, i18n.LangEN), userNotice("raid", "Raider", "1234 raiders!", ""))
-	m.focus = FocusChat
+	m.layout.focus = FocusChat
 	msgs := m.ChatMessages()
 	lead, text := m.formatChatMessageParts(msgs[0], true)
 	if got, want := ansi.Strip(lead+text), "▌★[raid] 1234 raiders!"; got != want {

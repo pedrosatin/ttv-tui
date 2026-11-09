@@ -77,19 +77,19 @@ func (it ListItem) DisplayName() string {
 
 // Categories returns a copy of all loaded categories.
 func (m Model) Categories() []twitch.Category {
-	out := make([]twitch.Category, len(m.categories))
-	copy(out, m.categories)
+	out := make([]twitch.Category, len(m.list.categories))
+	copy(out, m.list.categories)
 	return out
 }
 
 // VisibleCategories returns the categories matching the current filter.
 func (m Model) VisibleCategories() []twitch.Category {
-	q := strings.ToLower(strings.TrimSpace(m.filter))
+	q := strings.ToLower(strings.TrimSpace(m.list.filter))
 	if q == "" {
 		return m.Categories()
 	}
-	out := make([]twitch.Category, 0, len(m.categories))
-	for _, c := range m.categories {
+	out := make([]twitch.Category, 0, len(m.list.categories))
+	for _, c := range m.list.categories {
 		if strings.Contains(strings.ToLower(c.Name), q) {
 			out = append(out, c)
 		}
@@ -99,17 +99,17 @@ func (m Model) VisibleCategories() []twitch.Category {
 
 // Channels returns a copy of all loaded channels for the active category or search.
 func (m Model) Channels() []twitch.Channel {
-	out := make([]twitch.Channel, len(m.channels))
-	copy(out, m.channels)
+	out := make([]twitch.Channel, len(m.list.channels))
+	copy(out, m.list.channels)
 	return out
 }
 
 // VisibleChannels returns the channels matching the text filter and the
 // language/audience preference filters.
 func (m Model) VisibleChannels() []twitch.Channel {
-	q := strings.ToLower(strings.TrimSpace(m.filter))
-	out := make([]twitch.Channel, 0, len(m.channels))
-	for _, c := range m.channels {
+	q := strings.ToLower(strings.TrimSpace(m.list.filter))
+	out := make([]twitch.Channel, 0, len(m.list.channels))
+	for _, c := range m.list.channels {
 		if !m.channelPassesPrefs(c) {
 			continue
 		}
@@ -132,15 +132,15 @@ func (m Model) VisibleChannels() []twitch.Channel {
 
 // Favorites returns a copy of all favorite channels.
 func (m Model) Favorites() []twitch.Channel {
-	out := make([]twitch.Channel, len(m.favorites))
-	copy(out, m.favorites)
+	out := make([]twitch.Channel, len(m.list.favorites))
+	copy(out, m.list.favorites)
 	return out
 }
 
 // Recents returns a copy of all recent channels.
 func (m Model) Recents() []twitch.Channel {
-	out := make([]twitch.Channel, len(m.recents))
-	copy(out, m.recents)
+	out := make([]twitch.Channel, len(m.list.recents))
+	copy(out, m.list.recents)
 	return out
 }
 
@@ -186,7 +186,7 @@ func (m Model) VisibleItems() []ListItem {
 	// findLoaded returns the loaded copy of ch when the current listing has
 	// evidence about its availability.
 	findLoaded := func(ch twitch.Channel) (twitch.Channel, bool) {
-		for _, c := range m.channels {
+		for _, c := range m.list.channels {
 			if channelMatches(c, ch) && m.listingAvailability(c) != twitch.AvailabilityUnknown {
 				return c, true
 			}
@@ -208,7 +208,7 @@ func (m Model) VisibleItems() []ListItem {
 	}
 
 	matchesFilter := func(name, login, title string) bool {
-		q := strings.ToLower(strings.TrimSpace(m.filter))
+		q := strings.ToLower(strings.TrimSpace(m.list.filter))
 		if q == "" {
 			return true
 		}
@@ -218,7 +218,7 @@ func (m Model) VisibleItems() []ListItem {
 	}
 
 	// 1. Favorites
-	for _, fav := range m.favorites {
+	for _, fav := range m.list.favorites {
 		ch, avail := savedItem(fav)
 		title := ""
 		if ch.Title != nil {
@@ -240,7 +240,7 @@ func (m Model) VisibleItems() []ListItem {
 	}
 
 	// 2. Recents (excluding any already seen in Favorites)
-	for _, rec := range m.recents {
+	for _, rec := range m.list.recents {
 		if isSeen(rec) {
 			continue
 		}
@@ -294,7 +294,7 @@ func (m Model) VisibleItems() []ListItem {
 	// 3. Conteúdo da tela
 	switch m.Mode() {
 	case ModeCategories:
-		for _, cat := range m.categories {
+		for _, cat := range m.list.categories {
 			if !matchesFilter(cat.Name, "", "") {
 				continue
 			}
@@ -307,12 +307,12 @@ func (m Model) VisibleItems() []ListItem {
 	case ModeSearch:
 		// An exact channel hit first (v1.9 ticket 11), then categories, then the
 		// other channels (ticket 09).
-		for _, ch := range m.channels {
-			if twitch.ExactChannelMatch(m.searchQuery, ch) {
+		for _, ch := range m.list.channels {
+			if twitch.ExactChannelMatch(m.list.search.query, ch) {
 				addChannel(ch, ItemTypeExactChannel)
 			}
 		}
-		for _, cat := range m.searchCategories {
+		for _, cat := range m.list.search.categories {
 			if !matchesFilter(cat.Name, "", "") {
 				continue
 			}
@@ -324,7 +324,7 @@ func (m Model) VisibleItems() []ListItem {
 		}
 		fallthrough
 	case ModeChannels:
-		for _, ch := range m.channels {
+		for _, ch := range m.list.channels {
 			addChannel(ch, ItemTypeChannel)
 		}
 	}
@@ -352,12 +352,12 @@ func (m Model) listingAvailability(ch twitch.Channel) twitch.Availability {
 // isPlayingChannel reports whether ch is the channel the player is showing now.
 // A channel being played is live regardless of what the store says.
 func (m Model) isPlayingChannel(ch twitch.Channel) bool {
-	if m.playerLogin == "" || ch.Login == "" {
+	if m.player.login == "" || ch.Login == "" {
 		return false
 	}
-	switch m.playerState {
+	switch m.player.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
-		return strings.EqualFold(m.playerLogin, ch.Login)
+		return strings.EqualFold(m.player.login, ch.Login)
 	default:
 		return false
 	}
@@ -383,11 +383,11 @@ func (m *Model) markChannelOffline(login string) {
 		}
 		return out
 	}
-	m.channels = apply(m.channels)
-	m.favorites = apply(m.favorites)
-	m.recents = apply(m.recents)
-	if m.pendingRecents != nil {
-		m.pendingRecents = apply(m.pendingRecents)
+	m.list.channels = apply(m.list.channels)
+	m.list.favorites = apply(m.list.favorites)
+	m.list.recents = apply(m.list.recents)
+	if m.list.pendingRecents != nil {
+		m.list.pendingRecents = apply(m.list.pendingRecents)
 	}
 }
 
@@ -397,10 +397,10 @@ func (m *Model) markChannelOffline(login string) {
 // change. Channels absent from the listing keep what they had: absence is not
 // evidence.
 func (m *Model) refreshSavedAvailability(loaded []twitch.Channel) {
-	m.favorites = m.withLoadedAvailability(m.favorites, loaded)
-	m.recents = m.withLoadedAvailability(m.recents, loaded)
-	if m.pendingRecents != nil {
-		m.pendingRecents = m.withLoadedAvailability(m.pendingRecents, loaded)
+	m.list.favorites = m.withLoadedAvailability(m.list.favorites, loaded)
+	m.list.recents = m.withLoadedAvailability(m.list.recents, loaded)
+	if m.list.pendingRecents != nil {
+		m.list.pendingRecents = m.withLoadedAvailability(m.list.pendingRecents, loaded)
 	}
 }
 
@@ -442,16 +442,16 @@ func (m Model) withLoadedAvailability(saved, loaded []twitch.Channel) []twitch.C
 
 // HighlightedID returns the stable ID of the currently highlighted item.
 func (m Model) HighlightedID() string {
-	return m.highlightedID
+	return m.list.highlightedID
 }
 
 // HighlightedItem returns the currently highlighted ListItem, if any.
 func (m Model) HighlightedItem() (ListItem, bool) {
-	if m.highlightedID == "" {
+	if m.list.highlightedID == "" {
 		return ListItem{}, false
 	}
 	for _, it := range m.VisibleItems() {
-		if it.ID() == m.highlightedID {
+		if it.ID() == m.list.highlightedID {
 			return it, true
 		}
 	}
@@ -478,122 +478,122 @@ func (m Model) HighlightedChannel() (twitch.Channel, bool) {
 
 // SelectedCategory returns the last category confirmed with Enter, or nil if none.
 func (m Model) SelectedCategory() *twitch.Category {
-	if m.selectedCategory == nil {
+	if m.list.selectedCategory == nil {
 		return nil
 	}
-	c := *m.selectedCategory
+	c := *m.list.selectedCategory
 	return &c
 }
 
 // SelectedChannel returns the last channel confirmed with Enter, or nil if none.
 func (m Model) SelectedChannel() *twitch.Channel {
-	if m.selectedChannel == nil {
+	if m.list.selectedChannel == nil {
 		return nil
 	}
-	ch := *m.selectedChannel
+	ch := *m.list.selectedChannel
 	return &ch
 }
 
 func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
-	m.tracker.cancelActive()
-	m.generation++
-	m.hydrateGen++
+	m.list.tracker.cancelActive()
+	m.list.generation++
+	m.list.hydrateGen++
 	m.applyPendingRecents()
-	m.mode = ModeCategories
-	m.searchOrigin = ""
-	m.filtering = false
-	m.searching = false
-	m.channelFilterMenu = false
-	m.filter = ""
-	m.searchInput = ""
-	m.searchCategories = nil
+	m.list.mode = ModeCategories
+	m.list.search.origin = ""
+	m.list.filtering = false
+	m.list.search.active = false
+	m.list.prefs.menuOpen = false
+	m.list.filter = ""
+	m.list.search.input = ""
+	m.list.search.categories = nil
 	m.clearStaleStatusErrors()
-	m.nextCursor = ""
-	m.hasMore = false
-	m.focusResults = false
-	if m.selectedCategory != nil && m.selectedCategory.ID != "" {
-		m.highlightedID = m.selectedCategory.ID
-		m.highlightedLogin = ""
+	m.list.nextCursor = ""
+	m.list.hasMore = false
+	m.list.focusResults = false
+	if m.list.selectedCategory != nil && m.list.selectedCategory.ID != "" {
+		m.list.highlightedID = m.list.selectedCategory.ID
+		m.list.highlightedLogin = ""
 	}
 	m.reconcileHighlight()
 	if m.source == nil {
-		m.loading = false
+		m.list.loading = false
 		return m, nil
 	}
-	m.loading = true
-	return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
+	m.list.loading = true
+	return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 }
 
 // returnFromSearch steps back from search results to the list that started the
 // search. A search opened inside a category reloads that category's channels;
 // a search opened from the categories list returns to categories.
 func (m Model) returnFromSearch() (tea.Model, tea.Cmd) {
-	if m.searchOrigin == ModeChannels && m.selectedCategory != nil {
+	if m.list.search.origin == ModeChannels && m.list.selectedCategory != nil {
 		return m.returnToChannels()
 	}
 	return m.returnToCategories()
 }
 
 func (m Model) returnToChannels() (tea.Model, tea.Cmd) {
-	if m.selectedCategory == nil {
+	if m.list.selectedCategory == nil {
 		return m.returnToCategories()
 	}
-	cat := *m.selectedCategory
-	m.tracker.cancelActive()
-	m.generation++
-	m.hydrateGen++
+	cat := *m.list.selectedCategory
+	m.list.tracker.cancelActive()
+	m.list.generation++
+	m.list.hydrateGen++
 	m.applyPendingRecents()
-	m.mode = ModeChannels
-	m.searchOrigin = ""
-	m.filtering = false
-	m.searching = false
-	m.channelFilterMenu = false
-	m.filter = ""
-	m.searchInput = ""
-	m.searchQuery = ""
-	m.searchCategories = nil
+	m.list.mode = ModeChannels
+	m.list.search.origin = ""
+	m.list.filtering = false
+	m.list.search.active = false
+	m.list.prefs.menuOpen = false
+	m.list.filter = ""
+	m.list.search.input = ""
+	m.list.search.query = ""
+	m.list.search.categories = nil
 	m.clearStaleStatusErrors()
-	m.nextCursor = ""
-	m.hasMore = false
-	m.channels = nil
+	m.list.nextCursor = ""
+	m.list.hasMore = false
+	m.list.channels = nil
 	m.clearHighlight()
-	m.focusResults = true
+	m.list.focusResults = true
 	if m.source == nil {
-		m.loading = false
+		m.list.loading = false
 		return m, nil
 	}
-	m.loading = true
-	return m, m.withHydrate(m.fetchChannelsCmd(m.generation, cat, "", false))
+	m.list.loading = true
+	return m, m.withHydrate(m.fetchChannelsCmd(m.list.generation, cat, "", false))
 }
 
 func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 	if m.source == nil {
 		return m, nil
 	}
-	m.tracker.cancelActive()
-	m.generation++
-	m.hydrateGen++
+	m.list.tracker.cancelActive()
+	m.list.generation++
+	m.list.hydrateGen++
 	m.applyPendingRecents()
-	m.loading = true
-	m.err = nil
-	m.nextCursor = ""
-	m.hasMore = false
+	m.list.loading = true
+	m.list.err = nil
+	m.list.nextCursor = ""
+	m.list.hasMore = false
 
 	switch m.Mode() {
 	case ModeChannels:
-		if m.selectedCategory != nil {
-			return m, m.withHydrate(m.fetchChannelsCmd(m.generation, *m.selectedCategory, "", false))
+		if m.list.selectedCategory != nil {
+			return m, m.withHydrate(m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, "", false))
 		}
-		m.mode = ModeCategories
-		return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
+		m.list.mode = ModeCategories
+		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 	case ModeSearch:
-		if strings.TrimSpace(m.searchQuery) != "" {
-			return m, m.withHydrate(m.fetchSearchCmd(m.generation, m.searchQuery))
+		if strings.TrimSpace(m.list.search.query) != "" {
+			return m, m.withHydrate(m.fetchSearchCmd(m.list.generation, m.list.search.query))
 		}
-		m.mode = ModeCategories
-		return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
+		m.list.mode = ModeCategories
+		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 	default:
-		return m, m.withHydrate(m.fetchCategoriesCmd(m.generation, "", false))
+		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 	}
 }
 
@@ -601,9 +601,9 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 // the visible list. VisibleItems keeps using m.recents until applyPendingRecents
 // runs on the next list load.
 func (m *Model) queueRecent(ch twitch.Channel) {
-	base := m.recents
-	if m.pendingRecents != nil {
-		base = m.pendingRecents
+	base := m.list.recents
+	if m.list.pendingRecents != nil {
+		base = m.list.pendingRecents
 	}
 	filtered := make([]twitch.Channel, 0, len(base))
 	for _, r := range base {
@@ -611,41 +611,41 @@ func (m *Model) queueRecent(ch twitch.Channel) {
 			filtered = append(filtered, r)
 		}
 	}
-	m.pendingRecents = append([]twitch.Channel{ch}, filtered...)
-	if len(m.pendingRecents) > defaultMaxRecents {
-		m.pendingRecents = m.pendingRecents[:defaultMaxRecents]
+	m.list.pendingRecents = append([]twitch.Channel{ch}, filtered...)
+	if len(m.list.pendingRecents) > defaultMaxRecents {
+		m.list.pendingRecents = m.list.pendingRecents[:defaultMaxRecents]
 	}
 }
 
 // applyPendingRecents promotes the store-ordered recents into the visible list.
 func (m *Model) applyPendingRecents() {
-	if m.pendingRecents == nil {
+	if m.list.pendingRecents == nil {
 		return
 	}
-	m.recents = m.pendingRecents
-	m.pendingRecents = nil
+	m.list.recents = m.list.pendingRecents
+	m.list.pendingRecents = nil
 }
 
 // ToggleFavorite toggles ch in favorites. If present, removes it; if absent, adds it.
 // Returns true if added, false if removed.
 func (m *Model) ToggleFavorite(ch twitch.Channel) bool {
-	for i, fav := range m.favorites {
+	for i, fav := range m.list.favorites {
 		if channelMatches(fav, ch) {
-			m.favorites = append(m.favorites[:i], m.favorites[i+1:]...)
+			m.list.favorites = append(m.list.favorites[:i], m.list.favorites[i+1:]...)
 			return false
 		}
 	}
-	m.favorites = append(m.favorites, ch)
+	m.list.favorites = append(m.list.favorites, ch)
 	return true
 }
 
 func (m Model) toStoreState() store.State {
-	recs := m.recents
-	if m.pendingRecents != nil {
-		recs = m.pendingRecents
+	recs := m.list.recents
+	if m.list.pendingRecents != nil {
+		recs = m.list.pendingRecents
 	}
 	return store.State{
-		Favorites: store.FromTwitchChannels(m.favorites),
+		Favorites: store.FromTwitchChannels(m.list.favorites),
 		Recents:   store.FromTwitchChannels(recs),
 	}
 }
@@ -699,29 +699,29 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		selected := *it.Category
-		m.selectedCategory = &selected
+		m.list.selectedCategory = &selected
 		if m.source == nil {
 			return m, func() tea.Msg {
 				return CategorySelectedMsg{Category: selected}
 			}
 		}
-		m.tracker.cancelActive()
-		m.generation++
-		m.mode = ModeChannels
-		m.channels = nil
-		m.searchCategories = nil
-		m.searchQuery = ""
-		m.searchOrigin = ""
-		m.filter = ""
-		m.filtering = false
-		m.searching = false
+		m.list.tracker.cancelActive()
+		m.list.generation++
+		m.list.mode = ModeChannels
+		m.list.channels = nil
+		m.list.search.categories = nil
+		m.list.search.query = ""
+		m.list.search.origin = ""
+		m.list.filter = ""
+		m.list.filtering = false
+		m.list.search.active = false
 		m.clearHighlight()
-		m.focusResults = true
-		m.nextCursor = ""
-		m.hasMore = false
+		m.list.focusResults = true
+		m.list.nextCursor = ""
+		m.list.hasMore = false
 		m.clearStaleStatusErrors()
-		m.loading = true
-		return m, m.fetchChannelsCmd(m.generation, selected, "", false)
+		m.list.loading = true
+		return m, m.fetchChannelsCmd(m.list.generation, selected, "", false)
 
 	default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
 		if it.Channel == nil {
@@ -733,13 +733,13 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		// whatever CategoryName the Source already set; unknown stays empty and
 		// the bar omits it (never the last list visited).
 		if it.Type == ItemTypeChannel && m.Mode() == ModeChannels {
-			stampChannelCategory(&selected, m.selectedCategory)
+			stampChannelCategory(&selected, m.list.selectedCategory)
 		}
-		m.selectedChannel = &selected
+		m.list.selectedChannel = &selected
 		// Opening a channel drops the local filter so favorites and the rest of
 		// the list are visible again; the user did not ask to stay filtered.
-		m.filter = ""
-		m.filtering = false
+		m.list.filter = ""
+		m.list.filtering = false
 		// Recents are queued for the store in ChannelSelectedMsg; the visible
 		// order stays frozen so Enter does not land on a shifted row.
 		return m, func() tea.Msg {
@@ -766,7 +766,7 @@ func stampChannelCategory(ch *twitch.Channel, cat *twitch.Category) {
 
 func (m *Model) moveHighlight(delta int) {
 	// A manual move is the user's choice; a pending load must not override it.
-	m.focusResults = false
+	m.list.focusResults = false
 	items := m.VisibleItems()
 	if len(items) == 0 {
 		m.clearHighlight()
@@ -789,9 +789,9 @@ func (m *Model) moveHighlight(delta int) {
 
 // clearHighlight drops the highlight identity and its cached position.
 func (m *Model) clearHighlight() {
-	m.highlightedID = ""
-	m.highlightedLogin = ""
-	m.highlightIndex = 0
+	m.list.highlightedID = ""
+	m.list.highlightedLogin = ""
+	m.list.highlightIndex = 0
 }
 
 // setHighlightToItem points the highlight at items[idx] and refreshes the
@@ -808,27 +808,27 @@ func (m *Model) setHighlightToItem(items []ListItem, idx int) {
 		idx = len(items) - 1
 	}
 	it := items[idx]
-	m.highlightedID = it.ID()
-	m.highlightIndex = idx
-	m.highlightedLogin = ""
+	m.list.highlightedID = it.ID()
+	m.list.highlightIndex = idx
+	m.list.highlightedLogin = ""
 	if it.Channel != nil {
-		m.highlightedLogin = it.Channel.Login
+		m.list.highlightedLogin = it.Channel.Login
 	}
 }
 
 // indexOfHighlighted finds the highlighted row by stable ID, then by channel
 // login. Returns -1 when neither identity is present in items.
 func (m Model) indexOfHighlighted(items []ListItem) int {
-	if m.highlightedID != "" {
+	if m.list.highlightedID != "" {
 		for i, it := range items {
-			if it.ID() == m.highlightedID {
+			if it.ID() == m.list.highlightedID {
 				return i
 			}
 		}
 	}
-	if m.highlightedLogin != "" {
+	if m.list.highlightedLogin != "" {
 		for i, it := range items {
-			if it.Channel != nil && strings.EqualFold(it.Channel.Login, m.highlightedLogin) {
+			if it.Channel != nil && strings.EqualFold(it.Channel.Login, m.list.highlightedLogin) {
 				return i
 			}
 		}
@@ -852,7 +852,7 @@ func (m *Model) reconcileHighlight() {
 		m.setHighlightToItem(items, idx)
 		return
 	}
-	m.setHighlightToItem(items, m.highlightIndex)
+	m.setHighlightToItem(items, m.list.highlightIndex)
 }
 
 // settleHighlightAfterLoad places the highlight after a channel or search page
@@ -864,11 +864,11 @@ func (m *Model) reconcileHighlight() {
 // highlighted item keeps its place by identity, or the nearest neighbor when
 // that identity left the list.
 func (m *Model) settleHighlightAfterLoad() {
-	if !m.focusResults {
+	if !m.list.focusResults {
 		m.reconcileHighlight()
 		return
 	}
-	m.focusResults = false
+	m.list.focusResults = false
 	if id, ok := m.firstResultID(); ok {
 		items := m.VisibleItems()
 		for i, it := range items {
@@ -877,9 +877,9 @@ func (m *Model) settleHighlightAfterLoad() {
 				return
 			}
 		}
-		m.highlightedID = id
-		m.highlightedLogin = ""
-		m.highlightIndex = 0
+		m.list.highlightedID = id
+		m.list.highlightedLogin = ""
+		m.list.highlightIndex = 0
 		return
 	}
 	m.reconcileHighlight()
@@ -897,8 +897,8 @@ func (m *Model) settleHighlightAfterLoad() {
 func (m Model) firstResultID() (string, bool) {
 	items := m.VisibleItems()
 	if m.Mode() == ModeSearch {
-		for _, ch := range m.channels {
-			if !twitch.ExactChannelMatch(m.searchQuery, ch) {
+		for _, ch := range m.list.channels {
+			if !twitch.ExactChannelMatch(m.list.search.query, ch) {
 				continue
 			}
 			for _, it := range items {
@@ -908,8 +908,8 @@ func (m Model) firstResultID() (string, bool) {
 			}
 		}
 	}
-	if m.Mode() == ModeSearch && len(m.searchCategories) > 0 {
-		targetID := m.searchCategories[0].ID
+	if m.Mode() == ModeSearch && len(m.list.search.categories) > 0 {
+		targetID := m.list.search.categories[0].ID
 		for _, it := range items {
 			if it.Type == ItemTypeCategory && it.Category != nil && it.Category.ID == targetID {
 				return it.ID(), true
@@ -919,8 +919,8 @@ func (m Model) firstResultID() (string, bool) {
 			return targetID, true
 		}
 	}
-	if m.Mode() == ModeSearch && len(m.channels) > 0 {
-		target := m.channels[0]
+	if m.Mode() == ModeSearch && len(m.list.channels) > 0 {
+		target := m.list.channels[0]
 		for _, it := range items {
 			if it.Channel != nil && channelMatches(*it.Channel, target) {
 				return it.ID(), true
@@ -935,7 +935,7 @@ func (m Model) firstResultID() (string, bool) {
 			return it.ID(), true
 		}
 	}
-	for _, ch := range m.channels {
+	for _, ch := range m.list.channels {
 		for _, it := range items {
 			if it.Channel != nil && channelMatches(*it.Channel, ch) {
 				return it.ID(), true
@@ -959,7 +959,7 @@ func (m Model) totalItemCount() int {
 }
 
 func (m Model) shouldLoadNextPage() bool {
-	if m.source == nil || m.loading || !m.hasMore || m.nextCursor == "" {
+	if m.source == nil || m.list.loading || !m.list.hasMore || m.list.nextCursor == "" {
 		return false
 	}
 	if m.Mode() == ModeSearch {
@@ -969,13 +969,13 @@ func (m Model) shouldLoadNextPage() bool {
 	if len(ids) == 0 {
 		return false
 	}
-	return ids[len(ids)-1] == m.highlightedID
+	return ids[len(ids)-1] == m.list.highlightedID
 }
 
 func (m Model) fetchCategoriesCmd(gen uint64, cursor string, appendPage bool) tea.Cmd {
 	src := m.source
-	tracker := m.tracker
-	limit := m.pageSize
+	tracker := m.list.tracker
+	limit := m.list.pageSize
 	if limit <= 0 {
 		limit = defaultCategoryPageSize
 	}
@@ -1001,8 +1001,8 @@ func (m Model) fetchCategoriesCmd(gen uint64, cursor string, appendPage bool) te
 
 func (m Model) fetchChannelsCmd(gen uint64, cat twitch.Category, cursor string, appendPage bool) tea.Cmd {
 	src := m.source
-	tracker := m.tracker
-	limit := m.pageSize
+	tracker := m.list.tracker
+	limit := m.list.pageSize
 	if limit <= 0 {
 		limit = defaultCategoryPageSize
 	}
@@ -1035,7 +1035,7 @@ func (m Model) fetchChannelsCmd(gen uint64, cat twitch.Category, cursor string, 
 // there is anything to hydrate. Hydration uses its own generation and does not
 // share the request tracker, so it never cancels catalog fetches.
 func (m Model) withHydrate(cmd tea.Cmd) tea.Cmd {
-	hydrate := m.fetchHydrateCmd(m.hydrateGen)
+	hydrate := m.fetchHydrateCmd(m.list.hydrateGen)
 	switch {
 	case cmd == nil:
 		return hydrate
@@ -1048,9 +1048,9 @@ func (m Model) withHydrate(cmd tea.Cmd) tea.Cmd {
 
 // savedLogins returns unique non-empty logins from favorites and recents.
 func (m Model) savedLogins() []string {
-	n := len(m.favorites) + len(m.recents)
-	if m.pendingRecents != nil {
-		n += len(m.pendingRecents)
+	n := len(m.list.favorites) + len(m.list.recents)
+	if m.list.pendingRecents != nil {
+		n += len(m.list.pendingRecents)
 	}
 	seen := make(map[string]struct{}, n)
 	out := make([]string, 0, n)
@@ -1066,13 +1066,13 @@ func (m Model) savedLogins() []string {
 		seen[key] = struct{}{}
 		out = append(out, login)
 	}
-	for _, ch := range m.favorites {
+	for _, ch := range m.list.favorites {
 		add(ch)
 	}
-	for _, ch := range m.recents {
+	for _, ch := range m.list.recents {
 		add(ch)
 	}
-	for _, ch := range m.pendingRecents {
+	for _, ch := range m.list.pendingRecents {
 		add(ch)
 	}
 	return out

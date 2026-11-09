@@ -50,7 +50,7 @@ func TestComposeBlocksSlashCommandAndKeepsDraft(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			m, fc, cat := composeTyped(t, i18n.LangEN, 120, tc.draft)
-			before := m.chatPanel.buf.Len()
+			before := m.chat.panel.buf.Len()
 
 			m, cmd := pressEnter(t, m)
 
@@ -60,7 +60,7 @@ func TestComposeBlocksSlashCommandAndKeepsDraft(t *testing.T) {
 			if len(fc.sent) != 0 {
 				t.Fatalf("blocked command reached the sender: %+v", fc.sent)
 			}
-			if got := m.chatPanel.buf.Len(); got != before {
+			if got := m.chat.panel.buf.Len(); got != before {
 				t.Fatalf("blocked command echoed locally: buffer %d -> %d", before, got)
 			}
 			if m.ComposeDraft() != tc.draft {
@@ -78,7 +78,7 @@ func TestComposeBlocksSlashCommandAndKeepsDraft(t *testing.T) {
 
 func TestComposeBlockedCommandBeatsTooLongWarning(t *testing.T) {
 	m, fc, cat := composeTyped(t, i18n.LangEN, 120, "/ban x")
-	m.composeDraft = "/ban " + strings.Repeat("x", twitchMessageRuneLimit)
+	m.chat.composeDraft = "/ban " + strings.Repeat("x", twitchMessageRuneLimit)
 
 	m, _ = pressEnter(t, m)
 
@@ -159,7 +159,7 @@ func TestComposeCommandWarningClearsOnceDraftIsFixed(t *testing.T) {
 		t.Fatalf("warning cleared while the draft %q is still a command", m.ComposeDraft())
 	}
 
-	m.composeDraft = "/m"
+	m.chat.composeDraft = "/m"
 	m = sendKeys(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	if m.ChatSendWarning() != "" {
 		t.Fatalf("warning outlived the fix: %q (draft %q)", m.ChatSendWarning(), m.ComposeDraft())
@@ -178,7 +178,7 @@ func TestSlashOutsideComposeIsNotTheChatGuard(t *testing.T) {
 	m, _, fc := setupTwoPanelModel(t)
 	m = resize(m, 120, 24)
 	fc.sent = nil
-	m.composeDraft = ""
+	m.chat.composeDraft = ""
 
 	m = sendKeys(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	if m.Composing() {

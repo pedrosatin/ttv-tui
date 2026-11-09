@@ -286,7 +286,7 @@ func TestCopyY_SystemMessage(t *testing.T) {
 		}},
 	})
 	m = updated.(Model)
-	m.focus = FocusChat
+	m.layout.focus = FocusChat
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
@@ -311,7 +311,7 @@ func TestCopyNoticeExpiresWithInjectedClock(t *testing.T) {
 	base := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 	now := base
 	m := scrollFixture(t, i18n.LangPTBR, 2)
-	m.nowFunc = func() time.Time { return now }
+	m.chat.nowFunc = func() time.Time { return now }
 
 	prev := osc52Out
 	osc52Out = ioDiscard{}
@@ -327,7 +327,7 @@ func TestCopyNoticeExpiresWithInjectedClock(t *testing.T) {
 	if m.CopyNotice() != want {
 		t.Fatalf("pt-BR notice = %q, want %q", m.CopyNotice(), want)
 	}
-	gen := m.copyNoticeGen
+	gen := m.chat.copyNoticeGen
 
 	// Clear tick before TTL must keep the notice when the clock is frozen.
 	updated, _ = m.Update(copyNoticeClearMsg{gen: gen})
@@ -352,7 +352,7 @@ func TestCopyY_WarnsOnListFocus(t *testing.T) {
 	t.Cleanup(func() { osc52Out = prev })
 
 	m := scrollFixture(t, i18n.LangEN, 2)
-	m.focus = FocusList
+	m.layout.focus = FocusList
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
 	if cmd == nil {
@@ -821,5 +821,5 @@ func TestOSC52NoticeNeverConfirmsCopy(t *testing.T) {
 
 func expectedContextCopy(m Model, text string) string {
 	msg, _ := m.SelectedChatMessage()
-	return fmt.Sprintf(m.t("chat.copy.context"), m.chatPanel.channel, msg.ReceivedAt.Local().Format(time.DateTime[:16]), text)
+	return fmt.Sprintf(m.t("chat.copy.context"), m.chat.panel.channel, msg.ReceivedAt.Local().Format(time.DateTime[:16]), text)
 }

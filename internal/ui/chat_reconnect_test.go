@@ -29,7 +29,7 @@ func rcLive(t *testing.T, lang string, fc *fakeChat, n int) (Model, *i18n.Catalo
 	}
 	m = rcSend(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = rcSend(t, m, ChatEventMsg{Generation: 1, Channel: "gaules", State: ChatStateConnected})
-	m.focus = FocusChat
+	m.layout.focus = FocusChat
 	return rcDeliver(t, m, 1, 0, n), cat
 }
 
@@ -249,7 +249,7 @@ func TestCtrlT_KeepsTheDraft(t *testing.T) {
 	if m.ComposeDraft() != "rascunho" {
 		t.Fatalf("draft = %q, want rascunho", m.ComposeDraft())
 	}
-	if !m.composing {
+	if !m.chat.composing {
 		t.Fatal("reconnecting left compose mode")
 	}
 	rcAssertHistory(t, m, 50)

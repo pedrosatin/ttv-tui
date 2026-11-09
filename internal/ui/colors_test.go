@@ -45,14 +45,14 @@ func TestOrientationColorsPlayerStatesEmitExpectedSGR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := New(mustCatalog(t, i18n.LangEN))
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
-			m.playerLogin = "gaules"
-			m.playerState = tc.state
-			m.playerVolume = 80
+			m.player.login = "gaules"
+			m.player.state = tc.state
+			m.player.volume = 80
 			if tc.state == PlayerStateError {
-				m.playerFailure = PlayerFailureNetwork
+				m.player.failure = PlayerFailureNetwork
 			}
 			if tc.state == PlayerStateBreak {
-				m.playerBreakElapsed = 0
+				m.player.breakElapsed = 0
 			}
 			bar := m.StatusBar()
 			if !strings.Contains(bar, "\x1b[") {
@@ -92,10 +92,10 @@ func TestOrientationColorsAvailabilityAndFocus(t *testing.T) {
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
-	m.playerLogin = "favlive"
-	m.playerState = PlayerStatePlaying
-	m.focus = FocusList
-	m.highlightedID = "f1"
+	m.player.login = "favlive"
+	m.player.state = PlayerStatePlaying
+	m.layout.focus = FocusList
+	m.list.highlightedID = "f1"
 	if items := m.VisibleItems(); len(items) < 3 {
 		t.Fatalf("VisibleItems=%d, want favorites+recents", len(items))
 	}
@@ -143,18 +143,18 @@ func TestOrientationColorsChatSystemRejectMention(t *testing.T) {
 
 	m := New(mustCatalog(t, i18n.LangEN), WithChat(&fakeChat{hasToken: true, username: "pedrosatin"}))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 30})
-	m.chatPanel.channel = "gaules"
-	m.chatPanel.state = ChatStateConnected
-	m.chatPanel.username = "pedrosatin"
-	m.focus = FocusChat
-	m.chatPanel.buf.Append(ChatMessage{Kind: chat.MessageSystem, Body: "slow mode on"})
-	m.chatPanel.buf.Append(ChatMessage{Kind: chat.MessageSystem, MsgID: systemMsgIDModeration, Body: "spammer timed out"})
-	m.chatPanel.buf.Append(ChatMessage{Kind: chat.MessageNotice, Body: "followers-only"})
-	m.chatPanel.buf.Append(ChatMessage{
+	m.chat.panel.channel = "gaules"
+	m.chat.panel.state = ChatStateConnected
+	m.chat.panel.username = "pedrosatin"
+	m.layout.focus = FocusChat
+	m.chat.panel.buf.Append(ChatMessage{Kind: chat.MessageSystem, Body: "slow mode on"})
+	m.chat.panel.buf.Append(ChatMessage{Kind: chat.MessageSystem, MsgID: systemMsgIDModeration, Body: "spammer timed out"})
+	m.chat.panel.buf.Append(ChatMessage{Kind: chat.MessageNotice, Body: "followers-only"})
+	m.chat.panel.buf.Append(ChatMessage{
 		Kind: chat.MessageChat, User: "alice", DisplayName: "Alice", Color: "#FF0000",
 		Body: "hey @pedrosatin check this",
 	})
-	m.chatPanel.buf.Append(ChatMessage{
+	m.chat.panel.buf.Append(ChatMessage{
 		Kind: chat.MessageChat, User: "bob", DisplayName: "Bob", Body: "hello", Color: "#00FF00",
 		Delivery: chat.DeliveryRejected, RejectReason: chat.RejectSlowMode,
 	})
@@ -224,10 +224,10 @@ func TestOrientationColorsDisabledNoForegroundSGR(t *testing.T) {
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
-	m.playerState = PlayerStatePlaying
-	m.playerLogin = "gaules"
-	m.helpVisible = true
-	m.highlightedID = "f1"
+	m.player.state = PlayerStatePlaying
+	m.player.login = "gaules"
+	m.layout.helpVisible = true
+	m.list.highlightedID = "f1"
 
 	view := m.View()
 	if sgrColorRe.MatchString(view) {
@@ -250,7 +250,7 @@ func TestOrientationColorsDisabledNoForegroundSGR(t *testing.T) {
 		t.Fatalf("help legend missing without color:\n%s", help)
 	}
 
-	m.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: fmt.Errorf("boom")}
+	m.list.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: fmt.Errorf("boom")}
 	errView := m.View()
 	if sgrColorRe.MatchString(errView) {
 		t.Fatalf("error view must not emit color SGR when disabled:\n%q", errView)
@@ -278,8 +278,8 @@ func TestOrientationColorsCLICOLORZeroDisablesEvenWithForce(t *testing.T) {
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
-	m.playerState = PlayerStatePlaying
-	m.playerLogin = "gaules"
+	m.player.state = PlayerStatePlaying
+	m.player.login = "gaules"
 	view := m.View()
 	if sgrColorRe.MatchString(view) {
 		t.Fatalf("CLICOLOR=0 must not emit color SGR:\n%q", view)
@@ -315,9 +315,9 @@ func TestOrientationColorsHelpLegendAndWidths(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", width), func(t *testing.T) {
 			m := New(mustCatalog(t, i18n.LangPTBR))
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: width, Height: 28})
-			m.helpVisible = true
-			m.playerState = PlayerStatePaused
-			m.playerLogin = "gaules"
+			m.layout.helpVisible = true
+			m.player.state = PlayerStatePaused
+			m.player.login = "gaules"
 			view := m.View()
 			plain := ansi.Strip(view)
 			legend := m.t("help.colors")
@@ -370,8 +370,8 @@ func TestAvailabilityTagsNeverTruncatedAt80(t *testing.T) {
 				{ID: "r-2", Login: "liveguy", DisplayName: "LiveNomeBemLongo", Viewers: nil, Availability: twitch.AvailabilityLive},
 			}),
 		)
-		m.playerLogin = "liveguy"
-		m.playerState = PlayerStatePlaying
+		m.player.login = "liveguy"
+		m.player.state = PlayerStatePlaying
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 		plain := ansi.Strip(m.View())
 		for _, tag := range []string{
@@ -396,7 +396,7 @@ func TestAvailabilityTagsNeverTruncatedAt80(t *testing.T) {
 
 func TestMentionsSelfDetection(t *testing.T) {
 	m := New(mustCatalog(t, i18n.LangEN))
-	m.chatPanel.username = "PedroSatin"
+	m.chat.panel.username = "PedroSatin"
 	cases := []struct {
 		body string
 		want bool
@@ -426,10 +426,10 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
-	m.playerState = PlayerStatePlaying
-	m.playerLogin = "gaules"
-	m.helpVisible = true
-	m.highlightedID = "f1"
+	m.player.state = PlayerStatePlaying
+	m.player.login = "gaules"
+	m.layout.helpVisible = true
+	m.list.highlightedID = "f1"
 	view := m.View()
 	bar := m.StatusBar()
 	t.Logf("RAW_VIEW=%q", view)
@@ -453,9 +453,9 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 		}),
 	)
 	m2, _ = pressKeyMsg(m2, tea.WindowSizeMsg{Width: 100, Height: 24})
-	m2.playerState = PlayerStatePlaying
-	m2.playerLogin = "gaules"
-	m2.helpVisible = true
+	m2.player.state = PlayerStatePlaying
+	m2.player.login = "gaules"
+	m2.layout.helpVisible = true
 	noColorView := m2.View()
 	t.Logf("NO_COLOR_VIEW=%q", noColorView)
 	if sgrColorRe.MatchString(noColorView) {

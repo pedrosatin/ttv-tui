@@ -161,7 +161,7 @@ func TestLayoutViewsAt80And120(t *testing.T) {
 	for _, width := range []int{80, 120} {
 		updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 14})
 		m = updated.(Model)
-		m.showList, m.showChat = true, true
+		m.layout.showList, m.layout.showChat = true, true
 
 		cases := []struct {
 			name           string
@@ -177,7 +177,7 @@ func TestLayoutViewsAt80And120(t *testing.T) {
 			{"focus", false, false, false, false, false, true},
 		}
 		for _, tc := range cases {
-			m.showList, m.showChat = tc.list, tc.chat
+			m.layout.showList, m.layout.showChat = tc.list, tc.chat
 			m.normalizeFocusAfterLayout()
 			plain := ansi.Strip(m.View())
 			lines := strings.Split(plain, "\n")
@@ -229,7 +229,7 @@ func TestLayoutFocusHasNoPanels(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 14})
 	m = updated.(Model)
-	m.showList, m.showChat = false, false
+	m.layout.showList, m.layout.showChat = false, false
 	m.normalizeFocusAfterLayout()
 
 	listW, chatW := m.panelWidths()
@@ -251,7 +251,7 @@ func TestHelpDocumentsLayoutKeys(t *testing.T) {
 		t.Fatalf("i18n: %v", err)
 	}
 	m := New(catEN)
-	m.helpVisible = true
+	m.layout.helpVisible = true
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
 	plain := ansi.Strip(m.View())

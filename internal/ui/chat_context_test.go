@@ -48,14 +48,14 @@ func TestContextSanitization(t *testing.T) {
 func TestContextCopyPayload(t *testing.T) {
 	m := scrollFixture(t, i18n.LangPTBR, 0)
 	received := time.Date(2026, 11, 5, 14, 23, 0, 0, time.Local)
-	m.nowFunc = func() time.Time { return received }
+	m.chat.nowFunc = func() time.Time { return received }
 	m = withChatMessages(t, m, ChatMessage{Kind: chat.MessageChat, User: "login", DisplayName: "Nick", Body: "olá 😀 漢字", ReceivedAt: received})
 	forceOSCClipboardEnv(t)
 	var out bytes.Buffer
 	old := osc52Out
 	osc52Out = &out
 	t.Cleanup(func() { osc52Out = old })
-	m.nowFunc = func() time.Time { return received.Add(24 * time.Hour) }
+	m.chat.nowFunc = func() time.Time { return received.Add(24 * time.Hour) }
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	_ = flushCopy(t, updated.(Model), cmd)
 	got, err := decodeOSC52Payload(out.String())
@@ -70,7 +70,7 @@ func TestContextCopyPayload(t *testing.T) {
 
 func TestContextYOnList(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
-	m.focus = FocusList
+	m.layout.focus = FocusList
 	m = sendKeys(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	if !strings.Contains(strings.ToLower(ansi.Strip(m.View())), "focus the chat") {
 		t.Fatalf("missing copy warning: %s", ansi.Strip(m.View()))
@@ -109,7 +109,7 @@ func (m contextPTYModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func TestContextPTY(t *testing.T) {
 	m := scrollFixture(t, i18n.LangPTBR, 0)
 	received := time.Date(2026, 11, 5, 14, 23, 0, 0, time.Local)
-	m.nowFunc = func() time.Time { return received }
+	m.chat.nowFunc = func() time.Time { return received }
 	m = withChatMessages(t, m, ChatMessage{Kind: chat.MessageChat, FirstMsg: true, ReceivedAt: received, DisplayName: "N\u202eick", Body: "Olá 😀 漢字 café\u034f\U000e0000"})
 	forceOSCClipboardEnv(t)
 	var clipboard bytes.Buffer

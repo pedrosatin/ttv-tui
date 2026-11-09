@@ -21,8 +21,8 @@ func testCatalog(t *testing.T, lang string) *i18n.Catalog {
 func channelFilterFixture(t *testing.T) Model {
 	t.Helper()
 	m := New(testCatalog(t, i18n.LangEN))
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{
 		{ID: "1", Login: "gaules", DisplayName: "Gaules", Language: twitch.LanguagePtr("PT"), Viewers: twitch.IntPtr(1200), Availability: twitch.AvailabilityLive},
 		{ID: "2", Login: "xqc", DisplayName: "xQc", Language: twitch.LanguagePtr("EN"), Viewers: twitch.IntPtr(800), Availability: twitch.AvailabilityLive},
 		{ID: "3", Login: "small", DisplayName: "Small", Language: twitch.LanguagePtr("PT"), Viewers: twitch.IntPtr(40), Availability: twitch.AvailabilityLive},
@@ -38,7 +38,7 @@ func TestChannelFilterByLanguageAndAudience(t *testing.T) {
 		t.Fatalf("unfiltered VisibleChannels = %d, want 4", got)
 	}
 
-	m.filterLanguages = []string{"pt"}
+	m.list.prefs.languages = []string{"pt"}
 	vis := m.VisibleChannels()
 	if len(vis) != 3 { // pt + unknown mystery
 		t.Fatalf("PT filter len=%d want 3 (pt + unknown); got %+v", len(vis), loginsOf(vis))
@@ -49,7 +49,7 @@ func TestChannelFilterByLanguageAndAudience(t *testing.T) {
 		}
 	}
 
-	m.filterMinViewers = 500
+	m.list.prefs.minViewers = 500
 	vis = m.VisibleChannels()
 	if len(vis) != 2 { // gaules 1200 + mystery 900; small 40 out
 		t.Fatalf("PT+500 filter len=%d want 2; got %+v", len(vis), loginsOf(vis))
@@ -76,10 +76,10 @@ func TestChannelFilterByLanguageAndAudience(t *testing.T) {
 
 func TestChannelFilterDoesNotAffectCategories(t *testing.T) {
 	m := New(testCatalog(t, i18n.LangEN))
-	m.mode = ModeCategories
-	m.categories = []twitch.Category{{ID: "c1", Name: "Just Chatting", Viewers: twitch.IntPtr(10)}}
-	m.filterLanguages = []string{"pt"}
-	m.filterMinViewers = 5000
+	m.list.mode = ModeCategories
+	m.list.categories = []twitch.Category{{ID: "c1", Name: "Just Chatting", Viewers: twitch.IntPtr(10)}}
+	m.list.prefs.languages = []string{"pt"}
+	m.list.prefs.minViewers = 5000
 	items := m.VisibleItems()
 	if len(items) != 1 || items[0].Category == nil {
 		t.Fatalf("categories must remain visible under channel prefs: %+v", items)
@@ -91,7 +91,7 @@ func TestChannelFilterMenuToggleClearClose(t *testing.T) {
 	var persistedLangs []string
 	var persistedMin int
 	var persistCalls int
-	m.filterPersist = func(languages []string, minViewers int) error {
+	m.list.prefs.persist = func(languages []string, minViewers int) error {
 		persistCalls++
 		persistedLangs = append([]string{}, languages...)
 		persistedMin = minViewers
@@ -112,16 +112,16 @@ func TestChannelFilterMenuToggleClearClose(t *testing.T) {
 	}
 
 	// Languages are sorted (EN before PT); move onto the PT row and toggle.
-	for i := 0; i < len(m.channelFilterMenuItems); i++ {
-		item := m.channelFilterMenuItems[m.channelFilterMenuIndex]
+	for i := 0; i < len(m.list.prefs.menuItems); i++ {
+		item := m.list.prefs.menuItems[m.list.prefs.menuIndex]
 		if item.Kind == filterMenuLang && item.Language == "pt" {
 			break
 		}
 		next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = next.(Model)
 	}
-	if cur := m.channelFilterMenuItems[m.channelFilterMenuIndex]; cur.Kind != filterMenuLang || cur.Language != "pt" {
-		t.Fatalf("failed to highlight PT row: %+v", m.channelFilterMenuItems[m.channelFilterMenuIndex])
+	if cur := m.list.prefs.menuItems[m.list.prefs.menuIndex]; cur.Kind != filterMenuLang || cur.Language != "pt" {
+		t.Fatalf("failed to highlight PT row: %+v", m.list.prefs.menuItems[m.list.prefs.menuIndex])
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
@@ -137,8 +137,8 @@ func TestChannelFilterMenuToggleClearClose(t *testing.T) {
 
 	// Move to audience 500 and select with Space.
 	for i := 0; i < 20; i++ {
-		if m.channelFilterMenuIndex < len(m.channelFilterMenuItems) {
-			cur := m.channelFilterMenuItems[m.channelFilterMenuIndex]
+		if m.list.prefs.menuIndex < len(m.list.prefs.menuItems) {
+			cur := m.list.prefs.menuItems[m.list.prefs.menuIndex]
 			if cur.Kind == filterMenuAudience && cur.Audience == 500 {
 				break
 			}
@@ -146,9 +146,9 @@ func TestChannelFilterMenuToggleClearClose(t *testing.T) {
 		next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = next.(Model)
 	}
-	item := m.channelFilterMenuItems[m.channelFilterMenuIndex]
+	item := m.list.prefs.menuItems[m.list.prefs.menuIndex]
 	if item.Kind != filterMenuAudience || item.Audience != 500 {
-		t.Fatalf("failed to land on 500 audience row: %+v items=%+v", item, m.channelFilterMenuItems)
+		t.Fatalf("failed to land on 500 audience row: %+v items=%+v", item, m.list.prefs.menuItems)
 	}
 	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
 	m = next.(Model)
@@ -165,7 +165,7 @@ func TestChannelFilterMenuToggleClearClose(t *testing.T) {
 	}
 
 	// Clear languages via "all languages".
-	m.channelFilterMenuIndex = 0
+	m.list.prefs.menuIndex = 0
 	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
 	if cmd != nil {
@@ -184,8 +184,8 @@ func TestChannelFilterMenuToggleClearClose(t *testing.T) {
 
 func TestChannelFilterEmptyState(t *testing.T) {
 	m := channelFilterFixture(t)
-	m.filterLanguages = []string{"es"}
-	m.filterMinViewers = 5000
+	m.list.prefs.languages = []string{"es"}
+	m.list.prefs.minViewers = 5000
 	// mystery (unknown lang) has 900 viewers — still passes language, fails audience.
 	// No ES channels; unknown passes language but fails 5000 audience.
 	view := m.View()
@@ -210,8 +210,8 @@ func TestChannelFilterEmptyState(t *testing.T) {
 func TestChannelFilterI18nAndWidths(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		m := New(testCatalog(t, lang), WithChannelFilters([]string{"pt"}, 500, nil))
-		m.mode = ModeChannels
-		m.channels = []twitch.Channel{
+		m.list.mode = ModeChannels
+		m.list.channels = []twitch.Channel{
 			{ID: "1", Login: "gaules", DisplayName: "Gaules", Language: twitch.LanguagePtr("pt"), Viewers: twitch.IntPtr(900), Availability: twitch.AvailabilityLive},
 		}
 		m = m.openChannelFilterMenu()
@@ -225,11 +225,11 @@ func TestChannelFilterI18nAndWidths(t *testing.T) {
 			if !strings.Contains(view, "PT") || !strings.Contains(m.StatusBar(), "500+") {
 				t.Fatalf("lang=%s width=%d status/menu missing active filter marks:\n%s\n%s", lang, width, m.StatusBar(), view)
 			}
-			m.helpVisible = true
-			m.channelFilterMenu = false
+			m.layout.helpVisible = true
+			m.list.prefs.menuOpen = false
 			help := strings.Join(m.renderHelpLines(width), "\n")
-			m.channelFilterMenu = true
-			m.helpVisible = false
+			m.list.prefs.menuOpen = true
+			m.layout.helpVisible = false
 			if !strings.Contains(help, m.t("help.channel_filter")) {
 				t.Fatalf("lang=%s help missing channel_filter key", lang)
 			}

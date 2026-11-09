@@ -17,16 +17,16 @@ const (
 )
 
 func (m Model) hasChatPanel() bool {
-	return m.chatPanel.channel != "" || m.chatPanel.state != ChatStateNone || m.composing
+	return m.chat.panel.channel != "" || m.chat.panel.state != ChatStateNone || m.chat.composing
 }
 
 func (m Model) chatStatusSummary() string {
-	ch := sanitizeScreenText(m.chatPanel.channel)
-	switch m.chatPanel.state {
+	ch := sanitizeScreenText(m.chat.panel.channel)
+	switch m.chat.panel.state {
 	case ChatStateConnecting:
 		return fmt.Sprintf(m.t("chat.connecting"), ch)
 	case ChatStateConnected:
-		if m.chatPanel.anonymous {
+		if m.chat.panel.anonymous {
 			return fmt.Sprintf(m.t("chat.connected_anon"), ch)
 		}
 		return fmt.Sprintf(m.t("chat.connected"), ch)
@@ -35,7 +35,7 @@ func (m Model) chatStatusSummary() string {
 	case ChatStateDisconnected:
 		return m.chatConnectionReason(m.t("chat.disconnected"))
 	case ChatStateError:
-		errText := sanitizeScreenText(m.chatPanel.errText)
+		errText := sanitizeScreenText(m.chat.panel.errText)
 		if errText == "" {
 			errText = m.t("player.error_unknown")
 		}
@@ -46,14 +46,14 @@ func (m Model) chatStatusSummary() string {
 }
 
 func (m Model) chatConnectionReason(state string) string {
-	if reason := strings.TrimSpace(sanitizeScreenText(m.chatPanel.errText)); reason != "" {
+	if reason := strings.TrimSpace(sanitizeScreenText(m.chat.panel.errText)); reason != "" {
 		return state + ": " + reason
 	}
 	return state
 }
 
 func (m Model) chatRoomModesSummary() string {
-	rs := m.chatPanel.roomState
+	rs := m.chat.panel.roomState
 	var tags []string
 	if rs.Slow > 0 {
 		tags = append(tags, fmt.Sprintf(m.t("chat.room.slow"), rs.Slow))
@@ -68,11 +68,11 @@ func (m Model) chatRoomModesSummary() string {
 }
 
 func (m Model) chatHeaderState() string {
-	switch m.chatPanel.state {
+	switch m.chat.panel.state {
 	case ChatStateConnecting:
 		return m.t("chat.state.connecting")
 	case ChatStateConnected:
-		if m.chatPanel.anonymous {
+		if m.chat.panel.anonymous {
 			return m.t("chat.state.connected_anon")
 		}
 		return m.t("chat.state.connected")
@@ -81,7 +81,7 @@ func (m Model) chatHeaderState() string {
 	case ChatStateDisconnected:
 		return m.chatConnectionReason(m.t("chat.disconnected"))
 	case ChatStateError:
-		errText := sanitizeScreenText(m.chatPanel.errText)
+		errText := sanitizeScreenText(m.chat.panel.errText)
 		if errText == "" {
 			errText = m.t("player.error_unknown")
 		}
@@ -99,7 +99,7 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 	if showFocusChrome {
 		focusMarker = "▸ "
 	}
-	title := fmt.Sprintf(m.t("chat.title"), sanitizeScreenText(m.chatPanel.channel))
+	title := fmt.Sprintf(m.t("chat.title"), sanitizeScreenText(m.chat.panel.channel))
 	state := m.chatHeaderState()
 	modes := m.chatRoomModesSummary()
 
@@ -166,18 +166,18 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 	if notice := m.renderChatPendingNotice(maxWidth); notice != "" {
 		footer = append(footer, notice)
 	}
-	if m.chatPanel.sendWarning != "" {
+	if m.chat.panel.sendWarning != "" {
 		if maxWidth <= 0 {
-			warnLine := "  ! " + styleWarning(sanitizeScreenText(m.chatPanel.sendWarning))
+			warnLine := "  ! " + styleWarning(sanitizeScreenText(m.chat.panel.sendWarning))
 			footer = append(footer, warnLine)
 		} else {
-			warnRows := wrapChatRow("  ! ", sanitizeScreenText(m.chatPanel.sendWarning), maxWidth)
+			warnRows := wrapChatRow("  ! ", sanitizeScreenText(m.chat.panel.sendWarning), maxWidth)
 			for _, r := range warnRows {
 				footer = append(footer, styleWarning(r))
 			}
 		}
 	}
-	if m.composing && m.chatHasToken() {
+	if m.chat.composing && m.chatHasToken() {
 		hint := m.renderComposeHintLine(maxWidth)
 		if m.composeDraftOverLimit() {
 			footer = append(footer, styleWarning(hint))
@@ -199,8 +199,8 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 
 	body := make([]string, 0, msgBudget)
 	if len(msgs) == 0 {
-		if msgBudget > 0 && m.chatPanel.state == ChatStateConnected {
-			emptyLine := "  " + fmt.Sprintf(m.t("chat.empty"), m.chatPanel.channel)
+		if msgBudget > 0 && m.chat.panel.state == ChatStateConnected {
+			emptyLine := "  " + fmt.Sprintf(m.t("chat.empty"), m.chat.panel.channel)
 			body = append(body, TruncateVisual(emptyLine, maxWidth))
 		}
 	} else {
@@ -228,11 +228,11 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 const composeCursor = "█"
 
 func (m Model) composeDraftRuneCount() int {
-	return utf8.RuneCountInString(m.composeDraft)
+	return utf8.RuneCountInString(m.chat.composeDraft)
 }
 
 func (m Model) composeDraftOverLimit() bool {
-	return utf8.RuneCountInString(strings.TrimSpace(m.composeDraft)) > twitchMessageRuneLimit
+	return utf8.RuneCountInString(strings.TrimSpace(m.chat.composeDraft)) > twitchMessageRuneLimit
 }
 
 func (m Model) composeCounterLabel() string {
@@ -266,8 +266,8 @@ func formatComposeHintWithCounter(hint, counter string, maxWidth int) string {
 }
 
 func (m Model) renderChatInputLine(maxWidth int) string {
-	ch := sanitizeScreenText(m.chatPanel.channel)
-	if maxWidth > 1 && hasWideRune(ch+normalizeScreenText(m.composeDraft)) {
+	ch := sanitizeScreenText(m.chat.panel.channel)
+	if maxWidth > 1 && hasWideRune(ch+normalizeScreenText(m.chat.composeDraft)) {
 		maxWidth--
 	}
 	if !m.chatHasToken() {
@@ -279,7 +279,7 @@ func (m Model) renderChatInputLine(maxWidth int) string {
 		line = TruncateVisual(line, maxWidth)
 		return lipgloss.NewStyle().Faint(true).Render(line)
 	}
-	if m.composing {
+	if m.chat.composing {
 		prefix := "  > " + fmt.Sprintf(m.t("chat.input.composing"), ch)
 		// A long channel name must not push the draft and cursor off the panel.
 		const minDraftCells = 8
@@ -290,12 +290,12 @@ func (m Model) renderChatInputLine(maxWidth int) string {
 				prefix = ""
 			}
 		}
-		draft := sanitizeScreenText(m.composeDraft)
+		draft := sanitizeScreenText(m.chat.composeDraft)
 		line := prefix + draftWindow(draft, prefix, maxWidth, ansi.StringWidth(composeCursor)) + composeCursor
 		return lipgloss.NewStyle().Bold(true).Render(line)
 	}
-	if m.composeDraft != "" {
-		draft := sanitizeScreenText(m.composeDraft)
+	if m.chat.composeDraft != "" {
+		draft := sanitizeScreenText(m.chat.composeDraft)
 		prefix := "  > " + fmt.Sprintf(m.t("chat.input.draft"), "")
 		line := prefix + draftWindow(draft, prefix, maxWidth, 0)
 		return lipgloss.NewStyle().Faint(true).Render(line)
@@ -382,7 +382,7 @@ func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth, selectedIdx
 		rows = append(wrapped, rows...)
 		starts = append(first, starts...)
 	}
-	if m.videoHost != nil {
+	if m.hosted.host != nil {
 		return trimToMessageStart(rows, starts, budget)
 	}
 	if len(rows) > budget {

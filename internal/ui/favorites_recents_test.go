@@ -39,8 +39,8 @@ func TestFavoritesToggling_ReflectedInListAndStore(t *testing.T) {
 	)
 
 	// Add channels in ModeChannels
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{
 		{ID: "ch-1", Login: "streamer_normal", DisplayName: "Normal Streamer", Viewers: twitch.IntPtr(500)},
 	}
 	m.reconcileHighlight()
@@ -114,8 +114,8 @@ func TestListOrder_FavoritesRecentsContent(t *testing.T) {
 		}),
 	)
 
-	m.mode = ModeCategories
-	m.categories = []twitch.Category{
+	m.list.mode = ModeCategories
+	m.list.categories = []twitch.Category{
 		{ID: "cat-1", Name: "Category 1"},
 		{ID: "cat-2", Name: "Category 2"},
 	}
@@ -168,8 +168,8 @@ func TestNoDuplicatesAcrossSections(t *testing.T) {
 		}),
 	)
 
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{
 		{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer", Viewers: twitch.IntPtr(1000)},
 		{ID: "ch-recent", Login: "recent_shared", DisplayName: "Recent Shared", Viewers: twitch.IntPtr(500)},
 		{ID: "ch-unique", Login: "unique_streamer", DisplayName: "Unique Streamer", Viewers: twitch.IntPtr(200)},
@@ -209,7 +209,7 @@ func TestEnterSemanticsByItemType(t *testing.T) {
 			{ID: "rec-2", Login: "streamer_rec2", DisplayName: "Rec2"},
 		}),
 	)
-	m.categories = []twitch.Category{
+	m.list.categories = []twitch.Category{
 		{ID: "cat-1", Name: "Category 1"},
 	}
 	m.reconcileHighlight()
@@ -246,7 +246,7 @@ func TestEnterSemanticsByItemType(t *testing.T) {
 
 	// 2. Enter on Category: drills down to ModeChannels without recording recent
 	// Move highlight down to Category 1 (it is 4th item: fav-1, rec-1, rec-2, cat-1)
-	m.highlightedID = "cat-1"
+	m.list.highlightedID = "cat-1"
 	recentsBefore := len(m.Recents())
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
@@ -270,8 +270,8 @@ func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
 		}),
 	)
 
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{
 		{ID: "fav-on", Login: "online_guy", DisplayName: "Online Guy", Viewers: twitch.IntPtr(1500), Title: twitch.StringPtr("Playing Game")},
 	}
 
@@ -314,10 +314,10 @@ func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
 	}
 
 	// A search proves gaulestv is not broadcasting (stream:null upstream).
-	m.mode = ModeSearch
-	m.searchQuery = "gaules"
+	m.list.mode = ModeSearch
+	m.list.search.query = "gaules"
 	updated, _ := m.Update(SearchLoadedMsg{
-		Generation: m.generation,
+		Generation: m.list.generation,
 		Page: twitch.Page[twitch.Channel]{Items: []twitch.Channel{
 			{ID: "r-off", Login: "gaulestv", DisplayName: "gaulestv", Availability: twitch.AvailabilityOffline},
 		}},
@@ -352,10 +352,10 @@ func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 			{ID: "r-1", Login: "eslcs", DisplayName: "ESLCS", Availability: twitch.AvailabilityOffline},
 		}),
 	)
-	m.playerLogin = "ESLCS"
+	m.player.login = "ESLCS"
 
 	for _, st := range []PlayerState{PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak} {
-		m.playerState = st
+		m.player.state = st
 		items := m.VisibleItems()
 		if len(items) != 1 || items[0].Availability != twitch.AvailabilityLive {
 			t.Fatalf("state %q: playing channel availability = %+v, want live", st, items)
@@ -370,7 +370,7 @@ func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 	}
 
 	// Once the player is gone the stored evidence is back in charge.
-	m.playerState = PlayerStateEnded
+	m.player.state = PlayerStateEnded
 	if items := m.VisibleItems(); !items[0].Offline() {
 		t.Fatalf("after playback ends availability = %v, want stored offline", items[0].Availability)
 	}
@@ -386,11 +386,11 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 		}),
 	)
 	cat := twitch.Category{ID: "cs", Name: "Counter-Strike"}
-	m.mode = ModeChannels
-	m.selectedCategory = &cat
+	m.list.mode = ModeChannels
+	m.list.selectedCategory = &cat
 
 	updated, _ := m.Update(ChannelsLoadedMsg{
-		Generation: m.generation,
+		Generation: m.list.generation,
 		Category:   cat,
 		Page: twitch.Page[twitch.Channel]{Items: []twitch.Channel{
 			{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(12900), Title: twitch.StringPtr("Major"), Availability: twitch.AvailabilityLive},
@@ -412,8 +412,8 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 	}
 
 	// Leaving the category keeps the evidence for the saved channels.
-	m.mode = ModeCategories
-	m.channels = nil
+	m.list.mode = ModeCategories
+	m.list.channels = nil
 	plain := ansi.Strip(m.View())
 	if !strings.Contains(plain, "12.9k  Gaules — Major") {
 		t.Fatalf("favorite should keep live status after leaving category:\n%s", plain)
@@ -442,9 +442,9 @@ func TestAvailabilityLabelsFitIn120And80Columns(t *testing.T) {
 				{ID: "r-2", Login: "gaulestv", DisplayName: "gaulestv", Availability: twitch.AvailabilityOffline},
 			}),
 		)
-		m.chatPanel.channel = "eslcs"
-		m.playerLogin = "eslcs"
-		m.playerState = PlayerStatePlaying
+		m.chat.panel.channel = "eslcs"
+		m.player.login = "eslcs"
+		m.player.state = PlayerStatePlaying
 		unverified := cat.T("channels.unverified_tag")
 		live := cat.T("channels.live_compact")
 
@@ -486,7 +486,7 @@ func TestSectionsRenderIn120And79Columns(t *testing.T) {
 			{ID: "rec-1", Login: "alanzoka", DisplayName: "alanzoka", Viewers: nil},
 		}),
 	)
-	m.categories = []twitch.Category{
+	m.list.categories = []twitch.Category{
 		{ID: "cat-1", Name: "Counter-Strike", Viewers: twitch.IntPtr(50000)},
 	}
 
@@ -580,9 +580,9 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 		)
 
 		// 1. In Search Mode:
-		m.mode = ModeSearch
-		m.searchQuery = "channel"
-		m.channels = []twitch.Channel{liveCh}
+		m.list.mode = ModeSearch
+		m.list.search.query = "channel"
+		m.list.channels = []twitch.Channel{liveCh}
 		m.reconcileHighlight()
 
 		plainSearch := ansi.Strip(m.View())
@@ -632,15 +632,15 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 			WithFavorites([]twitch.Channel{favCh}),
 			WithRecents([]twitch.Channel{recCh}),
 		)
-		mCat.mode = ModeCategories
-		mCat.categories = []twitch.Category{{ID: "c-1", Name: "Games"}}
-		mCat.highlightedID = "c-1"
+		mCat.list.mode = ModeCategories
+		mCat.list.categories = []twitch.Category{{ID: "c-1", Name: "Games"}}
+		mCat.list.highlightedID = "c-1"
 
 		plainCat := ansi.Strip(mCat.View())
 		catLines := strings.Split(plainCat, "\n")
 
 		// In search, highlight is on search result, so fav and rec have "  " marker
-		m.highlightedID = "s-1"
+		m.list.highlightedID = "s-1"
 		plainSearchNoHighlight := ansi.Strip(m.View())
 		searchLines := strings.Split(plainSearchNoHighlight, "\n")
 
@@ -661,15 +661,15 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 		liveFav := twitch.Channel{ID: "favlive-1", Login: "favlive", DisplayName: "FavLive", Viewers: twitch.IntPtr(5200), Title: twitch.StringPtr("Playing Game"), Availability: twitch.AvailabilityLive}
 
 		mDualCat := New(cat, WithFavorites([]twitch.Channel{liveFav}), WithRecents([]twitch.Channel{offCh}))
-		mDualCat.mode = ModeCategories
-		mDualCat.categories = []twitch.Category{{ID: "c-1", Name: "Games"}}
-		mDualCat.highlightedID = "c-1"
+		mDualCat.list.mode = ModeCategories
+		mDualCat.list.categories = []twitch.Category{{ID: "c-1", Name: "Games"}}
+		mDualCat.list.highlightedID = "c-1"
 
 		mDualSearch := New(cat, WithFavorites([]twitch.Channel{liveFav}), WithRecents([]twitch.Channel{offCh}))
-		mDualSearch.mode = ModeSearch
-		mDualSearch.searchQuery = "channel"
-		mDualSearch.channels = []twitch.Channel{liveCh}
-		mDualSearch.highlightedID = "s-1"
+		mDualSearch.list.mode = ModeSearch
+		mDualSearch.list.search.query = "channel"
+		mDualSearch.list.channels = []twitch.Channel{liveCh}
+		mDualSearch.list.highlightedID = "s-1"
 
 		plainDualCat := ansi.Strip(mDualCat.View())
 		plainDualSearch := ansi.Strip(mDualSearch.View())
@@ -887,9 +887,9 @@ func TestCaptureSearchScreenPTY(t *testing.T) {
 		WithRecents([]twitch.Channel{recCh}),
 	)
 
-	m.mode = ModeSearch
-	m.searchQuery = "cellbit"
-	m.channels = []twitch.Channel{liveCh}
+	m.list.mode = ModeSearch
+	m.list.search.query = "cellbit"
+	m.list.channels = []twitch.Channel{liveCh}
 	m.reconcileHighlight()
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = updated.(Model)

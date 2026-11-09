@@ -273,7 +273,7 @@ func (t statusTone) style() lipgloss.Style {
 
 // mentionsSelf reports whether body addresses the logged-in chat username.
 func (m Model) mentionsSelf(body string) bool {
-	user := strings.TrimSpace(m.chatPanel.username)
+	user := strings.TrimSpace(m.chat.panel.username)
 	if user == "" || body == "" {
 		return false
 	}

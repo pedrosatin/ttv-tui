@@ -9,7 +9,7 @@ import (
 func TestHostedOpacityKeysAdjustTheOverlay(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.keys = defaultKeyMap()
-	m.chatOverlay = true
+	m.hosted.chatOverlay = true
 	if handled, _ := m.handleHostedResizeKey(tea.KeyMsg{Type: tea.KeyUp, Alt: true}); !handled || m.hostedPanel().OverlayOpacity != 75 {
 		t.Fatalf("Alt+↑: handled %v, %+v", handled, m.hostedPanel())
 	}
@@ -20,7 +20,7 @@ func TestHostedOpacityKeysAdjustTheOverlay(t *testing.T) {
 
 func TestHostedOpacityStaysInRange(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.chatOverlay = true
+	m.hosted.chatOverlay = true
 	for range 40 {
 		m.adjustChatOpacity(hostedOpacityStep)
 	}
@@ -37,21 +37,21 @@ func TestHostedOpacityStaysInRange(t *testing.T) {
 
 func TestHostedOpacityNeedsTheChatOverTheVideo(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	if cmd := m.adjustChatOpacity(hostedOpacityStep); cmd != nil || !m.statusNoticeWarns || m.chatOverlayOpacity != 0 {
-		t.Fatalf("chat ao lado: notice %q, opacidade %d", m.statusNotice, m.chatOverlayOpacity)
+	if cmd := m.adjustChatOpacity(hostedOpacityStep); cmd != nil || !m.notices.statusWarns || m.hosted.chatOverlayOpacity != 0 {
+		t.Fatalf("chat ao lado: notice %q, opacidade %d", m.notices.status, m.hosted.chatOverlayOpacity)
 	}
 }
 
 func TestHostedOpacityIsSaved(t *testing.T) {
 	var got int
 	m := hostedModel(t, 212, 49, true)
-	m.chatOverlay = true
-	m.hostedPersist = func(_, _ int, _, _ bool, opacity int) error {
+	m.hosted.chatOverlay = true
+	m.hosted.persist = func(_, _ int, _, _ bool, opacity int) error {
 		got = opacity
 		return nil
 	}
 	m.adjustChatOpacity(hostedOpacityStep)
-	m.saveHostedColumns(m.hostedSaveGen)()
+	m.saveHostedColumns(m.hosted.saveGen)()
 	if got != 75 {
 		t.Fatalf("salvou %d", got)
 	}

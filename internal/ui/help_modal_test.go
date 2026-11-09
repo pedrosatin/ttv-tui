@@ -333,7 +333,7 @@ func TestHelpShrinkingTheTerminalKeepsThePositionValid(t *testing.T) {
 
 func TestHelpLongPlayerErrorIsReachable(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
-	m.playerLastLine = strings.TrimSpace(strings.Repeat("streamlink falhou ao abrir ", 6)) + " fimdoerro"
+	m.player.lastLine = strings.TrimSpace(strings.Repeat("streamlink falhou ao abrir ", 6)) + " fimdoerro"
 	m = resize(m, 40, 15)
 	m = sendKeys(m, keyHelpAsk, keyEnd)
 	if body := strings.Join(helpBody(m), "\n"); !strings.Contains(body, "fimdoerro") {
@@ -352,11 +352,11 @@ type helpState struct {
 func snapshotBehindHelp(m Model, pb *fakePlayback, fc *fakeChat) helpState {
 	return helpState{
 		mode: string(m.Mode()), focus: string(m.Focus()), highlighted: m.HighlightedID(),
-		draft: m.ComposeDraft(), filter: m.filter, searchInput: m.searchInput,
-		layout: string(m.LayoutMode()), langs: strings.Join(m.filterLanguages, ","),
+		draft: m.ComposeDraft(), filter: m.list.filter, searchInput: m.list.search.input,
+		layout: string(m.LayoutMode()), langs: strings.Join(m.list.prefs.languages, ","),
 		composing: m.Composing(), filtering: m.Filtering(), searching: m.Searching(),
-		filterMenu: m.channelFilterMenu, menuIndex: m.channelFilterMenuIndex,
-		favorites: len(m.favorites), started: len(pb.started), stopped: pb.stopped,
+		filterMenu: m.list.prefs.menuOpen, menuIndex: m.list.prefs.menuIndex,
+		favorites: len(m.list.favorites), started: len(pb.started), stopped: pb.stopped,
 		pauses: pb.pauses, volumes: len(pb.volDeltas), reconnected: fc.reconnected, sent: len(fc.sent),
 	}
 }
@@ -382,7 +382,7 @@ func TestHelpKeysNeverLeakBehindIt(t *testing.T) {
 		enter func(t *testing.T, m Model) Model
 	}{"filter menu", func(t *testing.T, m Model) Model {
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
-		if !m.channelFilterMenu {
+		if !m.list.prefs.menuOpen {
 			t.Fatal("filter menu did not open")
 		}
 		return m
@@ -481,7 +481,7 @@ func TestHelpOverFilterMenuIsVisibleAndRestoresIt(t *testing.T) {
 	if m.HelpVisible() {
 		t.Fatal("Esc left the help open")
 	}
-	if !m.channelFilterMenu {
+	if !m.list.prefs.menuOpen {
 		t.Fatal("closing the help closed the filter menu too")
 	}
 }

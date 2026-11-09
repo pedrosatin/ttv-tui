@@ -46,11 +46,11 @@ func TestOpenChannelDoesNotReorderVisibleList(t *testing.T) {
 			{ID: "rec-c", Login: "carol", DisplayName: "Carol"},
 		}),
 	)
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{
 		{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: twitch.IntPtr(100)},
 	}
-	m.highlightedID = "rec-c"
+	m.list.highlightedID = "rec-c"
 	m.reconcileHighlight()
 
 	before := visibleLogins(m.VisibleItems())
@@ -89,9 +89,9 @@ func TestEnterRightAfterOpenDoesNotReopenSameChannelByShift(t *testing.T) {
 			{ID: "rec-c", Login: "carol", DisplayName: "Carol"},
 		}),
 	)
-	m.mode = ModeCategories
-	m.categories = []twitch.Category{{ID: "cat-1", Name: "Just Chatting"}}
-	m.highlightedID = "rec-b"
+	m.list.mode = ModeCategories
+	m.list.categories = []twitch.Category{{ID: "cat-1", Name: "Just Chatting"}}
+	m.list.highlightedID = "rec-b"
 	m.reconcileHighlight()
 
 	m = openChannel(t, m)
@@ -142,12 +142,12 @@ func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 			{ID: "rec-b", Login: "bob", DisplayName: "Bob"},
 		}),
 	)
-	m.mode = ModeChannels
-	m.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
+	m.list.channels = []twitch.Channel{
 		{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: twitch.IntPtr(10)},
 	}
-	m.highlightedID = "rec-b"
+	m.list.highlightedID = "rec-b"
 	m.reconcileHighlight()
 
 	frozen := visibleLogins(m.VisibleItems())
@@ -174,7 +174,7 @@ func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 	}
 
 	// Open alice (now second recent), freeze again, then Esc applies on categories.
-	m.highlightedID = "rec-a"
+	m.list.highlightedID = "rec-a"
 	m.reconcileHighlight()
 	beforeBack := visibleLogins(m.VisibleItems())
 	m = openChannel(t, m)
@@ -214,12 +214,12 @@ func TestOpenChannelKeepsFavoritePositionAndDedup(t *testing.T) {
 			{ID: "rec-1", Login: "recent_one", DisplayName: "Recent One"},
 		}),
 	)
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{
 		{ID: "fav-shared", Login: "shared", DisplayName: "Shared", Viewers: twitch.IntPtr(1)},
 		{ID: "ch-new", Login: "brand_new", DisplayName: "Brand New", Viewers: twitch.IntPtr(2)},
 	}
-	m.highlightedID = "ch-new"
+	m.list.highlightedID = "ch-new"
 	m.reconcileHighlight()
 
 	before := visibleLogins(m.VisibleItems())

@@ -33,19 +33,19 @@ func chatColumn(t *testing.T, m Model) []string {
 
 func withMessages(t *testing.T, m Model, n int) Model {
 	t.Helper()
-	m.chatPanel.buf = chat.NewBuffer(chat.DefaultMaxLines, chat.DefaultMaxBytes)
-	m.chatPanel.buf.SetGeneration(m.chatPanel.gen)
+	m.chat.panel.buf = chat.NewBuffer(chat.DefaultMaxLines, chat.DefaultMaxBytes)
+	m.chat.panel.buf.SetGeneration(m.chat.panel.gen)
 	if n == 0 {
 		return m
 	}
 	msgs := make([]ChatMessage, 0, n)
 	for i := 0; i < n; i++ {
 		msgs = append(msgs, ChatMessage{
-			Generation: m.chatPanel.gen, Kind: chat.MessageChat,
+			Generation: m.chat.panel.gen, Kind: chat.MessageChat,
 			ID: fmt.Sprintf("m%d", i), User: "u", DisplayName: "User", Body: fmt.Sprintf("msg %d", i),
 		})
 	}
-	updated, _ := m.Update(ChatEventMsg{Generation: m.chatPanel.gen, Channel: "gaules", Messages: msgs})
+	updated, _ := m.Update(ChatEventMsg{Generation: m.chat.panel.gen, Channel: "gaules", Messages: msgs})
 	return updated.(Model)
 }
 

@@ -100,7 +100,7 @@ func (m Model) panelWidths() (int, int) {
 	if m.width <= 0 {
 		return 0, 0
 	}
-	if m.videoHost != nil {
+	if m.hosted.host != nil {
 		listW, chatW, _ := m.hostedWidths()
 		return listW, chatW
 	}
@@ -157,7 +157,7 @@ func (m Model) frame() string {
 		overlayLines = m.renderChannelFilterMenuLines(m.width)
 	}
 
-	if m.videoHost != nil && m.width > 0 && m.height > 1 {
+	if m.hosted.host != nil && m.width > 0 && m.height > 1 {
 		return m.hostedView(m.height-1, overlayLines, status)
 	}
 
@@ -169,7 +169,7 @@ func (m Model) frame() string {
 		}
 		if m.shouldShowNarrowChatNotice() {
 			bodyLines = append(bodyLines, m.narrowChatNoticeLines(0)...)
-		} else if m.showChat {
+		} else if m.layout.showChat {
 			chatLines := m.renderChatLines(defaultChatPreviewLines, 0)
 			bodyLines = append(bodyLines, chatLines...)
 		} else if !m.listVisible() {
@@ -324,7 +324,7 @@ func (m Model) narrowChatNoticeLines(maxWidth int) []string {
 // one-row terminal draws only the status bar, and a help nobody can see must
 // not eat keys.
 func (m Model) helpOpen() bool {
-	return m.helpVisible && m.height != 1
+	return m.layout.helpVisible && m.height != 1
 }
 
 // helpPageRows returns how many of the total help rows are drawn at once. On
@@ -340,13 +340,13 @@ func (m Model) helpPageRows(total int) int {
 // helpOffset returns helpScroll within the current bounds. A resize or a new
 // player error can change them while the help stays open.
 func (m Model) helpOffset(total int) int {
-	return min(max(m.helpScroll, 0), total-m.helpPageRows(total))
+	return min(max(m.layout.helpScroll, 0), total-m.helpPageRows(total))
 }
 
 // helpTextWidth is the width the help wraps to: the video column in the hosted
 // window, where it lies over the picture, and the whole screen elsewhere.
 func (m Model) helpTextWidth() int {
-	if m.videoHost != nil {
+	if m.hosted.host != nil {
 		if _, _, videoW := m.hostedWidths(); videoW > hostedHelpPadding {
 			return videoW - hostedHelpPadding
 		}
@@ -381,7 +381,7 @@ func positionRow(current, total, width int) string {
 // renderHelpLines returns the whole help, wrapped at maxWidth. Rows are never
 // truncated: what does not fit the height is reached by scrolling.
 func (m Model) renderHelpLines(maxWidth int) []string {
-	if !m.helpVisible {
+	if !m.layout.helpVisible {
 		return nil
 	}
 	focusPanel := m.t("help.panel_list")
@@ -405,7 +405,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		m.t("help.nocolor"),
 	} {
 		out = append(out, wrapChatRow("  ", line, maxWidth)...)
-		if m.videoHost != nil && line == m.t("help.layout") {
+		if m.hosted.host != nil && line == m.t("help.layout") {
 			out = append(out, wrapChatRow("  ", m.t("help.hosted_resize"), maxWidth)...)
 		}
 	}
@@ -454,14 +454,14 @@ func (m Model) headerLine() string {
 	var title string
 	switch m.Mode() {
 	case ModeChannels:
-		if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-			title = fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.selectedCategory.Name))
+		if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
+			title = fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.list.selectedCategory.Name))
 		} else {
 			title = m.t("channels.title")
 		}
 	case ModeSearch:
-		if m.searchQuery != "" {
-			title = fmt.Sprintf(m.t("search.title_query"), sanitizeScreenText(m.searchQuery))
+		if m.list.search.query != "" {
+			title = fmt.Sprintf(m.t("search.title_query"), sanitizeScreenText(m.list.search.query))
 		} else {
 			title = m.t("search.title")
 		}
@@ -479,11 +479,11 @@ func (m Model) headerLine() string {
 }
 
 func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
-	if m.searching {
-		line := fmt.Sprintf(m.t("search.prompt"), sanitizeScreenText(m.searchInput))
+	if m.list.search.active {
+		line := fmt.Sprintf(m.t("search.prompt"), sanitizeScreenText(m.list.search.input))
 		lines = append(lines, TruncateVisual(line, maxWidth))
-	} else if m.filtering || m.filter != "" {
-		line := fmt.Sprintf(m.t("filter.prompt"), sanitizeScreenText(m.filter))
+	} else if m.list.filtering || m.list.filter != "" {
+		line := fmt.Sprintf(m.t("filter.prompt"), sanitizeScreenText(m.list.filter))
 		lines = append(lines, TruncateVisual(line, maxWidth))
 	}
 	return lines
@@ -495,16 +495,16 @@ func (m Model) renderBodyLines(maxWidth int) []string {
 		header = styleFocus(header)
 	}
 
-	if m.err != nil {
+	if m.list.err != nil {
 		lines := []string{header}
 		lines = m.appendPromptLines(lines, maxWidth)
 		if maxWidth <= 0 {
 			lines = append(lines,
-				styleError(m.errorMessage(m.err)),
+				styleError(m.errorMessage(m.list.err)),
 				styleWarning(m.t("error.action_retry")),
 			)
 		} else {
-			for _, part := range strings.Split(ansi.Wrap(m.errorMessage(m.err), maxWidth, ""), "\n") {
+			for _, part := range strings.Split(ansi.Wrap(m.errorMessage(m.list.err), maxWidth, ""), "\n") {
 				lines = append(lines, styleError(TruncateVisual(part, maxWidth)))
 			}
 			for _, part := range strings.Split(ansi.Wrap(m.t("error.action_retry"), maxWidth, ""), "\n") {
@@ -540,7 +540,7 @@ func (m Model) channelRowTag(ch twitch.Channel, avail twitch.Availability) strin
 	case twitch.AvailabilityUnknown:
 		tags = append(tags, styleUnverified(m.t("channels.unverified_tag")))
 	}
-	if len(m.filterLanguages) > 0 && channelLanguageUnknown(ch) {
+	if len(m.list.prefs.languages) > 0 && channelLanguageUnknown(ch) {
 		tags = append(tags, m.t("channels.lang_unknown_tag"))
 	}
 	return strings.Join(tags, " ")

@@ -14,7 +14,7 @@ func TestReliableChatFailureStateAndDraft(t *testing.T) {
 		m, cat := rcLive(t, lang, &fakeChat{hasToken: true, username: "tester"}, 3)
 		m.width = 160
 		reason := "heartbeat timeout"
-		m.chatPanel.buf.Append(ChatMessage{Generation: 1, Kind: chat.MessageChat, Nonce: "pending", Body: "retry me", Self: true, Delivery: chat.DeliverySending})
+		m.chat.panel.buf.Append(ChatMessage{Generation: 1, Kind: chat.MessageChat, Nonce: "pending", Body: "retry me", Self: true, Delivery: chat.DeliverySending})
 		m = rcSend(t, m, ChatEventMsg{Generation: 1, Channel: "gaules", State: ChatStateReconnecting, ErrText: reason})
 		m = rcSend(t, m, ChatEventMsg{Generation: 1, Channel: "gaules", SendUpdates: []ChatSendStatusUpdate{{Generation: 1, Channel: "gaules", Nonce: "pending", Body: "retry me", Status: chat.DeliveryDiscarded, Reason: chat.RejectTimeout}}})
 		for _, text := range []string{m.chatStatusSummary(), ansi.Strip(m.StatusBar()), ansi.Strip(strings.Join(m.renderChatLines(12, 160), "\n"))} {
@@ -27,12 +27,12 @@ func TestReliableChatFailureStateAndDraft(t *testing.T) {
 				t.Fatal("still sending after timeout")
 			}
 		}
-		if m.composeDraft != "retry me" {
+		if m.chat.composeDraft != "retry me" {
 			t.Fatal("lost failed draft")
 		}
-		m.composeDraft = "new draft"
+		m.chat.composeDraft = "new draft"
 		m = rcSend(t, m, ChatEventMsg{Generation: 1, Channel: "gaules", SendUpdates: []ChatSendStatusUpdate{{Channel: "gaules", Body: "old draft", Status: chat.DeliveryDiscarded, Reason: chat.RejectConnectionLost}}})
-		if m.composeDraft != "new draft" {
+		if m.chat.composeDraft != "new draft" {
 			t.Fatal("overwrote newer draft")
 		}
 		m = rcConnected(t, m, 1)

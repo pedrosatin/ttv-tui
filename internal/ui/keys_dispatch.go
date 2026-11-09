@@ -17,12 +17,12 @@ func handled(next tea.Model, cmd tea.Cmd) (tea.Model, tea.Cmd, bool) {
 
 // clearKeyNotices drops the notices that last until the next key.
 func (m *Model) clearKeyNotices() {
-	m.authNotice = ""
-	m.corruptNotice = ""
+	m.notices.auth = ""
+	m.notices.corrupt = ""
 	m.clearStatusNotice()
-	m.ctrlCNotice = ""
-	m.copyNotice = ""
-	m.playerWindowNotice = false
+	m.notices.ctrlC = ""
+	m.chat.copyNotice = ""
+	m.player.windowNotice = false
 }
 
 // handleAppKey answers the two keys that outrank the help: Ctrl+Q and Ctrl+C.
@@ -33,7 +33,7 @@ func (m Model) handleAppKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// Ctrl+C reaches a raw-mode TUI as a key, not SIGINT. It never quits;
 	// only Ctrl+Q takes the shutdown path. Show a localized hint instead.
 	if msg.Type == tea.KeyCtrlC {
-		m.ctrlCNotice = m.t("status.ctrl_c_hint")
+		m.notices.ctrlC = m.t("status.ctrl_c_hint")
 		return m, nil, true
 	}
 	return m, nil, false
@@ -41,16 +41,16 @@ func (m Model) handleAppKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 // quit cancels the request in flight and stops the player and the chat.
 func (m Model) quit() (tea.Model, tea.Cmd) {
-	m.tracker.cancelActive()
-	m.generation++
-	m.loading = false
+	m.list.tracker.cancelActive()
+	m.list.generation++
+	m.list.loading = false
 	m.quitting = true
 	var cmds []tea.Cmd
 	if m.playback != nil {
 		cmds = append(cmds, m.playback.Stop())
 	}
-	if m.chat != nil {
-		cmds = append(cmds, m.chat.Stop())
+	if m.chat.session != nil {
+		cmds = append(cmds, m.chat.session.Stop())
 	}
 	cmds = append(cmds, tea.Quit)
 	return m, tea.Batch(cmds...)
@@ -82,19 +82,19 @@ func (m Model) keyStopVideo() (tea.Model, tea.Cmd) {
 	if m.playback == nil {
 		return m, nil
 	}
-	if m.playerState == PlayerStateNone || m.playerState == PlayerStateEnded {
+	if m.player.state == PlayerStateNone || m.player.state == PlayerStateEnded {
 		return m, nil
 	}
 	return m, m.playback.Stop()
 }
 
 func (m Model) keyReconnectChat() (tea.Model, tea.Cmd) {
-	if m.chat == nil || m.chatPanel.channel == "" {
+	if m.chat.session == nil || m.chat.panel.channel == "" {
 		return m, nil
 	}
-	m.chatPanel.state = ChatStateConnecting
-	m.chatPanel.switching = true
-	return m, m.chat.Reconnect()
+	m.chat.panel.state = ChatStateConnecting
+	m.chat.panel.switching = true
+	return m, m.chat.session.Reconnect()
 }
 
 // handleLayoutKey answers the layout controls, which work from any mode
@@ -132,15 +132,15 @@ func (m Model) handleModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 
-	if m.searching && m.listVisible() {
+	if m.list.search.active && m.listVisible() {
 		return handled(m.updateSearchingKey(msg))
 	}
 
-	if m.filtering && m.listVisible() {
+	if m.list.filtering && m.listVisible() {
 		return handled(m.updateFilteringKey(msg))
 	}
 
-	if m.channelFilterMenu {
+	if m.list.prefs.menuOpen {
 		return handled(m.updateChannelFilterMenuKey(msg))
 	}
 
@@ -150,7 +150,7 @@ func (m Model) handleModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m.switchPanelFocus(), nil, true
 	}
 
-	if m.composing && m.showChat && !m.chatHiddenByWidth() {
+	if m.chat.composing && m.layout.showChat && !m.chatHiddenByWidth() {
 		return handled(m.updateComposingKey(msg))
 	}
 	return m, nil, false
@@ -208,12 +208,12 @@ func (m Model) keyChannelFilter() (tea.Model, tea.Cmd) {
 // filter, then steps back one level.
 func (m Model) keyClear() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
-		m.focus = FocusList
-		m.composing = false
+		m.layout.focus = FocusList
+		m.chat.composing = false
 		return m, nil
 	}
-	if m.filter != "" {
-		m.filter = ""
+	if m.list.filter != "" {
+		m.list.filter = ""
 		m.reconcileHighlight()
 		return m, nil
 	}
@@ -237,25 +237,25 @@ func (m Model) keyCopyMessage() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) keyFilter() (tea.Model, tea.Cmd) {
-	m.focus = FocusList
+	m.layout.focus = FocusList
 	m.clearStaleStatusErrors()
-	m.filtering = true
+	m.list.filtering = true
 	return m, nil
 }
 
 func (m Model) keySearch() (tea.Model, tea.Cmd) {
-	m.focus = FocusList
-	if q := strings.TrimSpace(m.filter); q != "" {
+	m.layout.focus = FocusList
+	if q := strings.TrimSpace(m.list.filter); q != "" {
 		return m.startSearch(q)
 	}
 	m.clearStaleStatusErrors()
-	m.searching = true
-	m.searchInput = ""
+	m.list.search.active = true
+	m.list.search.input = ""
 	return m, nil
 }
 
 func (m Model) keyRetry() (tea.Model, tea.Cmd) {
-	if m.err == nil && m.playerState == PlayerStateError && m.playback != nil && m.playerLogin != "" {
+	if m.list.err == nil && m.player.state == PlayerStateError && m.playback != nil && m.player.login != "" {
 		return m.retryPlayback()
 	}
 	return m.retryCurrentMode()
@@ -322,12 +322,12 @@ func (m Model) keyDown() (tea.Model, tea.Cmd) {
 	}
 	m.moveHighlight(1)
 	if m.shouldLoadNextPage() {
-		m.generation++
-		m.loading = true
-		if m.Mode() == ModeChannels && m.selectedCategory != nil {
-			return m, m.fetchChannelsCmd(m.generation, *m.selectedCategory, m.nextCursor, true)
+		m.list.generation++
+		m.list.loading = true
+		if m.Mode() == ModeChannels && m.list.selectedCategory != nil {
+			return m, m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, m.list.nextCursor, true)
 		}
-		return m, m.fetchCategoriesCmd(m.generation, m.nextCursor, true)
+		return m, m.fetchCategoriesCmd(m.list.generation, m.list.nextCursor, true)
 	}
 	return m, nil
 }

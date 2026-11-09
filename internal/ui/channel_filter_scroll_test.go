@@ -18,10 +18,10 @@ var menuPosition = regexp.MustCompile(`^\s*(\d+)/(\d+)$`)
 func menuWithLanguages(t *testing.T, lang string, n, width, height int) Model {
 	t.Helper()
 	m := New(testCatalog(t, lang))
-	m.mode = ModeChannels
+	m.list.mode = ModeChannels
 	for i := range n {
 		code := fmt.Sprintf("%c%c", 'a'+i/26, 'a'+i%26)
-		m.channels = append(m.channels, twitch.Channel{
+		m.list.channels = append(m.list.channels, twitch.Channel{
 			ID:           fmt.Sprintf("id-%d", i),
 			Login:        fmt.Sprintf("chan%d", i),
 			DisplayName:  fmt.Sprintf("Chan%d", i),
@@ -79,14 +79,14 @@ func TestChannelFilterMenuCursorVisibleWith30LanguagesAt80x24(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		t.Run(lang, func(t *testing.T) {
 			m := menuWithLanguages(t, lang, 30, 80, 24)
-			last := len(m.channelFilterMenuItems) - 1
+			last := len(m.list.prefs.menuItems) - 1
 			if last != 35 {
 				t.Fatalf("menu items = %d, want 36", last+1)
 			}
 			for i := 0; i <= last; i++ {
 				assertMenuCursorVisible(t, m, 24, fmt.Sprintf("down step %d", i))
-				if m.channelFilterMenuIndex != i {
-					t.Fatalf("index = %d, want %d", m.channelFilterMenuIndex, i)
+				if m.list.prefs.menuIndex != i {
+					t.Fatalf("index = %d, want %d", m.list.prefs.menuIndex, i)
 				}
 				m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 			}
@@ -113,12 +113,12 @@ func TestChannelFilterMenuCursorRowIsTheSelectedItem(t *testing.T) {
 func TestChannelFilterMenuAudienceReachableWith30Languages(t *testing.T) {
 	var persisted int
 	m := menuWithLanguages(t, i18n.LangPTBR, 30, 80, 24)
-	m.filterPersist = func(_ []string, minViewers int) error {
+	m.list.prefs.persist = func(_ []string, minViewers int) error {
 		persisted = minViewers
 		return nil
 	}
 
-	for m.channelFilterMenuItems[m.channelFilterMenuIndex].Kind != filterMenuAudience {
+	for m.list.prefs.menuItems[m.list.prefs.menuIndex].Kind != filterMenuAudience {
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	}
 	view := ansi.Strip(m.View())
@@ -129,7 +129,7 @@ func TestChannelFilterMenuAudienceReachableWith30Languages(t *testing.T) {
 		t.Fatalf("cursor must sit on any-audience: %q", cursorRows(m))
 	}
 
-	for m.channelFilterMenuIndex+1 < len(m.channelFilterMenuItems) {
+	for m.list.prefs.menuIndex+1 < len(m.list.prefs.menuItems) {
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	}
 	if !strings.Contains(cursorRows(m)[0], "5000+") {
@@ -190,7 +190,7 @@ func TestChannelFilterMenuPositionFollowsCursorAndAlignsRight(t *testing.T) {
 
 func TestChannelFilterMenuKeepsTitleAndHintWhileScrolling(t *testing.T) {
 	m := menuWithLanguages(t, i18n.LangPTBR, 30, 80, 24)
-	for m.channelFilterMenuIndex+1 < len(m.channelFilterMenuItems) {
+	for m.list.prefs.menuIndex+1 < len(m.list.prefs.menuItems) {
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyDown})
 	}
 	rows := viewRows(m)
@@ -206,7 +206,7 @@ func TestChannelFilterMenuCursorVisibleOnSmallTerminals(t *testing.T) {
 	for height := 2; height <= 12; height++ {
 		t.Run(fmt.Sprintf("height %d", height), func(t *testing.T) {
 			m := menuWithLanguages(t, i18n.LangEN, 30, 80, height)
-			for i := range m.channelFilterMenuItems {
+			for i := range m.list.prefs.menuItems {
 				assertMenuCursorVisible(t, m, height, fmt.Sprintf("step %d", i))
 				m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyDown})
 			}
@@ -243,8 +243,8 @@ func TestChannelFilterMenuScrollsInEveryLayout(t *testing.T) {
 	for cycles, mode := range want {
 		m := menuWithLanguages(t, i18n.LangEN, 30, 80, 24)
 		m = m.closeChannelFilterMenu()
-		m.chatPanel.channel = "gaules"
-		m.showList, m.showChat = true, true
+		m.chat.panel.channel = "gaules"
+		m.layout.showList, m.layout.showChat = true, true
 		for range cycles {
 			m.cycleLayout()
 		}
@@ -253,7 +253,7 @@ func TestChannelFilterMenuScrollsInEveryLayout(t *testing.T) {
 		}
 		m = m.openChannelFilterMenu()
 		t.Run(string(mode), func(t *testing.T) {
-			for i := range m.channelFilterMenuItems {
+			for i := range m.list.prefs.menuItems {
 				assertMenuCursorVisible(t, m, 24, fmt.Sprintf("step %d", i))
 				want := fmt.Sprintf("%d/36", i+1)
 				if got := menuPositionRow(m); got != want {
@@ -268,46 +268,46 @@ func TestChannelFilterMenuScrollsInEveryLayout(t *testing.T) {
 func TestChannelFilterMenuQuickNavigation(t *testing.T) {
 	m := menuWithLanguages(t, i18n.LangEN, 30, 80, 24)
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	if m.channelFilterMenuIndex != 35 {
-		t.Fatalf("End index = %d, want 35", m.channelFilterMenuIndex)
+	if m.list.prefs.menuIndex != 35 {
+		t.Fatalf("End index = %d, want 35", m.list.prefs.menuIndex)
 	}
 	assertMenuCursorVisible(t, m, 24, "End")
 	if got := menuPositionRow(m); got != "36/36" {
 		t.Fatalf("position = %q", got)
 	}
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyHome})
-	if m.channelFilterMenuIndex != 0 {
-		t.Fatalf("Home index = %d", m.channelFilterMenuIndex)
+	if m.list.prefs.menuIndex != 0 {
+		t.Fatalf("Home index = %d", m.list.prefs.menuIndex)
 	}
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyPgDown})
-	if m.channelFilterMenuIndex != 19 {
-		t.Fatalf("PgDown index = %d, want 19", m.channelFilterMenuIndex)
+	if m.list.prefs.menuIndex != 19 {
+		t.Fatalf("PgDown index = %d, want 19", m.list.prefs.menuIndex)
 	}
 	if got := menuPositionRow(m); got != "20/36" {
 		t.Fatalf("position = %q", got)
 	}
 	assertMenuCursorVisible(t, m, 24, "PgDown")
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyPgUp})
-	if m.channelFilterMenuIndex != 0 {
-		t.Fatalf("PgUp index = %d", m.channelFilterMenuIndex)
+	if m.list.prefs.menuIndex != 0 {
+		t.Fatalf("PgUp index = %d", m.list.prefs.menuIndex)
 	}
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
-	if m.channelFilterMenuIndex != 0 {
-		t.Fatalf("j/k index = %d", m.channelFilterMenuIndex)
+	if m.list.prefs.menuIndex != 0 {
+		t.Fatalf("j/k index = %d", m.list.prefs.menuIndex)
 	}
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
-	if m.channelFilterMenuIndex != 35 {
-		t.Fatalf("G index = %d", m.channelFilterMenuIndex)
+	if m.list.prefs.menuIndex != 35 {
+		t.Fatalf("G index = %d", m.list.prefs.menuIndex)
 	}
 	short := menuWithLanguages(t, i18n.LangEN, 0, 80, 24)
 	short, _ = pressKey(short, tea.KeyMsg{Type: tea.KeyEnd})
 	assertMenuCursorVisible(t, short, 24, "short End")
-	if short.channelFilterMenuIndex != 5 {
-		t.Fatalf("short End index = %d", short.channelFilterMenuIndex)
+	if short.list.prefs.menuIndex != 5 {
+		t.Fatalf("short End index = %d", short.list.prefs.menuIndex)
 	}
 	short, _ = pressKey(short, tea.KeyMsg{Type: tea.KeyHome})
-	if short.channelFilterMenuIndex != 0 {
-		t.Fatalf("short Home index = %d", short.channelFilterMenuIndex)
+	if short.list.prefs.menuIndex != 0 {
+		t.Fatalf("short Home index = %d", short.list.prefs.menuIndex)
 	}
 }

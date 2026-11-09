@@ -31,7 +31,7 @@ func TestTextInputSanitizesPaste(t *testing.T) {
 					m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 				}
 				m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.input), Paste: true})
-				got := m.searchInput
+				got := m.list.search.input
 				switch mode {
 				case "filter":
 					got = m.Filter()

@@ -263,8 +263,8 @@ func setupStaleLiveListing(t *testing.T) Model {
 	)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{xqc, gaules}
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{xqc, gaules}
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: xqc})
 	m = updated.(Model)
 	m = drainCmd(t, m, cmd)
@@ -417,8 +417,8 @@ func TestPlayerTerminalStatesRender(t *testing.T) {
 				m, pb := newFailureModel(t, lang, size[0], "xaryu")
 				updated, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 				m = updated.(Model)
-				m.chatPanel.state = ChatStateConnected
-				m.chatPanel.channel = "xaryu"
+				m.chat.panel.state = ChatStateConnected
+				m.chat.panel.channel = "xaryu"
 				updated, _ = m.Update(PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "xaryu", Volume: 100})
 				playing := updated.(Model)
 				updated, cmd := playing.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
@@ -429,9 +429,9 @@ func TestPlayerTerminalStatesRender(t *testing.T) {
 				}
 				for _, failure := range []PlayerFailure{PlayerFailureNone, PlayerFailureUnknown, PlayerFailureOffline, PlayerFailureNetwork, PlayerFailureTimeout, PlayerFailureStreamlinkMissing, PlayerFailureMPVMissing} {
 					failed := failWith(t, playing, 1, failure, "")
-					failed.statusNotice = "secondary notice"
-					failed.copyNotice = "copy notice"
-					failed.err = errors.New("list error")
+					failed.notices.status = "secondary notice"
+					failed.chat.copyNotice = "copy notice"
+					failed.list.err = errors.New("list error")
 					view := ansi.Strip(failed.View())
 					want := failed.playerFailureText()
 					if !strings.Contains(view, want) || !strings.Contains(want, "r ") || !strings.Contains(want, "?") || strings.Contains(view, m.t("player.ended")) {

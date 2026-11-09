@@ -15,10 +15,10 @@ func (h *recordingHost) SetPanel(p HostPanel) { h.panels = append(h.panels, p) }
 // hostedModel is a model hosted in a window of the given size, with a chat panel.
 func hostedModel(t *testing.T, width, height int, withChat bool) Model {
 	t.Helper()
-	m := Model{videoHost: &recordingHost{}, showList: true, showChat: true}
+	m := Model{hosted: hostedState{host: &recordingHost{}}, layout: layoutState{showList: true, showChat: true}}
 	m.width, m.height = width, height
 	if withChat {
-		m.chatPanel.channel = "canal"
+		m.chat.panel.channel = "canal"
 	}
 	if withChat != m.hasChatPanel() {
 		t.Fatalf("hasChatPanel = %v, quero %v", m.hasChatPanel(), withChat)
@@ -43,7 +43,7 @@ func TestHostedWidths(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := hostedModel(t, tc.width, 49, true)
-			m.showList, m.showChat = !tc.hideList, !tc.hideChat
+			m.layout.showList, m.layout.showChat = !tc.hideList, !tc.hideChat
 			list, chat, video := m.hostedWidths()
 			if list != tc.wantList || chat != tc.wantChat || video != tc.wantVideo {
 				t.Fatalf("larguras = %d, %d, %d; quero %d, %d, %d", list, chat, video, tc.wantList, tc.wantChat, tc.wantVideo)
@@ -83,7 +83,7 @@ func TestHostedPanelFollowsTheToggles(t *testing.T) {
 
 func TestHostedPanelCarriesTheHelpOverTheVideo(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.helpVisible = true
+	m.layout.helpVisible = true
 	want := HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true, OverlayCols: 122, OverlayOpacity: 70}
 	if got := m.hostedPanel(); got != want {
 		t.Fatalf("com a ajuda aberta: %+v, quero %+v", got, want)
@@ -92,7 +92,7 @@ func TestHostedPanelCarriesTheHelpOverTheVideo(t *testing.T) {
 
 func TestHostedPanelGivesWayToTheFilterMenu(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.channelFilterMenu = true
+	m.list.prefs.menuOpen = true
 	if got := m.hostedPanel(); got != (HostPanel{}) {
 		t.Fatalf("com o menu de filtros aberto: %+v", got)
 	}
@@ -100,7 +100,7 @@ func TestHostedPanelGivesWayToTheFilterMenu(t *testing.T) {
 
 func TestHostedPublishesOnlyChanges(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	host := m.videoHost.(*recordingHost)
+	host := m.hosted.host.(*recordingHost)
 	m = m.syncHostPanel()
 	m = m.syncHostPanel()
 	if len(host.panels) != 1 {
@@ -130,7 +130,7 @@ func TestHostedSkipsWindowNotice(t *testing.T) {
 	if m.hostedIdleText() == "" {
 		t.Fatal("sem reprodução a coluna do vídeo precisa dizer o que fazer")
 	}
-	m.playerState = PlayerStatePlaying
+	m.player.state = PlayerStatePlaying
 	if m.hostedIdleText() != "" {
 		t.Fatal("tocando, a coluna do vídeo fica em branco para a janela desenhar")
 	}
@@ -177,7 +177,7 @@ func TestHostedResizeStopsAtTheLimits(t *testing.T) {
 
 func TestHostedSavedWidthsGiveWayInSmallWindows(t *testing.T) {
 	m := hostedModel(t, 106, 49, true)
-	m.hostedListCols, m.hostedChatCols = 90, 60
+	m.hosted.listCols, m.hosted.chatCols = 90, 60
 	list, chat, video := m.hostedWidths()
 	if video != hostedMinVideo || list+chat+video+2*hostedSepWidth != 106 {
 		t.Fatalf("janela pequena: %d, %d, %d", list, chat, video)
@@ -193,30 +193,30 @@ func TestHostedSavedWidthsGiveWayInSmallWindows(t *testing.T) {
 
 func TestHostedResizeOfHiddenPanelWarns(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.showList, m.showChat = false, false
-	if cmd := m.resizeHostedList(hostedResizeStep); cmd != nil || !m.statusNoticeWarns || m.hostedListCols != 0 {
-		t.Fatalf("lista oculta: notice %q, cols %d", m.statusNotice, m.hostedListCols)
+	m.layout.showList, m.layout.showChat = false, false
+	if cmd := m.resizeHostedList(hostedResizeStep); cmd != nil || !m.notices.statusWarns || m.hosted.listCols != 0 {
+		t.Fatalf("lista oculta: notice %q, cols %d", m.notices.status, m.hosted.listCols)
 	}
-	m.statusNotice, m.statusNoticeWarns = "", false
-	if cmd := m.resizeHostedChat(hostedResizeStep); cmd != nil || !m.statusNoticeWarns || m.hostedChatCols != 0 {
-		t.Fatalf("chat oculto: notice %q, cols %d", m.statusNotice, m.hostedChatCols)
+	m.notices.status, m.notices.statusWarns = "", false
+	if cmd := m.resizeHostedChat(hostedResizeStep); cmd != nil || !m.notices.statusWarns || m.hosted.chatCols != 0 {
+		t.Fatalf("chat oculto: notice %q, cols %d", m.notices.status, m.hosted.chatCols)
 	}
 }
 
 func TestHostedSaveKeepsOnlyTheLastChange(t *testing.T) {
 	var saved [][2]int
 	m := hostedModel(t, 212, 49, true)
-	m.hostedPersist = func(list, chat int, _, _ bool, _ int) error {
+	m.hosted.persist = func(list, chat int, _, _ bool, _ int) error {
 		saved = append(saved, [2]int{list, chat})
 		return nil
 	}
 	m.resizeHostedList(hostedResizeStep)
-	first := m.hostedSaveGen
+	first := m.hosted.saveGen
 	m.resizeHostedList(hostedResizeStep)
 	if cmd := m.saveHostedColumns(first); cmd != nil {
 		t.Fatal("uma mudança mais nova cancela o salvamento antigo")
 	}
-	cmd := m.saveHostedColumns(m.hostedSaveGen)
+	cmd := m.saveHostedColumns(m.hosted.saveGen)
 	if cmd == nil {
 		t.Fatal("a última mudança precisa ser salva")
 	}
@@ -230,14 +230,14 @@ func TestHostedResizeKeysOnlyInTheHostedWindow(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.keys = defaultKeyMap()
 	right := tea.KeyMsg{Type: tea.KeyCtrlRight}
-	if handled, _ := m.handleHostedResizeKey(right); !handled || m.hostedListCols != 44 {
-		t.Fatalf("Ctrl+→ na janela: handled %v, cols %d", handled, m.hostedListCols)
+	if handled, _ := m.handleHostedResizeKey(right); !handled || m.hosted.listCols != 44 {
+		t.Fatalf("Ctrl+→ na janela: handled %v, cols %d", handled, m.hosted.listCols)
 	}
 	alt := tea.KeyMsg{Type: tea.KeyLeft, Alt: true}
-	if handled, _ := m.handleHostedResizeKey(alt); !handled || m.hostedChatCols != 48 {
-		t.Fatalf("Alt+← na janela: handled %v, cols %d", handled, m.hostedChatCols)
+	if handled, _ := m.handleHostedResizeKey(alt); !handled || m.hosted.chatCols != 48 {
+		t.Fatalf("Alt+← na janela: handled %v, cols %d", handled, m.hosted.chatCols)
 	}
-	m.videoHost = nil
+	m.hosted.host = nil
 	if handled, _ := m.handleHostedResizeKey(right); handled {
 		t.Fatal("num terminal comum as teclas seguem livres")
 	}
@@ -245,13 +245,13 @@ func TestHostedResizeKeysOnlyInTheHostedWindow(t *testing.T) {
 
 func TestHostedListTakesFocusWhenItComesBack(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.focus = FocusList
+	m.layout.focus = FocusList
 	m.toggleListPanel()
-	if m.focus != FocusChat {
-		t.Fatalf("lista oculta: foco %v, quero o chat", m.focus)
+	if m.layout.focus != FocusChat {
+		t.Fatalf("lista oculta: foco %v, quero o chat", m.layout.focus)
 	}
 	m.toggleListPanel()
-	if m.focus != FocusList {
-		t.Fatalf("lista de volta: foco %v, quero a lista", m.focus)
+	if m.layout.focus != FocusList {
+		t.Fatalf("lista de volta: foco %v, quero a lista", m.layout.focus)
 	}
 }

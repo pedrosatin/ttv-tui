@@ -15,11 +15,11 @@ const (
 func (m Model) LayoutMode() LayoutMode {
 	listOn := m.listVisible()
 	switch {
-	case listOn && m.showChat:
+	case listOn && m.layout.showChat:
 		return LayoutSplit
-	case !listOn && m.showChat:
+	case !listOn && m.layout.showChat:
 		return LayoutChat
-	case listOn && !m.showChat:
+	case listOn && !m.layout.showChat:
 		return LayoutList
 	default:
 		return LayoutFocus
@@ -46,19 +46,19 @@ func (m Model) layoutModeLabel(mode LayoutMode) string {
 // the list is all there is to draw, so no flag can hide it and leave the screen
 // empty.
 func (m Model) listVisible() bool {
-	return m.showList || !m.hasChatPanel()
+	return m.layout.showList || !m.hasChatPanel()
 }
 
 // chatColumnVisible reports whether the chat panel occupies a column (layout
 // wants it, a chat session exists, and the terminal is wide enough).
 func (m Model) chatColumnVisible() bool {
-	return m.showChat && m.hasChatPanel() && !m.chatHiddenByWidth()
+	return m.layout.showChat && m.hasChatPanel() && !m.chatHiddenByWidth()
 }
 
 // shouldShowNarrowChatNotice is true only when width hides chat. Hiding chat
 // via layout must not show the "<80 cols" warning.
 func (m Model) shouldShowNarrowChatNotice() bool {
-	return m.showChat && m.hasChatPanel() && m.chatHiddenByWidth()
+	return m.layout.showChat && m.hasChatPanel() && m.chatHiddenByWidth()
 }
 
 // warnChatHiddenByWidth answers a chat key the split cannot serve, and reports
@@ -74,7 +74,7 @@ func (m *Model) warnChatHiddenByWidth() bool {
 // keepListWithoutChat answers a layout key before any chat exists: every mode
 // would draw the same list or nothing, so the panels stay and the bar says why.
 func (m *Model) keepListWithoutChat() {
-	m.showList, m.showChat = true, true
+	m.layout.showList, m.layout.showChat = true, true
 	m.warnStatus(m.t("layout.no_chat"))
 	m.normalizeFocusAfterLayout()
 }
@@ -82,24 +82,24 @@ func (m *Model) keepListWithoutChat() {
 func (m *Model) cycleLayout() {
 	switch m.LayoutMode() {
 	case LayoutSplit:
-		m.showList, m.showChat = false, true
+		m.layout.showList, m.layout.showChat = false, true
 	case LayoutChat:
-		m.showList, m.showChat = true, false
+		m.layout.showList, m.layout.showChat = true, false
 	case LayoutList:
-		m.showList, m.showChat = false, false
+		m.layout.showList, m.layout.showChat = false, false
 	default:
-		m.showList, m.showChat = true, true
+		m.layout.showList, m.layout.showChat = true, true
 	}
 	m.normalizeFocusAfterLayout()
 }
 
 func (m *Model) toggleListPanel() {
-	m.showList = !m.showList
+	m.layout.showList = !m.layout.showList
 	m.normalizeFocusAfterLayout()
 	// In the hosted window the list comes back to be used: the arrows and Enter that
 	// follow belong to it, not to the chat that took the focus while it was away.
-	if m.videoHost != nil && m.showList && m.listVisible() {
-		m.focus = FocusList
+	if m.hosted.host != nil && m.layout.showList && m.listVisible() {
+		m.layout.focus = FocusList
 	}
 }
 
@@ -107,9 +107,9 @@ func (m *Model) toggleListPanel() {
 // showing it means chat-only, the one mode that can draw it there.
 func (m *Model) toggleChatPanel() {
 	if m.chatHiddenByWidth() {
-		m.showList, m.showChat = false, true
+		m.layout.showList, m.layout.showChat = false, true
 	} else {
-		m.showChat = !m.showChat
+		m.layout.showChat = !m.layout.showChat
 	}
 	m.normalizeFocusAfterLayout()
 }
@@ -120,17 +120,17 @@ func (m *Model) normalizeFocusAfterLayout() {
 	listOn := m.listVisible()
 	chatOn := m.chatColumnVisible()
 	if !chatOn {
-		m.composing = false
+		m.chat.composing = false
 	}
 	switch {
 	case listOn && chatOn:
 		// Keep the user's focus between the two panels.
 	case chatOn:
-		m.focus = FocusChat
+		m.layout.focus = FocusChat
 	case listOn:
-		m.focus = FocusList
+		m.layout.focus = FocusList
 	default:
 		// Focus mode: leave underlying focus as-is; Focus() reports list.
-		m.composing = false
+		m.chat.composing = false
 	}
 }

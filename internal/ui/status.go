@@ -31,16 +31,16 @@ func (m Model) errorMessage(err error) string {
 // can still show the technical detail. Transient notices (favorite added,
 // copied, auth) are left alone — they have their own lifetime.
 func (m *Model) clearStaleStatusErrors() {
-	m.err = nil
-	if m.playerState != PlayerStateError {
+	m.list.err = nil
+	if m.player.state != PlayerStateError {
 		return
 	}
-	m.playerState = PlayerStateNone
-	m.playerFailure = PlayerFailureNone
+	m.player.state = PlayerStateNone
+	m.player.failure = PlayerFailureNone
 }
 
 func (m Model) listErrorAction() string {
-	switch twitch.KindOf(m.err) {
+	switch twitch.KindOf(m.list.err) {
 	case twitch.Rede:
 		return m.t("error.list.network")
 	case twitch.Contrato:
@@ -55,14 +55,14 @@ func (m Model) listErrorAction() string {
 }
 
 func (m Model) listErrorDetail() string {
-	if m.err == nil {
+	if m.list.err == nil {
 		return ""
 	}
 	var te *twitch.Error
-	if errors.As(m.err, &te) && te != nil && te.Err != nil {
+	if errors.As(m.list.err, &te) && te != nil && te.Err != nil {
 		return fmt.Sprintf(m.t("error.fail.detail"), sanitizeScreenText(te.Err.Error()))
 	}
-	if msg := strings.TrimSpace(sanitizeScreenText(m.err.Error())); msg != "" {
+	if msg := strings.TrimSpace(sanitizeScreenText(m.list.err.Error())); msg != "" {
 		return fmt.Sprintf(m.t("error.fail.detail"), msg)
 	}
 	return ""
@@ -70,10 +70,10 @@ func (m Model) listErrorDetail() string {
 
 func (m Model) activeContextSummary() string {
 	var parts []string
-	if m.selectedChannel != nil {
-		playerHasLogin := m.playerLogin != "" && strings.EqualFold(m.playerLogin, m.selectedChannel.Login)
-		name := sanitizeScreenText(m.selectedChannel.DisplayName)
-		login := sanitizeScreenText(m.selectedChannel.Login)
+	if m.list.selectedChannel != nil {
+		playerHasLogin := m.player.login != "" && strings.EqualFold(m.player.login, m.list.selectedChannel.Login)
+		name := sanitizeScreenText(m.list.selectedChannel.DisplayName)
+		login := sanitizeScreenText(m.list.selectedChannel.Login)
 		chText := ""
 		if !playerHasLogin {
 			chText = login
@@ -83,8 +83,8 @@ func (m Model) activeContextSummary() string {
 				chText = name
 			}
 		}
-		if m.selectedChannel.Viewers != nil {
-			vText := m.formatChannelViewers(m.selectedChannel.Viewers)
+		if m.list.selectedChannel.Viewers != nil {
+			vText := m.formatChannelViewers(m.list.selectedChannel.Viewers)
 			if chText != "" {
 				chText += " (" + vText + ")"
 			} else {
@@ -95,15 +95,15 @@ func (m Model) activeContextSummary() string {
 			parts = append(parts, chText)
 		}
 		// Category of the playing/selected channel — never the last list visited.
-		if cat := channelCategoryName(m.selectedChannel); cat != "" {
+		if cat := channelCategoryName(m.list.selectedChannel); cat != "" {
 			parts = append(parts, cat)
 		}
 		return strings.Join(parts, " · ")
 	}
-	if m.selectedCategory != nil && m.selectedCategory.Name != "" {
-		catText := sanitizeScreenText(m.selectedCategory.Name)
-		if m.selectedCategory.Viewers != nil {
-			catText += " (" + m.formatViewers(m.selectedCategory.Viewers) + ")"
+	if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
+		catText := sanitizeScreenText(m.list.selectedCategory.Name)
+		if m.list.selectedCategory.Viewers != nil {
+			catText += " (" + m.formatViewers(m.list.selectedCategory.Viewers) + ")"
 		}
 		parts = append(parts, catText)
 	}
@@ -137,16 +137,16 @@ type statusContent struct {
 // chat channel. Player actions, errors, search/filter and one-shot notices keep
 // the lead (ticket 07 / orientation).
 func (m Model) softStatusPrimary() bool {
-	if m.err != nil || m.searching || m.filtering || m.channelFilterMenu || m.loading {
+	if m.list.err != nil || m.list.search.active || m.list.filtering || m.list.prefs.menuOpen || m.list.loading {
 		return false
 	}
-	if m.authNotice != "" || m.corruptNotice != "" || m.copyNotice != "" || m.statusNotice != "" || m.ctrlCNotice != "" {
+	if m.notices.auth != "" || m.notices.corrupt != "" || m.chat.copyNotice != "" || m.notices.status != "" || m.notices.ctrlC != "" {
 		return false
 	}
-	if m.playerWindowNoticeShown() || m.playerState == PlayerStateError || m.playerState == PlayerStateEnded {
+	if m.playerWindowNoticeShown() || m.player.state == PlayerStateError || m.player.state == PlayerStateEnded {
 		return false
 	}
-	if m.playerState != PlayerStateNone && m.playerState != PlayerStateEnded {
+	if m.player.state != PlayerStateNone && m.player.state != PlayerStateEnded {
 		return false
 	}
 	return true
@@ -154,9 +154,9 @@ func (m Model) softStatusPrimary() bool {
 
 // chatStatusHasChannel reports whether the chat summary includes a room name.
 func (m Model) chatStatusHasChannel() bool {
-	switch m.chatPanel.state {
+	switch m.chat.panel.state {
 	case ChatStateConnecting, ChatStateConnected, ChatStateReconnecting:
-		return m.chatPanel.channel != ""
+		return m.chat.panel.channel != ""
 	default:
 		return false
 	}
@@ -165,7 +165,7 @@ func (m Model) chatStatusHasChannel() bool {
 // primaryNamesChatChannel reports whether primary already cites the chat room
 // (playing/selected), so promoting the chat status would only duplicate it.
 func (m Model) primaryNamesChatChannel(primary string) bool {
-	ch := strings.TrimSpace(m.chatPanel.channel)
+	ch := strings.TrimSpace(m.chat.panel.channel)
 	if ch == "" {
 		return false
 	}
@@ -175,7 +175,7 @@ func (m Model) primaryNamesChatChannel(primary string) bool {
 // chatChannelRef is the short "#login" form used when the full chat status
 // does not fit but the channel name still can.
 func (m Model) chatChannelRef() string {
-	ch := strings.TrimSpace(m.chatPanel.channel)
+	ch := strings.TrimSpace(m.chat.panel.channel)
 	if ch == "" || !m.chatStatusHasChannel() {
 		return ""
 	}
@@ -184,7 +184,7 @@ func (m Model) chatChannelRef() string {
 
 // focusStatusText names the focused panel when both panels are visible.
 func (m Model) focusStatusText() string {
-	if m.videoHost != nil {
+	if m.hosted.host != nil {
 		if m.shouldShowNarrowChatNotice() {
 			return m.t("status.chat_narrow")
 		}
@@ -214,13 +214,13 @@ func (m Model) includeLayoutStatus() bool {
 	if m.LayoutMode() == LayoutSplit {
 		return false
 	}
-	if m.err != nil || m.channelFilterMenu || m.searching || m.filtering {
+	if m.list.err != nil || m.list.prefs.menuOpen || m.list.search.active || m.list.filtering {
 		return false
 	}
-	if m.playerState == PlayerStateError {
+	if m.player.state == PlayerStateError {
 		return false
 	}
-	if m.ctrlCNotice != "" || m.authNotice != "" || m.corruptNotice != "" || m.copyNotice != "" || m.statusNotice != "" {
+	if m.notices.ctrlC != "" || m.notices.auth != "" || m.notices.corrupt != "" || m.chat.copyNotice != "" || m.notices.status != "" {
 		return false
 	}
 	return true
@@ -242,12 +242,12 @@ func (m Model) statusLadder(lang string) []statusChrome {
 	// Focus lives in the chrome, not in the state message, so Tab has a stable
 	// place to announce the active panel. Skip it while an error detail needs
 	// the columns.
-	if focus := m.focusStatusText(); focus != "" && m.err == nil {
+	if focus := m.focusStatusText(); focus != "" && m.list.err == nil {
 		focusHints = fmt.Sprintf(" | %s · %s · %s ", focus, help, quit)
 	}
 	last := " | " + quit + " "
 	// The window is narrow exactly when this hint matters: it outlasts the help hint.
-	if m.videoHost != nil && m.shouldShowNarrowChatNotice() {
+	if m.hosted.host != nil && m.shouldShowNarrowChatNotice() {
 		last = fmt.Sprintf(" | %s · %s ", m.t("status.chat_narrow"), quit)
 		hints, focusHints = last, last
 	}

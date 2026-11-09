@@ -241,7 +241,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // hiddenListKey rejects list actions while preserving shared chat shortcuts
 // and text entry in a visible chat. Global controls are handled independently.
 func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
-	if m.listVisible() || m.channelFilterMenu || (m.composing && m.chatColumnVisible()) {
+	if m.listVisible() || m.list.prefs.menuOpen || (m.chat.composing && m.chatColumnVisible()) {
 		return false
 	}
 	if key.Matches(msg, m.keys.Filter, m.keys.Search, m.keys.Favorite, m.keys.ChannelFilter, m.keys.Retry) {
@@ -268,19 +268,19 @@ func (m Model) switchPanelFocus() Model {
 		m.warnChatHiddenByWidth()
 		return m
 	}
-	m.composing = false
-	if m.focus == FocusChat {
-		m.focus = FocusList
+	m.chat.composing = false
+	if m.layout.focus == FocusChat {
+		m.layout.focus = FocusList
 	} else {
-		m.focus = FocusChat
+		m.layout.focus = FocusChat
 	}
 	return m
 }
 
 // toggleHelp opens or closes the help, always at the top.
 func (m *Model) toggleHelp() {
-	m.helpVisible = !m.helpVisible
-	m.helpScroll = 0
+	m.layout.helpVisible = !m.layout.helpVisible
+	m.layout.helpScroll = 0
 }
 
 // updateHelpKey consumes every key while the help is open: it closes, scrolls,
@@ -306,29 +306,29 @@ func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.GoLive):
 		offset = total
 	}
-	m.helpScroll = offset
+	m.layout.helpScroll = offset
 	return m, nil
 }
 
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {
-	if m.warnChatHiddenByWidth() || !m.showChat || m.chatHiddenByWidth() {
+	if m.warnChatHiddenByWidth() || !m.layout.showChat || m.chatHiddenByWidth() {
 		return m, nil
 	}
-	if !m.chatHasToken() && (m.chat != nil || m.chatPanel.channel != "") {
-		m.chatPanel.sendWarning = m.t("chat.warn.no_token")
+	if !m.chatHasToken() && (m.chat.session != nil || m.chat.panel.channel != "") {
+		m.chat.panel.sendWarning = m.t("chat.warn.no_token")
 		return m, nil
 	}
-	if m.hasChatPanel() || m.chat != nil {
-		m.focus = FocusChat
+	if m.hasChatPanel() || m.chat.session != nil {
+		m.layout.focus = FocusChat
 	}
-	m.composing = true
+	m.chat.composing = true
 	return m, nil
 }
 
 func (m Model) playerControllable() bool {
-	switch m.playerState {
+	switch m.player.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak, PlayerStateStarting:
 		return true
 	default:
@@ -344,9 +344,9 @@ func (m Model) adjustVolume(delta int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch {
-	case delta > 0 && m.playerVolume >= 100:
+	case delta > 0 && m.player.volume >= 100:
 		m.warnStatus(m.t("player.vol_max"))
-	case delta < 0 && m.playerVolume <= 0:
+	case delta < 0 && m.player.volume <= 0:
 		m.warnStatus(m.t("player.vol_min"))
 	}
 	return m, m.playback.AdjustVolume(delta)
@@ -356,34 +356,34 @@ func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Clear):
 		// Esc leaves composition and stays on the chat panel; draft is kept.
-		m.composing = false
+		m.chat.composing = false
 		return m, nil
 
 	case key.Matches(msg, m.keys.Select):
 		return m.submitComposeMessage()
 
 	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
-		m.composeDraft = trimLastRune(m.composeDraft)
+		m.chat.composeDraft = trimLastRune(m.chat.composeDraft)
 		m.clearResolvedComposeWarning()
 		return m, nil
 
 	case msg.Type == tea.KeySpace, key.Matches(msg, m.keys.Pause):
-		m.composeDraft += " "
+		m.chat.composeDraft += " "
 		m.clearResolvedComposeWarning()
 		return m, nil
 
 	case key.Matches(msg, m.keys.VolUp):
-		m.composeDraft += "+"
+		m.chat.composeDraft += "+"
 		m.clearResolvedComposeWarning()
 		return m, nil
 
 	case key.Matches(msg, m.keys.VolDown):
-		m.composeDraft += "-"
+		m.chat.composeDraft += "-"
 		m.clearResolvedComposeWarning()
 		return m, nil
 
 	case msg.Type == tea.KeyRunes:
-		m.composeDraft += sanitizeChatText(string(msg.Runes))
+		m.chat.composeDraft += sanitizeChatText(string(msg.Runes))
 		m.clearResolvedComposeWarning()
 		return m, nil
 	}
@@ -393,15 +393,15 @@ func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // clearResolvedComposeWarning drops a warning about the draft once the edit fixed
 // it, so the footer stops describing a problem the draft no longer has.
 func (m *Model) clearResolvedComposeWarning() {
-	switch m.chatPanel.sendWarning {
+	switch m.chat.panel.sendWarning {
 	case "":
 	case m.t("chat.warn.too_long"):
 		if !m.composeDraftOverLimit() {
-			m.chatPanel.sendWarning = ""
+			m.chat.panel.sendWarning = ""
 		}
 	case m.t("chat.warn.command_blocked"):
-		if !chat.IsBlockedCommand(m.composeDraft) {
-			m.chatPanel.sendWarning = ""
+		if !chat.IsBlockedCommand(m.chat.composeDraft) {
+			m.chat.panel.sendWarning = ""
 		}
 	}
 }

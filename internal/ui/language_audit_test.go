@@ -157,17 +157,17 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 		}},
 		{"channel filter menu", func(t *testing.T, lang string) Model {
 			m := auditModel(t, lang, 200)
-			m.channelFilterMenu = true
+			m.list.prefs.menuOpen = true
 			return m
 		}, func() []expectKey { return []expectKey{ek("channel_filter.status_open")} }},
 		{"search prompt", func(t *testing.T, lang string) Model {
 			m := auditModel(t, lang, 200)
-			m.searching, m.searchInput = true, "doom"
+			m.list.search.active, m.list.search.input = true, "doom"
 			return m
 		}, func() []expectKey { return []expectKey{ek("search.prompt", "doom")} }},
 		{"filter prompt", func(t *testing.T, lang string) Model {
 			m := auditModel(t, lang, 200)
-			m.filtering, m.filter = true, "cs"
+			m.list.filtering, m.list.filter = true, "cs"
 			return m
 		}, func() []expectKey { return []expectKey{ek("filter.prompt", "cs")} }},
 		{"Ctrl+C hint", func(t *testing.T, lang string) Model {

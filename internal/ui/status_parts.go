@@ -63,22 +63,22 @@ func (m Model) statusLead() statusLead {
 // blockingStatusLead covers errors and the states waiting for typed input.
 func (m Model) blockingStatusLead() (statusLead, bool) {
 	switch {
-	case m.playerState == PlayerStateError:
+	case m.player.state == PlayerStateError:
 		return statusLead{primary: m.playerFailureText(), tone: toneError, detail: m.playerErrorDetail()}, true
-	case m.ctrlCNotice != "":
+	case m.notices.ctrlC != "":
 		// Ctrl+C hint outranks filter/search prompts so every mode shows it.
-		return statusLead{primary: m.ctrlCNotice}, true
-	case m.err != nil:
+		return statusLead{primary: m.notices.ctrlC}, true
+	case m.list.err != nil:
 		return statusLead{primary: m.listErrorAction(), tone: toneError, detail: m.listErrorDetail()}, true
-	case m.channelFilterMenu:
+	case m.list.prefs.menuOpen:
 		return statusLead{primary: m.t("channel_filter.status_open")}, true
-	case m.searching && m.listVisible():
-		return statusLead{primary: fmt.Sprintf(m.t("search.prompt"), m.searchInput)}, true
-	case m.filtering && m.listVisible():
+	case m.list.search.active && m.listVisible():
+		return statusLead{primary: fmt.Sprintf(m.t("search.prompt"), m.list.search.input)}, true
+	case m.list.filtering && m.listVisible():
 		if m.filterHasNoMatches() {
-			return statusLead{primary: fmt.Sprintf(m.t("filter.search_hint"), strings.TrimSpace(m.filter))}, true
+			return statusLead{primary: fmt.Sprintf(m.t("filter.search_hint"), strings.TrimSpace(m.list.filter))}, true
 		}
-		return statusLead{primary: fmt.Sprintf(m.t("filter.prompt"), m.filter)}, true
+		return statusLead{primary: fmt.Sprintf(m.t("filter.prompt"), m.list.filter)}, true
 	}
 	return statusLead{}, false
 }
@@ -87,20 +87,20 @@ func (m Model) blockingStatusLead() (statusLead, bool) {
 func (m Model) noticeStatusLead() (statusLead, bool) {
 	lead := statusLead{}
 	switch {
-	case m.authNotice != "":
-		lead.primary = m.authNotice
+	case m.notices.auth != "":
+		lead.primary = m.notices.auth
 		lead.tone = toneWarning
-	case m.corruptNotice != "":
-		lead.primary = m.corruptNotice
+	case m.notices.corrupt != "":
+		lead.primary = m.notices.corrupt
 		lead.tone = toneWarning
-	case m.copyNotice != "":
-		lead.primary = m.copyNotice
+	case m.chat.copyNotice != "":
+		lead.primary = m.chat.copyNotice
 		if lead.primary == m.t("chat.copy.failed") {
 			lead.tone = toneWarning
 		}
-	case m.statusNotice != "":
-		lead.primary = m.statusNotice
-		if m.statusNoticeWarns {
+	case m.notices.status != "":
+		lead.primary = m.notices.status
+		if m.notices.statusWarns {
 			lead.tone = toneWarning
 		}
 	default:
@@ -116,14 +116,14 @@ func (m Model) activityStatusLead() (statusLead, bool) {
 	switch {
 	case m.playerWindowNoticeShown():
 		lead.primary = m.t("player.window_notice")
-		lead.tone = playerTone(m.playerState)
+		lead.tone = playerTone(m.player.state)
 		lead.context = append(lead.context, m.playerStatusBase())
-	case m.playerState != PlayerStateNone && m.playerState != PlayerStateEnded:
+	case m.player.state != PlayerStateNone && m.player.state != PlayerStateEnded:
 		lead.primary = m.playerStatusBase()
-		lead.tone = playerTone(m.playerState)
-	case m.loading:
+		lead.tone = playerTone(m.player.state)
+	case m.list.loading:
 		lead.primary = m.statusLoadingText()
-	case m.playerState == PlayerStateEnded:
+	case m.player.state == PlayerStateEnded:
 		lead.primary = m.playerStatusText()
 		lead.tone = toneEnded
 	default:
@@ -152,22 +152,22 @@ func (m Model) statusLoadingText() string {
 func (m Model) selectionStatusLead() statusLead {
 	lead := statusLead{primary: m.t("status.ready")}
 	switch {
-	case !m.loading && len(m.VisibleItems()) == 0:
+	case !m.list.loading && len(m.VisibleItems()) == 0:
 		lead.primary = m.t("list.empty_action")
-	case m.selectedChannel != nil:
-		lead.primary = fmt.Sprintf(m.t("channels.selected"), m.selectedChannel.DisplayName, m.selectedChannel.Login)
-		if m.selectedChannel.Viewers != nil {
-			lead.primary += " " + m.formatChannelViewers(m.selectedChannel.Viewers)
+	case m.list.selectedChannel != nil:
+		lead.primary = fmt.Sprintf(m.t("channels.selected"), m.list.selectedChannel.DisplayName, m.list.selectedChannel.Login)
+		if m.list.selectedChannel.Viewers != nil {
+			lead.primary += " " + m.formatChannelViewers(m.list.selectedChannel.Viewers)
 		}
-		if cat := channelCategoryName(m.selectedChannel); cat != "" {
+		if cat := channelCategoryName(m.list.selectedChannel); cat != "" {
 			lead.context = append(lead.context, cat)
 		}
-	case m.Mode() == ModeSearch && m.searchQuery != "":
-		lead.primary = fmt.Sprintf(m.t("search.title_query"), m.searchQuery)
-	case m.selectedCategory != nil:
-		lead.primary = fmt.Sprintf(m.t("categories.selected"), m.selectedCategory.Name)
-		if m.selectedCategory.Viewers != nil {
-			lead.primary += " " + m.formatViewers(m.selectedCategory.Viewers)
+	case m.Mode() == ModeSearch && m.list.search.query != "":
+		lead.primary = fmt.Sprintf(m.t("search.title_query"), m.list.search.query)
+	case m.list.selectedCategory != nil:
+		lead.primary = fmt.Sprintf(m.t("categories.selected"), m.list.selectedCategory.Name)
+		if m.list.selectedCategory.Viewers != nil {
+			lead.primary += " " + m.formatViewers(m.list.selectedCategory.Viewers)
 		}
 	}
 	return lead
@@ -194,7 +194,7 @@ func (m Model) statusKeep(primary string, tone statusTone) []string {
 // statusChatLine is the chat status when it adds to the lead. A list error
 // leaves it out.
 func (m Model) statusChatLine(primary string) string {
-	if m.err != nil {
+	if m.list.err != nil {
 		return ""
 	}
 	if s := m.chatStatusSummary(); s != "" && !strings.Contains(primary, s) {
@@ -220,9 +220,9 @@ func appendStatusContext(extra []string, chatStatus string, channelInPrimary boo
 // appendPlayerInfo adds the player's information line. A streamlink log line
 // ("[plugins.twitch][info] ...") says nothing to the viewer.
 func (m Model) appendPlayerInfo(extra []string) []string {
-	rawLog := m.videoHost != nil && strings.HasPrefix(m.playerInfoLine, "[")
-	if m.playerState != PlayerStateError && m.playerInfoLine != "" && !rawLog {
-		extra = append(extra, fmt.Sprintf(m.t("player.info"), m.playerInfoLine))
+	rawLog := m.hosted.host != nil && strings.HasPrefix(m.player.infoLine, "[")
+	if m.player.state != PlayerStateError && m.player.infoLine != "" && !rawLog {
+		extra = append(extra, fmt.Sprintf(m.t("player.info"), m.player.infoLine))
 	}
 	return extra
 }

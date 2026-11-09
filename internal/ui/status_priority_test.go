@@ -74,11 +74,11 @@ type barState struct {
 
 func playingState(state PlayerState, login string) func(t *testing.T, m Model) Model {
 	return func(_ *testing.T, m Model) Model {
-		m.playerWindowNotice = false
-		m.playerState = state
-		m.playerLogin = login
-		m.playerVolume = 100
-		m.selectedChannel = &twitch.Channel{Login: login, DisplayName: login, Viewers: twitch.IntPtr(1234)}
+		m.player.windowNotice = false
+		m.player.state = state
+		m.player.login = login
+		m.player.volume = 100
+		m.list.selectedChannel = &twitch.Channel{Login: login, DisplayName: login, Viewers: twitch.IntPtr(1234)}
 		return m
 	}
 }
@@ -93,15 +93,15 @@ func barStates() []barState {
 			return failWith(t, m, 1, PlayerFailureOffline, offlineLine)
 		}, glyphError},
 		{"list-error", func(_ *testing.T, m Model) Model {
-			m.err = errors.New("boom")
+			m.list.err = errors.New("boom")
 			return m
 		}, glyphError},
 		{"auth-warning", func(_ *testing.T, m Model) Model {
-			m.authNotice = m.t("auth.token_invalid_notice")
+			m.notices.auth = m.t("auth.token_invalid_notice")
 			return m
 		}, glyphWarning},
 		{"copy-failed", func(_ *testing.T, m Model) Model {
-			m.copyNotice = m.t("chat.copy.failed")
+			m.chat.copyNotice = m.t("chat.copy.failed")
 			return m
 		}, glyphWarning},
 		{"ended", playingState(PlayerStateEnded, "gaules"), ""},
@@ -113,7 +113,7 @@ func statusTestModel(t *testing.T, lang string, width int) Model {
 	m, _, _ := setupTwoPanelModel(t)
 	m.catalog = mustCatalog(t, lang)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: width, Height: 24})
-	m.playerWindowNotice = false
+	m.player.windowNotice = false
 	return m
 }
 
@@ -150,8 +150,8 @@ func TestStatusBarLongLoginKeepsVolumeAndFilterAt80(t *testing.T) {
 			for _, state := range []PlayerState{PlayerStatePlaying, PlayerStatePaused} {
 				t.Run(fmt.Sprintf("%s/%d/%s", lang, len(login), state), func(t *testing.T) {
 					m := playingState(state, login)(t, statusTestModel(t, lang, 80))
-					m.filterLanguages = []string{"pt"}
-					m.filterMinViewers = 500
+					m.list.prefs.languages = []string{"pt"}
+					m.list.prefs.minViewers = 500
 					bar := ansi.Strip(m.StatusBar())
 					assertStatusWidth(t, bar, 80)
 					main := fmt.Sprintf(m.t("player.playing"), login)
@@ -177,9 +177,9 @@ func TestStatusBarCutOrderAtEveryWidth(t *testing.T) {
 	for _, lang := range orientationLangs {
 		for width := 40; width <= 160; width++ {
 			m := playingState(PlayerStatePlaying, login)(t, statusTestModel(t, lang, width))
-			m.filterLanguages = []string{"pt"}
-			m.filterMinViewers = 500
-			m.showList = false // layout: chat, so the layout token is in play.
+			m.list.prefs.languages = []string{"pt"}
+			m.list.prefs.minViewers = 500
+			m.layout.showList = false // layout: chat, so the layout token is in play.
 			if m.LayoutMode() != LayoutChat {
 				t.Fatalf("layout = %q", m.LayoutMode())
 			}
@@ -209,8 +209,8 @@ func TestStatusBarTitleYieldsBeforeContext(t *testing.T) {
 	freed := false
 	for width := 80; width <= 160; width++ {
 		m := playingState(PlayerStatePlaying, "gaules")(t, statusTestModel(t, i18n.LangPTBR, width))
-		m.selectedChannel.CategoryName = &category
-		m.focus = FocusList
+		m.list.selectedChannel.CategoryName = &category
+		m.layout.focus = FocusList
 		bar := ansi.Strip(m.StatusBar())
 		title, context := strings.Contains(bar, m.t("app.title")), strings.Contains(bar, category)
 		if title && !context {
@@ -282,7 +282,7 @@ func TestStatusGlyphLeadsTheMessage(t *testing.T) {
 			return failWith(t, m, 1, PlayerFailureNetwork, "")
 		}, func(m Model) string { return glyphError + " " + m.t("player.fail.network") }},
 		{"warning", func(_ *testing.T, m Model) Model {
-			m.corruptNotice = "store.corrupt"
+			m.notices.corrupt = "store.corrupt"
 			return m
 		}, func(Model) string { return glyphWarning + " store.corrupt" }},
 	}
@@ -324,8 +324,8 @@ func TestStatusColorStaysOnTheGlyph(t *testing.T) {
 
 func TestInformativeNoticeHasNoWarningGlyph(t *testing.T) {
 	m := statusTestModel(t, i18n.LangPTBR, 120)
-	m.statusNotice = m.t("favorites.added")
-	if bar := ansi.Strip(m.StatusBar()); strings.Contains(bar, glyphWarning+" "+m.statusNotice) {
+	m.notices.status = m.t("favorites.added")
+	if bar := ansi.Strip(m.StatusBar()); strings.Contains(bar, glyphWarning+" "+m.notices.status) {
 		t.Fatalf("a confirmation is not a warning:\n%q", bar)
 	}
 }
@@ -350,7 +350,7 @@ func volumeModel(t *testing.T, lang string, width, volume int) (Model, *fakePlay
 	t.Helper()
 	m, pb := newFailureModel(t, lang, width, "gaules")
 	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: volume})
-	m.playerWindowNotice = false
+	m.player.windowNotice = false
 	return m, pb
 }
 
@@ -464,11 +464,11 @@ func TestPlayerFailureStillLeadsWithFilterAndNotices(t *testing.T) {
 		for _, f := range failures {
 			t.Run(lang+"/"+string(f), func(t *testing.T) {
 				m := statusTestModel(t, lang, 80)
-				m.filterLanguages = []string{"pt"}
-				m.filterMinViewers = 500
+				m.list.prefs.languages = []string{"pt"}
+				m.list.prefs.minViewers = 500
 				m = failWith(t, m, 1, f, offlineLine)
-				m.ctrlCNotice = m.t("status.ctrl_c_hint")
-				m.statusNotice = "secondary notice"
+				m.notices.ctrlC = m.t("status.ctrl_c_hint")
+				m.notices.status = "secondary notice"
 				bar := ansi.Strip(m.StatusBar())
 				assertStatusWidth(t, bar, 80)
 				lead := glyphError + " " + m.playerFailureText()
@@ -489,7 +489,7 @@ func TestPlayerFailureStillLeadsWithFilterAndNotices(t *testing.T) {
 
 func TestListErrorDetailOutranksVolume(t *testing.T) {
 	m := playingState(PlayerStatePlaying, "gaules")(t, statusTestModel(t, i18n.LangPTBR, 120))
-	m.err = errors.New("boom")
+	m.list.err = errors.New("boom")
 	bar := ansi.Strip(m.StatusBar())
 	if !strings.Contains(bar, glyphError+" "+m.listErrorAction()) || !strings.Contains(bar, "boom") {
 		t.Fatalf("list error lost its action or detail:\n%q", bar)
@@ -503,7 +503,7 @@ func TestWindowNoticeKeepsVolumeAt80(t *testing.T) {
 	for _, lang := range orientationLangs {
 		m := statusTestModel(t, lang, 80)
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 85})
-		m.playerWindowNotice = true
+		m.player.windowNotice = true
 		bar := ansi.Strip(m.StatusBar())
 		for _, want := range []string{m.t("player.window_notice"), m.playerVolumeText(), m.t("status.quit_hint")} {
 			if !strings.Contains(bar, want) {
@@ -518,22 +518,22 @@ func TestStatusBarNeverExceedsWidth(t *testing.T) {
 		barState{name: "wide-name", apply: playingState(PlayerStatePlaying, "配信者のチャンネル名前")},
 		barState{name: "long-filter", apply: func(t *testing.T, m Model) Model {
 			m = playingState(PlayerStatePaused, "a_login_of_25_characters_")(t, m)
-			m.filterLanguages = []string{"pt", "en", "es", "fr", "de", "it", "ja"}
-			m.filterMinViewers = 10000
+			m.list.prefs.languages = []string{"pt", "en", "es", "fr", "de", "it", "ja"}
+			m.list.prefs.minViewers = 10000
 			return m
 		}},
 		barState{name: "filter-menu", apply: func(_ *testing.T, m Model) Model {
-			m.filterLanguages = []string{"pt"}
+			m.list.prefs.languages = []string{"pt"}
 			return m.openChannelFilterMenu()
 		}},
 		barState{name: "search-prompt", apply: func(_ *testing.T, m Model) Model {
-			m.searching = true
-			m.searchInput = strings.Repeat("busca muito longa ", 12)
+			m.list.search.active = true
+			m.list.search.input = strings.Repeat("busca muito longa ", 12)
 			return m
 		}},
 		barState{name: "volume-max", apply: func(t *testing.T, m Model) Model {
 			m = playingState(PlayerStatePlaying, "a_login_of_25_characters_")(t, m)
-			m.statusNotice = m.t("player.vol_max")
+			m.notices.status = m.t("player.vol_max")
 			return m
 		}},
 		barState{name: "player-error-detail", apply: func(t *testing.T, m Model) Model {

@@ -36,7 +36,7 @@ func scrollFixture(t *testing.T, lang string, n int) Model {
 	m = updated.(Model)
 	updated, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
-	m.focus = FocusChat
+	m.layout.focus = FocusChat
 	if n > 0 {
 		m = withMessages(t, m, n)
 	}

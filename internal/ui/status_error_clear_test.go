@@ -65,12 +65,12 @@ func TestPlayerOfflineErrorClearsOnFilterAndSearch(t *testing.T) {
 func TestPlayerOfflineErrorRemainsOnSameScreen(t *testing.T) {
 	offline := "Erro: Canal offline · r repetir · ? detalhes"
 	m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{
 		{ID: "1", Login: "xqc", DisplayName: "xQc"},
 		{ID: "2", Login: "gaules", DisplayName: "Gaules"},
 	}
-	m.highlightedID = "1"
+	m.list.highlightedID = "1"
 	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
 
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyDown})
@@ -105,7 +105,7 @@ func TestListErrorClearsOnNavigation(t *testing.T) {
 	}
 	m := New(cat)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 20})
-	m.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: errors.New("timeout")}
+	m.list.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: errors.New("timeout")}
 	if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, m.t("error.list.network")) {
 		t.Fatalf("precondition: list error missing from status:\n%s", bar)
 	}
@@ -126,11 +126,11 @@ func TestClearStaleStatusErrorsKeepsTransientNotice(t *testing.T) {
 		t.Fatalf("i18n: %v", err)
 	}
 	m := New(cat)
-	m.statusNotice = m.t("favorites.added")
-	m.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: errors.New("x")}
-	m.playerState = PlayerStateError
-	m.playerFailure = PlayerFailureOffline
-	m.playerLastLine = offlineLine
+	m.notices.status = m.t("favorites.added")
+	m.list.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: errors.New("x")}
+	m.player.state = PlayerStateError
+	m.player.failure = PlayerFailureOffline
+	m.player.lastLine = offlineLine
 
 	m.clearStaleStatusErrors()
 	if m.Err() != nil {
@@ -151,7 +151,7 @@ func TestSuccessfulChannelSwitchClearsOfflineStatus(t *testing.T) {
 	offline := "Erro: Canal offline · r repetir · ? detalhes"
 	m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
 	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
-	m.err = &twitch.Error{Kind: twitch.Rede, Op: "channels", Err: errors.New("stale")}
+	m.list.err = &twitch.Error{Kind: twitch.Rede, Op: "channels", Err: errors.New("stale")}
 
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)

@@ -223,8 +223,8 @@ func TestEscFromSearchReturnsToOrigin(t *testing.T) {
 	m = typeRunes(m, "gaules")
 	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m, _ = pressKeyMsg(m, cmd())
-	if m.Mode() != ModeSearch || m.searchOrigin != ModeChannels {
-		t.Fatalf("search from category: mode=%q origin=%q", m.Mode(), m.searchOrigin)
+	if m.Mode() != ModeSearch || m.list.search.origin != ModeChannels {
+		t.Fatalf("search from category: mode=%q origin=%q", m.Mode(), m.list.search.origin)
 	}
 	fromCategoryView := ansi.Strip(m.View())
 	t.Logf("PTY CAPTURE search from category:\n%s", fromCategoryView)
@@ -260,8 +260,8 @@ func TestEscFromSearchReturnsToOrigin(t *testing.T) {
 	m = typeRunes(m, "gaules")
 	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m, _ = pressKeyMsg(m, cmd())
-	if m.Mode() != ModeSearch || m.searchOrigin != ModeCategories {
-		t.Fatalf("search from categories: mode=%q origin=%q", m.Mode(), m.searchOrigin)
+	if m.Mode() != ModeSearch || m.list.search.origin != ModeCategories {
+		t.Fatalf("search from categories: mode=%q origin=%q", m.Mode(), m.list.search.origin)
 	}
 	fromCategoriesView := ansi.Strip(m.View())
 	t.Logf("PTY CAPTURE search from categories:\n%s", fromCategoriesView)
@@ -284,8 +284,8 @@ func TestEscFromSearchReturnsToOrigin(t *testing.T) {
 	m = typeRunes(m, "gaules")
 	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m, _ = pressKeyMsg(m, cmd())
-	if m.Mode() != ModeSearch || m.searchOrigin != ModeChannels {
-		t.Fatalf("precondition for Ctrl+R: mode=%q origin=%q", m.Mode(), m.searchOrigin)
+	if m.Mode() != ModeSearch || m.list.search.origin != ModeChannels {
+		t.Fatalf("precondition for Ctrl+R: mode=%q origin=%q", m.Mode(), m.list.search.origin)
 	}
 	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlR})
 	if m.Mode() != ModeCategories || cmd == nil {

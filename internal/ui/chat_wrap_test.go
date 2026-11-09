@@ -18,9 +18,9 @@ func withChatMessages(t *testing.T, m Model, msgs ...ChatMessage) Model {
 	t.Helper()
 	m = withMessages(t, m, 0)
 	for i := range msgs {
-		msgs[i].Generation = m.chatPanel.gen
+		msgs[i].Generation = m.chat.panel.gen
 	}
-	updated, _ := m.Update(ChatEventMsg{Generation: m.chatPanel.gen, Channel: "gaules", Messages: msgs})
+	updated, _ := m.Update(ChatEventMsg{Generation: m.chat.panel.gen, Channel: "gaules", Messages: msgs})
 	return updated.(Model)
 }
 

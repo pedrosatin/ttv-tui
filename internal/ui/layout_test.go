@@ -289,7 +289,7 @@ func TestVisualTruncationUnicodeCJKAndEmojiNeverOverflowWidth(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
 
 	longEmojiCJKTitle := "🔥🎮 日本語の配信タイトル — 超長いストリームタイトルでレイアウトが崩れないことを確認するテスト 🚀✨🎉"
-	m.channels[0].Title = &longEmojiCJKTitle
+	m.list.channels[0].Title = &longEmojiCJKTitle
 
 	updated, _ := m.Update(ChatEventMsg{
 		Generation: 1,
@@ -339,13 +339,13 @@ func TestCJKChannelNameDoesNotInsertBlankListRow(t *testing.T) {
 	}
 	title := "配信タイトル — とても長いタイトルで折り返しを誘発する"
 	m := New(catEN)
-	m.mode = ModeChannels
-	m.channels = []twitch.Channel{
+	m.list.mode = ModeChannels
+	m.list.channels = []twitch.Channel{
 		{ID: "cjk-1", Login: "nihongo", DisplayName: "日本語配信者", Viewers: twitch.IntPtr(1234), Title: &title, Availability: twitch.AvailabilityLive},
 		{ID: "cjk-2", Login: "nextchan", DisplayName: "次のチャンネル", Viewers: twitch.IntPtr(56), Title: twitch.StringPtr("short"), Availability: twitch.AvailabilityLive},
 		{ID: "lat-3", Login: "latin", DisplayName: "LatinOnly", Viewers: twitch.IntPtr(99), Title: twitch.StringPtr("ascii title"), Availability: twitch.AvailabilityLive},
 	}
-	m.highlightedID = "cjk-1"
+	m.list.highlightedID = "cjk-1"
 
 	for _, width := range []int{80, 120} {
 		updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 14})
@@ -483,7 +483,7 @@ func TestIndependentStates_CtrlRPlayerErrorAndChatError(t *testing.T) {
 	}
 
 	// 4. Navigation error in list does not stop player or chat.
-	m.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: errors.New("offline")}
+	m.list.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: errors.New("offline")}
 	plain = ansi.Strip(m.View())
 	if !strings.Contains(plain, "Network error") || !strings.Contains(plain, "Chat — #gaules") {
 		t.Fatalf("expected list network error alongside active chat panel:\n%s", plain)

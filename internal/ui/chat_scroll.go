@@ -26,7 +26,7 @@ import (
 // the scroll highlight when history is paused. ok is false when the buffer is
 // empty.
 func (m Model) SelectedChatMessage() (ChatMessage, bool) {
-	if m.chatPanel.buf == nil {
+	if m.chat.panel.buf == nil {
 		return ChatMessage{}, false
 	}
 	msgs := m.ChatMessages()
@@ -42,26 +42,26 @@ func (m Model) SelectedChatMessage() (ChatMessage, bool) {
 
 // ChatFollowLive reports whether the chat viewport stays pinned to new messages.
 func (m Model) ChatFollowLive() bool {
-	return m.chatPanel.followLive
+	return m.chat.panel.followLive
 }
 
 // ChatPendingNew returns how many messages arrived while the viewport was
 // scrolled away from the live bottom. Zero while following live.
 func (m Model) ChatPendingNew() int {
-	if m.chatPanel.followLive {
+	if m.chat.panel.followLive {
 		return 0
 	}
-	return m.chatPanel.pendingNew
+	return m.chat.panel.pendingNew
 }
 
 func (m Model) chatSelectedIndex(n int) int {
 	if n <= 0 {
 		return -1
 	}
-	if m.chatPanel.followLive {
+	if m.chat.panel.followLive {
 		return n - 1
 	}
-	idx := m.chatPanel.bottomIdx
+	idx := m.chat.panel.bottomIdx
 	if idx < 0 {
 		return 0
 	}
@@ -72,18 +72,18 @@ func (m Model) chatSelectedIndex(n int) int {
 }
 
 func (m *Model) resetChatScroll() {
-	m.chatPanel.followLive = true
-	m.chatPanel.bottomIdx = 0
-	m.chatPanel.pendingNew = 0
+	m.chat.panel.followLive = true
+	m.chat.panel.bottomIdx = 0
+	m.chat.panel.pendingNew = 0
 }
 
 func (m *Model) chatFollowLiveNow() {
-	m.chatPanel.followLive = true
-	m.chatPanel.pendingNew = 0
-	if m.chatPanel.buf != nil && m.chatPanel.buf.Len() > 0 {
-		m.chatPanel.bottomIdx = m.chatPanel.buf.Len() - 1
+	m.chat.panel.followLive = true
+	m.chat.panel.pendingNew = 0
+	if m.chat.panel.buf != nil && m.chat.panel.buf.Len() > 0 {
+		m.chat.panel.bottomIdx = m.chat.panel.buf.Len() - 1
 	} else {
-		m.chatPanel.bottomIdx = 0
+		m.chat.panel.bottomIdx = 0
 	}
 }
 
@@ -91,18 +91,18 @@ func (m *Model) chatFollowLiveNow() {
 // beforeLen is buf.Len() immediately before Append; appended is whether Append
 // returned true.
 func (m *Model) noteChatAppend(beforeLen int, appended bool) {
-	if m.chatPanel.buf == nil {
+	if m.chat.panel.buf == nil {
 		return
 	}
-	after := m.chatPanel.buf.Len()
-	if m.chatPanel.followLive {
+	after := m.chat.panel.buf.Len()
+	if m.chat.panel.followLive {
 		if after > 0 {
-			m.chatPanel.bottomIdx = after - 1
+			m.chat.panel.bottomIdx = after - 1
 		}
 		return
 	}
 	if appended {
-		m.chatPanel.pendingNew++
+		m.chat.panel.pendingNew++
 	}
 	// Oldest messages may have been evicted to keep buffer limits; shift the
 	// anchor so the same logical message stays at the bottom of the viewport.
@@ -111,13 +111,13 @@ func (m *Model) noteChatAppend(beforeLen int, appended bool) {
 		evicted++
 	}
 	if evicted > 0 {
-		m.chatPanel.bottomIdx -= evicted
-		if m.chatPanel.bottomIdx < 0 {
-			m.chatPanel.bottomIdx = 0
+		m.chat.panel.bottomIdx -= evicted
+		if m.chat.panel.bottomIdx < 0 {
+			m.chat.panel.bottomIdx = 0
 		}
 	}
-	if after > 0 && m.chatPanel.bottomIdx >= after {
-		m.chatPanel.bottomIdx = after - 1
+	if after > 0 && m.chat.panel.bottomIdx >= after {
+		m.chat.panel.bottomIdx = after - 1
 	}
 }
 
@@ -154,21 +154,21 @@ func (m Model) scrollChatUp(by int) Model {
 	if by < 1 {
 		by = 1
 	}
-	if m.chatPanel.buf == nil {
+	if m.chat.panel.buf == nil {
 		return m
 	}
-	n := m.chatPanel.buf.Len()
+	n := m.chat.panel.buf.Len()
 	if n == 0 {
 		return m
 	}
-	if m.chatPanel.followLive {
-		m.chatPanel.followLive = false
-		m.chatPanel.bottomIdx = n - 1
-		m.chatPanel.pendingNew = 0
+	if m.chat.panel.followLive {
+		m.chat.panel.followLive = false
+		m.chat.panel.bottomIdx = n - 1
+		m.chat.panel.pendingNew = 0
 	}
-	m.chatPanel.bottomIdx -= by
-	if m.chatPanel.bottomIdx < 0 {
-		m.chatPanel.bottomIdx = 0
+	m.chat.panel.bottomIdx -= by
+	if m.chat.panel.bottomIdx < 0 {
+		m.chat.panel.bottomIdx = 0
 	}
 	return m
 }
@@ -177,16 +177,16 @@ func (m Model) scrollChatDown(by int) Model {
 	if by < 1 {
 		by = 1
 	}
-	if m.chatPanel.followLive || m.chatPanel.buf == nil {
+	if m.chat.panel.followLive || m.chat.panel.buf == nil {
 		return m
 	}
-	n := m.chatPanel.buf.Len()
+	n := m.chat.panel.buf.Len()
 	if n == 0 {
 		m.chatFollowLiveNow()
 		return m
 	}
-	m.chatPanel.bottomIdx += by
-	if m.chatPanel.bottomIdx >= n-1 {
+	m.chat.panel.bottomIdx += by
+	if m.chat.panel.bottomIdx >= n-1 {
 		m.chatFollowLiveNow()
 		return m
 	}
@@ -194,17 +194,17 @@ func (m Model) scrollChatDown(by int) Model {
 }
 
 func (m Model) scrollChatHome() Model {
-	if m.chatPanel.buf == nil {
+	if m.chat.panel.buf == nil {
 		return m
 	}
 	msgs := m.ChatMessages()
 	if len(msgs) == 0 {
 		return m
 	}
-	m.chatPanel.followLive = false
+	m.chat.panel.followLive = false
 	_, chatW := m.panelWidths()
 	budget := m.chatPageSize()
-	m.chatPanel.bottomIdx = m.chatHomeBottomIdx(msgs, budget, chatW)
+	m.chat.panel.bottomIdx = m.chatHomeBottomIdx(msgs, budget, chatW)
 	return m
 }
 
@@ -224,10 +224,10 @@ func (m Model) chatViewportEnd(msgCount int) int {
 	if msgCount <= 0 {
 		return 0
 	}
-	if m.chatPanel.followLive {
+	if m.chat.panel.followLive {
 		return msgCount
 	}
-	end := m.chatPanel.bottomIdx + 1
+	end := m.chat.panel.bottomIdx + 1
 	if end > msgCount {
 		end = msgCount
 	}

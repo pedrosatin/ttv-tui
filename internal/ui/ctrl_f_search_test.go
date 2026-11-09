@@ -24,8 +24,8 @@ func TestCtrlFAndCtrlSOpenSearchFromList(t *testing.T) {
 			var searched []string
 			m := newCategoriesModel(t, i18n.LangEN, 80, &searched)
 			m, cmd := pressKey(m, tea.KeyMsg{Type: tc.key})
-			if !m.Searching() || m.searchInput != "" || cmd != nil {
-				t.Fatalf("from list: searching=%v input=%q cmd=%v", m.Searching(), m.searchInput, cmd != nil)
+			if !m.Searching() || m.list.search.input != "" || cmd != nil {
+				t.Fatalf("from list: searching=%v input=%q cmd=%v", m.Searching(), m.list.search.input, cmd != nil)
 			}
 			m = typeRunes(m, "gaules")
 			m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
