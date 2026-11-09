@@ -43,9 +43,9 @@ if [[ ! -f "$pkgbuild_file" ]]; then
   exit 1
 fi
 
-# Extrai o hash SHA-256 para linux_amd64 e linux_arm64 do checksums.txt
-sha_amd64=$(awk '$2 ~ /linux_amd64\.tar\.gz$/ {print $1; exit}' "$checksums_file")
-sha_arm64=$(awk '$2 ~ /linux_arm64\.tar\.gz$/ {print $1; exit}' "$checksums_file")
+# Extrai o hash SHA-256 pelo nome exato: o checksums.txt também lista ttv-tui-window_*.
+sha_amd64=$(awk -v name="ttv-tui_${version}_linux_amd64.tar.gz" '$2 == name {print $1; exit}' "$checksums_file")
+sha_arm64=$(awk -v name="ttv-tui_${version}_linux_arm64.tar.gz" '$2 == name {print $1; exit}' "$checksums_file")
 
 if [[ -z "$sha_amd64" || ! "$sha_amd64" =~ ^[a-fA-F0-9]{64}$ ]]; then
   echo "Erro: não foi possível encontrar checksum SHA-256 válido para linux_amd64 em '$checksums_file'" >&2
