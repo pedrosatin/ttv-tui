@@ -467,8 +467,8 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 	}
 
 	// Leaving the category keeps the evidence for the saved channels.
-	m.list.mode = ModeCategories
-	m.list.channels = nil
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
 	plain := ansi.Strip(m.View())
 	if !strings.Contains(plain, "12.9k  Gaules — Major") {
 		t.Fatalf("favorite should keep live status after leaving category:\n%s", plain)
@@ -484,6 +484,64 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 	st := m.list.toStoreState()
 	if got := st.Favorites[0].ToTwitch().Availability; got != twitch.AvailabilityUnknown {
 		t.Fatalf("store must not persist availability, got %v", got)
+	}
+}
+
+func TestReturnToCategoriesDropsListing(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+	m := New(catEN,
+		WithFavorites([]twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Language: twitch.StringPtr("pt")}}),
+	)
+	cat := twitch.Category{ID: "cs", Name: "Counter-Strike"}
+	m.list.mode = ModeChannels
+	m.list.selectedCategory = &cat
+	updated, _ := m.Update(ChannelsLoadedMsg{
+		Generation: m.list.generation,
+		Category:   cat,
+		Page: twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+			{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Language: twitch.StringPtr("pt"), Viewers: twitch.IntPtr(12900), Availability: twitch.AvailabilityLive},
+			{ID: "c-2", Login: "eslcs", DisplayName: "ESLCS", Language: twitch.StringPtr("en"), Viewers: twitch.IntPtr(30400), Availability: twitch.AvailabilityLive},
+		}},
+	})
+	m = updated.(Model)
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.Mode() != ModeCategories {
+		t.Fatalf("Esc should return to categories, mode = %v", m.Mode())
+	}
+
+	// The hydration after Esc says the favorite went offline.
+	updated, _ = m.Update(SavedAvailabilityMsg{
+		Generation: m.list.hydrateGen,
+		Channels:   []twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Availability: twitch.AvailabilityOffline}},
+	})
+	m = updated.(Model)
+	items := m.VisibleItems()
+	if len(items) != 1 || !items[0].Offline() {
+		t.Errorf("favorite must show the newest availability (offline), got %+v", items)
+	}
+
+	// The language menu counts only what is on screen: the favorite.
+	langs := m.list.languagesInCurrentList()
+	if len(langs) != 1 || langs[0].Code != "pt" || langs[0].Count != 1 {
+		t.Errorf("language counts outside the screen: %+v", langs)
+	}
+}
+
+func TestRetryFallingToCategoriesDropsListing(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+	m := New(catEN, WithSource(&fakeSource{}))
+	m.list.mode = ModeSearch
+	m.list.channels = []twitch.Channel{{ID: "c-1", Login: "eslcs", Availability: twitch.AvailabilityLive}}
+
+	updated, _ := m.retryCurrentMode()
+	m = updated.(Model)
+	if m.Mode() != ModeCategories {
+		t.Fatalf("retry without query should fall to categories, mode = %v", m.Mode())
+	}
+	if len(m.Channels()) != 0 {
+		t.Fatalf("listing must be dropped on the way to categories, got %+v", m.Channels())
 	}
 }
 

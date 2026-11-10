@@ -508,6 +508,7 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.list.filter = ""
 	m.list.search.input = ""
 	m.list.search.categories = nil
+	m.list.channels = nil
 	m.clearStaleStatusErrors()
 	m.list.nextCursor = ""
 	m.list.hasMore = false
@@ -586,12 +587,14 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 			return m, m.withHydrate(m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, "", false))
 		}
 		m.list.mode = ModeCategories
+		m.list.channels = nil
 		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 	case ModeSearch:
 		if strings.TrimSpace(m.list.search.query) != "" {
 			return m, m.withHydrate(m.fetchSearchCmd(m.list.generation, m.list.search.query))
 		}
 		m.list.mode = ModeCategories
+		m.list.channels = nil
 		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 	default:
 		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
