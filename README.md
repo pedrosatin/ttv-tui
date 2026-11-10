@@ -4,321 +4,375 @@
 
 [Português (Brasil)](docs/README.pt-BR.md)
 
-Terminal UI for Twitch on Linux, macOS and Windows. Browse live categories and channels, watch streams through `streamlink` and `mpv` with ad filtering and in-app playback controls, and participate in IRC chat without opening a browser.
+Twitch in your terminal. Browse live categories and channels, watch a stream and chat, without opening a browser. Video plays through `streamlink` and `mpv`, with ad segments filtered out. You don't need an account to watch or read chat.
 
+![A Chess channel playing, with the channel list on the left and live chat on the right](docs/img/watching.svg)
 
-## v1.8 support
+<details>
+<summary>More screenshots</summary>
 
-| OS / architecture | Support |
-| --- | --- |
-| Linux amd64 / arm64 | Supported |
-| macOS arm64 (Apple Silicon) | Supported |
-| Windows x64 (amd64) | Supported |
-| macOS Intel (darwin/amd64) | Experimental; builds without a support commitment |
-| Windows ARM (windows/arm64) | Experimental; builds without a support commitment |
+Live categories, the first screen:
 
-The matrix defines v1.9 targets. Cross-compilation does not verify playback, audio, login, clipboard or shutdown on real hardware. Release v0.9.0 includes archives for all three operating systems.
+![The list of live categories sorted by viewers](docs/img/categories.svg)
 
-Browsing, search, local favorites, IRC chat and external video with pause/volume form the scope on supported targets. Use a terminal with Unicode and ANSI colors, at least 80 columns wide for split view; chat-only works below that width. Linux video requires a configured graphical session and audio. On Windows, use Windows Terminal; automated ConPTY tests are outside this version.
+Shortcut help, opened with `?`:
+
+![The keyboard shortcuts overlay](docs/img/help.svg)
+
+</details>
 
 ## Install
 
-### Linux and macOS: install script
+You need `streamlink` and `mpv` in your `PATH` to play video. The [FAQ](#faq) has the install command for each system.
 
-[`packaging/install.sh`](packaging/install.sh) downloads the release archive and `checksums.txt`, verifies the SHA-256 digest with `sha256sum` or `shasum -a 256`, and installs the binary in `~/.local/bin/ttv-tui`, the desktop entry in `~/.local/share/applications/ttv-tui.desktop`, and the icon in `~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg`:
-
-```bash
-# Install the latest release (or pass a specific version such as 0.9.0)
-./packaging/install.sh
-./packaging/install.sh 0.9.0
-
-# Preview the installation plan without downloading or modifying files
-./packaging/install.sh --dry-run 0.9.0
-
-# Install into a custom prefix
-./packaging/install.sh --prefix "$HOME/.local" 0.9.0
-```
-
-You can also run the script directly from GitHub:
+**Linux and macOS.** The script verifies the SHA-256 checksum and installs to `~/.local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash -s -- 0.9.0
+curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash
 ```
 
-On macOS, the script installs only the binary in `~/.local/bin`; the desktop entry and icon are Linux-only. Use the `darwin_arm64` archive for Apple Silicon. Browser-downloaded binaries without notarization may need approval in System Settings → Privacy & Security (Gatekeeper), after checking the source and checksum. Paid notarization is outside scope. Script/Homebrew downloads do not apply the browser's quarantine attribute.
-
-### Windows x64: PowerShell
-
-From a checkout, install version 0.9.0:
+**Windows x64.** From a checkout, in PowerShell:
 
 ```powershell
-.\packaging\install.ps1 -DryRun
 .\packaging\install.ps1 -Version 0.9.0
 winget install --id shinchiro.mpv -e
 winget install --id streamlink.streamlink -e
 ```
 
-The script verifies SHA-256, installs in `%LOCALAPPDATA%\Programs\ttv-tui\bin` and adds that directory to the user PATH. Open a new terminal.
+<details>
+<summary>Other ways to install</summary>
 
-### Homebrew (macOS) and Scoop (Windows)
+**Release archive.** Download the archive for your OS and `checksums.txt` from the [v0.9.0 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.9.0). Check the SHA-256 with `sha256sum`, `shasum -a 256` or `Get-FileHash -Algorithm SHA256`, then put `ttv-tui` in your `PATH`.
 
-The [Homebrew formula](packaging/homebrew/README.md) uses the v0.9.0 macOS release for Apple Silicon and Intel. It has not been published or validated on macOS. After publishing the tap, the intended command is `brew install pedrosatin/tap/ttv-tui`. Dependencies can be installed with `brew install mpv streamlink`.
-
-The [Scoop manifest](packaging/scoop/ttv-tui.json) uses the v0.9.0 Windows amd64 release and its SHA-256. Dependencies use `scoop bucket add extras` and `scoop install extras/mpv extras/streamlink`.
-
-### Release binary (v0.9.0)
-
-Download the archive for your OS and architecture and `checksums.txt` from the [v0.9.0 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.9.0). Examples are `ttv-tui_0.9.0_linux_amd64.tar.gz`, `ttv-tui_0.9.0_darwin_arm64.tar.gz` and `ttv-tui_0.9.0_windows_amd64.zip`. Linux and macOS also have the other architecture in tar.gz; Windows arm64 is available in zip. See the support matrix above.
-
-Verify the archive's SHA-256 against its entry in `checksums.txt` before extracting it. On Linux use `sha256sum`, on macOS `shasum -a 256`, or on Windows PowerShell `Get-FileHash -Algorithm SHA256`. Extract `ttv-tui` (or `ttv-tui.exe` on Windows) and place it in a directory on your `PATH`.
-
-### Go install
-
-Requires Go 1.27 or newer:
+**Go 1.27 or newer:**
 
 ```bash
 go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.9.0
 ```
 
-### Arch Linux (AUR)
-
-An AUR package (`ttv-tui-bin`) is planned and not published yet. Until it is available on the AUR, you can build and install it directly from [`packaging/PKGBUILD`](packaging/PKGBUILD):
+**Arch Linux.** The AUR package is not published yet. Build it from the PKGBUILD:
 
 ```bash
-cd packaging
-makepkg -si
+cd packaging && makepkg -si
 ```
 
-### Build from source
-
-Requires Go 1.27:
+**From source:**
 
 ```bash
-git clone https://github.com/pedrosatin/ttv-tui.git
-cd ttv-tui
-CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=0.9.0" -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
+git clone https://github.com/pedrosatin/ttv-tui.git && cd ttv-tui
+CGO_ENABLED=0 go build -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
-### Desktop shortcut
+**Homebrew and Scoop.** The [formula](packaging/homebrew/README.md) and the [Scoop manifest](packaging/scoop/ttv-tui.json) are ready but not published yet.
 
-[`packaging/install.sh`](packaging/install.sh) and [`packaging/PKGBUILD`](packaging/PKGBUILD) install [`packaging/ttv-tui.desktop`](packaging/ttv-tui.desktop) and [`assets/ttv-tui.svg`](assets/ttv-tui.svg) automatically. If you installed the binary with `go install` or `go build`, copy them manually:
+**Install script options.** Pass a version such as `install.sh 0.9.0`, preview with `--dry-run`, or change the target with `--prefix`. On Windows, `install.ps1 -DryRun` previews the plan.
+
+**Desktop shortcut.** `install.sh` and the PKGBUILD install the desktop entry and the icon. After `go install` or `go build`, copy them yourself:
 
 ```bash
 install -Dm644 packaging/ttv-tui.desktop ~/.local/share/applications/ttv-tui.desktop
 install -Dm644 assets/ttv-tui.svg ~/.local/share/icons/hicolor/scalable/apps/ttv-tui.svg
-update-desktop-database ~/.local/share/applications
 ```
 
-The desktop entry runs `xdg-terminal-exec ttv-tui` with `Terminal=false` and `StartupWMClass=ttv-tui`. If `xdg-terminal-exec` is not installed on your system, edit `~/.local/share/applications/ttv-tui.desktop` and either set `Terminal=true` with `Exec=ttv-tui` or call your terminal emulator directly, such as `Exec=alacritty --class ttv-tui -e ttv-tui` or `Exec=kitty --app-id ttv-tui ttv-tui`.
+</details>
 
-## Requirements
-
-### Required (video playback)
-
-- An OS from the support matrix and a Unicode/ANSI terminal.
-- `streamlink` in `PATH` to negotiate stream playback and filter ad segments. Without it, video playback is unavailable.
-- `mpv` in `PATH` to decode and display video in its own window while exposing a local JSON IPC socket. Without it, video playback is unavailable.
-
-### Optional (login and chat)
-
-- `sqlite3` in `PATH`. `ttv-tui` runs the `sqlite3` command-line binary only during `ttv-tui login --from-browser` to copy and query your browser's cookie database via SQLite's online `.backup` command without contesting an open browser lock. Not needed if you browse and watch anonymously or import tokens via `ttv-tui login --import twt`.
-- A supported browser logged into `twitch.tv` (Brave, Chrome, Chromium, Edge, Vivaldi, Opera, or Firefox) if you want to send chat messages via `--from-browser`. On Linux Chromium-family browsers, `secret-tool` (`libsecret`) must also be in `PATH` to read the OSCrypt Safe Storage secret from the desktop keyring. Browsing categories, watching streams, and reading chat work anonymously without logging in.
-
-## Quick start
-
-1. Configure a Twitch token if you want to send chat messages. When you already have `twitch-tui` (`twt`) configured at `~/.config/twt/config.toml` or want a chat-scoped token without reading browser cookies or the desktop keyring, prefer importing from `twt`:
+## Use
 
 ```bash
-ttv-tui login --import twt
+ttv-tui                     # browse and watch, no account needed
+ttv-tui login --import twt  # optional: reuse your twitch-tui token to send chat messages
+ttv-tui doctor              # check dependencies, paths and token presence
 ```
 
-Otherwise, extract the `auth-token` session cookie from an installed browser. Read [Login and security](#login-and-security) for the reach of the keyring secret and session cookie:
+Pick a category with `Enter`, then a channel with `Enter`. The stream starts and its chat opens on the right. Press `?` for the shortcut list.
 
-```bash
-ttv-tui login --from-browser
-```
+## Platforms
 
-If you have multiple browser profiles, pass `--browser` and `--profile` directly or pick from the interactive prompt:
+| OS | Status |
+| --- | --- |
+| Linux amd64 / arm64 | Supported |
+| macOS arm64 (Apple Silicon) | Supported |
+| Windows x64 | Supported, in Windows Terminal |
+| macOS Intel, Windows ARM | Experimental builds |
 
-```bash
-ttv-tui login --from-browser --browser brave --profile Default
-```
+The split view needs 80 columns. Below that, the app shows chat only or the list only.
 
-2. Launch the interface:
+## Keyboard shortcuts
 
-```bash
-ttv-tui
-```
-
-The UI language follows `--lang` (`en` or `pt-BR`), the `language` setting in `config.toml`, or your `LC_ALL` / `LC_MESSAGES` / `LANG` environment variables, defaulting to English.
-
-## Walkthrough
-
-When `ttv-tui` starts, it loads the top live categories on Twitch.
-
-
-Select a category with `Enter` to list its live channels, then press `Enter` on a channel to launch video playback in `mpv` and join the channel's IRC chat in the right panel.
-
-
-Press `?` or `F1` at any time to display the in-app keyboard shortcuts overlay.
-
-
-For a step-by-step tour covering installation, authentication, channel switching, favorites, chat, narrow terminals, and shutdown, read the [full walkthrough](docs/walkthrough.md).
-
-## Single window (Linux, Wayland)
-
-On Linux under Wayland, `ttv-tui` opens one window with the list on the left, the video in the center and the chat on the right. There is no separate mpv window. It needs SDL3 and libmpv; without them, or with `--terminal`, the app stays in the terminal.
+<details open>
+<summary>List and search</summary>
 
 | Key | Action |
-|---|---|
+| --- | --- |
+| `↑` `↓` or `j` `k` | Move the selection |
+| `Enter` | Open the category or watch the channel |
+| `f` | Add or remove the channel from favorites |
+| `/` | Filter the current list |
+| `Ctrl+F` or `Ctrl+S` | Search channels across Twitch |
+| `l` | Filter channels by language and audience |
+| `r` | Retry loading the list or the video |
+| `Esc` | Clear the filter, or go back to categories |
+| `Ctrl+R` | Go back to categories from anywhere |
+| `Tab` | Move focus between the list and the chat |
+
+</details>
+
+<details open>
+<summary>Chat</summary>
+
+| Key | Action |
+| --- | --- |
+| `i` | Write a message |
+| `Enter` | Send the message |
+| `Esc` | Stop writing and keep the draft |
+| `↑` `↓` `PgUp` `Home` | Scroll the history |
+| `End` or `G` | Back to live messages |
+| `y` | Copy the selected message |
+| `Ctrl+T` | Reconnect to the chat |
+
+</details>
+
+<details open>
+<summary>Video, layout and app</summary>
+
+| Key | Action |
+| --- | --- |
+| `Space` | Pause or resume |
+| `+` `-` | Volume up or down by 5% |
+| `Ctrl+X` | Stop the video and stay in the app |
+| `Ctrl+W` | Cycle layouts: list + chat, chat, list, none |
 | `Ctrl+H` / `Ctrl+L` | Show or hide the list / the chat |
+| `?` or `F1` | Show or hide the shortcut help |
+| `Ctrl+Q` | Quit |
+
+`Space` and `+` `-` also work in the `mpv` window. Its other keys do nothing.
+
+</details>
+
+<details>
+<summary>Single window only (Linux, Wayland)</summary>
+
+| Key | Action |
+| --- | --- |
 | `Ctrl+→` / `Ctrl+←` | Widen / narrow the list |
 | `Alt+←` / `Alt+→` | Widen / narrow the chat |
-| `Ctrl+O` | Move the chat between beside the video and over it |
+| `Ctrl+O` | Put the chat beside the video or over it |
 | `Alt+↑` / `Alt+↓` | Raise / lower the opacity of the chat over the video |
 | `Ctrl+P` | Swap the sides of the list and the chat |
 
-Widths and the chat placement are saved as `list_columns`, `chat_columns`, `chat_overlay`, `chat_overlay_opacity` (10 to 100, in percent) and `panels_swapped` in `config.toml`.toml`. Color emoji show as empty boxes for now. See [ADR 0011](docs/adr/0011-janela-unica.md).
+The app saves these choices in `config.toml`.
 
-## Keybindings
+</details>
 
-Press `?` or `F1` to open the modal help. It captures keys; use `↑`/`↓`, `PgUp`/`PgDn`, or `Home`/`End` to scroll and `?`, `Esc`, `F1`, or `q` to close it. The tables below list all bindings, including two details omitted from the compact overlay: the unshifted `=` and `_` volume aliases, and `F1` working while typing in a prompt.
+## FAQ
 
-### List navigation and search
+<details>
+<summary><b>How does it work?</b></summary>
 
-| Key | Action |
+The app ties three tools together and draws the interface around them:
+
+1. **Lists.** Categories, channels and search come from the public GraphQL API that twitch.tv itself uses. The app registers no Twitch application.
+2. **Video.** When you open a channel, the app starts `streamlink`. It fetches the stream at the best quality, drops the ad segments and pipes the video to `mpv`. The app sends pause, volume and stop to `mpv` over a local JSON IPC socket.
+3. **Chat.** The chat connects to Twitch IRC over TLS. Without a token it logs in anonymously and only reads.
+
+The app plays one channel at a time. Opening another channel stops the old player and moves the chat to the new room. `Ctrl+X` stops only the video, and the chat stays open. `Ctrl+Q` stops `streamlink` and `mpv`, removes the temporary IPC files and disconnects the chat.
+
+The [ADRs](docs/adr/) explain each choice.
+
+</details>
+
+<details>
+<summary><b>How do I install the dependencies?</b></summary>
+
+`streamlink` and `mpv` are required for video. `sqlite3` and `secret-tool` matter only for `login --from-browser`.
+
+| System | Command |
 | --- | --- |
-| `↑` / `↓` or `j` / `k` | Move selection up or down in the list, loading more items at the bottom |
-| `Enter` | Open the highlighted category or start watching the highlighted channel |
-| `f` | Toggle the highlighted channel in Favorites |
-| `/` | Filter the current list locally (`Enter` keeps filter, `Esc` clears) |
-| `Ctrl+F` | Search channels across Twitch, reusing active `/` filter text if present |
-| `Ctrl+S` | Same as `Ctrl+F` (alias). Works in any terminal: `ttv-tui` runs in raw mode, which disables the terminal's software flow control |
-| `r` | Retry loading the current list or retry a failed video playback |
-| `Esc` | Clear active filter, or step back from channels / search results to categories |
-| `Ctrl+R` | Return to Live Categories from anywhere, even while typing |
-| `Tab` | Switch keyboard focus between the list panel and the chat panel |
+| Arch Linux | `sudo pacman -S streamlink mpv sqlite libsecret` |
+| Debian / Ubuntu | `sudo apt install streamlink mpv sqlite3 libsecret-tools` |
+| macOS | `brew install mpv streamlink` |
+| Windows (winget) | `winget install --id shinchiro.mpv -e` and `winget install --id streamlink.streamlink -e` |
+| Windows (Scoop) | `scoop bucket add extras` and `scoop install extras/mpv extras/streamlink` |
 
-### Chat
+If your distribution ships an old `streamlink`, install a current one with `pipx install streamlink`.
 
-| Key | Action |
+The single window on Linux also needs SDL3 and libmpv. On Arch, that is `sudo pacman -S sdl3 mpv`.
+
+Run `ttv-tui doctor` afterwards. It lists what is missing.
+
+</details>
+
+<details>
+<summary><b>How do favorites and recent channels work?</b></summary>
+
+Press `f` on a channel to add it to favorites, and press it again to remove it. Every channel you open goes to the recent list, which keeps the last 50. Both sections sit at the top of the list.
+
+In a new session, those channels show `[unverified]` until you open them or they show up in a live list. They are stored in `state.json`, not on your Twitch account.
+
+</details>
+
+<details>
+<summary><b>Do I need a Twitch account?</b></summary>
+
+No. Browsing, watching and reading chat work anonymously. You need a token only to send chat messages.
+
+</details>
+
+<details>
+<summary><b>How do I log in to send messages?</b></summary>
+
+Pick one:
+
+- `ttv-tui login --import twt` copies the token from [twitch-tui](https://github.com/Xithrius/twitch-tui). It is a chat-scoped token, so prefer this one.
+- `ttv-tui login --from-browser` copies the `auth-token` cookie from Brave, Chrome, Chromium, Edge, Vivaldi, Opera or Firefox. Add `--browser` and `--profile` to skip the prompt. It works on Linux only for now, and it needs `sqlite3`. Chromium-based browsers also need `secret-tool`, from `libsecret`.
+
+</details>
+
+<details>
+<summary><b>Is <code>--from-browser</code> safe?</b></summary>
+
+Know what it reaches before you use it:
+
+- The `auth-token` cookie is a full session for your Twitch account, not a chat-only token.
+- To decrypt it in Chromium-based browsers, the app reads the browser key from your keyring. That key can decrypt every cookie in that browser. The app reads only the Twitch row and drops the key when `login` ends.
+- The token is saved in plain text in `config.toml`, with mode `0600` on Linux and macOS. The app never prints it.
+
+[SECURITY.md](SECURITY.md) has the full details.
+
+</details>
+
+<details>
+<summary><b>How do I log out or revoke the token?</b></summary>
+
+Deleting the local file does not end the session on Twitch. Do both:
+
+1. On twitch.tv, open **Settings → Security and Privacy → Sign Out Everywhere**. For an imported `twt` token, you can also revoke it under **Settings → Connections**.
+2. Delete `config.toml`. `ttv-tui doctor` shows where it is. On Linux:
+
+   ```bash
+   rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/ttv-tui/config.toml"
+   ```
+
+</details>
+
+<details>
+<summary><b>Does it block ads?</b></summary>
+
+`streamlink` drops the ad segments from the stream. During an ad break, the status bar shows `Ad break: the video resumes on its own` with a countdown.
+
+</details>
+
+<details>
+<summary><b>Why does the video open in another window?</b></summary>
+
+The app does not decode video. `mpv` plays it in its own window, and the app controls it over IPC. The `mpv` window has no controls. Use the app's keys, and close the video with `Ctrl+X` or by closing the window.
+
+On Linux amd64 with Wayland, the app opens a single window instead, with the list, the video and the chat side by side. It needs `ttv-tui-window`, SDL3 and libmpv. The install script adds `ttv-tui-window` for you. To stay in the terminal, run `ttv-tui --terminal`. Color emoji show as empty boxes in that window for now. See [ADR 0011](docs/adr/0011-janela-unica.md).
+
+</details>
+
+<details>
+<summary><b>Where did the chat go?</b></summary>
+
+Your terminal is narrower than 80 columns, so the split view hides the chat. Press `Ctrl+L` to see the chat at full width, or widen the terminal.
+
+</details>
+
+<details>
+<summary><b>What do <code>[sending]</code>, <code>[rejected]</code> and the other chat tags mean?</b></summary>
+
+| Tag | Meaning |
 | --- | --- |
-| `↑` / `k`, `↓` / `j`, `PgUp`, `Home` | Scroll chat history; selection follows the bottom-most visible message |
-| `End` / `G` | Resume following live chat |
-| `y` | Copy the selected chat message (or the latest while live) via `wl-copy`, `xclip`, or OSC 52 |
-| `i` | Focus chat and start writing a message in the current channel |
-| `Enter` | Send the composed message to chat |
-| `Esc` | Exit message input while preserving your draft, or return focus to the list |
-| `Ctrl+T` | Reconnect to the current channel's IRC chat |
+| `[sending]` / `[sent]` | Waiting for the server / the server confirmed the message |
+| `[rejected: <reason>]` | Not sent. The reason can be slow mode, followers-only, subs-only, emote-only, a duplicate message, a ban, or no answer from the server |
+| `[discarded: …]` | The message hit Twitch's limit of 20 messages per 30 seconds, or you switched channels before it went out |
+| `[new]` | Message from a new account |
+| `[deleted]` | A moderator deleted the message. You can still read and copy it |
 
-### Layout
+Messages sent less than 1 second apart wait in a queue. Slash commands are blocked, except `/me`, and your draft stays.
 
-| Key | Action |
-| --- | --- |
-| `Ctrl+W` | Cycle layouts: list + chat → chat only → list only → focus (both hidden) |
-| `Ctrl+H` | Show or hide the list panel |
-| `Ctrl+L` | Show or hide the chat panel |
+</details>
 
-The layout is a session preference: the status bar names the active one
-(`layout: chat`) and hiding the chat never triggers the narrow-terminal notice. Without an open channel, layout keys keep the list visible and report `No chat yet: open a channel with Enter`. The status bar uses `▶` for playing, `‖` for paused, `✖` for errors and `!` for warnings, so state does not depend on color.
+<details>
+<summary><b>Can I ban, time out or delete messages?</b></summary>
 
-### Video player (`mpv` window)
+No. Twitch removed moderation commands from IRC, so `/ban` would go out as a public message. Moderation needs the Helix API and a registered Twitch app, which this project does not use.
 
-| Key | Action |
-| --- | --- |
-| `Space` | Pause or resume video playback |
-| `+` / `=` | Increase `mpv` volume by 5% |
-| `-` / `_` | Decrease `mpv` volume by 5% |
-| `Ctrl+X` | Stop video playback without leaving the app |
+</details>
 
-Pause and volume work in both windows, the TUI and the `mpv` window, and the status bar follows the volume whichever window changed it. Volume stops at 100% in both. `Ctrl+X` works only in the TUI.
+<details>
+<summary><b>Does it show emotes, VODs or my followed channels?</b></summary>
 
-`ttv-tui` replaces the `mpv` key bindings, so every other key in the video window does nothing, including `q`, `f`, and the arrows. The video window has no controls of its own, no on-screen control bar included; everything goes through the TUI. To close the video, press `Ctrl+X` or close its window.
+Not yet:
 
-### Application
+- Emotes show as text. Twitch, BTTV and 7TV images are not drawn.
+- Only live streams play. VODs and clips do not.
+- Favorites and recent channels do not sync with the channels you follow on Twitch.
 
-| Key | Action |
-| --- | --- |
-| `?` or `F1` | Toggle the keyboard shortcuts overlay (`F1` works even while typing) |
-| `Ctrl+Q` | Stop active playback, disconnect chat, and quit |
+</details>
 
-`Ctrl+S` and `Ctrl+Q` reach the app because `ttv-tui` runs the terminal in raw mode, which disables software flow control: the terminal no longer intercepts `Ctrl+S` to pause output or `Ctrl+Q` to resume it. No extra setup is needed. `Ctrl+F` remains the primary search binding.
+<details>
+<summary><b>Where does the app keep its files?</b></summary>
 
-## Layout
+| OS | Config and token | Favorites and recents |
+| --- | --- | --- |
+| Linux | `~/.config/ttv-tui/config.toml` | `~/.local/state/ttv-tui/state.json` |
+| macOS | `~/Library/Application Support/ttv-tui/config.toml` | `~/Library/Application Support/ttv-tui/state/state.json` |
+| Windows | `%APPDATA%\ttv-tui\config.toml` | `%LOCALAPPDATA%\ttv-tui\state.json` |
 
-`ttv-tui` uses a two-panel layout when a channel is open:
+`XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these paths on every OS. If `state.json` is corrupted, the app saves it as `state.json.bak` and starts with empty lists.
 
-- **Left panel.** Navigation list showing Favorites, Recent channels, and Live Categories, Live Channels, or Search Results.
-- **Right panel.** Live IRC chat for the active channel, with room mode tags (`slow`, `followers-only`, `subs-only`) in the header and the compose prompt at the bottom.
-- **Bottom bar.** Status bar showing the active language (`[en]` or `[pt-BR]`), playback state, volume, channel context, and key hints.
+</details>
 
-Press `Tab` to move focus between the list and chat panels. The active panel header displays `[focus]`.
+<details>
+<summary><b>The video does not play, or there is no sound</b></summary>
 
-Column width adaptation:
+1. Run `ttv-tui doctor`. It reports missing `streamlink` or `mpv`, the paths in use and whether a token exists, without showing it.
+2. `Player error: channel offline` means the stream ended. Pick another channel, or press `r` to retry.
+3. Check that the status bar does not show `vol 0`. Press `+` to raise the volume.
+4. On Linux, check that `WAYLAND_DISPLAY` or `DISPLAY` is set and that an audio server is running.
+5. Press `?` after a failure to read the last error from `streamlink` or `mpv`.
 
-- **100+ columns.** Side-by-side split with roughly 40% width for the list and 60% for chat.
-- **80 to 99 columns.** Side-by-side split with a compact chat column of at least 34 columns so the list stays readable.
-- **Under 80 columns.** In split view, chat is hidden and the notice `Chat hidden (<80 cols) — Ctrl+L opens chat only, or widen the terminal` appears. Press `Ctrl+L` for full-width chat, or widen the terminal to restore the split.
+</details>
 
-## Chat
+<details>
+<summary><b>The app asks to stop "a player from a previous session"</b></summary>
 
-- **Anonymous reading.** Connecting to and reading any channel's chat uses an anonymous Twitch IRC login (`justinfan...`) over TLS (`irc.chat.twitch.tv:6697`) with IRCv3 tags enabled. No account or token is required to read chat.
-- **Authenticated sending.** Pressing `i` to compose a message requires a valid token in `config.toml`.
-- **Copy message (`y`).** With focus on the chat panel, `y` copies the selected message (the bottom-most visible row, or the latest message while following live) to the system clipboard. The payload includes context, for example `channel #login · YYYY-MM-DD HH:MM · nick: text`, with local time. System lines use their text; messages without a receipt time omit the context. Layout separators and padding are excluded. Mouse selection is not used. Clipboard paths try the tmux buffer first when inside tmux, then (1) `wl-copy` when `WAYLAND_DISPLAY` is set and `wl-copy` is on `PATH` (content persists after the app exits); (2) `xclip -selection clipboard` when `DISPLAY` is set and `xclip` is on `PATH`; (3) OSC 52 written to stderr for SSH/tmux and other hosts without those helpers. If a path fails, the next one is tried. The status bar names the path that worked (`Copied via wl-copy: …` / `xclip` / `OSC 52`), or shows a clear error when every path fails. For the OSC 52 path inside tmux, enable `set-clipboard on` (for example in `~/.tmux.conf`) so the sequence reaches the system clipboard.
-- **Chat markers and commands.** Messages from new accounts carry `[new]`. Deleted messages remain visible as `[deleted]` and their text can still be copied. Slash commands are blocked with a warning, except `/me`; the draft is preserved.
-- **Rate limits.** Outgoing messages pass through a local rate limiter matching Twitch's limits of 20 messages per 30 seconds globally and 1 message per second per channel. Messages spaced closer than 1 second queue automatically; if the 20-message window is full, excess messages are marked `[discarded: rate limit exceeded (20/30s or 1/s)]`.
-- **Delivery tracking and room restrictions.** Each sent message carries a client nonce and displays `[sending]` until confirmed by the server (`[sent]`). If the room rejects a message due to slow mode, followers-only mode, subscribers-only mode, emote-only mode, duplicate message rules (R9K), or a ban/timeout, `ttv-tui` tags the message as `[rejected: <reason>]` inline.
+A previous run was killed before it could close `streamlink` and `mpv`. Answer `Y` to stop the leftover player.
 
-### Moderation
+</details>
 
-The app does not support bans, timeouts, or message deletion. Twitch discontinued IRC moderation commands; `/ban` and similar commands become public messages, so the app blocks slash commands except `/me`.
-Moderation actions require the Helix API with OAuth and a registered Twitch app. Its revocable `client_id` is tied to an account, and revocation would break login for all users at once.
-That risk is disproportionate for a product already in a gray area due to ad-free video. Chat supports badges, copying with context, evidence of deleted messages, and raid notices.
+<details>
+<summary><b>How do I change the language or turn off colors?</b></summary>
 
-## Login and security
+Pass `--lang en` or `--lang pt-BR`, or set `language` in `config.toml`. Without either, the app follows your `LANG` and falls back to English.
 
-Cookie extraction below describes the current Linux implementation. See limitations for integration outside Linux.
+To turn off colors, run with `NO_COLOR=1`. The symbols `▸ ★ ● ▶ ‖ ✖` still show the state.
 
-`ttv-tui` registers no OAuth application on Twitch and embeds no third-party OAuth client secret. You can authenticate either by importing a token from `twitch-tui` (`--import twt`) or by extracting the session cookie from your web browser (`--from-browser`):
+</details>
 
-1. **What `--from-browser` reads.** `ttv-tui` locates cookie databases for installed browsers: Brave, Chrome, Chromium, Edge, Vivaldi, Opera, and Firefox, including Flatpak and Snap paths for Firefox. It copies the SQLite database to a temporary directory via `sqlite3 <db> ".backup '<tmp>'"`, falling back to a file copy with `-wal` and `-shm` sidecars, queries only the `auth-token` cookie for `.twitch.tv` / `twitch.tv`, and deletes the temporary copy. The original browser file is never modified.
-2. **Reach of the keyring secret and cookie decryption.**
-   - **Firefox.** Stores all cookies in plaintext inside `cookies.sqlite`.
-   - **Chromium family.** Encrypts cookies with AES-128-CBC (`v10` / `v11`). `ttv-tui` calls `secret-tool` (`libsecret`) to read the browser's OSCrypt Safe Storage password from your desktop session keyring (`application=<browser>` under `chrome_libsecret_os_crypt_password_v2`, or the legacy `<Browser> Safe Storage` service entry), derives the 16-byte AES key with PBKDF2-HMAC-SHA1 (`saltysalt`, 1 iteration), and strips the 32-byte SHA-256 host-key prefix used by newer Chromium database versions (`meta.version >= 24`). Because Chromium uses a single Safe Storage secret per browser installation, that keyring secret can decrypt **all** cookies stored in that browser across every website, not only `twitch.tv`'s `auth-token`. Although `ttv-tui` queries only the `auth-token` row for `twitch.tv` and keeps the derived key in memory only while `login` runs, unlocking the keyring exposes that browser's master cookie key to the process.
-3. **Full-account scope and plaintext storage.**
-   - **Full session reach.** The `auth-token` cookie from `twitch.tv` is a full first-party web session token for your Twitch account, not an OAuth token restricted to narrow chat scopes (`chat:read` / `chat:edit`). Anyone who obtains this token can act as your account on Twitch until the session is invalidated.
-   - **Plaintext on disk (`0600`).** After validating the token against `https://id.twitch.tv/oauth2/validate` to resolve your Twitch username, scopes, and expiration time, `ttv-tui` writes the token in plaintext to `~/.config/ttv-tui/config.toml` (or `$XDG_CONFIG_HOME/ttv-tui/config.toml`) with `0600` file permissions, readable and writable only by your OS user. Any process running under your user account can read this file. The token value is never printed to stdout, stderr, or error logs. On macOS the file is `~/Library/Application Support/ttv-tui/config.toml`; on Windows it is `%APPDATA%\ttv-tui\config.toml`, protected by the inherited profile ACL, without POSIX `0600` guarantees. XDG takes priority on all three systems.
-4. **When to prefer `--import twt`.** If you already have `twitch-tui` configured at `~/.config/twt/config.toml` or prefer using a chat-scoped OAuth token without granting access to your browser cookie database and Safe Storage keyring secret, run `ttv-tui login --import twt` instead of `--from-browser`.
-5. **How to revoke.** Deleting `config.toml` only removes the local file; the token remains valid on Twitch until revoked on the server. To invalidate the session on Twitch's servers, open `twitch.tv` and use **Settings -> Security and Privacy -> Sign Out Everywhere**, or log out of the browser session from which the token was extracted, or revoke the connection under **Settings -> Connections** if imported via `--import twt`. Then delete your local configuration file:
+<details>
+<summary><b>Where does <code>y</code> copy to?</b></summary>
 
-On Linux (on macOS/Windows remove the file indicated by `doctor`):
+Inside tmux, the app tries the tmux buffer first. Then it tries `wl-copy`, `xclip` and OSC 52, in that order. The status bar names the one that worked. Inside tmux, OSC 52 needs `set-clipboard on`. The copy includes the channel and time, for example `channel #login · 2026-11-10 14:30 · nick: text`.
 
-```bash
-rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/ttv-tui/config.toml"
-```
+</details>
 
-See [SECURITY.md](SECURITY.md) for vulnerability reporting and revocation instructions.
+<details>
+<summary><b>Why doesn't <code>Ctrl+C</code> quit? Won't <code>Ctrl+S</code> freeze my terminal?</b></summary>
 
-## Troubleshooting
+Quit with `Ctrl+Q`, which works even while you type. `Ctrl+C` only shows the hint `To quit use Ctrl+Q`.
 
-Run `ttv-tui doctor --lang en` (or `--lang pt-BR`) before reporting a failure. It shows app version, OS/architecture, presence and numeric version of `streamlink`/`mpv`, effective directories, and token presence as YES/NO only. It does not validate the token over the network. Unreadable configuration is reported without echoing its error or contents. Missing dependencies or unreadable state/configuration return exit code 1; a completed diagnostic returns 0.
+The app runs the terminal in raw mode, so the terminal sends `Ctrl+S` and `Ctrl+Q` to the app instead of pausing output.
 
-“Clean” means no pending records; “pending” can also mean an active instance. The command does not modify records or test past IPC, audio or playback. A tool found whose version probe fails is reported as version unavailable.
-
-
-- **`Channel offline: pick another channel`.** `streamlink` reported no playable streams for that login. Select another live channel or press `r` to refresh the channel list.
-- **`streamlink not found` / `mpv not found`.** Install `streamlink` and `mpv` via your distribution's package manager and confirm both are in `PATH`.
-- **`sqlite3 not found in PATH` during login.** Install the `sqlite` / `sqlite3` CLI package, such as `sudo pacman -S sqlite` or `sudo apt install sqlite3`.
-- **`keyring locked or unavailable` during login.** Unlock your desktop session keyring or install `libsecret` (`secret-tool`), sign in with Firefox and pass `--browser firefox`, or import a token with `ttv-tui login --import twt`.
-- **`Token expired or invalid`.** Browser session tokens expire when your web session ends. Log in to `twitch.tv` in your browser if needed and re-run `ttv-tui login --from-browser` or `ttv-tui login --import twt`.
-- **Orphaned player prompt on startup (`A player from a previous session is still running...`).** If a previous `ttv-tui` process was killed abruptly with `SIGKILL`, its `streamlink` and `mpv` process group may still be playing. On the next launch, `ttv-tui` verifies the recorded PID and socket in `~/.local/state/ttv-tui/players/` and prompts `[Y/n]` to stop the leftover player before opening the UI.
-- **Chat is hidden.** In split view below 80 columns, press `Ctrl+L` to open full-width chat, or widen the terminal or tmux pane to restore the split.
-- **No video window or no audio from `mpv`.** `ttv-tui` launches `mpv` with `--no-config --no-input-default-bindings --no-osc --volume-max=100 --force-window=immediate --hwdec=auto-safe`. Verify that your Wayland or X11 display session (`DISPLAY` or `WAYLAND_DISPLAY`) and audio server (PipeWire / PulseAudio) are running, and check that `Volume` in the status bar is not `vol 0` (press `+` to raise volume). Press `?` after a player failure to view the `Last player error` line reported by `streamlink` or `mpv`.
-- **Colors and `NO_COLOR`.** Set `NO_COLOR` to any non-empty value in the terminal environment (for example `NO_COLOR=1 ttv-tui`) to turn color off without changing anything else; `TERM=dumb` and `CLICOLOR=0` have the same effect. No color SGR sequence is emitted (bold, reverse, and underline remain), so symbols keep carrying the state: the selection stays on `▸`, favorites keep `★`, live channels keep `●` and `[live]`, and offline channels keep `[offline]`. `NO_COLOR` is an environment variable, not a `config.toml` key.
+</details>
 
 ## Development
 
-Run the build, `go vet`, test suite, race detector, and `golangci-lint` `v2.15.0` matching [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+<details>
+<summary>Build, test and lint</summary>
+
+These are the CI checks:
 
 ```bash
 TMPDIR=/tmp go build ./...
@@ -328,34 +382,11 @@ TMPDIR=/tmp go test -race -count=1 ./internal/player ./internal/chat ./internal/
 TMPDIR=/tmp go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run
 ```
 
-- **Why `TMPDIR=/tmp` is used.** Tests in `internal/player` create temporary directories via `t.TempDir()` and bind per-session `mpv` Unix domain sockets (`i`) inside them. The Linux kernel limits `sockaddr_un.sun_path` to 108 bytes, and `internal/player` enforces a 100-byte ceiling. When the parent environment sets `TMPDIR` to a long directory path, socket paths inside `t.TempDir()` can exceed that byte limit and fail to bind. Setting `TMPDIR=/tmp` keeps test socket paths short.
-- **Pinned `golangci-lint` version (`v2.15.0`).** CI runs `golangci-lint` `v2.15.0`. If you already have `golangci-lint` `v2.15.0` installed in `PATH`, you can run `TMPDIR=/tmp golangci-lint run` directly.
+`TMPDIR=/tmp` keeps the test socket paths under the 108-byte Unix limit.
 
-### Paths by OS
+The design decisions are in [`docs/adr/`](docs/adr/).
 
-`XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_RUNTIME_DIR` take priority on every OS, each with a `ttv-tui` suffix. Without those variables:
-
-| OS | Configuration (token) | State | Runtime |
-| --- | --- | --- | --- |
-| Linux | `~/.config/ttv-tui/config.toml` | `~/.local/state/ttv-tui` | `<OS temp>/ttv-tui` |
-| macOS | `~/Library/Application Support/ttv-tui/config.toml` | `~/Library/Application Support/ttv-tui/state` | `$TMPDIR/ttv-tui` (otherwise OS temp) |
-| Windows | `%APPDATA%\ttv-tui\config.toml` | `%LOCALAPPDATA%\ttv-tui` | `%LOCALAPPDATA%\ttv-tui\run` |
-
-The state directory contains `state.json` (favorites and up to 50 recents) and `players/player-<pid>-<gen>.json`. Each session creates `<runtime>/<gen>-*/mpv-input.conf`; Unix also creates socket `i` in a `0700` directory, with a `0600` key file. Windows IPC uses a named pipe without a socket file. If the directory cannot be used, the fallback is `<OS temp>/ttv-tui-<pid>-<gen>/`. The token uses `0600` on Unix and the inherited profile ACL on Windows; see [SECURITY.md](SECURITY.md).
-
-If `state.json` is corrupted, `ttv-tui` backs it up to `state.json.bak` and starts with empty favorites and recents.
-
-Architecture Decision Records are documented in [`docs/adr/`](docs/adr/).
-
-## Limitations and roadmap
-
-Current limitations and v1.8 integration:
-
-- **Login outside Linux pending in this checkout.** Profile discovery still uses Linux paths and `login --token` is not available yet. The v1.8 authentication scope calls for Firefox and hidden token input; Windows Chromium (App-Bound Encryption) is outside scope. Implementation and validation belong to the authentication ticket.
-- **No chat moderation commands.** Deleting messages, timeouts, and bans are not implemented.
-- **Text-only emotes.** Chat renders text and Unicode; graphical Twitch, BTTV, and 7TV emotes are not rendered as images in the terminal.
-- **Live streams only.** VODs and clips are not supported.
-- **Local favorites and recents.** Favorite channels are stored locally in `state.json` rather than synced from your Twitch followed channels list, which requires a registered Helix OAuth client ID.
+</details>
 
 ## License
 
