@@ -59,8 +59,12 @@ type Session struct {
 	endpoint string
 	cmd      *exec.Cmd
 	// group is set right after cmd starts; read it only once cmd.Process exists.
-	group  processGroup
-	record string
+	group processGroup
+	// groupGone is set when the group was found empty right after the leader was
+	// reaped. From then on its id may lead another program's group, so the
+	// session never signals or probes it again.
+	groupGone atomic.Bool
+	record    string
 	// inputConfErr is why the session runs without its input.conf; set once
 	// before the session starts, then only read.
 	inputConfErr error
@@ -283,7 +287,7 @@ func (s *Session) closeIPC() {
 // playing after streamlink is gone, so the deadline escalates to SIGKILL on the
 // group whenever any member survives it.
 func (s *Session) terminateProcessGroup() {
-	if s.cmd == nil || s.cmd.Process == nil {
+	if s.cmd == nil || s.cmd.Process == nil || s.groupGone.Load() {
 		return
 	}
 	_ = s.group.terminate()
@@ -296,6 +300,10 @@ func (s *Session) terminateProcessGroup() {
 
 func (s *Session) waitProcess() {
 	err := s.cmd.Wait()
+	// Before waitDone: a Stop that sees it closed must also see groupGone.
+	if !s.group.alive() {
+		s.groupGone.Store(true)
+	}
 	s.mu.Lock()
 	s.waitErr = err
 	s.mu.Unlock()
@@ -923,7 +931,7 @@ func (s *Session) cleanupFiles() {
 	}
 	// Keep the record while any group member lives, so a later run can still
 	// find the player if this process dies before Stop.
-	if s.record != "" && (s.cmd == nil || s.cmd.Process == nil || !s.group.alive()) {
+	if s.record != "" && (s.cmd == nil || s.cmd.Process == nil || s.groupGone.Load() || !s.group.alive()) {
 		_ = os.Remove(s.record)
 	}
 }
