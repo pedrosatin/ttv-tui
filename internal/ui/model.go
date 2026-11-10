@@ -546,6 +546,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case storeSavedMsg:
 		return m.applyStoreSaved(msg)
 
+	case configSavedMsg:
+		return m.applyConfigSaved(msg)
+
 	case ChatEventMsg:
 		return m.handleChatEvent(msg)
 

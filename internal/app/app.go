@@ -208,8 +208,9 @@ func streams(opts Options) (input io.Reader, output, logw io.Writer) {
 	return input, output, logw
 }
 
-// persistLang saves a --lang that differs from the configured language. cfg
-// takes the new language even with no path to save it to.
+// persistLang saves a --lang that differs from the configured language, on top
+// of the config as it is on disk now (see rewriteConfig). cfg takes the new
+// language even with no path to save it to and when the save fails.
 func persistLang(lang string, cfg *config.Config, cfgPath string) error {
 	if lang == "" {
 		return nil
@@ -222,7 +223,20 @@ func persistLang(lang string, cfg *config.Config, cfgPath string) error {
 	if cfgPath == "" {
 		return nil
 	}
-	return config.SaveTo(cfgPath, *cfg)
+	return rewriteConfig(cfgPath, func(c *config.Config) { c.Language = norm })
+}
+
+// rewriteConfig rereads the config at path, applies change and saves it, so a
+// `ttv-tui login` in another terminal since this run read the config is kept.
+// A config that exists but cannot be read or parsed is left as it is and the
+// error returned: saving over it would lose what it holds.
+func rewriteConfig(path string, change func(*config.Config)) error {
+	cfg, err := config.LoadFrom(path)
+	if err != nil {
+		return err
+	}
+	change(&cfg)
+	return config.SaveTo(path, cfg)
 }
 
 func resolveStatePath(path string) (string, error) {
@@ -269,14 +283,20 @@ func chatManager(injected *chat.Manager, cfg config.Config) (*chat.Manager, func
 	return mgr, mgr.Close
 }
 
-// loadState reads the saved favorites and recents. The notice is set only when
-// the state file was corrupt; any other read error starts from an empty state.
+// loadState reads the saved favorites and recents. A missing state file starts
+// empty in silence; one that is corrupt or cannot be read starts empty with a
+// notice. The store refuses to save over a file it cannot read, so the
+// favorites in it are not lost.
 func loadState(s *store.Store, catalog *i18n.Catalog) (store.State, string) {
 	st, err := s.Load()
-	if errors.Is(err, store.ErrCorrupt) {
+	switch {
+	case err == nil:
+		return st, ""
+	case errors.Is(err, store.ErrCorrupt):
 		return st, catalog.T("store.corrupt_notice")
+	default:
+		return st, catalog.T("store.load_failed_notice")
 	}
-	return st, ""
 }
 
 // configOptions hands the UI the saved channel filters and panel layout. With a
@@ -289,31 +309,29 @@ func configOptions(cfg config.Config, cfgPath string) []ui.Option {
 		}
 		return append(opts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, nil))
 	}
-	w := &configWriter{path: cfgPath, cfg: cfg}
+	w := &configWriter{path: cfgPath}
 	return []ui.Option{
 		ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, w.saveFilters),
 		ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, w.saveColumns),
 	}
 }
 
-// configWriter saves the settings the UI changes while it runs.
+// configWriter saves the settings the UI changes while it runs. The lock keeps
+// a filter save and a layout save from rereading the same file and each
+// dropping the other's change.
 type configWriter struct {
 	mu   sync.Mutex
 	path string
-	cfg  config.Config
 }
 
-// update rereads the config before each save: a `ttv-tui login` in another
-// terminal must not be undone by a change of panel width here. If the reread
-// fails, the change goes on top of the last config this run saw.
+// update applies change to the config on disk (see rewriteConfig): a `ttv-tui
+// login` in another terminal must not be undone by a change of panel width
+// here. If the config cannot be read, nothing is saved and the UI shows the
+// error; the change still holds for this run.
 func (w *configWriter) update(change func(*config.Config)) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if fresh, err := config.LoadFrom(w.path); err == nil {
-		w.cfg = fresh
-	}
-	change(&w.cfg)
-	return config.SaveTo(w.path, w.cfg)
+	return rewriteConfig(w.path, change)
 }
 
 func (w *configWriter) saveFilters(languages []string, minViewers int) error {

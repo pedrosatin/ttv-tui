@@ -70,6 +70,10 @@ func (m Model) blockingStatusLead() (statusLead, bool) {
 		return statusLead{primary: m.notices.ctrlC}, true
 	case m.list.err != nil:
 		return statusLead{primary: m.listErrorAction(), tone: toneError, detail: m.listErrorDetail()}, true
+	case m.list.prefs.menuOpen && m.notices.statusWarns:
+		// A choice made in the menu may fail to save; the warning stays over
+		// the menu hint, or nobody would see it before the next key clears it.
+		return statusLead{primary: m.notices.status, tone: toneWarning}, true
 	case m.list.prefs.menuOpen:
 		return statusLead{primary: m.t("channel_filter.status_open")}, true
 	case m.list.search.active && m.listVisible():

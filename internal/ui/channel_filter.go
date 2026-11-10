@@ -226,8 +226,7 @@ func (m Model) persistChannelFilters() tea.Cmd {
 	minV := m.list.prefs.minViewers
 	persist := m.list.prefs.persist
 	return func() tea.Msg {
-		_ = persist(langs, minV)
-		return nil
+		return configSavedMsg{Err: persist(langs, minV)}
 	}
 }
 

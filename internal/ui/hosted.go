@@ -294,8 +294,7 @@ func (h hostedState) saveColumns(gen int) tea.Cmd {
 	}
 	persist, list, chat, overlay, swapped, opacity := h.persist, h.listCols, h.chatCols, h.chatOverlay, h.panelsSwapped, h.chatOverlayOpacity
 	return func() tea.Msg {
-		_ = persist(list, chat, overlay, swapped, opacity)
-		return nil
+		return configSavedMsg{Err: persist(list, chat, overlay, swapped, opacity)}
 	}
 }
 

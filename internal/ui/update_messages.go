@@ -183,6 +183,20 @@ func (m Model) applyStoreSaved(msg storeSavedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// configSavedMsg ends a save of the channel filters or the panel layout.
+type configSavedMsg struct {
+	Err error
+}
+
+// applyConfigSaved warns when the config was not saved. The change still holds
+// for this run.
+func (m Model) applyConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m.warnStatus(m.t("config.save_failed"))
+	}
+	return m, nil
+}
+
 // applyPlayerStatus folds one player event into the model, unless it belongs
 // to a playback the model already left.
 func (m Model) applyPlayerStatus(msg PlayerStatusMsg) (tea.Model, tea.Cmd) {

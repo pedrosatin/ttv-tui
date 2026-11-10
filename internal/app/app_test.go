@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/auth"
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/store"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
@@ -85,7 +88,7 @@ func TestConfigWriterRereadsBeforeSaving(t *testing.T) {
 	if err := config.SaveTo(path, start); err != nil {
 		t.Fatal(err)
 	}
-	w := &configWriter{path: path, cfg: start}
+	w := &configWriter{path: path}
 
 	// A panel width change after a login in another terminal keeps that login.
 	loginElsewhere(t, path)
@@ -273,4 +276,190 @@ func TestConfigOptionsWithoutPathNeverWrite(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("something was written without a config path: %v", entries)
 	}
+}
+
+// brokenConfig is a config.toml that exists but that LoadFrom rejects. apply
+// breaks a valid config at path and returns the bytes that have to survive.
+type brokenConfig struct {
+	name  string
+	apply func(t *testing.T, path string) []byte
+}
+
+var brokenConfigs = []brokenConfig{
+	{"unreadable", func(t *testing.T, path string) []byte {
+		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+			t.Skip("permission 000 does not stop root or Windows from reading")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, 0o000); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
+		return data
+	}},
+	{"invalid syntax", func(t *testing.T, path string) []byte {
+		data := []byte("access_token = \"token-in-broken-file\nlanguage = [\n")
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}},
+}
+
+// breakConfig saves a valid config at path and breaks it as b says.
+func breakConfig(t *testing.T, path string, b brokenConfig) []byte {
+	t.Helper()
+	if err := config.SaveTo(path, config.Config{Language: "en", AccessToken: "token-at-startup", MinViewers: 10}); err != nil {
+		t.Fatal(err)
+	}
+	return b.apply(t, path)
+}
+
+// assertUntouched checks that path still holds want, byte for byte.
+func assertUntouched(t *testing.T, path string, want []byte) {
+	t.Helper()
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("config was rewritten:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestConfigWriterLeavesAConfigItCannotReadAlone(t *testing.T) {
+	for _, b := range brokenConfigs {
+		t.Run(b.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			want := breakConfig(t, path, b)
+			w := &configWriter{path: path}
+			if err := w.saveColumns(30, 40, true, true, 70); err == nil {
+				t.Fatal("saveColumns over a config it could not read reported success")
+			}
+			if err := w.saveFilters([]string{"pt"}, 500); err == nil {
+				t.Fatal("saveFilters over a config it could not read reported success")
+			}
+			assertUntouched(t, path, want)
+		})
+	}
+}
+
+func TestConfigOptionsWarnWhenTheConfigCannotBeRead(t *testing.T) {
+	for _, b := range brokenConfigs {
+		t.Run(b.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			want := breakConfig(t, path, b)
+			m := toggleEnglishFilter(t, configOptions(config.Config{Language: "en", AccessToken: "token-at-startup"}, path))
+			cat, err := i18n.New(i18n.LangEN)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, wantNotice := m.StatusNotice(), cat.T("config.save_failed"); got != wantNotice {
+				t.Fatalf("status notice = %q, want %q", got, wantNotice)
+			}
+			assertUntouched(t, path, want)
+		})
+	}
+}
+
+func TestPersistLangRereadsBeforeSaving(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	start := config.Config{Language: "en", AccessToken: "token-at-startup", Username: "early", MinViewers: 10}
+	if err := config.SaveTo(path, start); err != nil {
+		t.Fatal(err)
+	}
+	cfg := start
+	loginElsewhere(t, path)
+	if err := persistLang("pt-BR", &cfg, path); err != nil {
+		t.Fatalf("persistLang: %v", err)
+	}
+	if cfg.Language != i18n.LangPTBR {
+		t.Fatalf("cfg.Language = %q, want %q", cfg.Language, i18n.LangPTBR)
+	}
+	want := config.Config{Language: i18n.LangPTBR, AccessToken: "token-from-other-terminal", Username: "latecomer", MinViewers: 10}
+	if got := savedConfig(t, path); got != fmt.Sprintf("%+v", want) {
+		t.Fatalf("after persistLang:\n got %s\nwant %+v", got, want)
+	}
+}
+
+func TestPersistLangLeavesAConfigItCannotReadAlone(t *testing.T) {
+	for _, b := range brokenConfigs {
+		t.Run(b.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			want := breakConfig(t, path, b)
+			cfg := config.Config{Language: "en", AccessToken: "token-at-startup", MinViewers: 10}
+			if err := persistLang("pt-BR", &cfg, path); err == nil {
+				t.Fatal("persistLang over a config it could not read reported success")
+			}
+			if cfg.Language != i18n.LangPTBR {
+				t.Fatalf("cfg.Language = %q, want %q", cfg.Language, i18n.LangPTBR)
+			}
+			assertUntouched(t, path, want)
+		})
+	}
+}
+
+func TestLoadStateWarnsWhenTheStoreCannotBeRead(t *testing.T) {
+	cat, err := i18n.New(i18n.LangEN)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("missing file", func(t *testing.T) {
+		st, notice := loadState(store.New(filepath.Join(t.TempDir(), "state.json")), cat)
+		if notice != "" || len(st.Favorites) != 0 {
+			t.Fatalf("missing store: notice %q, favorites %v", notice, st.Favorites)
+		}
+	})
+
+	t.Run("unreadable file", func(t *testing.T) {
+		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+			t.Skip("permission 000 does not stop root or Windows from reading")
+		}
+		path := filepath.Join(t.TempDir(), "state.json")
+		saved := store.Channel{ID: "1", Login: "saved", DisplayName: "Saved"}
+		if err := store.SaveTo(path, store.State{Favorites: []store.Channel{saved}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, 0o000); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
+
+		appStore := store.New(path)
+		st, notice := loadState(appStore, cat)
+		if want := cat.T("store.load_failed_notice"); notice != want {
+			t.Fatalf("notice = %q, want %q", notice, want)
+		}
+		if notice == cat.T("store.corrupt_notice") {
+			t.Fatal("a store that could not be read is not a corrupt one")
+		}
+
+		// A favorite added while the file is still unreadable is not saved.
+		added := store.Channel{ID: "2", Login: "added", DisplayName: "Added"}
+		st.ToggleFavorite(added)
+		if err := appStore.Save(st); err == nil {
+			t.Fatal("saving over a store that could not be read reported success")
+		}
+		// Once the file is readable again, the next save keeps what it held.
+		if err := os.Chmod(path, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := appStore.Save(st); err != nil {
+			t.Fatalf("save after the store became readable: %v", err)
+		}
+		got, err := store.LoadFrom(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Favorites) != 2 || !got.Favorites[0].Matches(saved) || !got.Favorites[1].Matches(added) {
+			t.Fatalf("favorites on disk = %+v, want the saved one and the added one", got.Favorites)
+		}
+	})
 }
