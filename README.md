@@ -88,12 +88,16 @@ Pick a category with `Enter`, then a channel with `Enter`. The stream starts and
 
 ## Platforms
 
-| OS | Status |
-| --- | --- |
-| Linux amd64 / arm64 | Supported |
-| macOS arm64 (Apple Silicon) | Supported |
-| Windows x64 | Supported, in Windows Terminal |
-| macOS Intel, Windows ARM | Experimental builds |
+| OS | Release build | CI tests | Tested by hand |
+| --- | --- | --- | --- |
+| Linux amd64 | Yes | Yes | Yes, on Arch Linux with Wayland |
+| Linux arm64 | Yes | No | No |
+| macOS arm64 (Apple Silicon) | Yes | Yes | No |
+| Windows x64 | Yes | Yes | No |
+| macOS Intel, Windows ARM | Yes, experimental | No | No |
+
+> [!WARNING]
+> Only Linux amd64 has been tested by hand. On macOS and Windows the code builds and the automated tests pass, but nobody has checked video, audio, login, the clipboard or shutdown on a real machine. The dependency commands for those systems and for Debian/Ubuntu were not run either. Reports are welcome in the [issues](https://github.com/pedrosatin/ttv-tui/issues).
 
 The split view needs 80 columns. Below that, the app shows chat only or the list only.
 
@@ -194,7 +198,7 @@ The [ADRs](docs/adr/) explain each choice.
 | Windows (winget) | `winget install --id shinchiro.mpv -e` and `winget install --id streamlink.streamlink -e` |
 | Windows (Scoop) | `scoop bucket add extras` and `scoop install extras/mpv extras/streamlink` |
 
-If your distribution ships an old `streamlink`, install a current one with `pipx install streamlink`.
+Only the Arch command was tested. If your distribution ships an old `streamlink`, install a current one with `pipx install streamlink`.
 
 The single window on Linux also needs SDL3 and libmpv. On Arch, that is `sudo pacman -S sdl3 mpv`.
 
