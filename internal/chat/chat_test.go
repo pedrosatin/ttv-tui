@@ -381,6 +381,26 @@ func TestParseLine_Table(t *testing.T) {
 			},
 		},
 		{
+			name:     "PING behind a prefix that contains PING",
+			line:     ":PINGU!pingu@host PING :abc",
+			wantKind: EventPing,
+			check: func(t *testing.T, ev Event) {
+				if ev.User != "PINGU" || ev.PingPayload != " :abc" {
+					t.Fatalf("User=%q PingPayload=%q, want PINGU and ' :abc'", ev.User, ev.PingPayload)
+				}
+			},
+		},
+		{
+			name:     "PING behind tags and a prefix that contain PING",
+			line:     "@x=PING :nick!nick@host PING :abc",
+			wantKind: EventPing,
+			check: func(t *testing.T, ev Event) {
+				if ev.PingPayload != " :abc" || ev.Tags["x"] != "PING" {
+					t.Fatalf("PingPayload=%q Tags=%v, want ' :abc'", ev.PingPayload, ev.Tags)
+				}
+			},
+		},
+		{
 			name:     "PINGX is an ordinary command, not a PING",
 			line:     "PINGX abc",
 			wantKind: EventOther,
@@ -580,11 +600,11 @@ func TestParseLine_Table(t *testing.T) {
 			},
 		},
 		{
-			name:     "USERNOTICE without tags keeps channel, text and prefix nick, with no DisplayName",
+			name:     "USERNOTICE without tags keeps channel and text, and DisplayName falls back to prefix nick",
 			line:     ":nick!nick@host USERNOTICE #gaules :texto",
 			wantKind: EventUserNotice,
 			check: func(t *testing.T, ev Event) {
-				if ev.Channel != "gaules" || ev.Body != "texto" || ev.User != "nick" || ev.DisplayName != "" {
+				if ev.Channel != "gaules" || ev.Body != "texto" || ev.User != "nick" || ev.DisplayName != "nick" {
 					t.Fatalf("Channel=%q Body=%q User=%q DisplayName=%q", ev.Channel, ev.Body, ev.User, ev.DisplayName)
 				}
 			},
@@ -592,6 +612,36 @@ func TestParseLine_Table(t *testing.T) {
 		{
 			name:     "Malformed USERNOTICE without channel",
 			line:     "@login=raider;msg-id=raid :tmi.twitch.tv USERNOTICE",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed PRIVMSG with an empty channel name",
+			line:     ":nick!nick@host PRIVMSG # :oi",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed ROOMSTATE with an empty channel name",
+			line:     "@slow=30 :tmi.twitch.tv ROOMSTATE #",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed CLEARCHAT with an empty channel name",
+			line:     ":tmi.twitch.tv CLEARCHAT # :baduser",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed CLEARMSG with an empty channel name",
+			line:     "@login=baduser;target-msg-id=abc :tmi.twitch.tv CLEARMSG # :oi",
+			wantKind: EventMalformed,
+			check:    func(t *testing.T, ev Event) {},
+		},
+		{
+			name:     "Malformed USERNOTICE with an empty channel name",
+			line:     ":nick!nick@host USERNOTICE # :texto",
 			wantKind: EventMalformed,
 			check:    func(t *testing.T, ev Event) {},
 		},
@@ -612,6 +662,16 @@ func TestParseLine_Table(t *testing.T) {
 			check: func(t *testing.T, ev Event) {
 				if ev.Command != "JOIN" || ev.Channel != "gaules" || ev.User != "nick" || ev.Body != "" {
 					t.Fatalf("Command=%q Channel=%q User=%q Body=%q", ev.Command, ev.Channel, ev.User, ev.Body)
+				}
+			},
+		},
+		{
+			name:     "Unhandled command with an empty channel name leaves Channel empty",
+			line:     ":nick!nick@host JOIN #",
+			wantKind: EventOther,
+			check: func(t *testing.T, ev Event) {
+				if ev.Command != "JOIN" || ev.Channel != "" {
+					t.Fatalf("Command=%q Channel=%q", ev.Command, ev.Channel)
 				}
 			},
 		},

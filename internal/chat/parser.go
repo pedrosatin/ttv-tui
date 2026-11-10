@@ -189,13 +189,12 @@ func parseEnvelope(ev *Event, line string) (argsPart string, ok bool) {
 	ev.Command = cmd
 	ev.User = extractNick(prefix)
 
-	// A PING behind a prefix. The payload is whatever follows the first "PING"
-	// in the whole line, tags and prefix included.
+	// A PING behind a prefix. The payload is the exact text after the command
+	// word, leading space included, so "PING" inside the tags or the prefix
+	// never shifts it.
 	if cmd == "PING" {
 		ev.Kind = EventPing
-		if idx := strings.Index(line, "PING"); idx >= 0 {
-			ev.PingPayload = line[idx+4:]
-		}
+		ev.PingPayload = rest[len(cmd):]
 		return "", false
 	}
 	return argsPart, true
@@ -221,12 +220,16 @@ type lineArgs struct {
 }
 
 // channel returns the first parameter without its '#'. ok is false when the
-// parameter is missing or does not start with '#'.
+// parameter is missing, does not start with '#', or is a bare '#'.
 func (a lineArgs) channel() (name string, ok bool) {
 	if len(a.params) < 1 {
 		return "", false
 	}
-	return strings.CutPrefix(a.params[0], "#")
+	name, ok = strings.CutPrefix(a.params[0], "#")
+	if name == "" {
+		return "", false
+	}
+	return name, ok
 }
 
 func parsePrivMsg(ev *Event, args lineArgs) {
@@ -317,6 +320,9 @@ func parseUserNotice(ev *Event, args lineArgs) {
 	ev.Channel = channel
 	ev.Body = args.trailing
 	populateUserNoticeTags(ev)
+	if ev.DisplayName == "" {
+		ev.DisplayName = ev.User
+	}
 }
 
 // parseOther keeps every command the client has no handler for. The channel is
@@ -424,9 +430,6 @@ func populateUserNoticeTags(ev *Event) {
 	}
 	if login := strings.TrimSpace(ev.Tags["login"]); login != "" {
 		ev.User = login
-	}
-	if ev.DisplayName == "" {
-		ev.DisplayName = ev.User
 	}
 	if rawBadges := strings.TrimSpace(ev.Tags["badges"]); rawBadges != "" {
 		for _, b := range strings.Split(rawBadges, ",") {
