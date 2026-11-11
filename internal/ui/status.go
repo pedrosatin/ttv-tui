@@ -175,7 +175,7 @@ func (c chatState) primaryNamesChannel(primary string) bool {
 // chatChannelRef is the short "#login" form used when the full chat status
 // does not fit but the channel name still can.
 func (m Model) chatChannelRef() string {
-	ch := strings.TrimSpace(m.chat.panel.channel)
+	ch := strings.TrimSpace(sanitizeScreenText(m.chat.panel.channel))
 	if ch == "" || !m.chat.statusHasChannel() {
 		return ""
 	}
@@ -273,14 +273,15 @@ func (m Model) StatusBar() string {
 	if m.catalog != nil {
 		lang = m.catalog.Lang()
 	}
+	// Every piece of the bar passes here, Twitch names and the player login included.
 	c := m.statusParts()
-	c.primary = normalizeScreenText(c.primary)
-	c.detail = normalizeScreenText(c.detail)
+	c.primary = sanitizeScreenText(c.primary)
+	c.detail = sanitizeScreenText(c.detail)
 	for i := range c.keep {
-		c.keep[i] = normalizeScreenText(c.keep[i])
+		c.keep[i] = sanitizeScreenText(c.keep[i])
 	}
 	for i := range c.extra {
-		c.extra[i] = normalizeScreenText(c.extra[i])
+		c.extra[i] = sanitizeScreenText(c.extra[i])
 	}
 	token := ""
 	if m.includeLayoutStatus() {
