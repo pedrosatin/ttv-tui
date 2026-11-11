@@ -3,6 +3,7 @@ package ui
 import (
 	"hash/fnv"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -189,7 +190,7 @@ func styleNick(name, _ string) string {
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(strings.ToLower(name)))
-	color := nickPalette[int(h.Sum32())%len(nickPalette)]
+	color := nickPalette[h.Sum32()%uint32(len(nickPalette))]
 	return style.Foreground(color).Render(name)
 }
 
@@ -294,54 +295,31 @@ func (c chatState) mentionsSelf(body string) bool {
 	return false
 }
 
+// Longest terms come first so a shorter alternative cannot win at the same index.
+var legendTerms = regexp.MustCompile(`(?i)vermelho|amarelo|magenta|mention|menção|yellow|green|verde|ciano|cyan|red`)
+
 // colorizeHelpLegend paints the known color terms inside the help.colors line
 // so the legend itself demonstrates the palette. Unknown text stays plain.
 func colorizeHelpLegend(plain string) string {
 	if plain == "" || !colorsEnabled() {
 		return plain
 	}
-	type term struct {
-		needle string
-		paint  func(string) string
+	paints := map[string]func(string) string{
+		"amarelo":  styleFavorite,
+		"vermelho": styleError,
+		"magenta":  styleSystem,
+		"menção":   styleMention,
+		"mention":  styleMention,
+		"yellow":   styleFavorite,
+		"green":    styleLive,
+		"verde":    styleLive,
+		"ciano":    styleFocus,
+		"cyan":     styleFocus,
+		"red":      styleError,
 	}
-	terms := []term{
-		{"amarelo", styleFavorite},
-		{"vermelho", styleError},
-		{"magenta", styleSystem},
-		{"menção", styleMention},
-		{"mention", styleMention},
-		{"yellow", styleFavorite},
-		{"green", styleLive},
-		{"verde", styleLive},
-		{"ciano", styleFocus},
-		{"cyan", styleFocus},
-		{"red", styleError},
-	}
-	lower := strings.ToLower(plain)
-	var b strings.Builder
-	for len(lower) > 0 {
-		bestAt, bestLen := -1, 0
-		var paint func(string) string
-		for _, t := range terms {
-			idx := strings.Index(lower, t.needle)
-			if idx < 0 {
-				continue
-			}
-			if bestAt < 0 || idx < bestAt || (idx == bestAt && len(t.needle) > bestLen) {
-				bestAt = idx
-				bestLen = len(t.needle)
-				paint = t.paint
-			}
-		}
-		if bestAt < 0 {
-			b.WriteString(plain)
-			break
-		}
-		b.WriteString(plain[:bestAt])
-		end := bestAt + bestLen
-		b.WriteString(paint(plain[bestAt:end]))
-		plain = plain[end:]
-		lower = lower[end:]
-	}
-	return b.String()
+	return legendTerms.ReplaceAllStringFunc(plain, func(term string) string {
+		// ToLower is safe for this key only while no term contains k or s:
+		// case folding also matches Kelvin K and long ſ.
+		return paints[strings.ToLower(term)](term)
+	})
 }

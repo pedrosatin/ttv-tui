@@ -186,6 +186,7 @@ var allowedExceptions = map[string]bool{
 	"%7s":                   true,
 	"%d/%d":                 true,
 	// help.colors legend term matching (not user-facing copy; paints i18n text)
+	"(?i)vermelho|amarelo|magenta|mention|menção|yellow|green|verde|ciano|cyan|red": true,
 	"amarelo":  true,
 	"vermelho": true,
 	"magenta":  true,
