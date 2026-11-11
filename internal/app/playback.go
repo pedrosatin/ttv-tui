@@ -54,7 +54,15 @@ func (b *playbackBridge) Stop() tea.Cmd {
 	gen := mgr.Generation()
 	return func() tea.Msg {
 		vol := mgr.Volume()
-		mgr.StopGeneration(gen)
+		if err := mgr.StopGeneration(gen); err != nil {
+			return ui.PlayerStatusMsg{
+				Generation: gen,
+				State:      ui.PlayerStateError,
+				LastLine:   err.Error(),
+				Failure:    ui.PlayerFailure(player.FailureOf(err)),
+				Volume:     vol,
+			}
+		}
 		return ui.PlayerStatusMsg{
 			Generation: gen,
 			State:      ui.PlayerStateEnded,

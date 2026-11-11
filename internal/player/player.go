@@ -156,6 +156,8 @@ type Manager struct {
 	mu      sync.Mutex
 	gen     uint64
 	session *Session
+	// survivor blocks spawning until a group that outlived Stop disappears.
+	survivor *Session
 	// closing refuses new Starts from the moment Close begins; closed means the
 	// Events channel is closed.
 	closing bool
@@ -229,12 +231,40 @@ func New(opts Options) *Manager {
 }
 
 // stopTracked stops sess; the caller already counted it in m.stopping.
-func (m *Manager) stopTracked(sess *Session) {
-	sess.Stop()
+func (m *Manager) stopTracked(sess *Session) error {
+	err := m.stopSession(sess)
 	m.mu.Lock()
 	m.stopping--
 	m.stopped.Broadcast()
 	m.mu.Unlock()
+	return err
+}
+
+// stopSession retains a surviving group even when the session cannot attach.
+func (m *Manager) stopSession(sess *Session) error {
+	sess.Stop()
+	sess.mu.Lock()
+	survived := sess.state == StateError && sess.lastLine == sess.survivorLine()
+	sess.mu.Unlock()
+	if !survived {
+		return nil
+	}
+	m.mu.Lock()
+	m.survivor = sess
+	m.mu.Unlock()
+	return fmt.Errorf("%s", sess.survivorLine())
+}
+
+// survivorError checks existence without signalling the group. The caller holds m.mu.
+func (m *Manager) survivorError() error {
+	if m.survivor == nil {
+		return nil
+	}
+	if !m.survivor.group.alive() {
+		m.survivor = nil
+		return nil
+	}
+	return fmt.Errorf("%s", m.survivor.survivorLine())
 }
 
 // Events returns the channel of playback events. Receivers must discard events
@@ -295,7 +325,7 @@ func (m *Manager) start(login string, order uint64) (uint64, error) {
 	m.mu.Unlock()
 
 	if prev != nil {
-		m.stopTracked(prev)
+		_ = m.stopTracked(prev)
 		m.keepVolume(prev)
 	}
 	if m.afterPrevStop != nil {
@@ -307,6 +337,10 @@ func (m *Manager) start(login string, order uint64) (uint64, error) {
 		m.stopped.Wait()
 	}
 	if err := m.overtaken(gen); err != nil {
+		m.mu.Unlock()
+		return gen, err
+	}
+	if err := m.survivorError(); err != nil {
 		m.mu.Unlock()
 		return gen, err
 	}
@@ -364,7 +398,7 @@ func (m *Manager) start(login string, order uint64) (uint64, error) {
 	// session if so. Stop and Close wait for it through m.starting.
 	if err := m.overtaken(gen); err != nil {
 		m.mu.Unlock()
-		sess.Stop()
+		_ = m.stopSession(sess)
 		return gen, err
 	}
 	m.session = sess
@@ -430,23 +464,23 @@ func (m *Manager) checkTools() error {
 // therefore cannot leave a player behind.
 func (m *Manager) Stop() {
 	m.mu.Lock()
-	m.stopLocked()
+	_ = m.stopLocked()
 }
 
 // StopGeneration is Stop for a caller that read generation gen. It does nothing
 // once a newer Start or Stop has taken over: a Stop asked for before a play
-// must not take that play down.
-func (m *Manager) StopGeneration(gen uint64) {
+// must not take that play down. It returns the group termination error, if any.
+func (m *Manager) StopGeneration(gen uint64) error {
 	m.mu.Lock()
 	if gen < m.gen {
 		m.mu.Unlock()
-		return
+		return nil
 	}
-	m.stopLocked()
+	return m.stopLocked()
 }
 
 // stopLocked is Stop for a caller that holds m.mu. It releases m.mu.
-func (m *Manager) stopLocked() {
+func (m *Manager) stopLocked() error {
 	m.gen++
 	m.stopGen = m.gen
 	sess := m.session
@@ -455,15 +489,20 @@ func (m *Manager) stopLocked() {
 		m.stopping++
 	}
 	m.mu.Unlock()
+	var err error
 	if sess != nil {
-		m.stopTracked(sess)
+		err = m.stopTracked(sess)
 		m.keepVolume(sess)
 	}
 	m.mu.Lock()
 	for m.stopping > 0 || m.starting > 0 {
 		m.stopped.Wait()
 	}
+	if err == nil {
+		err = m.survivorError()
+	}
 	m.mu.Unlock()
+	return err
 }
 
 // TogglePause asks mpv to flip the pause property for the active session.
