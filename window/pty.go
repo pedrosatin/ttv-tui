@@ -84,6 +84,9 @@ func ptyTailStart(b []byte) int {
 		_, n := utf8.DecodeRune(b[end:])
 		end += n
 	}
+	if start < len(b) && b[start] < utf8.RuneSelf && end == start+1 {
+		start = end
+	}
 	for start < end {
 		cluster, _ := ansi.FirstGraphemeCluster(b[start:end], ansi.GraphemeWidth)
 		next := start + len(cluster)

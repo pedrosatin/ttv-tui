@@ -79,6 +79,9 @@ func TestPTYDelimitersAndEscapes(t *testing.T) {
 func TestPTYTailStart(t *testing.T) {
 	for _, tc := range []struct{ input, ready, tail string }{
 		{"abc", "abc", ""},
+		{"a\xf0\x9f", "a", "\xf0\x9f"},
+		{"abc\xf0\x9f", "abc", "\xf0\x9f"},
+		{"\r\n\xf0\x9f", "\r\n", "\xf0\x9f"},
 		{"🇧x", "🇧x", ""},
 		{"🇧\r", "🇧\r", ""},
 		{"🇧\x1b[", "🇧\x1b[", ""},
