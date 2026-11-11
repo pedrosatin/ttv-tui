@@ -155,11 +155,19 @@ type Manager struct {
 	mu      sync.Mutex
 	gen     uint64
 	session *Session
+	// closing refuses new Starts from the moment Close begins; closed means the
+	// Events channel is closed.
+	closing bool
 	closed  bool
-	// stopping counts sessions being torn down outside m.mu; stopped is
-	// signalled (on m.mu) whenever one finishes.
+	// stopping counts sessions being torn down outside m.mu, and starting the
+	// Starts past their last check, spawning or attaching. stopped is signalled
+	// (on m.mu) whenever either drops.
 	stopping int
+	starting int
 	stopped  *sync.Cond
+	// stopGen is the generation the last Stop left; a Start older than it was
+	// overtaken by that Stop.
+	stopGen uint64
 	// inputConfErr is the last input.conf write failure, for the exit log.
 	inputConfErr error
 	// keptLogin and keptVolume are the channel of the last session to end and the
@@ -167,6 +175,10 @@ type Manager struct {
 	// failed and left none.
 	keptLogin  string
 	keptVolume int
+
+	// afterPrevStop, when set by a test, runs in Start once the previous
+	// session is down and before the new one is spawned.
+	afterPrevStop func()
 }
 
 // New creates a Manager. The Events channel stays open for the Manager lifetime;
@@ -235,13 +247,17 @@ func (m *Manager) Generation() uint64 {
 
 // Start stops any previous session and starts playback for login in the mpv
 // window. It returns the new generation. The first event is StateStarting.
+//
+// The new player is spawned only once no other session is being torn down and
+// no other Start is spawning, so two players never run at once. A Stop, Close
+// or newer Start that comes first cancels it.
 func (m *Manager) Start(login string) (uint64, error) {
 	if login == "" {
 		return 0, fmt.Errorf("player: empty channel login")
 	}
 
 	m.mu.Lock()
-	if m.closed {
+	if m.closing {
 		m.mu.Unlock()
 		return 0, fmt.Errorf("player: manager closed")
 	}
@@ -258,6 +274,21 @@ func (m *Manager) Start(login string) (uint64, error) {
 		m.stopTracked(prev)
 		m.keepVolume(prev)
 	}
+	if m.afterPrevStop != nil {
+		m.afterPrevStop()
+	}
+
+	m.mu.Lock()
+	for m.stopping > 0 || m.starting > 0 {
+		m.stopped.Wait()
+	}
+	if err := m.overtaken(gen); err != nil {
+		m.mu.Unlock()
+		return gen, err
+	}
+	m.starting++
+	m.mu.Unlock()
+	defer m.doneStarting()
 
 	if err := m.checkTools(); err != nil {
 		m.emit(Event{
@@ -304,15 +335,37 @@ func (m *Manager) Start(login string) (uint64, error) {
 	if sess.inputConfErr != nil {
 		m.inputConfErr = sess.inputConfErr
 	}
-	// A newer Start may have won the race; drop this session if so.
-	if m.gen != gen || m.closed {
+	// A Stop, Close or newer Start may have come while spawning; drop this
+	// session if so. Stop and Close wait for it through m.starting.
+	if err := m.overtaken(gen); err != nil {
 		m.mu.Unlock()
 		sess.Stop()
-		return gen, fmt.Errorf("player: superseded before attach")
+		return gen, err
 	}
 	m.session = sess
 	m.mu.Unlock()
 	return gen, nil
+}
+
+// overtaken reports why the Start of gen must not attach a session, if it must
+// not. The caller holds m.mu.
+func (m *Manager) overtaken(gen uint64) error {
+	switch {
+	case m.closing:
+		return fmt.Errorf("player: manager closed")
+	case m.stopGen >= gen:
+		return fmt.Errorf("player: stopped before attach")
+	case m.gen != gen:
+		return fmt.Errorf("player: superseded before attach")
+	}
+	return nil
+}
+
+func (m *Manager) doneStarting() {
+	m.mu.Lock()
+	m.starting--
+	m.stopped.Broadcast()
+	m.mu.Unlock()
 }
 
 // keepVolume records where sess left the volume, once it can no longer change.
@@ -345,12 +398,15 @@ func (m *Manager) checkTools() error {
 	return nil
 }
 
-// Stop ends the active session, if any, and returns only once every session
-// being torn down (including one stopped concurrently, e.g. by the UI on Ctrl+Q
-// or by a channel switch) has its process group gone. Exiting the app right
-// after Stop therefore cannot leave a player behind.
+// Stop ends the active session, if any, and cancels a Start in progress. It
+// returns only once every session being torn down (including one stopped
+// concurrently, e.g. by the UI on Ctrl+Q or by a channel switch) has its process
+// group gone and no Start is spawning. Exiting the app right after Stop
+// therefore cannot leave a player behind.
 func (m *Manager) Stop() {
 	m.mu.Lock()
+	m.gen++
+	m.stopGen = m.gen
 	sess := m.session
 	m.session = nil
 	if sess != nil {
@@ -362,7 +418,7 @@ func (m *Manager) Stop() {
 		m.keepVolume(sess)
 	}
 	m.mu.Lock()
-	for m.stopping > 0 {
+	for m.stopping > 0 || m.starting > 0 {
 		m.stopped.Wait()
 	}
 	m.mu.Unlock()
@@ -425,6 +481,9 @@ func (m *Manager) InputConfErr() error {
 
 // Close stops playback and closes the Events channel. After Close, Start fails.
 func (m *Manager) Close() {
+	m.mu.Lock()
+	m.closing = true
+	m.mu.Unlock()
 	m.Stop()
 	m.mu.Lock()
 	defer m.mu.Unlock()
