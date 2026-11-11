@@ -44,6 +44,8 @@ type session struct {
 	started  time.Time
 	gotFirst atomic.Bool
 	ttffMs   atomic.Int64
+
+	setProperty func(string, string)
 }
 
 type app struct {
