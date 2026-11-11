@@ -63,6 +63,9 @@ func fitListRow(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return s
 	}
+	if maxWidth > 1 && hasWideRune(s) && !exactCellWidths {
+		maxWidth--
+	}
 	if !hasWideRune(s) || exactCellWidths {
 		return TruncateVisual(s, maxWidth)
 	}
@@ -136,8 +139,7 @@ func (m Model) panelWidths() (int, int) {
 }
 
 // View implements tea.Model.
-func (m Model) View() (view string) {
-	defer func() { view = fitScreenLines(view, m.width) }()
+func (m Model) View() string {
 	if m.quitting {
 		return ""
 	}
@@ -226,7 +228,7 @@ func (m Model) fitRows(lines, overlayLines []string, width, available int) []str
 // leaves the rows as they are.
 func padRows(rows []string, width int) []string {
 	for i := range rows {
-		rows[i] = padOrTruncateVisual(rows[i], width)
+		rows[i] = fitScreenLines(padOrTruncateVisual(rows[i], width), width)
 	}
 	return rows
 }
@@ -248,8 +250,8 @@ func (m Model) splitRows(listW, chatW, available int, overlayLines []string) []s
 		if i < len(chatLines) {
 			right = chatLines[i]
 		}
-		leftCell := padOrTruncateVisual(left, listW)
-		rightCell := padOrTruncateVisual(right, chatW)
+		leftCell := fitScreenLines(padOrTruncateVisual(left, listW), listW)
+		rightCell := fitScreenLines(padOrTruncateVisual(right, chatW), chatW)
 		combined = append(combined, leftCell+panelSeparator+rightCell)
 	}
 	return m.overlayHelpLines(combined, overlayLines, m.width, available)
@@ -424,7 +426,7 @@ func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int
 	if len(helpLines) >= len(lines) {
 		out := make([]string, len(lines))
 		for i := range out {
-			out[i] = padOrTruncateVisual(helpLines[i], maxWidth)
+			out[i] = fitScreenLines(padOrTruncateVisual(helpLines[i], maxWidth), maxWidth)
 		}
 		return out
 	}
@@ -433,7 +435,7 @@ func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int
 		lines[start-1] = padOrTruncateVisual("", maxWidth)
 	}
 	for i, hl := range helpLines {
-		lines[start+i] = padOrTruncateVisual(hl, maxWidth)
+		lines[start+i] = fitScreenLines(padOrTruncateVisual(hl, maxWidth), maxWidth)
 	}
 	return lines
 }

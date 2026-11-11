@@ -126,3 +126,33 @@ func TestScreenInputsNormalizeWithoutMutatingSource(t *testing.T) {
 		t.Fatal("non-display sanitizer changed")
 	}
 }
+
+func TestEmojiInListDoesNotTruncateChatURL(t *testing.T) {
+	m, _, _ := setupTwoPanelModel(t)
+	m = resize(m, 80, 24)
+	title := "🔥 " + strings.Repeat("x", 20)
+	m.list.channels = []twitch.Channel{
+		{ID: "1", Login: "streamer", DisplayName: "streamer", Title: &title, Viewers: twitch.IntPtr(10)},
+	}
+	// With chatW = 34, lead "  " (2 cells) and nick "u: " (3 cells), a 29-cell URL fills the chat column.
+	url := "https://example.com/123456789"
+	m = withChatMessages(t, m, ChatMessage{
+		Kind:        chat.MessageChat,
+		ID:          "m1",
+		User:        "u",
+		DisplayName: "u",
+		Body:        url,
+	})
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, url) {
+		t.Fatalf("chat URL truncated in split view with emoji in list:\n%s", view)
+	}
+}
+
+func TestSinhalaWithZWJPreservesText(t *testing.T) {
+	sinhala := "\u0dc1\u0dca\u200d\u0dbb\u0dd3" // "ශ්‍රී" with U+200D
+	got := normalizeScreenText(sinhala)
+	if !strings.Contains(got, "ර") {
+		t.Fatalf("normalizeScreenText(%q) = %q, want consonant ර (U+0DBB) preserved", sinhala, got)
+	}
+}

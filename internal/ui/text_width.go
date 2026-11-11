@@ -14,21 +14,42 @@ func normalizeScreenText(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	skipJoined := false
+	lastWasEmoji := false
 	for _, r := range s {
 		switch {
 		case r == '\u200d':
-			skipJoined = true
+			if lastWasEmoji {
+				skipJoined = true
+			}
 		case r == '\ufe0e' || r == '\ufe0f' || (r >= 0x1f3fb && r <= 0x1f3ff):
 			continue
 		default:
 			if skipJoined {
 				skipJoined = false
+				lastWasEmoji = isEmoji(r)
 				continue
 			}
+			lastWasEmoji = isEmoji(r)
 			b.WriteRune(r)
 		}
 	}
 	return b.String()
+}
+
+func isEmoji(r rune) bool {
+	switch {
+	case r >= 0x1f300 && r <= 0x1faff:
+		return true
+	case r >= 0x2600 && r <= 0x27bf:
+		return true
+	case r >= 0x2300 && r <= 0x23ff:
+		return true
+	case r >= 0x2b50 && r <= 0x2b55:
+		return true
+	case r >= 0x1f1e6 && r <= 0x1f1ff:
+		return true
+	}
+	return false
 }
 
 func sanitizeScreenText(s string) string {
@@ -42,7 +63,6 @@ var exactCellWidths bool
 
 // fitScreenLines leaves one cell unused on rows containing wide characters:
 // even isolated emoji can occupy one or two cells depending on the terminal.
-// Apply after panel composition so the separator keeps its fixed column.
 func fitScreenLines(view string, width int) string {
 	if width <= 0 || exactCellWidths {
 		return view
@@ -56,7 +76,7 @@ func fitScreenLines(view string, width int) string {
 			}
 			if ansi.StringWidth(strings.TrimRight(ansi.Strip(row), " ")) < width {
 				rows[i] = ansi.Truncate(row, width-1, "")
-			} else {
+			} else if ansi.StringWidth(row) > width {
 				rows[i] = TruncateVisual(row, width-1)
 			}
 		}
