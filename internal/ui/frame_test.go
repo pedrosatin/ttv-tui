@@ -180,7 +180,7 @@ func TestFrameWithoutHeightSplitStacksHelpBelowPanels(t *testing.T) {
 
 	for i, hl := range help {
 		gotRow := rows[panelRows+i]
-		if !strings.Contains(gotRow, strings.TrimSpace(hl)) {
+		if !strings.Contains(gotRow, strings.TrimSpace(ansi.Strip(hl))) {
 			t.Fatalf("row %d = %q, want help line %d %q", panelRows+i, gotRow, i, hl)
 		}
 	}
