@@ -19,6 +19,7 @@ const (
 	chromiumIterations = 1
 	cookiePrefixV10    = "v10"
 	cookiePrefixV11    = "v11"
+	chromiumV10Pass    = "peanuts" // fixed password for v10 cookies on Linux
 	hostHashLen        = 32
 )
 
@@ -213,8 +214,9 @@ type chromiumCookieRow struct {
 }
 
 // extractChromiumAuthToken reads auth-token from a (possibly live) Cookies DB path,
-// copying it to a temp dir first. password is the Safe Storage secret.
-func extractChromiumAuthToken(cookiesPath, password string) (string, error) {
+// copying it to a temp dir first. v11Password returns the Safe Storage secret and
+// is called only for a v11 cookie.
+func extractChromiumAuthToken(cookiesPath string, v11Password func() (string, error)) (string, error) {
 	tmpDB, cleanup, err := copyCookieDB(cookiesPath)
 	if err != nil {
 		return "", err
@@ -241,6 +243,12 @@ func extractChromiumAuthToken(cookiesPath, password string) (string, error) {
 			Op:      "extract",
 			Err:     ErrUnknownCookieFormat,
 			Message: "encrypted_value não é hex válido",
+		}
+	}
+	password := chromiumV10Pass
+	if strings.HasPrefix(string(enc), cookiePrefixV11) {
+		if password, err = v11Password(); err != nil {
+			return "", err
 		}
 	}
 	token, err := DecryptChromiumValue(enc, password, row.HostKey)
