@@ -210,6 +210,7 @@
   "store.corrupt_notice": "Arquivo de estado corrompido e salvo em .bak — iniciado com favoritos e recentes vazios",
   "store.load_failed_notice": "Não foi possível ler o arquivo de estado; iniciado com favoritos e recentes vazios",
   "config.save_failed": "Ajuste não salvo: verifique o config.toml",
+  "config.removed": "Sessão encerrada: config.toml apagado. Rode ttv-tui login",
   "cli.unknown_command": "ttv-tui: comando desconhecido %q",
   "cli.unexpected_argument": "ttv-tui login: argumento inesperado %q",
   "cli.usage_root": "Uso:\n  ttv-tui doctor [--lang en|pt-BR]\n  ttv-tui [opções]\n  ttv-tui login [--from-browser [--browser <nome>] [--profile <nome>] | --import twt]\n\nOpções:\n",

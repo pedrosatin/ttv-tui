@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"slices"
 	"strings"
 
@@ -208,10 +209,19 @@ type configSavedMsg struct {
 	Err error
 }
 
-// applyConfigSaved warns when the config was not saved. The change still holds
-// for this run.
+// ErrConfigRemoved is what a save of the channel filters or the panel layout
+// returns when it went through but had to recreate a config deleted while the
+// app ran. The deleted file took the token with it. Its text is the catalog key
+// of the notice.
+var ErrConfigRemoved = errors.New("config.removed")
+
+// applyConfigSaved warns when the config was not saved, or when the save found
+// it deleted. A failed change still holds for this run.
 func (m Model) applyConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
-	if msg.Err != nil {
+	switch {
+	case errors.Is(msg.Err, ErrConfigRemoved):
+		m.warnStatus(m.t("config.removed"))
+	case msg.Err != nil:
 		m.warnStatus(m.t("config.save_failed"))
 	}
 	return m, nil
