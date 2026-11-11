@@ -92,7 +92,7 @@ func (c ValidateClient) Validate(ctx context.Context, token string) (Validation,
 		if v.Login == "" {
 			return Validation{}, &Error{
 				Op:      "validate",
-				Err:     ErrTokenInvalid,
+				Err:     errors.New("resposta de validação sem login"),
 				Message: "resposta de validação sem login",
 			}
 		}
