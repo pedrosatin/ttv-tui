@@ -20,10 +20,23 @@ func (a *app) pumpReplies() {
 	for {
 		n, err := a.term.Read(buf)
 		if n > 0 && a.ptmx != nil {
-			_, _ = a.ptmx.Write(buf[:n])
+			a.writeInput(buf[:n])
 		}
 		if err != nil {
 			return
+		}
+	}
+}
+
+// pumpInput é o único escritor do PTY.
+func (a *app) pumpInput() {
+	for b := range a.inputq {
+		for len(b) > 0 {
+			n, err := a.ptmx.Write(b)
+			if err != nil || n == 0 {
+				return
+			}
+			b = b[n:]
 		}
 	}
 }
