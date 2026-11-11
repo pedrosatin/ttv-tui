@@ -100,8 +100,6 @@ func main() {
 		fatal("GL context:", C.GoString(C.SDL_GetError()))
 	}
 	defer C.SDL_GL_DestroyContext(gl)
-	C.SDL_GL_SetSwapInterval(1)
-	C.SDL_StartTextInput(win)
 
 	scale := float64(C.SDL_GetWindowDisplayScale(win))
 	if scale <= 0 {
@@ -120,6 +118,8 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--probe" {
 		return
 	}
+	C.SDL_GL_SetSwapInterval(1)
+	C.SDL_StartTextInput(win)
 	C.reg_events()
 
 	a := &app{win: win, fs: fs, ctlq: make(chan ctlMsg, 16), paintReq: make(chan struct{}, 1), dirtyY1: -1}
