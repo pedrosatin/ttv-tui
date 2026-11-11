@@ -107,11 +107,7 @@ func (a *app) stopSession() {
 	a.relayout()
 }
 
-func (a *app) serveCtl(path string) {
-	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
-	if err != nil {
-		panic(err)
-	}
+func (a *app) serveCtl(l *net.UnixListener) {
 	for {
 		c, err := l.AcceptUnix()
 		if err != nil {
