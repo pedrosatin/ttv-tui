@@ -104,6 +104,8 @@ type Manager struct {
 	opts   Options
 	events chan SessionEvent
 
+	sessions  sync.WaitGroup
+	closeOnce sync.Once
 	mu        sync.Mutex
 	gen       uint64
 	channel   string
@@ -390,6 +392,7 @@ func (m *Manager) Join(channelLogin string) (uint64, error) {
 	m.cancel = cancel
 	m.done = done
 	m.sendCh = sendCh
+	m.sessions.Add(1)
 	m.mu.Unlock()
 
 	if prevCancel != nil {
@@ -473,8 +476,6 @@ func (m *Manager) Stop() {
 	m.mu.Lock()
 	cancel := m.cancel
 	done := m.done
-	m.cancel = nil
-	m.done = nil
 	m.sendCh = nil
 	m.pending = nil
 	m.inFlight = nil
@@ -491,32 +492,36 @@ func (m *Manager) Stop() {
 
 // Close stops the active session and closes the Events channel.
 func (m *Manager) Close() {
-	m.mu.Lock()
-	if m.closed {
+	m.closeOnce.Do(func() {
+		m.mu.Lock()
+		m.closed = true
+		cancel := m.cancel
+		done := m.done
+		m.sendCh = nil
+		m.pending = nil
+		m.inFlight = nil
+		m.channel = ""
 		m.mu.Unlock()
-		return
-	}
-	m.closed = true
-	cancel := m.cancel
-	done := m.done
-	m.cancel = nil
-	m.done = nil
-	m.sendCh = nil
-	m.pending = nil
-	m.inFlight = nil
-	m.channel = ""
-	m.mu.Unlock()
 
-	if cancel != nil {
-		cancel()
-	}
-	if done != nil {
-		<-done
-	}
-	close(m.events)
+		if cancel != nil {
+			cancel()
+		}
+		if done != nil {
+			<-done
+		}
+		// Join registers each session before releasing mu, including sessions
+		// still waiting for their predecessor to finish.
+		m.sessions.Wait()
+		close(m.events)
+	})
 }
 
 func (m *Manager) drainStaleEvents(minGen uint64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return
+	}
 	for {
 		select {
 		case ev := <-m.events:
@@ -541,13 +546,12 @@ func (m *Manager) isCurrentGen(gen uint64) bool {
 
 func (m *Manager) emitUpdate(gen uint64, channel string, upd SendStatusUpdate) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.closed || m.gen != gen {
-		m.mu.Unlock()
 		return
 	}
 	ch := m.events
 	anon := m.opts.Token == ""
-	m.mu.Unlock()
 
 	ev := SessionEvent{
 		Generation:  gen,
@@ -586,6 +590,7 @@ func (m *Manager) emit(ctx context.Context, ev SessionEvent) {
 }
 
 func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64, channel string, sendCh <-chan SendRequest) {
+	defer m.sessions.Done()
 	defer close(done)
 
 	anon := m.opts.Token == ""
