@@ -53,7 +53,8 @@ func main() {
 
 	dir, err := os.MkdirTemp("", "ttv-shell-")
 	if err != nil {
-		panic(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	defer os.RemoveAll(dir)
 	binDir := filepath.Join(dir, "bin")
@@ -63,32 +64,42 @@ func main() {
 	ctlPath := filepath.Join(dir, "ctl.sock")
 	testPath := os.Getenv("TTV_WINDOW_TEST") // só os testes de fluxo abrem esta porta
 
-	cApp := C.CString(app_id)
-	cHint := C.CString("SDL_APP_ID")
-	C.SDL_SetHint(cHint, cApp)
-	drv, wl := C.CString("SDL_VIDEO_DRIVER"), C.CString("wayland")
-	C.SDL_SetHint(drv, wl)
 	fatal := func(args ...any) {
 		fmt.Fprintln(os.Stderr, args...)
 		_ = os.RemoveAll(dir)
 		os.Exit(1)
 	}
+	ctlLn, err := net.ListenUnix("unix", &net.UnixAddr{Name: ctlPath, Net: "unix"})
+	if err != nil {
+		fatal("control socket path:", err)
+	}
+	defer ctlLn.Close()
+	layoutPath := filepath.Join(dir, "layout.sock")
+	layoutLn, err := net.Listen("unix", layoutPath)
+	if err != nil {
+		fatal("layout socket path:", err)
+	}
+	defer layoutLn.Close()
+	cApp := C.CString(app_id)
+	cHint := C.CString("SDL_APP_ID")
+	C.SDL_SetHint(cHint, cApp)
+	drv, wl := C.CString("SDL_VIDEO_DRIVER"), C.CString("wayland")
+	C.SDL_SetHint(drv, wl)
 	if !C.SDL_Init(C.SDL_INIT_VIDEO | C.SDL_INIT_EVENTS) {
 		fatal(C.GoString(C.SDL_GetError()))
 	}
-	// --probe answers whether this machine can open the window: the libraries
-	// loaded (or this process would not exist), a Wayland display and a usable font.
-	if len(os.Args) == 2 && os.Args[1] == "--probe" {
-		if _, err := newFontSet(14); err != nil {
-			fatal(err)
-		}
-		C.SDL_Quit()
-		return
-	}
-	C.reg_events()
+	defer C.SDL_Quit()
 	title := C.CString("ttv-tui")
 	win := C.make_window(title)
-	C.SDL_GL_CreateContext(win)
+	if win == nil {
+		fatal("window:", C.GoString(C.SDL_GetError()))
+	}
+	defer C.SDL_DestroyWindow(win)
+	gl := C.SDL_GL_CreateContext(win)
+	if gl == nil {
+		fatal("GL context:", C.GoString(C.SDL_GetError()))
+	}
+	defer C.SDL_GL_DestroyContext(gl)
 	C.SDL_GL_SetSwapInterval(1)
 	C.SDL_StartTextInput(win)
 
@@ -105,21 +116,21 @@ func main() {
 		fatal(err)
 	}
 
+	// Probe uses the same window, GL context and font metrics as normal startup.
+	if len(os.Args) == 2 && os.Args[1] == "--probe" {
+		return
+	}
+	C.reg_events()
+
 	a := &app{win: win, fs: fs, ctlq: make(chan ctlMsg, 16), paintReq: make(chan struct{}, 1), dirtyY1: -1}
 	go a.painter()
 	a.tex = C.make_tex()
 	a.term = vt.NewSafeEmulator(80, 24)
 	a.relayout()
-	go a.serveCtl(ctlPath)
+	go a.serveCtl(ctlLn)
 	if testPath != "" {
 		_ = os.Remove(testPath)
 		go a.serveTest(testPath)
-	}
-	layoutPath := filepath.Join(dir, "layout.sock")
-	layoutLn, err := net.Listen("unix", layoutPath)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "layout:", err)
-		os.Exit(1)
 	}
 	go a.serveLayout(layoutLn)
 
@@ -165,7 +176,6 @@ func main() {
 	_ = a.cmd.Process.Signal(syscall.SIGHUP)
 	waitTUI(tuiDone, tuiStopWait, func() { _ = a.cmd.Process.Kill() })
 	a.stopSession()
-	C.SDL_Quit()
 }
 
 // internal/player: defaultStopWait = 3 s e groupKillWait = 2 s.

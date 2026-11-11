@@ -39,7 +39,9 @@ func openWindow(opts Options) bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if exec.CommandContext(ctx, path, "--probe").Run() != nil {
+	probe := exec.CommandContext(ctx, path, "--probe")
+	probe.Stderr = os.Stderr
+	if probe.Run() != nil {
 		return false
 	}
 	var args []string
@@ -47,6 +49,7 @@ func openWindow(opts Options) bool {
 		args = append(args, "--lang", opts.Lang)
 	}
 	cmd := exec.Command(path, args...)
+	cmd.Stderr = os.Stderr
 	detachWindow(cmd)
 	if cmd.Start() != nil {
 		return false

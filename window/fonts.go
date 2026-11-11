@@ -87,12 +87,20 @@ func newFontSet(px float64) (*fontSet, error) {
 	if b, bf, err := loadFace(fcMatch("monospace:bold"), px); err == nil {
 		fs.bold, fs.boldF = b, bf
 	}
-	m := reg.Metrics()
-	adv, _ := reg.GlyphAdvance('M')
-	fs.cellW = adv.Round()
-	fs.cellH = (m.Ascent + m.Descent).Ceil()
-	fs.base = m.Ascent.Ceil()
+	fs.cellW, fs.cellH, fs.base, err = cellMetrics(reg)
+	if err != nil {
+		return nil, err
+	}
 	return fs, nil
+}
+
+func cellMetrics(reg font.Face) (int, int, int, error) {
+	m := reg.Metrics()
+	adv, ok := reg.GlyphAdvance('M')
+	if !ok || adv.Round() <= 0 || (m.Ascent+m.Descent).Ceil() <= 0 {
+		return 0, 0, 0, fmt.Errorf("monospace font: invalid cell metrics or missing M")
+	}
+	return adv.Round(), (m.Ascent + m.Descent).Ceil(), m.Ascent.Ceil(), nil
 }
 
 func (fs *fontSet) get(r rune, bold bool) *glyph {
