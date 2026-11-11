@@ -158,8 +158,9 @@ func TestExtractFirefox_Success(t *testing.T) {
 }
 
 func TestExtractFirefox_CookieMissing(t *testing.T) {
-	requireSQLite3(t)
-	_, err := ExtractFirefox(testdata(t, "firefox_empty.sqlite"))
+	db := filepath.Join(t.TempDir(), "cookies.sqlite")
+	sqlite3Exec(t, db, firefoxSchema)
+	_, err := ExtractFirefox(db)
 	if !errors.Is(err, ErrCookieNotFound) {
 		t.Fatalf("err = %v, want ErrCookieNotFound", err)
 	}

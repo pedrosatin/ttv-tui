@@ -271,7 +271,7 @@ func queryChromiumAuthToken(dbPath string) (chromiumCookieRow, error) {
 		`IFNULL((SELECT value FROM meta WHERE key='version'), '0') ` +
 		`FROM cookies c ` +
 		`WHERE c.name='auth-token' AND (c.host_key='.twitch.tv' OR c.host_key='twitch.tv') ` +
-		`LIMIT 1;`
+		`ORDER BY c.creation_utc DESC LIMIT 1;` // newest cookie wins
 	out, err := runSQLite(dbPath, sql)
 	if err != nil {
 		return chromiumCookieRow{}, err
