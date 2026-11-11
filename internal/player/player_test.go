@@ -56,7 +56,7 @@ func newTestManager(t *testing.T, mode string, opts Options) *Manager {
 	t.Helper()
 	opts.Command = helperCommand(mode)
 	if opts.RuntimeDir == "" {
-		opts.RuntimeDir = t.TempDir()
+		opts.RuntimeDir = privateRuntimeDir(t)
 	}
 	if opts.SocketWait == 0 {
 		opts.SocketWait = 5 * time.Second
@@ -69,6 +69,18 @@ func newTestManager(t *testing.T, mode string, opts Options) *Manager {
 		mgr.Close()
 	})
 	return mgr
+}
+
+// privateRuntimeDir is a 0700 runtime base. t.TempDir() returns a 0755
+// directory, which the session refuses on Unix, sending every test to the
+// same shared fallback.
+func privateRuntimeDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "run")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	return dir
 }
 
 func waitForState(t *testing.T, ch <-chan Event, gen uint64, want State, timeout time.Duration) Event {
@@ -1485,7 +1497,7 @@ func TestRealStreamlinkSmoke(t *testing.T) {
 	}
 
 	mgr := New(Options{
-		RuntimeDir: t.TempDir(),
+		RuntimeDir: privateRuntimeDir(t),
 		SocketWait: 45 * time.Second,
 		StopWait:   3 * time.Second,
 	})

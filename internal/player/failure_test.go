@@ -219,7 +219,7 @@ func TestMissingToolIsReportedWithoutSpawning(t *testing.T) {
 		t.Run(tool, func(t *testing.T) {
 			var spawned atomic.Int32
 			mgr := New(Options{
-				RuntimeDir: t.TempDir(),
+				RuntimeDir: privateRuntimeDir(t),
 				Command: func(login, socket string) *exec.Cmd {
 					spawned.Add(1)
 					return exec.Command(os.Args[0])
@@ -257,7 +257,7 @@ func TestMissingToolIsReportedWithoutSpawning(t *testing.T) {
 
 func TestStreamlinkNotOnPathIsClassified(t *testing.T) {
 	mgr := New(Options{
-		RuntimeDir: t.TempDir(),
+		RuntimeDir: privateRuntimeDir(t),
 		Command: func(login, socket string) *exec.Cmd {
 			return exec.Command("ttv-tui-test-streamlink-that-does-not-exist")
 		},
