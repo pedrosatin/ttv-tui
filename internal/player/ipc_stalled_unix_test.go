@@ -252,3 +252,75 @@ func TestPauseAfterExpiredWriteStillPauses(t *testing.T) {
 		t.Fatalf("after the confirmed reply: paused = %v, state = %s, want paused", paused, st)
 	}
 }
+
+// gatedConn holds each write until the test hands it a result, so a write
+// fails exactly when the test says.
+type gatedConn struct {
+	net.Conn
+	writing chan struct{}
+	result  chan error
+}
+
+func (c *gatedConn) Write(b []byte) (int, error) {
+	c.writing <- struct{}{}
+	if err := <-c.result; err != nil {
+		return 0, err
+	}
+	return len(b), nil
+}
+
+// waitDesiredPause waits until the wished pause is paused, which tells the
+// test that the Space it started has recorded its wish.
+func waitDesiredPause(t *testing.T, s *Session, paused bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		s.mu.Lock()
+		ok := s.hasDesiredPause && s.desiredPaused == paused
+		s.mu.Unlock()
+		if ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the wished pause never became %v", paused)
+		}
+		runtime.Gosched()
+	}
+}
+
+// Three Spaces while the first write is stuck: true, false, true. When the
+// first write fails, the wish of the third, which is again true, must stay.
+func TestFailedPauseKeepsNewerEqualWish(t *testing.T) {
+	s, _ := stalledIPC(t, time.Minute)
+	gate := &gatedConn{Conn: s.ipcConn, writing: make(chan struct{}), result: make(chan error)}
+	s.ipcConn = gate
+
+	first := make(chan error, 1)
+	go func() { first <- s.togglePause() }()
+	<-gate.writing
+
+	later := make(chan error, 2)
+	go func() { later <- s.togglePause() }()
+	waitDesiredPause(t, s, false)
+	go func() { later <- s.togglePause() }()
+	waitDesiredPause(t, s, true)
+
+	gate.result <- os.ErrDeadlineExceeded
+	if err := <-first; !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("first Space: err = %v, want a write deadline error", err)
+	}
+	s.mu.Lock()
+	wished, has := s.desiredPaused, s.hasDesiredPause
+	s.mu.Unlock()
+
+	for range 2 {
+		<-gate.writing
+		gate.result <- nil
+		if err := <-later; err != nil {
+			t.Fatalf("later Space: %v", err)
+		}
+	}
+	if !has || !wished {
+		t.Fatalf("after the first write failed: wished pause = %v (set %v), want the third Space's true", wished, has)
+	}
+}

@@ -94,6 +94,9 @@ type Session struct {
 	paused          bool
 	desiredPaused   bool
 	hasDesiredPause bool
+	// desiredPauseSeq counts the wishes recorded, so a failed Space can tell
+	// whether a newer one replaced its wish, even with the same value.
+	desiredPauseSeq uint64
 	volume          int
 	waitDone        chan struct{}
 	waitErr         error
@@ -679,6 +682,7 @@ func (s *Session) applyPlaybackBaseline() {
 	s.mu.Lock()
 	s.desiredPaused = false
 	s.hasDesiredPause = true
+	s.desiredPauseSeq++
 	s.mu.Unlock()
 	_ = s.setVolumeWithOSD(s.cfg.Volume, false)
 	_ = s.sendCommand([]any{"set_property", "pause", false}, pendingCommand{
@@ -701,6 +705,8 @@ func (s *Session) togglePause() error {
 	prevDesired, prevHas := s.desiredPaused, s.hasDesiredPause
 	s.desiredPaused = want
 	s.hasDesiredPause = true
+	s.desiredPauseSeq++
+	seq := s.desiredPauseSeq
 	s.mu.Unlock()
 
 	err := s.sendCommand([]any{"set_property", "pause", want}, pendingCommand{
@@ -712,7 +718,7 @@ func (s *Session) togglePause() error {
 		// The command never reached mpv, so the wish it carried is undone
 		// unless something newer replaced it meanwhile.
 		s.mu.Lock()
-		if s.hasDesiredPause && s.desiredPaused == want {
+		if s.hasDesiredPause && s.desiredPauseSeq == seq {
 			s.desiredPaused, s.hasDesiredPause = prevDesired, prevHas
 		}
 		s.mu.Unlock()
