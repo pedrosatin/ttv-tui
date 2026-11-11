@@ -211,6 +211,7 @@ type listState struct {
 	hydrateGen uint64
 	loading    bool
 	err        error
+	loadFailed bool // the last load failed; an empty list is missing data, not an empty result
 	categories []twitch.Category
 	channels   []twitch.Channel
 	nextCursor string

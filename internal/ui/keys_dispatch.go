@@ -311,6 +311,9 @@ func (m Model) keyUp() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
 		return m.scrollChatUp(1), nil
 	}
+	if m.list.err != nil {
+		return m, nil
+	}
 	m.moveHighlight(-1)
 	return m, nil
 }
@@ -319,6 +322,9 @@ func (m Model) keyUp() (tea.Model, tea.Cmd) {
 func (m Model) keyDown() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
 		return m.scrollChatDown(1), nil
+	}
+	if m.list.err != nil {
+		return m, nil
 	}
 	m.moveHighlight(1)
 	if m.shouldLoadNextPage() {

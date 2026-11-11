@@ -1,6 +1,7 @@
 {
   "store.save_failed": "Not saved: check permissions/disk space",
   "list.empty_action": "Empty: r retry · Esc back",
+  "list.not_loaded": "The list did not load.",
   "player.info": "Player info: %s",
   "app.title": "ttv-tui",
   "status.ready": "Ready",

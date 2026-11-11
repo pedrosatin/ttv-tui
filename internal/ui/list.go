@@ -447,8 +447,9 @@ func (m Model) HighlightedID() string {
 }
 
 // HighlightedItem returns the currently highlighted ListItem, if any.
+// A load error replaces the rows on screen, so no row is highlighted under it.
 func (m Model) HighlightedItem() (ListItem, bool) {
-	if m.list.highlightedID == "" {
+	if m.list.highlightedID == "" || m.list.err != nil {
 		return ListItem{}, false
 	}
 	for _, it := range m.VisibleItems() {
