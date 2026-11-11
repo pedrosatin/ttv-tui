@@ -139,6 +139,7 @@ func (m Model) applySavedAvailability(msg SavedAvailabilityMsg) (tea.Model, tea.
 		return m, nil
 	}
 	m.refreshSavedAvailability(msg.Channels)
+	m.reconcileHighlight()
 	return m, nil
 }
 
@@ -271,6 +272,7 @@ func (m *Model) setPlayerFailure(msg PlayerStatusMsg) {
 		// the listing may still show stale viewers from before play.
 		if msg.Failure == PlayerFailureOffline {
 			m.markChannelOffline(m.player.login)
+			m.reconcileHighlight()
 		}
 	} else {
 		m.player.failure = PlayerFailureNone
