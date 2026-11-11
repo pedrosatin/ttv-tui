@@ -45,7 +45,7 @@ func TestStartupProbe(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("XDG_STATE_HOME", dir)
 	bin := filepath.Join(dir, "ttv-tui-window")
-	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-buildvcs=false", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v %s", err, out)
 	}
 	t.Setenv("HOME", dir)
@@ -80,9 +80,14 @@ void SDL_DestroyWindow(SDL_Window *win) {}
 	if out, err := exec.Command("cc", args...).CombinedOutput(); err != nil {
 		t.Fatalf("cc: %v %s", err, out)
 	}
+	shortTmp, err := os.MkdirTemp("/tmp", "ttv-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(shortTmp) })
 	for _, stage := range []string{"window", "context", "socket", "ok"} {
 		t.Run(stage, func(t *testing.T) {
-			tmp := dir
+			tmp := shortTmp
 			if stage == "socket" {
 				tmp = filepath.Join(dir, strings.Repeat("x", 100))
 				if err := os.Mkdir(tmp, 0700); err != nil {

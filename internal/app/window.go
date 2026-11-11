@@ -40,7 +40,10 @@ func openWindow(opts Options) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	probe := exec.CommandContext(ctx, path, "--probe")
-	probe.Stderr = os.Stderr
+	probe.Stderr = opts.Log
+	if probe.Stderr == nil {
+		probe.Stderr = os.Stderr
+	}
 	if probe.Run() != nil {
 		return false
 	}

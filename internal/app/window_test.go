@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,22 +32,11 @@ func TestOpenWindowReportsProbeError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := os.Stderr
-	capture, err := os.CreateTemp(t.TempDir(), "stderr")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = capture.Close() }()
-	os.Stderr = capture
-	defer func() { os.Stderr = old }()
-	if openWindow(Options{}) {
+	var capture bytes.Buffer
+	if openWindow(Options{Log: &capture}) {
 		t.Fatal("failed probe opened window")
 	}
-	out, err := os.ReadFile(capture.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(out), "injected window error") {
+	if out := capture.String(); !strings.Contains(out, "injected window error") {
 		t.Fatalf("window error discarded; stderr = %q", out)
 	}
 }
