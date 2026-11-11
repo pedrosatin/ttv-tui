@@ -147,3 +147,45 @@ func TestFrameUnsizedFocusShowsOnlyTheHint(t *testing.T) {
 		t.Fatalf("got %q, want the focus hint and the status bar", rows)
 	}
 }
+
+// In the split layout without a height, all help lines appear below both panels
+// (the taller of list and chat), with the status bar on the last row.
+func TestFrameWithoutHeightSplitStacksHelpBelowPanels(t *testing.T) {
+	const helpTitle = "Keyboard Shortcuts"
+
+	m, _, _ := setupTwoPanelModel(t)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 0})
+	m = withMessages(t, updated.(Model), 3)
+	m.layout.helpVisible = true
+
+	listW, chatW := m.panelWidths()
+	if listW == 0 || chatW == 0 {
+		t.Fatalf("widths = %d, %d, want a split", listW, chatW)
+	}
+	panelRows := max(len(m.renderBodyLines(listW)), len(m.renderChatLines(20, chatW)))
+	help := m.helpViewLines()
+
+	rows := strings.Split(ansi.Strip(m.frame()), "\n")
+
+	panelAt := rowIndex(rows, "Live Channels")
+	chatAt := rowIndex(rows, "Chat — #gaules")
+	helpAt := rowIndex(rows, helpTitle)
+	if panelAt < 0 || chatAt < 0 || helpAt < 0 || panelAt >= helpAt || chatAt >= helpAt {
+		t.Fatalf("panels (list=%d, chat=%d) and help at %d, want panels before help:\n%s", panelAt, chatAt, helpAt, strings.Join(rows, "\n"))
+	}
+
+	if wantRows := panelRows + len(help) + 1; len(rows) != wantRows {
+		t.Fatalf("got %d rows, want %d (%d panel rows + %d help rows + 1 status):\n%s", len(rows), wantRows, panelRows, len(help), strings.Join(rows, "\n"))
+	}
+
+	for i, hl := range help {
+		gotRow := rows[panelRows+i]
+		if !strings.Contains(gotRow, strings.TrimSpace(hl)) {
+			t.Fatalf("row %d = %q, want help line %d %q", panelRows+i, gotRow, i, hl)
+		}
+	}
+
+	if got, want := rows[len(rows)-1], ansi.Strip(m.StatusBar()); got != want {
+		t.Fatalf("last row = %q, want status bar %q", got, want)
+	}
+}

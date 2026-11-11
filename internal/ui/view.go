@@ -194,9 +194,7 @@ func (m Model) unsizedFrame(overlayLines []string, status string) string {
 	if m.listVisible() {
 		bodyLines = m.renderBodyLines(0)
 	}
-	if m.shouldShowNarrowChatNotice() {
-		bodyLines = append(bodyLines, m.narrowChatNoticeLines(0)...)
-	} else if m.layout.showChat {
+	if m.layout.showChat {
 		chatLines := m.renderChatLines(defaultChatPreviewLines, 0)
 		bodyLines = append(bodyLines, chatLines...)
 	} else if !m.listVisible() {
@@ -256,6 +254,9 @@ func (m Model) splitRows(listW, chatW, available int, overlayLines []string) []s
 		// column and the chat text is never cut for an emoji in the list.
 		row := padOrTruncateVisual(left, listW) + panelSeparator + padOrTruncateVisual(right, chatW)
 		combined = append(combined, fitScreenLines(row, listW+ansi.StringWidth(panelSeparator)+chatW))
+	}
+	if m.height <= 0 {
+		return padRows(append(combined, overlayLines...), m.width)
 	}
 	return m.overlayHelpLines(combined, overlayLines, m.width, available)
 }
