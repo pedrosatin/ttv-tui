@@ -578,6 +578,7 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 	m.list.generation++
 	m.list.hydrateGen++
 	m.applyPendingRecents()
+	m.reconcileHighlight()
 	m.list.loading = true
 	m.list.err = nil
 	m.list.nextCursor = ""
