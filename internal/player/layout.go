@@ -108,6 +108,11 @@ func checkDirWritable(dir string) error {
 func createFallbackDir(dir, endpoint string) error {
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		if os.IsExist(err) {
+			if runtime.GOOS != "windows" {
+				if err := checkPrivateDir(dir); err != nil {
+					return err
+				}
+			}
 			if err := checkDirWritable(dir); err != nil {
 				return fmt.Errorf("fallback directory %q not writable: %w", dir, err)
 			}

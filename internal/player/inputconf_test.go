@@ -220,9 +220,9 @@ func TestInputConfWriteFailureWithCustomCommandKeepsCommand(t *testing.T) {
 	}
 }
 
-// A real failure of the production writer: the temp fallback directory already
-// exists and others can read it. On Windows that is a temp outside the profile.
-func TestSharedFallbackDirRunsWithoutInputConf(t *testing.T) {
+// Unix rejects a shared fallback before writing input.conf. Windows keeps
+// playing without input.conf when the temp directory is outside the profile.
+func TestSharedFallbackDirectory(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", t.TempDir())
 	base := t.TempDir()
 	defer setFallbackBaseDirForTest(base)()
@@ -236,6 +236,12 @@ func TestSharedFallbackDirRunsWithoutInputConf(t *testing.T) {
 
 	mgr := newTestManager(t, "play", Options{RuntimeDir: unusableRuntimeDir(t)})
 	gen, err := mgr.Start("shared")
+	if runtime.GOOS != "windows" {
+		if err == nil {
+			t.Fatal("Start accepted a shared fallback directory")
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}

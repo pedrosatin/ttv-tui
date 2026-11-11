@@ -98,3 +98,25 @@ func TestRuntimeBaseForeignOwner(t *testing.T) {
 		t.Error("rejected base contains session files")
 	}
 }
+
+func TestFallbackRejectsSharedDirectory(t *testing.T) {
+	restore := setFallbackBaseDirForTest(privateDir(t))
+	t.Cleanup(restore)
+	dir, _, err := fallbackLocation(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	layout, err := prepareSession("", 1)
+	if err == nil {
+		t.Fatalf("session accepted shared fallback directory: %q", layout.Dir)
+	}
+	if layout.Dir != "" {
+		t.Errorf("session returned rejected fallback directory: %q", layout.Dir)
+	}
+}
