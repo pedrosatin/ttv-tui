@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -259,8 +260,12 @@ type gqlErrorExtensions struct {
 
 type gqlErrorItem struct {
 	Message    string              `json:"message"`
+	Path       []any               `json:"path,omitempty"`
 	Extensions *gqlErrorExtensions `json:"extensions,omitempty"`
 }
+
+// errIntegrityCheck marks a request refused for lacking an integrity token.
+var errIntegrityCheck = errors.New("graphql integrity check failed")
 
 func isIntegrityCheckFailed(errs []gqlErrorItem) bool {
 	for _, e := range errs {
@@ -272,6 +277,47 @@ func isIntegrityCheckFailed(errs []gqlErrorItem) bool {
 		}
 	}
 	return false
+}
+
+// gqlErrorsFailure classifies an errors array that came without the data the
+// parser needs. A resolver timeout is transient and is retried like a 5xx.
+func gqlErrorsFailure(op string, errs []gqlErrorItem) *Error {
+	if isIntegrityCheckFailed(errs) {
+		return &Error{Kind: Contrato, Op: op, Err: errIntegrityCheck}
+	}
+	kind := Contrato
+	for _, e := range errs {
+		if strings.Contains(strings.ToLower(e.Message), "timeout") {
+			kind = Servidor
+		}
+	}
+	msg := strings.TrimSpace(errs[0].Message)
+	if msg == "" {
+		msg = "graphql error"
+	}
+	return &Error{Kind: kind, Op: op, Err: fmt.Errorf("graphql error: %s", msg)}
+}
+
+// erroredItems returns the list positions an error path points into: under
+// prefix ["users"], the path ["users", 3, "stream"] marks 3.
+func erroredItems(errs []gqlErrorItem, prefix ...string) map[int]bool {
+	out := map[int]bool{}
+	for _, e := range errs {
+		if len(e.Path) <= len(prefix) {
+			continue
+		}
+		match := true
+		for i, p := range prefix {
+			if seg, ok := e.Path[i].(string); !ok || seg != p {
+				match = false
+				break
+			}
+		}
+		if n, ok := e.Path[len(prefix)].(float64); match && ok {
+			out[int(n)] = true
+		}
+	}
+	return out
 }
 
 type gqlCategoriesResponse struct {
@@ -452,7 +498,11 @@ func (s *GQLSource) Categories(ctx context.Context, page PageRequest) (Page[Cate
 
 	res, reqErr := executeWithRetry(s, ctx, op, payload, s.parseCategoriesResponse)
 	if reqErr != nil {
-		return Page[Category]{}, reqErr
+		if page.Cursor == "" || !errors.Is(reqErr, errIntegrityCheck) {
+			return Page[Category]{}, reqErr
+		}
+		// Paginar categorias exige um token de integridade que não temos, então a lista termina aqui.
+		res = Page[Category]{Items: []Category{}}
 	}
 	s.rememberCategories(res.Items)
 	s.setCachedCategories(cacheKey, res)
@@ -521,7 +571,11 @@ func (s *GQLSource) Channels(ctx context.Context, categoryID string, page PageRe
 		return s.parseChannelsResponse(body, catKey)
 	})
 	if reqErr != nil {
-		return Page[Channel]{}, reqErr
+		if page.Cursor == "" || !errors.Is(reqErr, errIntegrityCheck) {
+			return Page[Channel]{}, reqErr
+		}
+		// Paginar canais exige um token de integridade que não temos, então a lista termina aqui.
+		res = Page[Channel]{Items: []Channel{}}
 	}
 	s.setCachedChannels(cacheKey, res)
 	return res, nil
@@ -625,11 +679,11 @@ func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]Categ
 	return res.Items, nil
 }
 
-// ChannelsByLogins fetches Availability for many logins in one GraphQL request.
-// An empty or all-blank logins slice returns nil without contacting the network.
-// Duplicate logins (case-insensitive) are collapsed; at most maxUsersByLogins
-// are sent. Users absent from the response are omitted so the caller keeps
-// AvailabilityUnknown for them.
+// ChannelsByLogins fetches Availability for many logins, maxUsersByLogins per
+// GraphQL request. An empty or all-blank logins slice returns nil without
+// contacting the network. Duplicate logins (case-insensitive) are collapsed.
+// Users absent from the response are omitted so the caller keeps
+// AvailabilityUnknown for them. A failed batch fails the whole lookup.
 func (s *GQLSource) ChannelsByLogins(ctx context.Context, logins []string) ([]Channel, error) {
 	const op = "channelsByLogins"
 
@@ -645,29 +699,30 @@ func (s *GQLSource) ChannelsByLogins(ctx context.Context, logins []string) ([]Ch
 	if len(unique) == 0 {
 		return nil, nil
 	}
-	if len(unique) > maxUsersByLogins {
-		unique = unique[:maxUsersByLogins]
-	}
 
-	payload, err := json.Marshal(gqlRequest{
-		Query: usersByLoginsQuery,
-		Variables: map[string]any{
-			"logins": unique,
-		},
-	})
-	if err != nil {
-		return nil, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("encode graphql request: %w", err),
+	var out []Channel
+	for batch := range slices.Chunk(unique, maxUsersByLogins) {
+		payload, err := json.Marshal(gqlRequest{
+			Query: usersByLoginsQuery,
+			Variables: map[string]any{
+				"logins": batch,
+			},
+		})
+		if err != nil {
+			return nil, &Error{
+				Kind: Contrato,
+				Op:   op,
+				Err:  fmt.Errorf("encode graphql request: %w", err),
+			}
 		}
-	}
 
-	res, reqErr := executeWithRetry(s, ctx, op, payload, s.parseUsersByLoginsResponse)
-	if reqErr != nil {
-		return nil, reqErr
+		res, reqErr := executeWithRetry(s, ctx, op, payload, s.parseUsersByLoginsResponse)
+		if reqErr != nil {
+			return nil, reqErr
+		}
+		out = append(out, res.Items...)
 	}
-	return res.Items, nil
+	return out, nil
 }
 
 // uniqueLogins returns non-empty logins lowercased, first occurrence wins.
@@ -838,25 +893,8 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (Page[Category], *Error
 		}
 	}
 
-	if isIntegrityCheckFailed(gqlResp.Errors) {
-		// Paginar categorias exige token de integridade que não temos.
-		return Page[Category]{
-			Items:   []Category{},
-			Cursor:  "",
-			HasMore: false,
-		}, nil
-	}
-
-	if len(gqlResp.Errors) > 0 {
-		msg := strings.TrimSpace(gqlResp.Errors[0].Message)
-		if msg == "" {
-			msg = "graphql error"
-		}
-		return Page[Category]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("graphql error: %s", msg),
-		}
+	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.Games == nil) {
+		return Page[Category]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.Games == nil {
@@ -938,24 +976,8 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 		}
 	}
 
-	if isIntegrityCheckFailed(gqlResp.Errors) {
-		return Page[Channel]{
-			Items:   []Channel{},
-			Cursor:  "",
-			HasMore: false,
-		}, nil
-	}
-
-	if len(gqlResp.Errors) > 0 {
-		msg := strings.TrimSpace(gqlResp.Errors[0].Message)
-		if msg == "" {
-			msg = "graphql error"
-		}
-		return Page[Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("graphql error: %s", msg),
-		}
+	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.Game == nil || gqlResp.Data.Game.Streams == nil) {
+		return Page[Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.Game == nil || gqlResp.Data.Game.Streams == nil {
@@ -1065,24 +1087,8 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 		}
 	}
 
-	if isIntegrityCheckFailed(gqlResp.Errors) {
-		return Page[Channel]{
-			Items:   []Channel{},
-			Cursor:  "",
-			HasMore: false,
-		}, nil
-	}
-
-	if len(gqlResp.Errors) > 0 {
-		msg := strings.TrimSpace(gqlResp.Errors[0].Message)
-		if msg == "" {
-			msg = "graphql error"
-		}
-		return Page[Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("graphql error: %s", msg),
-		}
+	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Channels == nil) {
+		return Page[Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Channels == nil {
@@ -1094,8 +1100,16 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 	}
 
 	edges := gqlResp.Data.SearchFor.Channels.Edges
+	errored := erroredItems(gqlResp.Errors, "searchFor", "channels", "edges")
 	items := make([]Channel, 0, len(edges))
 	for i, edge := range edges {
+		if errored[i] {
+			// A partial error drops only its own item; a null stream there is no offline evidence.
+			if edge.Item == nil {
+				continue
+			}
+			dropFailedStream(&edge.Item.Stream)
+		}
 		if edge.Item == nil {
 			return Page[Channel]{}, &Error{
 				Kind: Contrato,
@@ -1150,24 +1164,8 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], 
 		}
 	}
 
-	if isIntegrityCheckFailed(gqlResp.Errors) {
-		return Page[Category]{
-			Items:   []Category{},
-			Cursor:  "",
-			HasMore: false,
-		}, nil
-	}
-
-	if len(gqlResp.Errors) > 0 {
-		msg := strings.TrimSpace(gqlResp.Errors[0].Message)
-		if msg == "" {
-			msg = "graphql error"
-		}
-		return Page[Category]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("graphql error: %s", msg),
-		}
+	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Games == nil) {
+		return Page[Category]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Games == nil {
@@ -1179,8 +1177,12 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], 
 	}
 
 	edges := gqlResp.Data.SearchFor.Games.Edges
+	errored := erroredItems(gqlResp.Errors, "searchFor", "games", "edges")
 	items := make([]Category, 0, len(edges))
 	for i, edge := range edges {
+		if edge.Item == nil && errored[i] {
+			continue
+		}
 		if edge.Item == nil {
 			return Page[Category]{}, &Error{
 				Kind: Contrato,
@@ -1230,24 +1232,8 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Err
 		}
 	}
 
-	if isIntegrityCheckFailed(gqlResp.Errors) {
-		return Page[Channel]{
-			Items:   []Channel{},
-			Cursor:  "",
-			HasMore: false,
-		}, nil
-	}
-
-	if len(gqlResp.Errors) > 0 {
-		msg := strings.TrimSpace(gqlResp.Errors[0].Message)
-		if msg == "" {
-			msg = "graphql error"
-		}
-		return Page[Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("graphql error: %s", msg),
-		}
+	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.Users == nil) {
+		return Page[Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil {
@@ -1258,11 +1244,15 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Err
 		}
 	}
 
+	errored := erroredItems(gqlResp.Errors, "users")
 	items := make([]Channel, 0, len(gqlResp.Data.Users))
 	for i, user := range gqlResp.Data.Users {
 		if user == nil {
 			// Login did not resolve; omit so the caller keeps unknown.
 			continue
+		}
+		if errored[i] {
+			dropFailedStream(&user.Stream)
 		}
 		login := strings.TrimSpace(user.Login)
 		displayName := strings.TrimSpace(user.DisplayName)
@@ -1470,6 +1460,14 @@ func cloneChannelPage(p Page[Channel]) Page[Channel] {
 		Items:   items,
 		Cursor:  p.Cursor,
 		HasMore: p.HasMore,
+	}
+}
+
+// dropFailedStream turns a null stream that an error path points at into an
+// absent one: the resolver failed, so the null says nothing about being offline.
+func dropFailedStream(raw *json.RawMessage) {
+	if strings.TrimSpace(string(*raw)) == "null" {
+		*raw = nil
 	}
 }
 
