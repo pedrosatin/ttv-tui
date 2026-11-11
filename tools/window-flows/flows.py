@@ -689,6 +689,13 @@ def flows():
     mv = motion(a, b, *V)
     check(role, "o vídeo volta ao fechar", on and mv > 0.002, f"centro {mv:.4f}")
 
+    t("key", "F1")
+    opened = wait(lambda: stats()["holeOn"] and stats()["overlay"] == stats()["hole"][2] and "===" in screen(), 3, 0.1)
+    check(role, "F1 abre a ajuda na janela", opened)
+    t("key", "F1")
+    closed = wait(lambda: stats()["holeOn"] and stats()["overlay"] == 0 and "===" not in screen(), 3, 0.1)
+    check(role, "F1 fecha a ajuda na janela", closed)
+
     # ---- Zapeador: trocar de canal várias vezes sem vazar nada
     role = "zapeador"
     rss0 = rss_mb(st["pid"])

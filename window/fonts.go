@@ -89,6 +89,7 @@ func newFontSet(px float64) (*fontSet, error) {
 	}
 	fs.cellW, fs.cellH, fs.base, err = cellMetrics(reg)
 	if err != nil {
+		fs.close()
 		return nil, err
 	}
 	return fs, nil
@@ -145,4 +146,20 @@ func (fs *fontSet) get(r rune, bold bool) *glyph {
 	g := &glyph{mask: a, x: dr.Min.X, y: dr.Min.Y}
 	fs.cache[key] = g
 	return g
+}
+
+func scaledFontSet(pt, scale float64) (*fontSet, error) {
+	if scale <= 0 {
+		scale = 1
+	}
+	return newFontSet(pt * 96.0 / 72.0 * scale)
+}
+
+func (fs *fontSet) close() {
+	for _, f := range fs.faces {
+		_ = f.Close()
+	}
+	if fs.bold != nil {
+		_ = fs.bold.Close()
+	}
 }
