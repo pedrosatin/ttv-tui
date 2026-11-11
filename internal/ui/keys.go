@@ -244,7 +244,10 @@ func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
 	if m.listVisible() || m.list.prefs.menuOpen || (m.chat.composing && m.chatColumnVisible()) {
 		return false
 	}
-	if key.Matches(msg, m.keys.Filter, m.keys.Search, m.keys.Favorite, m.keys.ChannelFilter, m.keys.Retry) {
+	if key.Matches(msg, m.keys.Filter, m.keys.Search, m.keys.Favorite, m.keys.ChannelFilter) {
+		return true
+	}
+	if key.Matches(msg, m.keys.Retry) && m.retryTarget() != retryTargetPlayer {
 		return true
 	}
 	return !m.chatColumnVisible() && key.Matches(msg,
