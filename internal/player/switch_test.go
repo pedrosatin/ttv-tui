@@ -182,11 +182,15 @@ func TestStopGenerationIgnoresReplacedGeneration(t *testing.T) {
 		t.Fatalf("Start B: %v", err)
 	}
 
-	mgr.StopGeneration(genA)
+	if err := mgr.StopGeneration(genA); err != nil {
+		t.Fatal(err)
+	}
 	if login := activeLogin(mgr); login != "channel-b" {
 		t.Fatalf("after the Stop for A the session is %q, want channel-b", login)
 	}
-	mgr.StopGeneration(genB)
+	if err := mgr.StopGeneration(genB); err != nil {
+		t.Fatal(err)
+	}
 	if login := activeLogin(mgr); login != "" {
 		t.Fatalf("session %q left after the Stop for B", login)
 	}
