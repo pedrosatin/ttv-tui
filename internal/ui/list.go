@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -636,7 +637,7 @@ func (m *Model) applyPendingRecents() {
 func (m *Model) ToggleFavorite(ch twitch.Channel) bool {
 	for i, fav := range m.list.favorites {
 		if channelMatches(fav, ch) {
-			m.list.favorites = append(m.list.favorites[:i], m.list.favorites[i+1:]...)
+			m.list.favorites = slices.Concat(m.list.favorites[:i], m.list.favorites[i+1:])
 			return false
 		}
 	}

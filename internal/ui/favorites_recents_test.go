@@ -1011,3 +1011,48 @@ func TestCaptureSearchScreenPTY(t *testing.T) {
 	t.Logf("\n%s\n", out)
 	fmt.Printf("\n--- PTY CAPTURE START ---\n%s\n--- PTY CAPTURE END ---\n", out)
 }
+
+func TestRemovingFavoriteKeepsEarlierModelSlice(t *testing.T) {
+	catEN, _ := i18n.New(i18n.LangEN)
+	fs := &fakeStore{}
+	m := New(catEN,
+		WithStore(fs),
+		WithFavorites([]twitch.Channel{
+			{ID: "1", Login: "alpha"},
+			{ID: "2", Login: "bravo"},
+			{ID: "3", Login: "charlie"},
+		}),
+	)
+	earlier := m
+	kept := m.list.favorites
+
+	if m.ToggleFavorite(twitch.Channel{ID: "2", Login: "bravo"}) {
+		t.Fatal("ToggleFavorite added bravo instead of removing it")
+	}
+
+	logins := func(chs []twitch.Channel) string {
+		out := make([]string, len(chs))
+		for i, ch := range chs {
+			out[i] = ch.Login
+		}
+		return strings.Join(out, ",")
+	}
+	if got := logins(kept); got != "alpha,bravo,charlie" {
+		t.Errorf("slice kept before removal = %s, want alpha,bravo,charlie", got)
+	}
+	if got := logins(earlier.Favorites()); got != "alpha,bravo,charlie" {
+		t.Errorf("earlier model favorites = %s, want alpha,bravo,charlie", got)
+	}
+	if got := logins(m.Favorites()); got != "alpha,charlie" {
+		t.Errorf("favorites after removal = %s, want alpha,charlie", got)
+	}
+
+	m.saveStoreCmd()()
+	saved := make([]string, len(fs.savedState.Favorites))
+	for i, ch := range fs.savedState.Favorites {
+		saved[i] = ch.Login
+	}
+	if got := strings.Join(saved, ","); got != "alpha,charlie" {
+		t.Errorf("persisted favorites = %s, want alpha,charlie", got)
+	}
+}
