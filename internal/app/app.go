@@ -355,9 +355,10 @@ func (w *configWriter) saveColumns(list, chat int, overlay, swapped bool, opacit
 	})
 }
 
-// tokenCheck builds the startup check of the saved token. Only an answer that
-// rejects the token counts as invalid: a timeout or a cancelled check says
-// nothing about it. A nil validate means auth.Validate.
+// tokenCheck builds the startup check of the saved token. A nil error means
+// valid, ErrTokenInvalid means refused, and any other error is indeterminate
+// (network, timeout, HTTP 5xx/429 or malformed response). Only refusal shows
+// the renewal notice. A nil validate means auth.Validate.
 func tokenCheck(validate func(ctx context.Context, token string) (auth.Validation, error), token string) ui.TokenCheckFunc {
 	if validate == nil {
 		validate = auth.Validate
@@ -366,10 +367,7 @@ func tokenCheck(validate func(ctx context.Context, token string) (auth.Validatio
 		vCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		_, err := validate(vCtx, token)
-		if err != nil {
-			if errors.Is(err, auth.ErrValidateTimeout) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-				return nil
-			}
+		if errors.Is(err, auth.ErrTokenInvalid) {
 			return auth.ErrTokenInvalid
 		}
 		return nil

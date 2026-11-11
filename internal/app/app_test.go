@@ -34,7 +34,8 @@ func TestTokenCheckMapsValidationErrors(t *testing.T) {
 		{"canceled", context.Canceled, nil},
 		{"wrapped canceled", fmt.Errorf("get: %w", context.Canceled), nil},
 		{"rejected token", auth.ErrTokenInvalid, auth.ErrTokenInvalid},
-		{"any other error", errors.New("502 bad gateway"), auth.ErrTokenInvalid},
+		{"wrapped rejected token", fmt.Errorf("validate: %w", auth.ErrTokenInvalid), auth.ErrTokenInvalid},
+		{"any other error", errors.New("502 bad gateway"), nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
