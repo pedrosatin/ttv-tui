@@ -24,6 +24,7 @@ func TestExternalTextNeverReachesTerminalRaw(t *testing.T) {
 	ch := twitch.Channel{
 		ID: "1", Login: login, DisplayName: name, Title: twitch.StringPtr(title),
 		CategoryName: twitch.StringPtr(cat), Viewers: twitch.IntPtr(10),
+		Language:     twitch.StringPtr("pt\x1b[2J\nfoo"),
 		Availability: twitch.AvailabilityLive,
 	}
 	category := twitch.Category{ID: "c", Name: cat, Viewers: twitch.IntPtr(10)}
@@ -43,6 +44,13 @@ func TestExternalTextNeverReachesTerminalRaw(t *testing.T) {
 		{"player", func(m *Model) {
 			m.player.login = login
 			m.player.state = PlayerStatePlaying
+		}},
+		{"language menu", func(m *Model) {
+			m.list.prefs.menuOpen = true
+		}},
+		{"language filter hides all", func(m *Model) {
+			m.list.prefs.languages = []string{"pt\x1b[2J\nfoo"}
+			m.list.prefs.minViewers = 1000
 		}},
 		{"empty chat", func(m *Model) {
 			m.chat.panel.channel = login
