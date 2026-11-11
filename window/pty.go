@@ -64,7 +64,7 @@ func ptyTailStart(b []byte) int {
 	if start == len(b)-1 {
 		return len(b)
 	}
-	start = max(start, 0)
+	start++ // o byte em start é ASCII e já fecha o cluster anterior
 	end := start
 	for end < len(b) && utf8.FullRune(b[end:]) {
 		_, n := utf8.DecodeRune(b[end:])
