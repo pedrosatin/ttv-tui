@@ -59,6 +59,7 @@ type app struct {
 	pw   int
 	ph   int
 	fs   *fontSet
+	pt   float64
 	term *vt.SafeEmulator
 	ptmx *os.File
 	cmd  *exec.Cmd

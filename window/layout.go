@@ -16,11 +16,23 @@ import (
 )
 
 // relayout recalcula painel, PTY e emulador a partir do tamanho da janela.
-func (a *app) relayout() {
+func (a *app) relayout() { a.relayoutFonts(nil) }
+
+// relayoutFonts troca a fonte e a grade sob o mesmo lock usado pelo pintor.
+func (a *app) relayoutFonts(fs *fontSet) {
+	a.paintMu.Lock()
+	defer a.paintMu.Unlock()
 	var w, h C.int
 	C.SDL_GetWindowSizeInPixels(a.win, &w, &h)
 	if w == 0 || h == 0 {
+		if fs != nil {
+			fs.close()
+		}
 		return
+	}
+	if fs != nil {
+		a.fs.close()
+		a.fs = fs
 	}
 	a.W, a.H = int(w), int(h)
 	a.px = 0
@@ -33,9 +45,7 @@ func (a *app) relayout() {
 		rows = 5
 	}
 	pw, ph := cols*a.fs.cellW, rows*a.fs.cellH
-	if cols != a.cols || rows != a.rows {
-		a.paintMu.Lock()
-		defer a.paintMu.Unlock()
+	if fs != nil || cols != a.cols || rows != a.rows {
 		a.dirtyY0, a.dirtyY1, a.dirtyX0, a.dirtyX1 = rows, -1, cols, -1
 		a.cols, a.rows, a.pw, a.ph = cols, rows, pw, ph
 		a.buf = make([]byte, pw*ph*4)

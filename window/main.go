@@ -102,14 +102,11 @@ func main() {
 	defer C.SDL_GL_DestroyContext(gl)
 
 	scale := float64(C.SDL_GetWindowDisplayScale(win))
-	if scale <= 0 {
-		scale = 1
-	}
 	pt := 9.0
 	if v, err := strconv.ParseFloat(os.Getenv("TTV_WINDOW_PT"), 64); err == nil {
 		pt = v
 	}
-	fs, err := newFontSet(pt * 96.0 / 72.0 * scale)
+	fs, err := scaledFontSet(pt, scale)
 	if err != nil {
 		fatal(err)
 	}
@@ -122,7 +119,7 @@ func main() {
 	C.SDL_StartTextInput(win)
 	C.reg_events()
 
-	a := &app{win: win, fs: fs, ctlq: make(chan ctlMsg, 16), paintReq: make(chan struct{}, 1), dirtyY1: -1}
+	a := &app{win: win, fs: fs, pt: pt, ctlq: make(chan ctlMsg, 16), paintReq: make(chan struct{}, 1), dirtyY1: -1}
 	go a.painter()
 	a.tex = C.make_tex()
 	a.term = vt.NewSafeEmulator(80, 24)
