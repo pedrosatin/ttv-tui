@@ -27,6 +27,7 @@ int rc_has_frame(mpv_render_context *rc);
 void rc_render(mpv_render_context *rc, int w, int h);
 void rc_free(mpv_render_context *rc);
 void load_fd(mpv_handle *m, const char *url);
+void set_property(mpv_handle *m, const char *name, const char *value);
 GLuint make_tex(void);
 void tex_alloc(GLuint t, int w, int h);
 void tex_rows(GLuint t, int y, int w, int h, const void *p);

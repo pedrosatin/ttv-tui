@@ -44,7 +44,11 @@ void rc_render(mpv_render_context *rc, int w, int h) {
     mpv_render_context_render(rc, p);
 }
 void rc_free(mpv_render_context *rc) { mpv_render_context_set_update_callback(rc, NULL, NULL); mpv_render_context_free(rc); }
-void load_fd(mpv_handle *m, const char *url) { const char *a[] = {"loadfile", url, NULL}; mpv_command(m, a); }
+void load_fd(mpv_handle *m, const char *url) { const char *a[] = {"loadfile", url, NULL}; mpv_command_async(m, 0, a); }
+void set_property(mpv_handle *m, const char *name, const char *value) {
+    // A API copia a string antes de retornar; o core aplica fora da thread de render.
+    mpv_set_property_async(m, 0, name, MPV_FORMAT_STRING, &value);
+}
 
 static void gl_reset(int W, int H) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

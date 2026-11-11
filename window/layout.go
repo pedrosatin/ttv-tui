@@ -63,7 +63,7 @@ func (a *app) applyMargins() {
 	}
 	W, H := float64(a.W), float64(a.H)
 	ratio := func(name string, px int) {
-		a.setOpt(a.sess.m, "video-margin-ratio-"+name, fmt.Sprintf("%.5f", max(float64(px), 0)/map[bool]float64{true: W, false: H}[name == "left" || name == "right"]))
+		a.sess.setProperty("video-margin-ratio-"+name, fmt.Sprintf("%.5f", max(float64(px), 0)/map[bool]float64{true: W, false: H}[name == "left" || name == "right"]))
 	}
 	if !a.host.Visible {
 		return // sobreposição na frente: mantém a geometria para quando ela sair
@@ -85,8 +85,8 @@ func (a *app) applyMargins() {
 	if margin > 300 {
 		osdSide, margin = "center", 0
 	}
-	a.setOpt(a.sess.m, "osd-align-x", osdSide)
-	a.setOpt(a.sess.m, "osd-margin-x", strconv.Itoa(margin))
+	a.sess.setProperty("osd-align-x", osdSide)
+	a.sess.setProperty("osd-margin-x", strconv.Itoa(margin))
 }
 
 // refreshHole recalcula se as células do vídeo ficam transparentes agora.

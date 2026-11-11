@@ -22,6 +22,16 @@ func (a *app) setOpt(m *C.mpv_handle, k, v string) {
 	C.free(unsafe.Pointer(cv))
 }
 
+// propertySetter só enfileira no core; pode ser usado com o render ativo.
+func propertySetter(m *C.mpv_handle) func(string, string) {
+	return func(k, v string) {
+		ck, cv := C.CString(k), C.CString(v)
+		C.set_property(m, ck, cv)
+		C.free(unsafe.Pointer(ck))
+		C.free(unsafe.Pointer(cv))
+	}
+}
+
 func (a *app) startSession(msg ctlMsg) {
 	if a.sess != nil {
 		a.stopSession()
@@ -49,7 +59,7 @@ func (a *app) startSession(msg ctlMsg) {
 		msg.conn.Close()
 		return
 	}
-	s := &session{m: m, rc: rc, conn: msg.conn, ipc: msg.ipc, done: make(chan struct{}), started: time.Now()}
+	s := &session{m: m, rc: rc, setProperty: propertySetter(m), conn: msg.conn, ipc: msg.ipc, done: make(chan struct{}), started: time.Now()}
 	a.sess = s
 	a.mu.Lock()
 	a.sessions++
