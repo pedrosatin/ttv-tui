@@ -149,7 +149,10 @@ func channelMatches(a, b twitch.Channel) bool {
 	if a.ID != "" && b.ID != "" && a.ID == b.ID {
 		return true
 	}
-	return strings.EqualFold(a.Login, b.Login)
+	if a.Login != "" && b.Login != "" && strings.EqualFold(a.Login, b.Login) {
+		return true
+	}
+	return false
 }
 
 // VisibleItems returns the deduplicated list of items in strict order:
@@ -256,11 +259,18 @@ func (m Model) resolveSaved(saved twitch.Channel) (twitch.Channel, twitch.Availa
 // favorite is not marked as seen, so it does not hide a later row.
 func (m Model) appendFavorites(items []ListItem, p itemPass) []ListItem {
 	for _, fav := range m.list.favorites {
+		if fav.ID == "" && fav.Login == "" {
+			continue
+		}
+		if p.isSeen(fav) {
+			continue
+		}
 		ch, avail := m.resolveSaved(fav)
-		if !p.passes(ch) {
+		if p.isSeen(ch) || !p.passes(ch) {
 			continue
 		}
 		items = append(items, channelItem(ItemTypeFavorite, ch, avail))
+		p.markSeen(fav)
 		p.markSeen(ch)
 	}
 	return items
@@ -270,14 +280,18 @@ func (m Model) appendFavorites(items []ListItem, p itemPass) []ListItem {
 // runs on the stored channel; the seen mark comes from the resolved one.
 func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 	for _, rec := range m.list.recents {
+		if rec.ID == "" && rec.Login == "" {
+			continue
+		}
 		if p.isSeen(rec) {
 			continue
 		}
 		ch, avail := m.resolveSaved(rec)
-		if !p.passes(ch) {
+		if p.isSeen(ch) || !p.passes(ch) {
 			continue
 		}
 		items = append(items, channelItem(ItemTypeRecent, ch, avail))
+		p.markSeen(rec)
 		p.markSeen(ch)
 	}
 	return items
@@ -318,6 +332,9 @@ func appendCategories(items []ListItem, cats []twitch.Category, p itemPass) []Li
 // channels the search query names exactly.
 func (m Model) appendListed(items []ListItem, p itemPass, itemType ListItemType) []ListItem {
 	for _, ch := range m.list.channels {
+		if ch.ID == "" && ch.Login == "" {
+			continue
+		}
 		if itemType == ItemTypeExactChannel && !twitch.ExactChannelMatch(m.list.search.query, ch) {
 			continue
 		}
