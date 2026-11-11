@@ -198,7 +198,7 @@ func (l listState) buildChannelFilterMenuItems() []channelFilterMenuItem {
 }
 
 func (m Model) openChannelFilterMenu() Model {
-	m.layout.focus = FocusList
+	m.setFocus(FocusList)
 	m.layout.helpVisible = false
 	m.list.filtering = false
 	m.list.search.active = false
