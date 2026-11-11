@@ -26,6 +26,31 @@ func keyBytes(key C.SDL_Keycode, mod C.SDL_Keymod) []byte {
 		}
 		return []byte{0x1b, '[', c}
 	}
+	if key >= C.SDLK_F1 && key <= C.SDLK_F12 {
+		i := int(key - C.SDLK_F1)
+		// Bubble Tea 1.3.10 só reconhece Alt+F1 a F12 e Shift+F1 a F8.
+		if ctrl || shift && (alt || i >= 8) {
+			return nil
+		}
+		m := 1
+		if shift {
+			m++
+		}
+		if alt {
+			m += 2
+		}
+		if i < 4 {
+			if m == 1 {
+				return []byte{0x1b, 'O', byte('P' + i)}
+			}
+			return fmt.Appendf(nil, "\x1b[1;%d%c", m, 'P'+i)
+		}
+		n := [...]int{15, 17, 18, 19, 20, 21, 23, 24}[i-4]
+		if m == 1 {
+			return fmt.Appendf(nil, "\x1b[%d~", n)
+		}
+		return fmt.Appendf(nil, "\x1b[%d;%d~", n, m)
+	}
 	switch key {
 	case C.SDLK_RETURN, C.SDLK_KP_ENTER:
 		return []byte{'\r'}
@@ -49,30 +74,6 @@ func keyBytes(key C.SDL_Keycode, mod C.SDL_Keymod) []byte {
 		return arrow('C')
 	case C.SDLK_LEFT:
 		return arrow('D')
-	case C.SDLK_F1:
-		return []byte("\x1bOP")
-	case C.SDLK_F2:
-		return []byte("\x1bOQ")
-	case C.SDLK_F3:
-		return []byte("\x1bOR")
-	case C.SDLK_F4:
-		return []byte("\x1bOS")
-	case C.SDLK_F5:
-		return []byte("\x1b[15~")
-	case C.SDLK_F6:
-		return []byte("\x1b[17~")
-	case C.SDLK_F7:
-		return []byte("\x1b[18~")
-	case C.SDLK_F8:
-		return []byte("\x1b[19~")
-	case C.SDLK_F9:
-		return []byte("\x1b[20~")
-	case C.SDLK_F10:
-		return []byte("\x1b[21~")
-	case C.SDLK_F11:
-		return []byte("\x1b[23~")
-	case C.SDLK_F12:
-		return []byte("\x1b[24~")
 	case C.SDLK_HOME:
 		return []byte("\x1b[H")
 	case C.SDLK_END:

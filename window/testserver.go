@@ -109,20 +109,26 @@ func (a *app) serveTest(path string) {
 			case "screen":
 				fmt.Fprint(c, a.screenText())
 			case "stats":
-				a.mu.Lock()
-				out := map[string]any{
-					"pid": os.Getpid(), "presents": a.presents, "videoFrames": a.videoFrames,
-					"panelPaints": a.panelPaints, "paintMs": a.paintNs / 1e6, "uploadMs": a.uploadNs / 1e6,
-					"sessions": a.sessions, "ttffMs": a.lastTtff, "ipc": a.lastIpc, "cols": a.cols,
-					"rows": a.rows, "W": a.W, "H": a.H, "cellW": a.fs.cellW, "cellH": a.fs.cellH,
-					"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "overlay": a.host.OverlayCols, "overlayLeft": a.host.OverlayLeft, "overlayOpacity": a.host.OverlayOpacity, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
-				}
-				if len(a.latMs) > 0 {
-					out["latMs"] = a.latMs
-				}
-				a.mu.Unlock()
-				_ = json.NewEncoder(c).Encode(out)
+				_ = json.NewEncoder(c).Encode(a.stats())
 			}
 		}(c)
 	}
+}
+
+func (a *app) stats() map[string]any {
+	a.paintMu.Lock()
+	defer a.paintMu.Unlock()
+	a.mu.Lock()
+	out := map[string]any{
+		"pid": os.Getpid(), "presents": a.presents, "videoFrames": a.videoFrames,
+		"panelPaints": a.panelPaints, "paintMs": a.paintNs / 1e6, "uploadMs": a.uploadNs / 1e6,
+		"sessions": a.sessions, "ttffMs": a.lastTtff, "ipc": a.lastIpc, "cols": a.cols,
+		"rows": a.rows, "W": a.W, "H": a.H, "cellW": a.fs.cellW, "cellH": a.fs.cellH,
+		"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "overlay": a.host.OverlayCols, "overlayLeft": a.host.OverlayLeft, "overlayOpacity": a.host.OverlayOpacity, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
+	}
+	if len(a.latMs) > 0 {
+		out["latMs"] = a.latMs
+	}
+	a.mu.Unlock()
+	return out
 }

@@ -144,7 +144,7 @@ func TestBoundKeysHaveWindowTranslation(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				base := name
 				// SDL_KMOD_LCTRL e SDL_KMOD_LALT.
-				mod := uint16(0)
+				mod := keyModifier(keyBytes, 0)
 				if strings.HasPrefix(base, "ctrl+") {
 					mod = 0x40
 					base = strings.TrimPrefix(base, "ctrl+")
@@ -166,13 +166,7 @@ func TestBoundKeysHaveWindowTranslation(t *testing.T) {
 				if !ok && len(base) == 1 {
 					k, ok = asciiKey(base[0], keyNames["Return"]), true
 				}
-				b := keyBytes(k, 0)
-				if mod == 0x40 {
-					b = keyBytes(k, 0x40)
-				}
-				if mod == 0x100 {
-					b = keyBytes(k, 0x100)
-				}
+				b := keyBytes(k, mod)
 				if !ok || len(b) == 0 {
 					t.Errorf("tecla ligada na TUI sem tradução em keyBytes: %s", name)
 				}
@@ -182,7 +176,6 @@ func TestBoundKeysHaveWindowTranslation(t *testing.T) {
 	})
 }
 
-// O tipo do keycode vem do cgo, que não pode ser importado em _test.go.
 func asciiKey[T ~uint32](b byte, _ T) T { return T(b) }
 
 func TestFunctionKeyBytes(t *testing.T) {
@@ -193,5 +186,41 @@ func TestFunctionKeyBytes(t *testing.T) {
 				t.Fatalf("bytes = %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+func keyModifier[K ~uint32, M ~uint16](_ func(K, M) []byte, mod uint16) M {
+	return M(mod)
+}
+
+func TestModifiedFunctionKeyBytes(t *testing.T) {
+	for i, n := range []int{1, 1, 1, 1, 15, 17, 18, 19, 20, 21, 23, 24} {
+		name := "F" + strconv.Itoa(i+1)
+		for _, side := range []struct{ shift, alt, ctrl uint16 }{{1, 0x100, 0x40}, {2, 0x200, 0x80}} {
+			for bits := 1; bits < 8; bits++ {
+				var mod uint16
+				if bits&1 != 0 {
+					mod |= side.shift
+				}
+				if bits&2 != 0 {
+					mod |= side.alt
+				}
+				if bits&4 != 0 {
+					mod |= side.ctrl
+				}
+				var want string
+				// Bubble Tea 1.3.10 reconhece Alt+F1 a F12 e Shift+F1 a F8.
+				if bits == 2 || bits == 1 && i < 8 {
+					if i < 4 {
+						want = "\x1b[1;" + strconv.Itoa(1+bits) + string(byte('P'+i))
+					} else {
+						want = "\x1b[" + strconv.Itoa(n) + ";" + strconv.Itoa(1+bits) + "~"
+					}
+				}
+				if got := keyBytes(keyNames[name], keyModifier(keyBytes, mod)); string(got) != want || want == "" && got != nil {
+					t.Errorf("%s mod=%#x: bytes = %q, want %q", name, mod, got, want)
+				}
+			}
+		}
 	}
 }
