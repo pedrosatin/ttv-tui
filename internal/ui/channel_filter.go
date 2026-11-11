@@ -125,7 +125,7 @@ func (p channelPrefs) languageSelected(lang string) bool {
 func (p channelPrefs) summary() string {
 	var parts []string
 	for _, lang := range p.languages {
-		parts = append(parts, strings.ToUpper(lang))
+		parts = append(parts, strings.ToUpper(sanitizeScreenText(lang)))
 	}
 	if p.minViewers > 0 {
 		parts = append(parts, fmt.Sprintf("%d", p.minViewers)+string('+'))
@@ -417,7 +417,7 @@ func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor 
 			if m.list.prefs.languageSelected(item.Language) {
 				box = checked
 			}
-			line = marker + box + " " + fmt.Sprintf(m.t("channel_filter.language_count"), strings.ToUpper(item.Language), countBy[item.Language])
+			line = marker + box + " " + fmt.Sprintf(m.t("channel_filter.language_count"), strings.ToUpper(sanitizeScreenText(item.Language)), countBy[item.Language])
 		case filterMenuAudience:
 			if !audienceHeaderDone {
 				rows = append(rows, TruncateVisual("  "+m.t("channel_filter.audience_header"), maxWidth))
