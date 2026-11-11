@@ -979,6 +979,7 @@ func TestSpaceDoesNotPauseWhileComposing(t *testing.T) {
 	updated, _ = m.Update(PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
 	m = updated.(Model)
 
+	m.setFocus(FocusChat)
 	m.chat.composing = true
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = updated.(Model)

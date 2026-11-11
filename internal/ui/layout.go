@@ -99,7 +99,7 @@ func (m *Model) toggleListPanel() {
 	// In the hosted window the list comes back to be used: the arrows and Enter that
 	// follow belong to it, not to the chat that took the focus while it was away.
 	if m.hosted.host != nil && m.layout.showList && m.listVisible() {
-		m.layout.focus = FocusList
+		m.setFocus(FocusList)
 	}
 }
 
@@ -114,6 +114,14 @@ func (m *Model) toggleChatPanel() {
 	m.normalizeFocusAfterLayout()
 }
 
+// setFocus ends composition when the list takes focus, preserving the draft.
+func (m *Model) setFocus(focus Focus) {
+	m.layout.focus = focus
+	if focus != FocusChat {
+		m.chat.composing = false
+	}
+}
+
 // normalizeFocusAfterLayout keeps focus and compose coherent with visible panels.
 // Esc never changes layout; only the layout keys do.
 func (m *Model) normalizeFocusAfterLayout() {
@@ -126,9 +134,9 @@ func (m *Model) normalizeFocusAfterLayout() {
 	case listOn && chatOn:
 		// Keep the user's focus between the two panels.
 	case chatOn:
-		m.layout.focus = FocusChat
+		m.setFocus(FocusChat)
 	case listOn:
-		m.layout.focus = FocusList
+		m.setFocus(FocusList)
 	default:
 		// Focus mode: leave underlying focus as-is; Focus() reports list.
 		m.chat.composing = false

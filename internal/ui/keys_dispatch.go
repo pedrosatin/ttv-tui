@@ -151,7 +151,7 @@ func (m Model) handleModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m.switchPanelFocus(), nil, true
 	}
 
-	if m.chat.composing && m.layout.showChat && !m.chatHiddenByWidth() {
+	if m.chat.composing && m.Focus() == FocusChat && m.layout.showChat && !m.chatHiddenByWidth() {
 		return handled(m.updateComposingKey(msg))
 	}
 	return m, nil, false
@@ -209,8 +209,7 @@ func (m Model) keyChannelFilter() (tea.Model, tea.Cmd) {
 // filter, then steps back one level.
 func (m Model) keyClear() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
-		m.layout.focus = FocusList
-		m.chat.composing = false
+		m.setFocus(FocusList)
 		return m, nil
 	}
 	if m.list.filter != "" {
@@ -238,14 +237,14 @@ func (m Model) keyCopyMessage() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) keyFilter() (tea.Model, tea.Cmd) {
-	m.layout.focus = FocusList
+	m.setFocus(FocusList)
 	m.clearStaleStatusErrors()
 	m.list.filtering = true
 	return m, nil
 }
 
 func (m Model) keySearch() (tea.Model, tea.Cmd) {
-	m.layout.focus = FocusList
+	m.setFocus(FocusList)
 	if q := strings.TrimSpace(m.list.filter); q != "" {
 		return m.startSearch(q)
 	}

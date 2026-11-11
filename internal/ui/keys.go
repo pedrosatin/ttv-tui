@@ -268,11 +268,10 @@ func (m Model) switchPanelFocus() Model {
 		m.warnChatHiddenByWidth()
 		return m
 	}
-	m.chat.composing = false
 	if m.layout.focus == FocusChat {
-		m.layout.focus = FocusList
+		m.setFocus(FocusList)
 	} else {
-		m.layout.focus = FocusChat
+		m.setFocus(FocusChat)
 	}
 	return m
 }
@@ -320,9 +319,7 @@ func (m Model) enterCompose() (tea.Model, tea.Cmd) {
 		m.chat.panel.sendWarning = m.t("chat.warn.no_token")
 		return m, nil
 	}
-	if m.chat.hasPanel() || m.chat.session != nil {
-		m.layout.focus = FocusChat
-	}
+	m.setFocus(FocusChat)
 	m.chat.composing = true
 	return m, nil
 }
