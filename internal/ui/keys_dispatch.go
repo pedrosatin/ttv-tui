@@ -254,25 +254,14 @@ func (m Model) keySearch() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-type retryTarget int
-
-const (
-	retryTargetList retryTarget = iota
-	retryTargetPlayer
-)
-
-// retryTarget calculates whether 'r' retries the player or the list.
-// When the player has an active error and can be restarted, player retry
-// takes precedence over list errors to match the status bar lead.
-func (m Model) retryTarget() retryTarget {
-	if m.player.state == PlayerStateError && m.playback != nil && m.player.login != "" {
-		return retryTargetPlayer
-	}
-	return retryTargetList
+// canRetryPlayer reports whether r restarts the player. A player error takes
+// precedence over a list error, as in the status bar lead.
+func (m Model) canRetryPlayer() bool {
+	return m.player.state == PlayerStateError && m.playback != nil && m.player.login != ""
 }
 
 func (m Model) keyRetry() (tea.Model, tea.Cmd) {
-	if m.retryTarget() == retryTargetPlayer {
+	if m.canRetryPlayer() {
 		return m.retryPlayback()
 	}
 	return m.retryCurrentMode()
