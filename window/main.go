@@ -135,10 +135,15 @@ func main() {
 		os.Exit(1)
 	}
 	a.ptmx = ptmx
+	a.inputq = make(chan []byte, 64)
+	go a.pumpInput()
+	defer ptmx.Close()
 	go a.pumpPTY()
 	go a.pumpReplies()
+	tuiDone := make(chan struct{})
 	go func() {
 		_ = a.cmd.Wait()
+		close(tuiDone)
 		C.push_quit()
 	}()
 
@@ -158,18 +163,22 @@ func main() {
 	}
 
 	_ = a.cmd.Process.Signal(syscall.SIGHUP)
-	done := make(chan struct{})
-	go func() { // cmd.Wait já roda acima; só aguarda o filho sumir
-		for i := 0; i < 40; i++ {
-			if a.cmd.Process.Signal(syscall.Signal(0)) != nil {
-				break
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-		close(done)
-	}()
-	<-done
-	_ = a.cmd.Process.Kill()
+	waitTUI(tuiDone, tuiStopWait, func() { _ = a.cmd.Process.Kill() })
 	a.stopSession()
 	C.SDL_Quit()
+}
+
+// internal/player: defaultStopWait = 3 s e groupKillWait = 2 s.
+// internal/app: orphanStopWait = 3 s. Mais 1 s para a limpeza da TUI.
+const tuiStopWait = 3*time.Second + 2*time.Second + time.Second
+
+func waitTUI(done <-chan struct{}, wait time.Duration, kill func()) {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		kill()
+		<-done
+	}
 }

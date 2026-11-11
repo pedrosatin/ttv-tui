@@ -59,7 +59,7 @@ func (a *app) startSession(msg ctlMsg) {
 		msg.conn.Close()
 		return
 	}
-	s := &session{m: m, rc: rc, setProperty: propertySetter(m), conn: msg.conn, ipc: msg.ipc, done: make(chan struct{}), started: time.Now()}
+	s := &session{m: m, rc: rc, setProperty: propertySetter(m), conn: msg.conn, ipc: msg.ipc, done: make(chan struct{}), stopping: make(chan struct{}), started: time.Now()}
 	a.sess = s
 	a.mu.Lock()
 	a.sessions++
@@ -73,8 +73,7 @@ func (a *app) startSession(msg ctlMsg) {
 		for {
 			ev := C.mpv_wait_event(m, -1)
 			if ev.event_id == C.MPV_EVENT_SHUTDOWN {
-				a.ctlq <- ctlMsg{kind: "ended", s: s}
-				C.push_ev(C.ev_ctl())
+				a.notifyEnded(s)
 				return
 			}
 			if s.stop.Load() {
@@ -85,8 +84,7 @@ func (a *app) startSession(msg ctlMsg) {
 	go func() { // shim morreu (TUI matou o grupo): encerra o core
 		b := make([]byte, 1)
 		_, _ = msg.conn.Read(b)
-		a.ctlq <- ctlMsg{kind: "ended", s: s}
-		C.push_ev(C.ev_ctl())
+		a.notifyEnded(s)
 	}()
 	a.refreshHole()
 	a.relayout()
@@ -99,6 +97,7 @@ func (a *app) stopSession() {
 	}
 	a.sess = nil
 	s.stop.Store(true)
+	close(s.stopping)
 	C.mpv_wakeup(s.m)
 	<-s.done
 	C.rc_free(s.rc)
@@ -138,5 +137,14 @@ func (a *app) serveCtl(path string) {
 			a.ctlq <- ctlMsg{kind: "start", ipc: req.IPC, fd: fd, conn: c}
 			C.push_ev(C.ev_ctl())
 		}(c)
+	}
+}
+
+// stopSession pode aguardar done mesmo com ctlq cheia.
+func (a *app) notifyEnded(s *session) {
+	select {
+	case a.ctlq <- ctlMsg{kind: "ended", s: s}:
+		C.push_ev(C.ev_ctl())
+	case <-s.stopping:
 	}
 }

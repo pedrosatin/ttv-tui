@@ -74,7 +74,11 @@ func (a *app) writeInput(b []byte) {
 	a.mu.Lock()
 	a.inputAt = time.Now()
 	a.mu.Unlock()
-	_, _ = a.ptmx.Write(b)
+	// A fila cheia descarta o evento inteiro, sem cortar sequências de tecla.
+	select {
+	case a.inputq <- append([]byte(nil), b...):
+	default:
+	}
 }
 
 func (a *app) handle(ev *C.SDL_Event) {

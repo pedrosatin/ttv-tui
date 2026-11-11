@@ -41,6 +41,7 @@ type session struct {
 	ipc      string
 	stop     atomic.Bool
 	done     chan struct{}
+	stopping chan struct{}
 	started  time.Time
 	gotFirst atomic.Bool
 	ttffMs   atomic.Int64
@@ -65,6 +66,8 @@ type app struct {
 	prev []cellKey
 	sess *session
 	ctlq chan ctlMsg
+
+	inputq chan []byte
 
 	tuiDirty     atomic.Bool
 	tuiPending   atomic.Bool
