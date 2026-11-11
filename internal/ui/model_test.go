@@ -808,13 +808,13 @@ type fakePlayback struct {
 	startMsg  PlayerStatusMsg
 }
 
-func (f *fakePlayback) Start(login string) tea.Cmd {
+func (f *fakePlayback) Start(login string, selection uint64) tea.Cmd {
 	f.started = append(f.started, login)
 	msg := f.startMsg
 	if msg.State == "" {
-		msg = PlayerStatusMsg{Generation: uint64(len(f.started)), State: PlayerStateStarting, Login: login, Volume: 100, FromStart: true}
+		msg = PlayerStatusMsg{Generation: uint64(len(f.started)), State: PlayerStateStarting, Login: login, Volume: 100, Selection: selection}
 	} else {
-		msg.FromStart = true
+		msg.Selection = selection
 		msg.Login = login
 		if msg.Volume == 0 {
 			msg.Volume = 100
@@ -826,7 +826,7 @@ func (f *fakePlayback) Start(login string) tea.Cmd {
 func (f *fakePlayback) Stop() tea.Cmd {
 	f.stopped++
 	return func() tea.Msg {
-		return PlayerStatusMsg{State: PlayerStateEnded, FromStart: false}
+		return PlayerStatusMsg{State: PlayerStateEnded}
 	}
 }
 
@@ -853,8 +853,8 @@ func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {
 
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: ch})
 	m = updated.(Model)
-	if !m.player.switching {
-		t.Fatal("expected playerSwitching after ChannelSelected")
+	if m.player.awaiting == 0 {
+		t.Fatal("expected a Start reply awaited after ChannelSelected")
 	}
 	if m.PlayerState() != PlayerStateStarting {
 		t.Fatalf("PlayerState=%q want iniciando", m.PlayerState())
@@ -868,8 +868,8 @@ func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {
 
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
-	if m.player.switching {
-		t.Fatal("expected playerSwitching cleared after FromStart handshake")
+	if m.player.awaiting != 0 {
+		t.Fatal("expected no Start reply awaited after the handshake")
 	}
 	if m.PlayerGeneration() != 1 {
 		t.Fatalf("PlayerGeneration=%d want 1", m.PlayerGeneration())
@@ -1106,8 +1106,8 @@ func TestPlayerVolumeClampedInUIAndStaleSwitchEventsDiscarded(t *testing.T) {
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
 
-	// Select channel B (gen 2): while playerSwitching is true (before Start cmd finishes),
-	// an in-flight pump event from gen 1 without FromStart must be ignored.
+	// Select channel B (gen 2): while its Start reply is awaited, an in-flight
+	// pump event from gen 1 must be ignored.
 	updated, cmdB := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "chanB"}})
 	m = updated.(Model)
 	updated, _ = m.Update(PlayerStatusMsg{
@@ -1115,7 +1115,6 @@ func TestPlayerVolumeClampedInUIAndStaleSwitchEventsDiscarded(t *testing.T) {
 		State:      PlayerStatePlaying,
 		Login:      "chanA",
 		Volume:     35,
-		FromStart:  false,
 	})
 	m = updated.(Model)
 	if m.PlayerLogin() != "chanB" || m.PlayerState() != PlayerStateStarting {

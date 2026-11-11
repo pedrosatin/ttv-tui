@@ -60,7 +60,7 @@ func TestStatusBarShowsChannelCategoryNotLastVisitedList(t *testing.T) {
 		t.Fatalf("expected League channels, mode=%q cat=%+v", m.Mode(), m.list.selectedCategory)
 	}
 	m = openChannel(t, m)
-	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "caedrel", Volume: 100, FromStart: true})
+	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "caedrel", Volume: 100, Selection: 1})
 	m.player.windowNotice = false
 
 	bar := ansi.Strip(m.StatusBar())
@@ -108,7 +108,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 		m.list.mode = ModeChannels
 		m.list.highlightedID = "f1"
 		m = openChannel(t, m)
-		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "favchan", Volume: 80, FromStart: true})
+		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "favchan", Volume: 80, Selection: 1})
 		m.player.windowNotice = false
 
 		bar := ansi.Strip(m.StatusBar())
@@ -134,7 +134,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 		m.list.mode = ModeChannels
 		m.list.highlightedID = "r1"
 		m = openChannel(t, m)
-		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "recchan", Volume: 80, FromStart: true})
+		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "recchan", Volume: 80, Selection: 1})
 		m.player.windowNotice = false
 
 		bar := ansi.Strip(m.StatusBar())
@@ -170,7 +170,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 		}}
 		m.list.highlightedID = "s1"
 		m = openChannel(t, m)
-		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "searchchan", Volume: 80, FromStart: true})
+		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "searchchan", Volume: 80, Selection: 1})
 		m.player.windowNotice = false
 
 		bar := ansi.Strip(m.StatusBar())
@@ -194,7 +194,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 		m.list.mode = ModeChannels
 		m.list.highlightedID = "f2"
 		m = openChannel(t, m)
-		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "mystery", Volume: 80, FromStart: true})
+		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "mystery", Volume: 80, Selection: 1})
 		m.player.windowNotice = false
 
 		bar := ansi.Strip(m.StatusBar())
@@ -217,7 +217,7 @@ func TestStatusBarCategoryUpdatesOnChannelSwitch(t *testing.T) {
 	m.list.mode = ModeChannels
 	m.list.highlightedID = "a"
 	m = openChannel(t, m)
-	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "alpha", Volume: 70, FromStart: true})
+	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "alpha", Volume: 70, Selection: 1})
 	m.player.windowNotice = false
 	if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, "Chess") || strings.Contains(bar, "Poker") {
 		t.Fatalf("first channel category:\n%q", bar)
@@ -225,7 +225,7 @@ func TestStatusBarCategoryUpdatesOnChannelSwitch(t *testing.T) {
 
 	m.list.highlightedID = "b"
 	m = openChannel(t, m)
-	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "bravo", Volume: 70, FromStart: true})
+	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "bravo", Volume: 70, Selection: 2})
 	m.player.windowNotice = false
 	bar := ansi.Strip(m.StatusBar())
 	if !strings.Contains(bar, "Poker") {

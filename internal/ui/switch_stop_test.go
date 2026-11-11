@@ -18,9 +18,9 @@ func TestStopDuringSwitchEndsStopped(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	replies := map[string]PlayerStatusMsg{
-		"player still starting": {Generation: 1, State: PlayerStateStarting, Login: "gaules", Volume: 100, FromStart: true},
+		"player still starting": {Generation: 1, State: PlayerStateStarting, Login: "gaules", Volume: 100, Selection: 1},
 		"start cancelled": {Generation: 1, State: PlayerStateError, Login: "gaules", LastLine: "player: stopped before attach",
-			Failure: PlayerFailureUnknown, FromStart: true},
+			Failure: PlayerFailureUnknown, Selection: 1},
 	}
 	for name, reply := range replies {
 		t.Run(name, func(t *testing.T) {

@@ -167,3 +167,27 @@ func TestStartWaitsForTeardownByAnotherStart(t *testing.T) {
 		t.Fatal("no session left after the two Starts")
 	}
 }
+
+// A Stop for a generation a newer Start replaced leaves that Start's session up;
+// a Stop for the current generation still stops it.
+func TestStopGenerationIgnoresReplacedGeneration(t *testing.T) {
+	spawns := &spawnLog{inner: helperCommand("play")}
+	mgr := newSpawnManager(t, spawns, 500*time.Millisecond)
+	genA, err := mgr.Start("channel-a")
+	if err != nil {
+		t.Fatalf("Start A: %v", err)
+	}
+	genB, err := mgr.Start("channel-b")
+	if err != nil {
+		t.Fatalf("Start B: %v", err)
+	}
+
+	mgr.StopGeneration(genA)
+	if login := activeLogin(mgr); login != "channel-b" {
+		t.Fatalf("after the Stop for A the session is %q, want channel-b", login)
+	}
+	mgr.StopGeneration(genB)
+	if login := activeLogin(mgr); login != "" {
+		t.Fatalf("session %q left after the Stop for B", login)
+	}
+}

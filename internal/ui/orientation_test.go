@@ -343,7 +343,10 @@ func TestStatusBarAt80KeepsMainActionAndQuit(t *testing.T) {
 	}
 	phases := []phase{
 		{"starting", func(m Model) Model {
-			m, cmd := pressKeyMsg(m, ChannelSelectedMsg{Channel: twitch.Channel{Login: login, DisplayName: login, Viewers: twitch.IntPtr(12900)}})
+			// The setup chose gaules with Enter; this selection comes from the next Enter.
+			m.list.enters++
+			m, cmd := pressKeyMsg(m, ChannelSelectedMsg{Channel: twitch.Channel{Login: login, DisplayName: login, Viewers: twitch.IntPtr(12900)},
+				Enter: m.list.enters})
 			return drainCmd(t, m, cmd)
 		}, func(m Model) string { return fmt.Sprintf(m.t("player.starting_channel"), login) }},
 		{"playing", func(m Model) Model {

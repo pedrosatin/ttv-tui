@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
@@ -12,6 +14,12 @@ import (
 // importing network/TLS logic.
 type chatBridge struct {
 	mgr *chat.Manager
+	// joins counts the Joins asked for. Join runs in Update, in the order of the
+	// selections; its Cmd runs in a goroutine that may not keep that order.
+	joins atomic.Uint64
+	// joining serializes the Join Cmds, so a Join that is no longer the latest
+	// cannot reach the chat after the latest one did.
+	joining sync.Mutex
 }
 
 func newChatBridge(mgr *chat.Manager) *chatBridge {
@@ -34,7 +42,14 @@ func (b *chatBridge) Username() string {
 
 func (b *chatBridge) Join(login string) tea.Cmd {
 	mgr := b.mgr
+	join := b.joins.Add(1)
 	return func() tea.Msg {
+		b.joining.Lock()
+		defer b.joining.Unlock()
+		if b.joins.Load() != join {
+			// A newer selection was made; its Join alone goes to the chat.
+			return nil
+		}
 		gen, err := mgr.Join(login)
 		if err != nil {
 			return ui.ChatEventMsg{

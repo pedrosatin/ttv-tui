@@ -21,10 +21,11 @@ func newPlaybackBridge(mgr *player.Manager) *playbackBridge {
 	return &playbackBridge{mgr: mgr}
 }
 
-func (b *playbackBridge) Start(login string) tea.Cmd {
+func (b *playbackBridge) Start(login string, selection uint64) tea.Cmd {
 	mgr := b.mgr
 	return func() tea.Msg {
-		gen, err := mgr.Start(login)
+		// Cmds run in goroutines that may not keep the order of the selections.
+		gen, err := mgr.StartInOrder(login, selection)
 		if err != nil {
 			return ui.PlayerStatusMsg{
 				Generation: gen,
@@ -32,7 +33,7 @@ func (b *playbackBridge) Start(login string) tea.Cmd {
 				Login:      login,
 				LastLine:   err.Error(),
 				Failure:    ui.PlayerFailure(player.FailureOf(err)),
-				FromStart:  true,
+				Selection:  selection,
 			}
 		}
 		// Handshake for the UI; later states arrive via the Events→Send pump.
@@ -41,17 +42,19 @@ func (b *playbackBridge) Start(login string) tea.Cmd {
 			State:      ui.PlayerStateStarting,
 			Login:      login,
 			Volume:     mgr.Volume(),
-			FromStart:  true,
+			Selection:  selection,
 		}
 	}
 }
 
+// Stop reads the generation when it is asked for, not when its Cmd runs: a
+// Start asked for after it may reach the player first, and stays up.
 func (b *playbackBridge) Stop() tea.Cmd {
 	mgr := b.mgr
+	gen := mgr.Generation()
 	return func() tea.Msg {
-		gen := mgr.Generation()
 		vol := mgr.Volume()
-		mgr.Stop()
+		mgr.StopGeneration(gen)
 		return ui.PlayerStatusMsg{
 			Generation: gen,
 			State:      ui.PlayerStateEnded,
