@@ -671,9 +671,9 @@ func (m Model) saveStoreCmd(notice ...string) tea.Cmd {
 	if len(notice) > 0 {
 		confirmation = notice[0]
 	}
-	return func() tea.Msg {
+	return m.storeSaves.cmd(func() tea.Msg {
 		return storeSavedMsg{Err: s.Save(st), Notice: confirmation}
-	}
+	})
 }
 
 func (m Model) toggleFavoriteHighlighted() (tea.Model, tea.Cmd) {

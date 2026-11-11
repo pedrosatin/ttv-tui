@@ -225,9 +225,9 @@ func (m Model) persistChannelFilters() tea.Cmd {
 	langs := m.FilterLanguages()
 	minV := m.list.prefs.minViewers
 	persist := m.list.prefs.persist
-	return func() tea.Msg {
+	return m.list.prefs.saves.cmd(func() tea.Msg {
 		return configSavedMsg{Err: persist(langs, minV)}
-	}
+	})
 }
 
 func (m Model) toggleChannelFilterMenuItem() (Model, tea.Cmd) {
