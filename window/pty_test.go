@@ -89,6 +89,9 @@ func TestPTYTailStart(t *testing.T) {
 		{"\xf0\x9f", ""},
 		{"x👩\u200d", "x"},
 		{"é", ""},
+		{"a\xf0\x9f", "a"},
+		{"abc\xf0\x9f", "abc"},
+		{"\r\n\xf0\x9f", "\r\n"},
 	} {
 		if n := ptyTailStart([]byte(tc.input)); tc.input[:n] != tc.ready {
 			t.Errorf("%q: entregue %q, retido %q; esperado entregar %q", tc.input, tc.input[:n], tc.input[n:], tc.ready)
