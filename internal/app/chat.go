@@ -114,7 +114,7 @@ func (b *chatBridge) Send(req ui.ChatSendRequest) tea.Cmd {
 	return func() tea.Msg {
 		upd, err := mgr.Send(req)
 		if err != nil && upd.Status == chat.DeliveryNone {
-			return nil
+			upd = chat.SendStatusUpdate{Generation: req.Generation, Channel: req.Channel, Nonce: req.Nonce, Body: req.Body, Status: chat.DeliveryDiscarded, Reason: chat.RejectConnectionLost}
 		}
 		return ui.ChatEventMsg{
 			Generation:  upd.Generation,
