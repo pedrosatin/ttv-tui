@@ -210,6 +210,7 @@
   "store.corrupt_notice": "State file corrupted and backed up to .bak — started with empty favorites and recents",
   "store.load_failed_notice": "State file could not be read; started with empty favorites and recents",
   "config.save_failed": "Setting not saved: check config.toml",
+  "config.removed": "Signed out: config.toml was deleted. Run ttv-tui login",
   "cli.unknown_command": "ttv-tui: unknown command %q",
   "cli.unexpected_argument": "ttv-tui login: unexpected argument %q",
   "cli.usage_root": "Usage:\n  ttv-tui doctor [--lang en|pt-BR]\n  ttv-tui [flags]\n  ttv-tui login [--from-browser [--browser <name>] [--profile <name>] | --import twt]\n\nFlags:\n",

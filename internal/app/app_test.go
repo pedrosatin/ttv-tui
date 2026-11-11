@@ -118,6 +118,30 @@ func TestConfigWriterRereadsBeforeSaving(t *testing.T) {
 	}
 }
 
+func TestConfigWriterReportsARemovedConfigOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := config.SaveTo(path, config.Config{Language: "en", AccessToken: "token-at-startup"}); err != nil {
+		t.Fatal(err)
+	}
+	w := &configWriter{path: path, existed: true}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.saveColumns(30, 40, false, false, 70); !errors.Is(err, ui.ErrConfigRemoved) {
+		t.Fatalf("first save after the removal = %v, want ui.ErrConfigRemoved", err)
+	}
+	if err := w.saveFilters([]string{"pt"}, 0); err != nil {
+		t.Fatalf("second save = %v, want nil", err)
+	}
+	got, err := config.LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HasToken() || got.ListColumns != 30 || !slices.Equal(got.FilterLanguages, []string{"pt"}) {
+		t.Fatalf("saved config = %+v, want both changes and no token", got)
+	}
+}
+
 // twoLanguageSource offers one category whose channels speak two languages, so
 // the filter menu has something to toggle.
 type twoLanguageSource struct{}
@@ -229,6 +253,50 @@ func TestConfigOptionsWithPathSaveWhatTheUIChanges(t *testing.T) {
 	}
 	if got.ListColumns != 30 || got.Language != "en" {
 		t.Fatalf("unrelated settings changed: %+v", got)
+	}
+}
+
+// A config removed while the app runs is a logout: the next save writes the
+// change without the token and the status bar says the session is gone.
+func TestConfigOptionsWarnWhenTheConfigWasRemoved(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	cfg := config.Config{Language: "en", AccessToken: "token-at-startup", Username: "early", ListColumns: 30}
+	if err := config.SaveTo(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	opts := configOptions(cfg, path)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	m := toggleEnglishFilter(t, opts)
+
+	cat, err := i18n.New(i18n.LangEN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := m.StatusNotice(), cat.T("config.removed"); got != want {
+		t.Fatalf("status notice = %q, want %q", got, want)
+	}
+	want := config.Default()
+	want.FilterLanguages = []string{"en"}
+	if got := savedConfig(t, path); got != fmt.Sprintf("%+v", want) {
+		t.Fatalf("after the save:\n got %s\nwant %+v", got, want)
+	}
+}
+
+// Without a config at startup the first save creates it, with no notice.
+func TestConfigOptionsCreateAMissingConfigQuietly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	m := toggleEnglishFilter(t, configOptions(config.Config{Language: "en"}, path))
+	if got := m.StatusNotice(); got != "" {
+		t.Fatalf("status notice = %q, want none", got)
+	}
+	got, err := config.LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got.FilterLanguages, []string{"en"}) {
+		t.Fatalf("filter change not saved: %+v", got)
 	}
 }
 

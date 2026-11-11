@@ -313,7 +313,8 @@ func configOptions(cfg config.Config, cfgPath string) []ui.Option {
 		}
 		return append(opts, ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, nil))
 	}
-	w := &configWriter{path: cfgPath}
+	_, err := os.Stat(cfgPath)
+	w := &configWriter{path: cfgPath, existed: err == nil}
 	return []ui.Option{
 		ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, w.saveFilters),
 		ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, w.saveColumns),
@@ -322,20 +323,33 @@ func configOptions(cfg config.Config, cfgPath string) []ui.Option {
 
 // configWriter saves the settings the UI changes while it runs. The lock keeps
 // a filter save and a layout save from rereading the same file and each
-// dropping the other's change.
+// dropping the other's change. existed tells whether the file was there at
+// startup or after the last save.
 type configWriter struct {
-	mu   sync.Mutex
-	path string
+	mu      sync.Mutex
+	path    string
+	existed bool
 }
 
 // update applies change to the config on disk (see rewriteConfig): a `ttv-tui
 // login` in another terminal must not be undone by a change of panel width
 // here. If the config cannot be read, nothing is saved and the UI shows the
-// error; the change still holds for this run.
+// error; the change still holds for this run. A config deleted while the app
+// runs is a logout: the save recreates it without the token and returns
+// ui.ErrConfigRemoved, once per deletion.
 func (w *configWriter) update(change func(*config.Config)) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return rewriteConfig(w.path, change)
+	_, statErr := os.Stat(w.path)
+	removed := w.existed && errors.Is(statErr, os.ErrNotExist)
+	if err := rewriteConfig(w.path, change); err != nil {
+		return err
+	}
+	w.existed = true
+	if removed {
+		return ui.ErrConfigRemoved
+	}
+	return nil
 }
 
 func (w *configWriter) saveFilters(languages []string, minViewers int) error {
