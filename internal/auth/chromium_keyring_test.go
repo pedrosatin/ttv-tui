@@ -16,8 +16,8 @@ func writeChromiumCookieDB(t *testing.T, encrypted []byte) string {
 	path := filepath.Join(t.TempDir(), "Cookies")
 	sql := `CREATE TABLE meta(key TEXT NOT NULL UNIQUE PRIMARY KEY, value TEXT NOT NULL);` +
 		`INSERT INTO meta VALUES('version','24');` +
-		`CREATE TABLE cookies(host_key TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, encrypted_value BLOB NOT NULL);` +
-		`INSERT INTO cookies VALUES('.twitch.tv','auth-token','',X'` + hex.EncodeToString(encrypted) + `');`
+		`CREATE TABLE cookies(creation_utc INTEGER NOT NULL, host_key TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, encrypted_value BLOB NOT NULL);` +
+		`INSERT INTO cookies VALUES(1, '.twitch.tv','auth-token','',X'` + hex.EncodeToString(encrypted) + `');`
 	if out, err := exec.Command("sqlite3", path, sql).CombinedOutput(); err != nil {
 		t.Fatalf("sqlite3: %v: %s", err, out)
 	}

@@ -14,7 +14,8 @@ func extractFirefoxAuthToken(cookiesPath string) (string, error) {
 
 	sql := `SELECT value FROM moz_cookies ` +
 		`WHERE name='auth-token' AND (host='.twitch.tv' OR host='twitch.tv') ` +
-		`LIMIT 1;`
+		// Default container first, then the newest cookie.
+		`ORDER BY originAttributes = '' DESC, creationTime DESC LIMIT 1;`
 	out, err := runSQLite(tmpDB, sql)
 	if err != nil {
 		return "", err

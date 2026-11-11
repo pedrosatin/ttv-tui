@@ -20,7 +20,8 @@ func runSQLiteCLI(dbPath, sql string) (string, error) {
 			Message: "sqlite3 não está no PATH; instale o pacote sqlite para ler o banco de cookies",
 		}
 	}
-	cmd := exec.Command("sqlite3", "-separator", "|", dbPath, sql)
+	// -init skips ~/.sqliterc, whose .headers or .mode would break the parse below.
+	cmd := exec.Command("sqlite3", "-init", os.DevNull, "-list", "-noheader", "-separator", "|", dbPath, sql)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", wrap("sqlite", err, fmt.Sprintf("falha ao consultar %s: %s", dbPath, strings.TrimSpace(string(out))))
@@ -28,9 +29,10 @@ func runSQLiteCLI(dbPath, sql string) (string, error) {
 	return string(out), nil
 }
 
-// copyCookieDB copies a cookie database (and WAL/SHM sidecars when present) into a
-// temporary directory so the browser's lock on the original file is not contested.
-// Never writes to the original. cleanup removes the temp directory.
+// copyCookieDB copies a cookie database and its WAL, SHM and journal sidecars into
+// a temporary directory. Only the copy is opened by sqlite3, so a pending WAL or
+// hot journal is applied to the copy and never to the browser's file. cleanup
+// removes the temp directory.
 func copyCookieDB(src string) (tmpPath string, cleanup func(), err error) {
 	noop := func() {}
 	if src == "" {
@@ -49,24 +51,11 @@ func copyCookieDB(src string) (tmpPath string, cleanup func(), err error) {
 	base := filepath.Base(src)
 	dst := filepath.Join(dir, base)
 
-	// Prefer the SQLite online backup API when sqlite3 is available: it produces a
-	// consistent snapshot even if the browser has the DB open in WAL mode.
-	if _, lookErr := exec.LookPath("sqlite3"); lookErr == nil {
-		backupSQL := fmt.Sprintf(".backup '%s'", strings.ReplaceAll(dst, "'", "''"))
-		cmd := exec.Command("sqlite3", src, backupSQL)
-		if out, backupErr := cmd.CombinedOutput(); backupErr == nil {
-			return dst, cleanup, nil
-		} else {
-			// Fall through to file copy; keep the error only if file copy also fails.
-			_ = out
-		}
-	}
-
 	if err := copyFile(src, dst); err != nil {
 		cleanup()
 		return "", noop, wrap("copy", err, fmt.Sprintf("falha ao copiar %s", src))
 	}
-	for _, suffix := range []string{"-wal", "-shm"} {
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
 		sideSrc := src + suffix
 		if st, statErr := os.Stat(sideSrc); statErr == nil && !st.IsDir() {
 			if cpErr := copyFile(sideSrc, dst+suffix); cpErr != nil {
