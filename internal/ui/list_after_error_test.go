@@ -127,3 +127,31 @@ func TestHydrationWithoutStreamKeepsFavoriteUnverified(t *testing.T) {
 	}
 	t.Fatalf("alpha not in the list: %v", visibleLogins(m.VisibleItems()))
 }
+
+// With the filter open, the arrows go through the filter handler. They must
+// not move the highlight under the error either.
+func TestFilterArrowsIgnoreRowsHiddenByLoadError(t *testing.T) {
+	m := listErrorModel(t, i18n.LangEN)
+	m.setHighlightToItem(m.VisibleItems(), 1)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updated.(Model)
+	if !m.list.filtering {
+		t.Fatal("fixture: filter not open")
+	}
+	updated, _ = m.Update(CategoriesLoadedMsg{Generation: m.list.generation, Err: loadFailure()})
+	m = updated.(Model)
+	if m.list.err == nil {
+		t.Fatal("fixture: list error not set")
+	}
+	before := m.HighlightedID()
+
+	for _, k := range []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyUp}} {
+		moved, cmd := m.Update(k)
+		if got := moved.(Model).HighlightedID(); got != before {
+			t.Errorf("%s in the filter moved the highlight under the error: %q -> %q", k, before, got)
+		}
+		if cmd != nil {
+			t.Errorf("%s in the filter under the error returned a command", k)
+		}
+	}
+}

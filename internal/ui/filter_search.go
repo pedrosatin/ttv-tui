@@ -87,11 +87,14 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.list.search.input = ""
 		return m, nil
 
-	case msg.Type == tea.KeyUp:
-		m.moveHighlight(-1)
-		return m, nil
-
-	case msg.Type == tea.KeyDown:
+	case msg.Type == tea.KeyUp, msg.Type == tea.KeyDown:
+		if m.list.err != nil {
+			return m, nil
+		}
+		if msg.Type == tea.KeyUp {
+			m.moveHighlight(-1)
+			return m, nil
+		}
 		m.moveHighlight(1)
 		if m.shouldLoadNextPage() {
 			m.list.generation++
