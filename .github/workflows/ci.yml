@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Install build dependencies
-        run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd mesa
+        run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd mesa ttf-dejavu
 
       - name: Checkout repository
         uses: actions/checkout@v4
