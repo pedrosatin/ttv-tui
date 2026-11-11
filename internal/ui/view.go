@@ -63,10 +63,11 @@ func fitListRow(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return s
 	}
-	if maxWidth > 1 && hasWideRune(s) && !exactCellWidths {
+	wide := hasWideRune(s) && !exactCellWidths
+	if wide && maxWidth > 1 {
 		maxWidth--
 	}
-	if !hasWideRune(s) || exactCellWidths {
+	if !wide {
 		return TruncateVisual(s, maxWidth)
 	}
 	s = strings.ReplaceAll(s, listRowEmDash, "-")
@@ -250,7 +251,7 @@ func (m Model) splitRows(listW, chatW, available int, overlayLines []string) []s
 		if i < len(chatLines) {
 			right = chatLines[i]
 		}
-		leftCell := fitScreenLines(padOrTruncateVisual(left, listW), listW)
+		leftCell := padOrTruncateVisual(left, listW)
 		rightCell := fitScreenLines(padOrTruncateVisual(right, chatW), chatW)
 		combined = append(combined, leftCell+panelSeparator+rightCell)
 	}

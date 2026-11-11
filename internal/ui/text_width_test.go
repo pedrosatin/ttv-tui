@@ -86,7 +86,7 @@ func TestNormalizeScreenText(t *testing.T) {
 func TestWideScreenLineHasSpareCell(t *testing.T) {
 	for _, width := range []int{80, 120} {
 		for _, text := range []string{"🫶", "漢"} {
-			line := text + strings.Repeat("x", width)
+			line := padOrTruncateVisual(text, width)
 			got := fitScreenLines(line, width)
 			if ansi.StringWidth(got) != width-1 {
 				t.Fatalf("got %d cells, want %d", ansi.StringWidth(got), width-1)
@@ -154,5 +154,47 @@ func TestSinhalaWithZWJPreservesText(t *testing.T) {
 	got := normalizeScreenText(sinhala)
 	if !strings.Contains(got, "ර") {
 		t.Fatalf("normalizeScreenText(%q) = %q, want consonant ර (U+0DBB) preserved", sinhala, got)
+	}
+}
+
+func TestPanelSeparatorColumnAlignedWithWideRunesInList(t *testing.T) {
+	for _, width := range []int{80, 100} {
+		t.Run(fmt.Sprintf("%dx24", width), func(t *testing.T) {
+			m, _, _ := setupTwoPanelModel(t)
+			m = resize(m, width, 24)
+			title1 := "🔥 " + strings.Repeat("x", 20)
+			title2 := "日本語 " + strings.Repeat("x", 20)
+			m.list.channels = []twitch.Channel{
+				{ID: "1", Login: "streamer1", DisplayName: "streamer1", Title: &title1, Viewers: twitch.IntPtr(10)},
+				{ID: "2", Login: "streamer2", DisplayName: "streamer2", Title: &title2, Viewers: twitch.IntPtr(20)},
+				{ID: "3", Login: "streamer3", DisplayName: "streamer3", Viewers: twitch.IntPtr(5)},
+			}
+			url := "https://example.com/123456789"
+			m = withChatMessages(t, m, ChatMessage{
+				Kind:        chat.MessageChat,
+				ID:          "m1",
+				User:        "u",
+				DisplayName: "u",
+				Body:        url,
+			})
+			view := ansi.Strip(m.View())
+			rows := strings.Split(view, "\n")
+			sepCol := -1
+			for i, row := range rows {
+				idx := strings.Index(row, "│")
+				if idx == -1 {
+					continue
+				}
+				col := ansi.StringWidth(row[:idx])
+				if sepCol == -1 {
+					sepCol = col
+				} else if col != sepCol {
+					t.Fatalf("row %d has separator at col %d, want col %d:\n%s", i, col, sepCol, view)
+				}
+			}
+			if sepCol == -1 {
+				t.Fatal("no separator found in view")
+			}
+		})
 	}
 }

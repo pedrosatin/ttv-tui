@@ -76,8 +76,6 @@ func fitScreenLines(view string, width int) string {
 			}
 			if ansi.StringWidth(strings.TrimRight(ansi.Strip(row), " ")) < width {
 				rows[i] = ansi.Truncate(row, width-1, "")
-			} else if ansi.StringWidth(row) > width {
-				rows[i] = TruncateVisual(row, width-1)
 			}
 		}
 	}
