@@ -109,6 +109,7 @@ func TestFallbackRejectsSharedDirectory(t *testing.T) {
 	if err := os.Mkdir(dir, 0o777); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	if err := os.Chmod(dir, 0o777); err != nil {
 		t.Fatal(err)
 	}
