@@ -92,8 +92,10 @@ type Source interface {
 	// ChannelsByLogins returns identity and Availability for the given logins,
 	// in as many upstream batches as needed. Empty logins yields an empty result with
 	// no network call. Logins that do not resolve are omitted so callers keep
-	// AvailabilityUnknown. stream:null is AvailabilityOffline; a stream object
-	// is AvailabilityLive with viewers/title when present.
+	// AvailabilityUnknown. stream:null without an error is AvailabilityOffline.
+	// A null stream with an error on the same item stays AvailabilityUnknown;
+	// it is not evidence of offline. A stream object is AvailabilityLive with
+	// viewers/title when present.
 	ChannelsByLogins(ctx context.Context, logins []string) ([]Channel, error)
 }
 

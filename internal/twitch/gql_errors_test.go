@@ -104,7 +104,7 @@ func TestGraphQLServiceTimeoutIsRetried(t *testing.T) {
 
 func TestGraphQLPartialErrorKeepsTheRest(t *testing.T) {
 	t.Run("search", func(t *testing.T) {
-		src, _ := newFixtureSource(t, searchPartialFixture)
+		src, calls := newFixtureSource(t, searchPartialFixture)
 		page, err := src.Search(context.Background(), "gaules")
 		if err != nil {
 			t.Fatalf("Search with a nested error: %v", err)
@@ -126,10 +126,13 @@ func TestGraphQLPartialErrorKeepsTheRest(t *testing.T) {
 				t.Fatalf("%s availability = %v, want %v (items=%+v)", login, got[login], av, page.Items)
 			}
 		}
+		if got := atomic.LoadInt32(calls); got != 2 {
+			t.Fatalf("attempts = %d, want 2", got)
+		}
 	})
 
 	t.Run("search categories", func(t *testing.T) {
-		src, _ := newFixtureSource(t, searchCategoriesPartialFixture)
+		src, calls := newFixtureSource(t, searchCategoriesPartialFixture)
 		got, err := src.SearchCategories(context.Background(), "valorant")
 		if err != nil {
 			t.Fatalf("SearchCategories with a nested error: %v", err)
@@ -137,10 +140,13 @@ func TestGraphQLPartialErrorKeepsTheRest(t *testing.T) {
 		if len(got) != 1 || got[0].Name != "VALORANT" {
 			t.Fatalf("got = %+v, want only VALORANT", got)
 		}
+		if got := atomic.LoadInt32(calls); got != 2 {
+			t.Fatalf("attempts = %d, want 2", got)
+		}
 	})
 
 	t.Run("saved logins", func(t *testing.T) {
-		src, _ := newFixtureSource(t, usersPartialFixture)
+		src, calls := newFixtureSource(t, usersPartialFixture)
 		got, err := src.ChannelsByLogins(context.Background(), []string{"um", "dois"})
 		if err != nil {
 			t.Fatalf("ChannelsByLogins with a nested error: %v", err)
@@ -153,6 +159,9 @@ func TestGraphQLPartialErrorKeepsTheRest(t *testing.T) {
 		}
 		if got[1].Availability != AvailabilityOffline {
 			t.Fatalf("dois availability = %v, want offline", got[1].Availability)
+		}
+		if got := atomic.LoadInt32(calls); got != 2 {
+			t.Fatalf("attempts = %d, want 2", got)
 		}
 	})
 }
@@ -240,5 +249,94 @@ func TestChannelsByLoginsSplitsIntoBatchesOf100(t *testing.T) {
 		if ch.Login != logins[i] || ch.Availability != AvailabilityOffline {
 			t.Fatalf("got[%d] = %+v, want %s offline", i, ch, logins[i])
 		}
+	}
+}
+
+func TestGraphQLPermanentTimeoutFieldIsNotRetried(t *testing.T) {
+	src, calls := newFixtureSource(t, `{"errors":[{"message":"Cannot query field \"requestTimeout\" on type \"Query\"."}]}`)
+	_, err := src.Search(context.Background(), "gaules")
+	if KindOf(err) != Contrato {
+		t.Fatalf("error = %v, want Contrato", err)
+	}
+	if got := atomic.LoadInt32(calls); got != 1 {
+		t.Fatalf("attempts = %d, want 1", got)
+	}
+}
+
+func TestGraphQLPartialPermanentErrorIsNotRetried(t *testing.T) {
+	src, calls := newFixtureSource(t, strings.ReplaceAll(searchPartialFixture, "service timeout", "resolver failed"))
+	page, err := src.Search(context.Background(), "gaules")
+	if err != nil || len(page.Items) != 3 {
+		t.Fatalf("items = %+v, error = %v", page.Items, err)
+	}
+	if got := atomic.LoadInt32(calls); got != 1 {
+		t.Fatalf("attempts = %d, want 1", got)
+	}
+}
+
+func TestGraphQLPartialErrorPathIndex(t *testing.T) {
+	for _, tc := range []struct {
+		name, index string
+		want        ErrorKind
+	}{
+		{"numeric string", `"0"`, ""},
+		{"out of range", "2", Contrato},
+		{"out of range string", `"2"`, Contrato},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.ReplaceAll(usersPartialFixture, "service timeout", "resolver failed")
+			body = strings.Replace(body, `["users",0,"stream"]`, `["users",`+tc.index+`,"stream"]`, 1)
+			src, calls := newFixtureSource(t, body)
+			items, err := src.ChannelsByLogins(context.Background(), []string{"um", "dois"})
+			if KindOf(err) != tc.want {
+				t.Fatalf("error = %v, want %s", err, tc.want)
+			}
+			if tc.want == "" && (len(items) != 2 || items[0].Availability != AvailabilityUnknown) {
+				t.Fatalf("items = %+v, want first unknown", items)
+			}
+			if tc.want != "" && len(items) != 0 {
+				t.Fatalf("items = %+v, want none", items)
+			}
+			if got := atomic.LoadInt32(calls); got != 1 {
+				t.Fatalf("attempts = %d, want 1", got)
+			}
+		})
+	}
+}
+
+func TestGraphQLPartialTimeoutRetriesAllLists(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		call       func(*GQLSource) error
+	}{
+		{"categories", `{"errors":[{"message":"SERVICE TIMEOUT","path":["games","edges",0,"node","viewersCount"]}],"data":{"games":{"edges":[{"node":{"id":"1","name":"Game"}}],"pageInfo":{}}}}`, func(s *GQLSource) error {
+			_, err := s.Categories(context.Background(), PageRequest{Limit: 20})
+			return err
+		}},
+		{"channels", `{"errors":[{"message":"service timeout","path":["game","streams","edges",0,"node","viewersCount"]}],"data":{"game":{"id":"1","name":"Game","streams":{"edges":[{"node":{"id":"s1","broadcaster":{"id":"1","login":"um","displayName":"Um"}}}],"pageInfo":{}}}}}`, func(s *GQLSource) error {
+			_, err := s.Channels(context.Background(), "1", PageRequest{Limit: 20})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src, calls := newFixtureSource(t, tc.body)
+			if err := tc.call(src); err != nil {
+				t.Fatal(err)
+			}
+			if got := atomic.LoadInt32(calls); got != 2 {
+				t.Fatalf("attempts = %d, want 2", got)
+			}
+		})
+	}
+}
+
+func TestGraphQLPartialTimeoutRetryReturnsFreshData(t *testing.T) {
+	src, calls := newFixtureSource(t, searchPartialFixture, searchOKFixture)
+	page, err := src.Search(context.Background(), "gaules")
+	if err != nil || len(page.Items) != 1 || page.Items[0].Login != "gaules" {
+		t.Fatalf("items = %+v, error = %v, want only gaules", page.Items, err)
+	}
+	if got := atomic.LoadInt32(calls); got != 2 {
+		t.Fatalf("attempts = %d, want 2", got)
 	}
 }

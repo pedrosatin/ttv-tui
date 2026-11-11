@@ -287,7 +287,7 @@ func gqlErrorsFailure(op string, errs []gqlErrorItem) *Error {
 	}
 	kind := Contrato
 	for _, e := range errs {
-		if strings.Contains(strings.ToLower(e.Message), "timeout") {
+		if strings.EqualFold(e.Message, "service timeout") {
 			kind = Servidor
 		}
 	}
@@ -300,7 +300,7 @@ func gqlErrorsFailure(op string, errs []gqlErrorItem) *Error {
 
 // erroredItems returns the list positions an error path points into: under
 // prefix ["users"], the path ["users", 3, "stream"] marks 3.
-func erroredItems(errs []gqlErrorItem, prefix ...string) map[int]bool {
+func erroredItems(op string, errs []gqlErrorItem, size int, prefix ...string) (map[int]bool, *Error) {
 	out := map[int]bool{}
 	for _, e := range errs {
 		if len(e.Path) <= len(prefix) {
@@ -313,11 +313,31 @@ func erroredItems(errs []gqlErrorItem, prefix ...string) map[int]bool {
 				break
 			}
 		}
-		if n, ok := e.Path[len(prefix)].(float64); match && ok {
-			out[int(n)] = true
+		if !match {
+			continue
 		}
+		var index int
+		switch n := e.Path[len(prefix)].(type) {
+		case float64:
+			index = int(n)
+			if float64(index) != n {
+				return nil, &Error{Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %v", n)}
+			}
+		case string:
+			var err error
+			index, err = strconv.Atoi(n)
+			if err != nil {
+				return nil, &Error{Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %q: %w", n, err)}
+			}
+		default:
+			return nil, &Error{Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %v", n)}
+		}
+		if index < 0 || index >= size {
+			return nil, &Error{Kind: Contrato, Op: op, Err: fmt.Errorf("error path index %d outside list of size %d", index, size)}
+		}
+		out[index] = true
 	}
-	return out
+	return out, nil
 }
 
 type gqlCategoriesResponse struct {
@@ -752,7 +772,21 @@ func executeWithRetry[T any](
 ) (Page[T], *Error) {
 	var lastErr *Error
 	for attempt := 0; attempt < 2; attempt++ {
-		res, reqErr := doAttempt(s, ctx, op, payload, parse)
+		res, reqErr := doAttempt(s, ctx, op, payload, func(body []byte) (Page[T], *Error) {
+			// Retry resolver timeouts once even when the response also has data.
+			// The final attempt uses the parser's partial-data handling.
+			if attempt == 0 {
+				var envelope struct {
+					Errors []gqlErrorItem `json:"errors"`
+				}
+				if json.Unmarshal(body, &envelope) == nil && len(envelope.Errors) > 0 {
+					if err := gqlErrorsFailure(op, envelope.Errors); err.Kind == Servidor {
+						return Page[T]{}, err
+					}
+				}
+			}
+			return parse(body)
+		})
 		if reqErr == nil {
 			return res, nil
 		}
@@ -906,6 +940,9 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (Page[Category], *Error
 	}
 
 	edges := gqlResp.Data.Games.Edges
+	if _, pathErr := erroredItems(op, gqlResp.Errors, len(edges), "games", "edges"); pathErr != nil {
+		return Page[Category]{}, pathErr
+	}
 	items := make([]Category, 0, len(edges))
 	var lastCursor string
 	for i, edge := range edges {
@@ -998,6 +1035,9 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 	}
 
 	edges := gqlResp.Data.Game.Streams.Edges
+	if _, pathErr := erroredItems(op, gqlResp.Errors, len(edges), "game", "streams", "edges"); pathErr != nil {
+		return Page[Channel]{}, pathErr
+	}
 	items := make([]Channel, 0, len(edges))
 	var lastCursor string
 	for i, edge := range edges {
@@ -1100,7 +1140,10 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 	}
 
 	edges := gqlResp.Data.SearchFor.Channels.Edges
-	errored := erroredItems(gqlResp.Errors, "searchFor", "channels", "edges")
+	errored, pathErr := erroredItems(op, gqlResp.Errors, len(edges), "searchFor", "channels", "edges")
+	if pathErr != nil {
+		return Page[Channel]{}, pathErr
+	}
 	items := make([]Channel, 0, len(edges))
 	for i, edge := range edges {
 		if errored[i] {
@@ -1177,7 +1220,10 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], 
 	}
 
 	edges := gqlResp.Data.SearchFor.Games.Edges
-	errored := erroredItems(gqlResp.Errors, "searchFor", "games", "edges")
+	errored, pathErr := erroredItems(op, gqlResp.Errors, len(edges), "searchFor", "games", "edges")
+	if pathErr != nil {
+		return Page[Category]{}, pathErr
+	}
 	items := make([]Category, 0, len(edges))
 	for i, edge := range edges {
 		if edge.Item == nil && errored[i] {
@@ -1244,7 +1290,10 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Err
 		}
 	}
 
-	errored := erroredItems(gqlResp.Errors, "users")
+	errored, pathErr := erroredItems(op, gqlResp.Errors, len(gqlResp.Data.Users), "users")
+	if pathErr != nil {
+		return Page[Channel]{}, pathErr
+	}
 	items := make([]Channel, 0, len(gqlResp.Data.Users))
 	for i, user := range gqlResp.Data.Users {
 		if user == nil {
