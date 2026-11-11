@@ -262,22 +262,19 @@ func (m Model) appendFavorites(items []ListItem, p itemPass) []ListItem {
 		if fav.ID == "" && fav.Login == "" {
 			continue
 		}
-		if p.isSeen(fav) {
-			continue
-		}
 		ch, avail := m.resolveSaved(fav)
 		if p.isSeen(ch) || !p.passes(ch) {
 			continue
 		}
 		items = append(items, channelItem(ItemTypeFavorite, ch, avail))
-		p.markSeen(fav)
 		p.markSeen(ch)
 	}
 	return items
 }
 
 // appendRecents appends the recents that are not favorites. The seen check
-// runs on the stored channel; the seen mark comes from the resolved one.
+// runs on the stored channel and on the resolved one; the seen mark comes
+// from the resolved one.
 func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 	for _, rec := range m.list.recents {
 		if rec.ID == "" && rec.Login == "" {
@@ -291,7 +288,6 @@ func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 			continue
 		}
 		items = append(items, channelItem(ItemTypeRecent, ch, avail))
-		p.markSeen(rec)
 		p.markSeen(ch)
 	}
 	return items
@@ -332,9 +328,6 @@ func appendCategories(items []ListItem, cats []twitch.Category, p itemPass) []Li
 // channels the search query names exactly.
 func (m Model) appendListed(items []ListItem, p itemPass, itemType ListItemType) []ListItem {
 	for _, ch := range m.list.channels {
-		if ch.ID == "" && ch.Login == "" {
-			continue
-		}
 		if itemType == ItemTypeExactChannel && !twitch.ExactChannelMatch(m.list.search.query, ch) {
 			continue
 		}
