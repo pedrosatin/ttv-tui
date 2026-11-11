@@ -158,6 +158,10 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		// The player was already stopped for the exit; nothing would stop this one.
 		return m, nil
 	}
+	if msg.Enter != m.list.enters {
+		// A later Enter chose another row; its message is the selection.
+		return m, nil
+	}
 	selected := msg.Channel
 	m.list.selectedChannel = &selected
 	m.clearStaleStatusErrors()
@@ -176,9 +180,10 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		m.player.lastLine = ""
 		m.player.failure = PlayerFailureNone
 		m.player.breakElapsed = 0
-		m.player.switching = true
+		m.player.selection++
+		m.player.awaiting = m.player.selection
 		m.player.stopAfterStart = false
-		cmds = append(cmds, m.playback.Start(selected.Login))
+		cmds = append(cmds, m.playback.Start(selected.Login, m.player.selection))
 	}
 	if m.chat.session != nil || m.chat.panel.channel != "" {
 		if chatCmd := m.startChatChannel(selected.Login); chatCmd != nil {
@@ -216,7 +221,7 @@ func (m Model) applyConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 // to a playback the model already left.
 func (m Model) applyPlayerStatus(msg PlayerStatusMsg) (tea.Model, tea.Cmd) {
 	var stop tea.Cmd
-	if msg.FromStart && m.player.switching && m.player.stopAfterStart {
+	if msg.Selection != 0 && msg.Selection == m.player.awaiting && m.player.stopAfterStart {
 		// The Stop reply was dropped with the switch; this Start may have
 		// attached after it ran.
 		m.player.stopAfterStart = false
@@ -246,14 +251,14 @@ func (m Model) applyPlayerStatus(msg PlayerStatusMsg) (tea.Model, tea.Cmd) {
 }
 
 // acceptPlayerStatus tracks the playback generation and reports whether msg is
-// current. While switching channels only the event that opens the new playback
-// passes.
+// current. While switching channels only the reply to the Start of the latest
+// selection passes, and a Start reply passes only then.
 func (m *Model) acceptPlayerStatus(msg PlayerStatusMsg) bool {
-	if m.player.switching {
-		if !msg.FromStart {
+	if m.player.awaiting != 0 || msg.Selection != 0 {
+		if msg.Selection != m.player.awaiting {
 			return false
 		}
-		m.player.switching = false
+		m.player.awaiting = 0
 		m.player.gen = msg.Generation
 	} else if msg.Generation != 0 && m.player.gen != 0 && msg.Generation < m.player.gen {
 		// Stale generation from a previous channel — discard.

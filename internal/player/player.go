@@ -168,6 +168,8 @@ type Manager struct {
 	// stopGen is the generation the last Stop left; a Start older than it was
 	// overtaken by that Stop.
 	stopGen uint64
+	// order is the highest order a StartInOrder has begun with.
+	order uint64
 	// inputConfErr is the last input.conf write failure, for the exit log.
 	inputConfErr error
 	// keptLogin and keptVolume are the channel of the last session to end and the
@@ -252,6 +254,18 @@ func (m *Manager) Generation() uint64 {
 // no other Start is spawning, so two players never run at once. A Stop, Close
 // or newer Start that comes first cancels it.
 func (m *Manager) Start(login string) (uint64, error) {
+	return m.start(login, 0)
+}
+
+// StartInOrder is Start for a caller whose requests may reach the Manager out
+// of order. order grows with each request; a Start that comes after one with a
+// higher order is superseded at once and spawns nothing.
+func (m *Manager) StartInOrder(login string, order uint64) (uint64, error) {
+	return m.start(login, order)
+}
+
+// start is Start, ordered when order is not 0.
+func (m *Manager) start(login string, order uint64) (uint64, error) {
 	if login == "" {
 		return 0, fmt.Errorf("player: empty channel login")
 	}
@@ -260,6 +274,13 @@ func (m *Manager) Start(login string) (uint64, error) {
 	if m.closing {
 		m.mu.Unlock()
 		return 0, fmt.Errorf("player: manager closed")
+	}
+	if order != 0 {
+		if order < m.order {
+			m.mu.Unlock()
+			return 0, fmt.Errorf("player: superseded before attach")
+		}
+		m.order = order
 	}
 	prev := m.session
 	m.session = nil
@@ -405,6 +426,23 @@ func (m *Manager) checkTools() error {
 // therefore cannot leave a player behind.
 func (m *Manager) Stop() {
 	m.mu.Lock()
+	m.stopLocked()
+}
+
+// StopGeneration is Stop for a caller that read generation gen. It does nothing
+// once a newer Start or Stop has taken over: a Stop asked for before a play
+// must not take that play down.
+func (m *Manager) StopGeneration(gen uint64) {
+	m.mu.Lock()
+	if gen < m.gen {
+		m.mu.Unlock()
+		return
+	}
+	m.stopLocked()
+}
+
+// stopLocked is Stop for a caller that holds m.mu. It releases m.mu.
+func (m *Manager) stopLocked() {
 	m.gen++
 	m.stopGen = m.gen
 	sess := m.session

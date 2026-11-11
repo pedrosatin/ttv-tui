@@ -49,9 +49,10 @@ type PlayerStatusMsg struct {
 	// Failure classifies a PlayerStateError message; LastLine keeps the
 	// original line as technical detail.
 	Failure PlayerFailure
-	// FromStart marks the handshake message returned by Playback.Start so the
-	// UI can ignore in-flight pump events from the previous channel.
-	FromStart bool
+	// Selection is set only on the reply of Playback.Start: the selection it
+	// was asked for. During a switch the UI takes only the reply of the latest
+	// one, and ignores pump events from the previous channel.
+	Selection uint64
 	// InputConfFailed marks a playback whose mpv window ignores keys because its
 	// key file could not be written. The TUI controls keep working.
 	InputConfFailed bool
@@ -65,8 +66,10 @@ type PlayerStatusMsg struct {
 // (forwarded by the app from the player event pump).
 type Playback interface {
 	// Start begins playback for login (stopping any previous session) and
-	// returns a Cmd that yields an initial PlayerStatusMsg.
-	Start(login string) tea.Cmd
+	// returns a Cmd that yields an initial PlayerStatusMsg carrying selection.
+	// selection grows with each call; a Start that reaches the player after a
+	// newer one is superseded.
+	Start(login string, selection uint64) tea.Cmd
 	// Stop ends the active playback and returns a Cmd that yields a terminal status.
 	Stop() tea.Cmd
 	// TogglePause flips pause on the active playback. Status arrives via PlayerStatusMsg.
@@ -230,9 +233,10 @@ func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
 	m.player.failure = PlayerFailureNone
 	m.player.lastLine = ""
 	m.player.breakElapsed = 0
-	m.player.switching = true
+	m.player.selection++
+	m.player.awaiting = m.player.selection
 	m.player.stopAfterStart = false
-	return m, m.playback.Start(login)
+	return m, m.playback.Start(login, m.player.selection)
 }
 
 func clampPlayerVolume(v int) int {

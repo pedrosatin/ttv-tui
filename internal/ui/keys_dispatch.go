@@ -85,7 +85,7 @@ func (m Model) keyStopVideo() (tea.Model, tea.Cmd) {
 	if m.player.state == PlayerStateNone || m.player.state == PlayerStateEnded {
 		return m, nil
 	}
-	m.player.stopAfterStart = m.player.switching
+	m.player.stopAfterStart = m.player.awaiting != 0
 	return m, m.playback.Stop()
 }
 

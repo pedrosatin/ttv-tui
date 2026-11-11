@@ -745,10 +745,12 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		// the list are visible again; the user did not ask to stay filtered.
 		m.list.filter = ""
 		m.list.filtering = false
+		m.list.enters++
+		enter := m.list.enters
 		// Recents are queued for the store in ChannelSelectedMsg; the visible
 		// order stays frozen so Enter does not land on a shifted row.
 		return m, func() tea.Msg {
-			return ChannelSelectedMsg{Channel: selected}
+			return ChannelSelectedMsg{Channel: selected, Enter: enter}
 		}
 	}
 }

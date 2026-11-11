@@ -77,6 +77,9 @@ type CategorySelectedMsg struct {
 // ChannelSelectedMsg is emitted when the user presses Enter on a highlighted channel.
 type ChannelSelectedMsg struct {
 	Channel twitch.Channel
+	// Enter is the count of Enters on a channel row up to this one. A message
+	// from an earlier Enter that arrives after a later one is dropped.
+	Enter uint64
 }
 
 type requestTracker struct {
@@ -227,6 +230,8 @@ type listState struct {
 	focusResults     bool   // next channel/search load highlights its first result; see settleHighlightAfterLoad
 	selectedCategory *twitch.Category
 	selectedChannel  *twitch.Channel
+	// enters counts Enter on a channel row; see ChannelSelectedMsg.Enter.
+	enters uint64
 
 	favorites []twitch.Channel
 	recents   []twitch.Channel
@@ -264,8 +269,11 @@ type channelPrefs struct {
 
 // playbackState is what the UI knows about the Player.
 type playbackState struct {
-	gen          uint64
-	switching    bool
+	gen uint64
+	// selection numbers the Starts asked for (channel chosen, r). awaiting is
+	// the one whose reply the UI waits for during a switch, 0 when none.
+	selection    uint64
+	awaiting     uint64
 	state        PlayerState
 	login        string
 	lastLine     string
