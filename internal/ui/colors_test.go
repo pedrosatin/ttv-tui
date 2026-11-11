@@ -502,3 +502,32 @@ func TestColorizeHelpLegendUnicodeByteShift(t *testing.T) {
 		})
 	}
 }
+
+// Every legend term is painted with its own color, in any case. A term added to
+// the regexp without a paint would make View panic.
+func TestColorizeHelpLegendPaintsEveryTerm(t *testing.T) {
+	forceOrientationColorsForTest(true)
+	defer forceOrientationColorsForTest(false)
+
+	want := map[string]func(string) string{
+		"amarelo": styleFavorite, "vermelho": styleError, "magenta": styleSystem,
+		"menção": styleMention, "mention": styleMention, "yellow": styleFavorite,
+		"green": styleLive, "verde": styleLive, "ciano": styleFocus, "cyan": styleFocus,
+		"red": styleError,
+	}
+	if len(want) != len(legendPaints) {
+		t.Fatalf("legend has %d paints, test expects %d", len(legendPaints), len(want))
+	}
+	for term, paint := range want {
+		for _, in := range []string{term, strings.ToUpper(term)} {
+			if got := colorizeHelpLegend(in); got != paint(in) {
+				t.Errorf("colorizeHelpLegend(%q) = %q, want %q", in, got, paint(in))
+			}
+		}
+	}
+	for _, alt := range strings.Split(strings.TrimPrefix(legendTerms.String(), "(?i)"), "|") {
+		if legendPaints[alt] == nil {
+			t.Errorf("legend term %q has no paint", alt)
+		}
+	}
+}
