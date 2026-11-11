@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +14,53 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/auth"
 	"github.com/pedrosatin/ttv-tui/internal/config"
 )
+
+func TestCLIEnvironmentIsolation(t *testing.T) {
+	if root := os.Getenv("TTV_TEST_INHERITED_HOME"); root != "" {
+		var stdout, stderr bytes.Buffer
+		if code := run([]string{"--help"}, &stdout, &stderr); code != 0 {
+			t.Fatalf("--help exit code = %d", code)
+		}
+		if !strings.Contains(stdout.String(), "Usage:") {
+			t.Error("run leu o config herdado do HOME falso ou do XDG externo")
+		}
+		for _, name := range []string{"HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"} {
+			if value := os.Getenv(name); value == "" || strings.HasPrefix(value, root) {
+				t.Errorf("%s não foi isolado antes dos testes", name)
+			}
+		}
+		return
+	}
+
+	root := t.TempDir()
+	for _, name := range []string{"HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"} {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(name, dir)
+	}
+	// Configs sentinela tornam a leitura do ambiente herdado observável no help.
+	for _, base := range []string{os.Getenv("XDG_CONFIG_HOME"), filepath.Join(os.Getenv("HOME"), ".config")} {
+		cfg := config.Default()
+		cfg.Language = "pt-BR"
+		if err := config.SaveTo(filepath.Join(base, "ttv-tui", "config.toml"), cfg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("TTV_TEST_INHERITED_HOME", root)
+	t.Setenv("LC_ALL", "en_US.UTF-8")
+	t.Setenv("LC_MESSAGES", "en_US.UTF-8")
+	t.Setenv("LANG", "en_US.UTF-8")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(executable, "-test.run=^TestCLIEnvironmentIsolation$", "-test.v")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("subprocesso sem isolamento: %v\n%s", err, output)
+	}
+}
 
 func TestCLIVersionAndLoginNeverPrintToken(t *testing.T) {
 	dir := t.TempDir()
@@ -92,6 +140,16 @@ func TestCLIVersionAndLoginNeverPrintToken(t *testing.T) {
 	}
 
 	// 3. ttv-tui --version never prints token even when config exists
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	versionConfigPath, err := config.DefaultPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	versionConfig := config.Default()
+	versionConfig.AccessToken = secretTwt
+	if err := config.SaveTo(versionConfigPath, versionConfig); err != nil {
+		t.Fatal(err)
+	}
 	stdout.Reset()
 	stderr.Reset()
 	code = run([]string{"--version"}, &stdout, &stderr)
