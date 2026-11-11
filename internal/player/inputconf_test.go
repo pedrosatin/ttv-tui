@@ -2,7 +2,6 @@ package player
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -226,10 +225,14 @@ func TestSharedFallbackDirectory(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", t.TempDir())
 	base := t.TempDir()
 	defer setFallbackBaseDirForTest(base)()
-	dir := filepath.Join(base, fmt.Sprintf("ttv-tui-%d-1", os.Getpid()))
+	dir, _, err := fallbackLocation(1)
+	if err != nil {
+		t.Fatalf("fallbackLocation: %v", err)
+	}
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatalf("Mkdir: %v", err)
 	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	if err := os.Chmod(dir, 0o755); err != nil {
 		t.Fatalf("Chmod: %v", err)
 	}
