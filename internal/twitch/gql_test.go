@@ -875,7 +875,7 @@ func TestSearchFixturesSuccessEmptyAndErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("429 RateLimit, 500 Servidor, partial JSON Contrato, and IntegrityCheckFailed", func(t *testing.T) {
+	t.Run("429 RateLimit, 500 Servidor, partial JSON Contrato, and IntegrityCheckFailed Contrato", func(t *testing.T) {
 		baseNow := time.Date(2026, 11, 3, 22, 0, 0, 0, time.UTC)
 		resetUnix := baseNow.Add(5 * time.Second).Unix()
 
@@ -959,7 +959,7 @@ func TestSearchFixturesSuccessEmptyAndErrors(t *testing.T) {
 			})
 		}
 
-		// IntegrityCheckFailed -> empty page without error
+		// IntegrityCheckFailed: a busca não pagina, então é erro visível e não "sem resultados".
 		srvIntegrity := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"errors":[{"message":"failed integrity check","extensions":{"code":"IntegrityCheckFailed"}}],"data":{"searchFor":null}}`))
@@ -970,12 +970,8 @@ func TestSearchFixturesSuccessEmptyAndErrors(t *testing.T) {
 			Endpoint:   srvIntegrity.URL,
 			HTTPClient: srvIntegrity.Client(),
 		})
-		page, err := srcIntegrity.Search(context.Background(), "gaules")
-		if err != nil {
-			t.Fatalf("IntegrityCheckFailed error = %v, want nil", err)
-		}
-		if len(page.Items) != 0 || page.HasMore {
-			t.Fatalf("IntegrityCheckFailed page = %+v, want empty", page)
+		if _, err := srcIntegrity.Search(context.Background(), "gaules"); KindOf(err) != Contrato {
+			t.Fatalf("IntegrityCheckFailed KindOf(err) = %q, want %q (err=%v)", KindOf(err), Contrato, err)
 		}
 	})
 }

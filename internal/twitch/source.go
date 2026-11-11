@@ -89,8 +89,8 @@ type Source interface {
 	// paginated: Twitch returns one relevance window. PreferSearchCategories
 	// reorders hits (exact name, then viewers) before return.
 	SearchCategories(ctx context.Context, query string) ([]Category, error)
-	// ChannelsByLogins returns identity and Availability for the given logins
-	// in a single upstream request. Empty logins yields an empty result with
+	// ChannelsByLogins returns identity and Availability for the given logins,
+	// in as many upstream batches as needed. Empty logins yields an empty result with
 	// no network call. Logins that do not resolve are omitted so callers keep
 	// AvailabilityUnknown. stream:null is AvailabilityOffline; a stream object
 	// is AvailabilityLive with viewers/title when present.
