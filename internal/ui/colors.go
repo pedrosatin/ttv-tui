@@ -298,28 +298,30 @@ func (c chatState) mentionsSelf(body string) bool {
 // Longest terms come first so a shorter alternative cannot win at the same index.
 var legendTerms = regexp.MustCompile(`(?i)vermelho|amarelo|magenta|mention|menção|yellow|green|verde|ciano|cyan|red`)
 
+// legendPaints holds one entry per legendTerms alternative, keyed in lower case.
+var legendPaints = map[string]func(string) string{
+	"amarelo":  styleFavorite,
+	"vermelho": styleError,
+	"magenta":  styleSystem,
+	"menção":   styleMention,
+	"mention":  styleMention,
+	"yellow":   styleFavorite,
+	"green":    styleLive,
+	"verde":    styleLive,
+	"ciano":    styleFocus,
+	"cyan":     styleFocus,
+	"red":      styleError,
+}
+
 // colorizeHelpLegend paints the known color terms inside the help.colors line
 // so the legend itself demonstrates the palette. Unknown text stays plain.
 func colorizeHelpLegend(plain string) string {
 	if plain == "" || !colorsEnabled() {
 		return plain
 	}
-	paints := map[string]func(string) string{
-		"amarelo":  styleFavorite,
-		"vermelho": styleError,
-		"magenta":  styleSystem,
-		"menção":   styleMention,
-		"mention":  styleMention,
-		"yellow":   styleFavorite,
-		"green":    styleLive,
-		"verde":    styleLive,
-		"ciano":    styleFocus,
-		"cyan":     styleFocus,
-		"red":      styleError,
-	}
 	return legendTerms.ReplaceAllStringFunc(plain, func(term string) string {
-		// ToLower is safe for this key only while no term contains k or s:
-		// case folding also matches Kelvin K and long ſ.
-		return paints[strings.ToLower(term)](term)
+		// The lower-case key misses only if a term gets an "s": the regexp also
+		// matches long ſ (U+017F), which ToLower keeps as ſ.
+		return legendPaints[strings.ToLower(term)](term)
 	})
 }
