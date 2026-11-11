@@ -462,3 +462,43 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 		t.Fatalf("NO_COLOR PTY dump still has color SGR:\n%q", noColorView)
 	}
 }
+
+func TestStyleNickNegative32BitHashDoesNotPanic(t *testing.T) {
+	forceOrientationColorsForTest(true)
+	defer forceOrientationColorsForTest(false)
+
+	// "alice" has FNV-32a hash 0x872213e7, which is negative in signed 32-bit int (-2027809817).
+	// On 32-bit architecture (GOARCH=386), int(h.Sum32()) % len(nickPalette) panics with index out of range [-1].
+	styled := styleNick("alice", "")
+	plain := ansi.Strip(styled)
+	if plain != "alice" {
+		t.Fatalf("styleNick(%q) = %q, want %q", "alice", plain, "alice")
+	}
+}
+
+func TestColorizeHelpLegendUnicodeByteShift(t *testing.T) {
+	forceOrientationColorsForTest(true)
+	defer forceOrientationColorsForTest(false)
+
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"turkish_i_shrink", "catálogo \u0130 verde"},
+		{"capital_a_stroke_expand", "Ⱥ verde"},
+		{"kelvin_shrink", "catálogo \u212a verde"},
+		{"both_i_and_kelvin", "catálogo \u0130 \u212a verde e amarelo"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := colorizeHelpLegend(tc.raw)
+			plain := ansi.Strip(out)
+			if plain != tc.raw {
+				t.Fatalf("plain text corrupted: got %q, want %q", plain, tc.raw)
+			}
+			if !strings.Contains(out, "\x1b[") {
+				t.Fatalf("expected color codes in %q", out)
+			}
+		})
+	}
+}
