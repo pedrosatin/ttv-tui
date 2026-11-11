@@ -166,6 +166,7 @@ func TestExtractFirefox_CookieMissing(t *testing.T) {
 }
 
 func TestKeyringUnavailable(t *testing.T) {
+	requireSQLite3(t)
 	orig := keyringLookup
 	t.Cleanup(func() { keyringLookup = orig })
 	keyringLookup = func(Browser) (string, error) {
