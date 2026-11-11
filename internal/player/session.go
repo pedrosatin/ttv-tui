@@ -698,15 +698,26 @@ func (s *Session) togglePause() error {
 		base = s.desiredPaused
 	}
 	want := !base
+	prevDesired, prevHas := s.desiredPaused, s.hasDesiredPause
 	s.desiredPaused = want
 	s.hasDesiredPause = true
 	s.mu.Unlock()
 
-	return s.sendCommand([]any{"set_property", "pause", want}, pendingCommand{
+	err := s.sendCommand([]any{"set_property", "pause", want}, pendingCommand{
 		kind:   pendingPause,
 		paused: want,
 		osd:    true,
 	})
+	if err != nil {
+		// The command never reached mpv, so the wish it carried is undone
+		// unless something newer replaced it meanwhile.
+		s.mu.Lock()
+		if s.hasDesiredPause && s.desiredPaused == want {
+			s.desiredPaused, s.hasDesiredPause = prevDesired, prevHas
+		}
+		s.mu.Unlock()
+	}
+	return err
 }
 
 func (s *Session) adjustVolume(delta int) error {
