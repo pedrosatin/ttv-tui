@@ -80,6 +80,9 @@ func (m Model) appendListEmptyLines(lines []string, maxWidth int) []string {
 
 // listEmptyText is the one-line reason for an empty list.
 func (m Model) listEmptyText() string {
+	if m.list.loadFailed {
+		return m.t("list.not_loaded")
+	}
 	if m.list.hasData() && m.list.filter != "" {
 		return m.t("filter.empty")
 	}

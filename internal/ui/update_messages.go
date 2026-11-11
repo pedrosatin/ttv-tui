@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -45,6 +46,7 @@ func (m Model) applyCategoriesLoaded(msg CategoriesLoadedMsg) (tea.Model, tea.Cm
 		return m, nil
 	}
 	m.list.loading = false
+	m.list.loadFailed = msg.Err != nil
 	if msg.Err != nil {
 		m.list.err = msg.Err
 		return m, nil
@@ -76,6 +78,7 @@ func (m Model) applyChannelsLoaded(msg ChannelsLoadedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.list.loading = false
+	m.list.loadFailed = msg.Err != nil
 	if msg.Err != nil {
 		m.list.err = msg.Err
 		return m, nil
@@ -108,6 +111,7 @@ func (m Model) applySearchLoaded(msg SearchLoadedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.list.loading = false
+	m.list.loadFailed = msg.Err != nil
 	if msg.Err != nil {
 		m.list.err = msg.Err
 		return m, nil
@@ -138,7 +142,12 @@ func (m Model) applySavedAvailability(msg SavedAvailabilityMsg) (tea.Model, tea.
 		// Keep [unverified]; never surface a hard error for this soft check.
 		return m, nil
 	}
-	m.refreshSavedAvailability(msg.Channels)
+	// A batch lookup is not a category listing: a channel without stream data
+	// has no evidence and must not be inferred live.
+	known := slices.DeleteFunc(slices.Clone(msg.Channels), func(c twitch.Channel) bool {
+		return c.Availability == twitch.AvailabilityUnknown
+	})
+	m.refreshSavedAvailability(known)
 	m.reconcileHighlight()
 	return m, nil
 }
