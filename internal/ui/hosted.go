@@ -293,9 +293,9 @@ func (h hostedState) saveColumns(gen int) tea.Cmd {
 		return nil
 	}
 	persist, list, chat, overlay, swapped, opacity := h.persist, h.listCols, h.chatCols, h.chatOverlay, h.panelsSwapped, h.chatOverlayOpacity
-	return func() tea.Msg {
+	return h.saves.cmd(func() tea.Msg {
 		return configSavedMsg{Err: persist(list, chat, overlay, swapped, opacity)}
-	}
+	})
 }
 
 // syncHostPanel tells the window about a changed video region.

@@ -48,6 +48,10 @@ func earlyCatalog() *i18n.Catalog {
 	return cat
 }
 
+// saveFlushTimeout bounds how long the exit waits for the saves the UI started.
+// A state save waits at most about half a second for the file lock.
+const saveFlushTimeout = 2 * time.Second
+
 // Run composes config, i18n, Source, player, chat, and the UI model and runs the TUI program.
 //
 // Each stage lives in its own function, but every defer stays here: cleanup
@@ -153,7 +157,10 @@ func Run(opts Options) error {
 	)
 	go forwardPlayerEvents(ctx, p, playerMgr)
 	go forwardChatEvents(ctx, p, chatMgr)
-	_, runErr := p.Run()
+	final, runErr := p.Run()
+	if m, ok := final.(ui.Model); ok {
+		m.FlushSaves(saveFlushTimeout)
+	}
 	// Stop the forwarders before the deferred player/chat shutdown.
 	cancel()
 	logInputConfErr(logw, playerMgr, catalog)

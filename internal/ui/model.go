@@ -192,6 +192,7 @@ type Model struct {
 	keys       keyMap
 	tokenCheck TokenCheckFunc
 	store      Store
+	storeSaves *saveSlot
 	playback   Playback
 	list       listState
 	player     playbackState
@@ -262,6 +263,7 @@ type channelPrefs struct {
 	languages  []string
 	minViewers int
 	persist    ChannelFilterPersistFunc
+	saves      *saveSlot
 	menuOpen   bool
 	menuIndex  int
 	menuItems  []channelFilterMenuItem
@@ -336,6 +338,9 @@ type hostedState struct {
 	chatCols int
 	persist  HostedColumnsPersist
 	saveGen  int
+	// queuedGen is the newest saveGen handed to saves.
+	queuedGen int
+	saves     *saveSlot
 }
 
 // noticeState holds the status bar notices.
@@ -373,10 +378,13 @@ func New(catalog *i18n.Catalog, opts ...Option) Model {
 			hydrateGen: 1,
 			favorites:  make([]twitch.Channel, 0),
 			recents:    make([]twitch.Channel, 0),
+			prefs:      channelPrefs{saves: &saveSlot{}},
 		},
-		player: playbackState{volume: 100},
-		chat:   chatState{panel: newChatPanel()},
-		layout: layoutState{focus: FocusList, showList: true, showChat: true},
+		player:     playbackState{volume: 100},
+		chat:       chatState{panel: newChatPanel()},
+		layout:     layoutState{focus: FocusList, showList: true, showChat: true},
+		hosted:     hostedState{saves: &saveSlot{}},
+		storeSaves: &saveSlot{},
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -523,7 +531,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case hostedNoticeMsg:
 		return m.applyHostedNotice(msg)
 	case hostedSaveMsg:
-		return m, m.hosted.saveColumns(msg.gen)
+		cmd := m.hosted.saveColumns(msg.gen)
+		if cmd != nil {
+			m.hosted.queuedGen = msg.gen
+		}
+		return m, cmd
 	case tea.BatchMsg:
 		return m.applyBatch(msg)
 
