@@ -49,7 +49,7 @@ func newSpawnManager(t *testing.T, spawns *spawnLog, stopWait time.Duration) *Ma
 	t.Helper()
 	mgr := New(Options{
 		Command:    spawns.command,
-		RuntimeDir: t.TempDir(),
+		RuntimeDir: privateRuntimeDir(t),
 		SocketWait: 5 * time.Second,
 		StopWait:   stopWait,
 	})
