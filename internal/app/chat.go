@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -142,6 +143,7 @@ func mapChatEvent(ev chat.SessionEvent) ui.ChatEventMsg {
 		ClearMsgID:  ev.ClearMsgID,
 		BanDuration: ev.BanDuration,
 		ErrText:     errText,
+		AuthFailed:  errors.Is(ev.Err, chat.ErrAuthentication),
 	}
 }
 

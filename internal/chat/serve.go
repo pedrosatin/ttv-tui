@@ -28,6 +28,7 @@ type connSession struct {
 	gen     uint64
 	channel string
 	anon    bool
+	nick    string
 
 	roomState   *RoomState
 	readTimeout time.Duration
@@ -36,7 +37,7 @@ type connSession struct {
 	updates    []SendStatusUpdate
 	sendWaitCh <-chan time.Time
 
-	// connectedOnce turns true on the first complete line from the server; the
+	// connectedOnce turns true on welcome or our JOIN echo; the
 	// caller uses it to reset the reconnect backoff.
 	connectedOnce bool
 }
@@ -65,10 +66,12 @@ func (s *connSession) open() error {
 	if err := s.conn.SetWriteDeadline(time.Now().Add(min(m.opts.PongTimeout, m.opts.SendTimeout))); err != nil {
 		return err
 	}
-	if err := m.writeHandshake(s.conn, s.channel, s.anon); err != nil {
+	nick, err := m.writeHandshake(s.conn, s.channel, s.anon)
+	if err != nil {
 		return fmt.Errorf("handshake: %w", err)
 	}
 
+	s.nick = nick
 	s.readTimeout = m.opts.PingInterval + m.opts.PongTimeout
 	if err := s.conn.SetReadDeadline(time.Now().Add(s.readTimeout)); err != nil {
 		return err
@@ -304,8 +307,10 @@ func (s *connSession) handleRead(res lineResult, ok bool) error {
 
 // handleLine dispatches one IRC line. Any complete line is proof of life.
 func (s *connSession) handleLine(line string) error {
-	s.connectedOnce = true
 	ev := ParseLine(line)
+	if ev.Command == "001" || (ev.Command == "JOIN" && strings.EqualFold(ev.User, s.nick) && ev.Channel == s.channel) {
+		s.connectedOnce = true
+	}
 	switch ev.Kind {
 	case EventPing:
 		if werr := s.write(FormatPong(ev.PingPayload), time.Time{}); werr != nil {
@@ -315,6 +320,9 @@ func (s *connSession) handleLine(line string) error {
 		s.handlePrivMsg(ev)
 	case EventNotice:
 		s.handleNotice(ev)
+		if reason, rejected := ClassifyRejectNotice(ev.MsgID, ev.Body); rejected && reason == RejectUnauthenticated {
+			return ErrAuthentication
+		}
 	case EventRoomState:
 		s.handleRoomState(ev)
 	case EventClearChat:
@@ -452,7 +460,7 @@ func (s *connSession) handleOther(ev Event) {
 
 // connectAndServe dials, authenticates and serves one connection. It returns
 // when the connection ends, with connectedOnce telling whether the server sent
-// at least one complete line.
+// a welcome or our JOIN echo.
 func (m *Manager) connectAndServe(
 	ctx context.Context,
 	gen uint64,

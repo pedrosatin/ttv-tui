@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +15,9 @@ import (
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
 )
+
+// ErrAuthentication marks a refused chat login or incomplete credentials.
+var ErrAuthentication = errors.New("chat: authentication failed")
 
 // DefaultAddr is the production Twitch IRC over TLS endpoint.
 const DefaultAddr = "irc.chat.twitch.tv:6697"
@@ -594,8 +598,14 @@ func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64
 		Anonymous:  anon,
 	})
 
+	if !anon && m.opts.Username == "" {
+		m.emit(ctx, SessionEvent{Generation: gen, Channel: channel, State: StateError, Err: ErrAuthentication})
+		return
+	}
+
 	backoff := m.opts.InitialBackoff
 	attempt := 0
+	refusals := 0
 
 	for {
 		if ctx.Err() != nil {
@@ -621,6 +631,13 @@ func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64
 		failedUpdates := make([]SendStatusUpdate, 0, len(failed))
 		for _, req := range failed {
 			failedUpdates = append(failedUpdates, SendStatusUpdate{Generation: gen, Channel: channel, Nonce: req.Nonce, Body: req.Body, Status: DeliveryDiscarded, Reason: RejectConnectionLost})
+		}
+		if errors.Is(err, ErrAuthentication) {
+			refusals++
+			if refusals >= 3 {
+				m.emit(ctx, SessionEvent{Generation: gen, Channel: channel, State: StateError, Err: ErrAuthentication, SendUpdates: failedUpdates})
+				return
+			}
 		}
 		attempt++
 		wait := backoff
@@ -709,18 +726,15 @@ func (m *Manager) popEarliestInFlight() (SendRequest, bool) {
 	return req, true
 }
 
-func (m *Manager) writeHandshake(w io.Writer, channel string, anon bool) error {
+func (m *Manager) writeHandshake(w io.Writer, channel string, anon bool) (string, error) {
+	nick := m.opts.Username
 	var b strings.Builder
 	b.WriteString("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n")
 	if !anon {
-		nick := m.opts.Username
-		if nick == "" {
-			nick = m.opts.RandNick()
-		}
 		fmt.Fprintf(&b, "PASS oauth:%s\r\n", m.opts.Token)
 		fmt.Fprintf(&b, "NICK %s\r\n", nick)
 	} else {
-		nick := m.opts.RandNick()
+		nick = m.opts.RandNick()
 		if nick == "" {
 			nick = "justinfan12345"
 		}
@@ -729,9 +743,9 @@ func (m *Manager) writeHandshake(w io.Writer, channel string, anon bool) error {
 	fmt.Fprintf(&b, "JOIN #%s\r\n", channel)
 
 	if _, err := io.WriteString(w, b.String()); err != nil {
-		return fmt.Errorf("write irc handshake: %w", err)
+		return "", fmt.Errorf("write irc handshake: %w", err)
 	}
-	return nil
+	return nick, nil
 }
 
 func normalizeChannel(raw string) string {
