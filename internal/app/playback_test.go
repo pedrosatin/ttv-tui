@@ -73,6 +73,23 @@ func TestLogInputConfErr(t *testing.T) {
 	}
 }
 
+func TestLogPlayerNotes(t *testing.T) {
+	for lang, want := range map[string]string{
+		i18n.LangEN:   "ttv-tui: player warning: player: process group 42 survived SIGKILL\n",
+		i18n.LangPTBR: "ttv-tui: aviso do player: player: process group 42 survived SIGKILL\n",
+	} {
+		cat, err := i18n.New(lang)
+		if err != nil {
+			t.Fatalf("i18n.New: %v", err)
+		}
+		var log bytes.Buffer
+		logPlayerNotes(&log, []string{"player: process group 42 survived SIGKILL"}, cat)
+		if log.String() != want {
+			t.Fatalf("%s: log = %q want %q", lang, log.String(), want)
+		}
+	}
+}
+
 func TestMapPlayerTerminalEvent(t *testing.T) {
 	for _, reason := range []player.EndReason{player.EndReasonStopped, player.EndReasonMPVDead, player.EndReasonSocketEOF, player.EndReasonStreamlinkExit, ""} {
 		for _, line := range []string{"", "streamlink: not found"} {

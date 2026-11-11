@@ -31,6 +31,9 @@ type sessionConfig struct {
 	BreakMaxHold time.Duration
 	RegistryDir  string
 	Emit         func(Event)
+	// Note records a problem for the exit log: the TUI owns the terminal while
+	// the session runs. Nil drops it.
+	Note func(string)
 	// Volume is what the player is set to once its IPC connects.
 	Volume int
 }
@@ -267,13 +270,15 @@ func (s *Session) Stop() {
 	// The group goes first: closeIPC waits for cmdMu, which a command writing
 	// to an mpv that stopped reading holds until its deadline. Once mpv is
 	// gone, those writes fail at once.
-	s.terminateProcessGroup()
+	gone := s.terminateProcessGroup()
 	s.closeIPC()
 	<-s.waitDone
 	s.cleanupFiles()
 	s.group.release()
 
-	if intentional {
+	if !gone {
+		s.transition(StateError, "", s.survivorLine())
+	} else if intentional {
 		s.transition(StateEnded, EndReasonStopped, "")
 	}
 }
@@ -292,17 +297,33 @@ func (s *Session) closeIPC() {
 // the supervised process has been reaped and no member of the group is left.
 // The leader exiting is not enough: a descendant (mpv) that ignores SIGTERM keeps
 // playing after streamlink is gone, so the deadline escalates to SIGKILL on the
-// group whenever any member survives it.
-func (s *Session) terminateProcessGroup() {
+// group whenever any member survives it. It reports false, and records it, when
+// a member outlives SIGKILL too (stuck in D state).
+func (s *Session) terminateProcessGroup() bool {
 	if s.cmd == nil || s.cmd.Process == nil || s.groupGone.Load() {
-		return
+		return true
 	}
 	_ = s.group.terminate()
-	if !waitGroupGone(s.group, s.waitDone, s.cfg.StopWait) {
+	gone := waitGroupGone(s.group, s.waitDone, s.cfg.StopWait)
+	if !gone {
 		_ = s.group.kill()
-		_ = waitGroupGone(s.group, s.waitDone, groupKillWait)
+		gone = waitGroupGone(s.group, s.waitDone, groupKillWait)
 	}
 	<-s.waitDone
+	if !gone {
+		s.note(s.survivorLine())
+	}
+	return gone
+}
+
+func (s *Session) survivorLine() string {
+	return fmt.Sprintf("player: process group %d survived SIGKILL", s.cmd.Process.Pid)
+}
+
+func (s *Session) note(msg string) {
+	if s.cfg.Note != nil {
+		s.cfg.Note(msg)
+	}
 }
 
 func (s *Session) waitProcess() {
@@ -406,6 +427,11 @@ func (s *Session) handleLine(line string) {
 	case adSignalHoldStart:
 		s.startAdHold()
 	case adSignalHoldEnd:
+		s.endAdHold()
+	case adSignalUnknown:
+		// Neither start nor end can be verified from here on: drop any hold
+		// instead of waiting for BreakMaxHold.
+		s.note("player: unrecognized streamlink ad-hold line: " + line)
 		s.endAdHold()
 	}
 }
@@ -626,6 +652,13 @@ func (s *Session) applyVolumeFromCommand(vol int) {
 
 func (s *Session) emitStatus() {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.emitStatusLocked()
+}
+
+// emitStatusLocked emits the current state. The caller holds s.mu, so no other
+// change can be emitted between this one and its event.
+func (s *Session) emitStatusLocked() {
 	ev := Event{
 		Generation: s.cfg.Generation,
 		State:      s.state,
@@ -636,7 +669,6 @@ func (s *Session) emitStatus() {
 	if s.state == StateBreak && s.adHold {
 		ev.BreakElapsed = time.Since(s.breakAt)
 	}
-	s.mu.Unlock()
 	s.cfg.Emit(ev)
 }
 
@@ -829,8 +861,8 @@ func (s *Session) startAdHold() {
 		return
 	}
 	s.state = StateBreak
+	s.emitStatusLocked()
 	s.mu.Unlock()
-	s.emitStatus()
 }
 
 // endAdHold handles streamlink's hold-end line (or the BreakMaxHold ceiling)
@@ -909,8 +941,9 @@ func (s *Session) transition(state State, reason EndReason, lastLine string) {
 	if state == StateBreak && s.adHold {
 		ev.BreakElapsed = time.Since(s.breakAt)
 	}
-	s.mu.Unlock()
+	// Under s.mu: events leave in the order of the changes they report.
 	s.cfg.Emit(ev)
+	s.mu.Unlock()
 }
 
 // failFast ends a session whose streamlink output already proved playback

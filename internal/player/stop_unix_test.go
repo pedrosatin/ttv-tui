@@ -3,6 +3,10 @@
 package player
 
 import (
+	"os"
+	"os/exec"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -34,5 +38,47 @@ func TestStopOfEndedSessionSignalsNoGroup(t *testing.T) {
 	mgr.Stop()
 	if !processAlive(stranger.Process.Pid) {
 		t.Fatalf("Stop of an ended session signalled group %d", stranger.Process.Pid)
+	}
+}
+
+// A member that SIGKILL cannot remove (stuck in D state) keeps the group alive.
+// Stop must report that as an error, not as a clean stop. A zombie whose parent,
+// this test, does not reap it stands in for that member.
+func TestGroupThatOutlivesSIGKILLIsAnError(t *testing.T) {
+	mgr := newTestManager(t, "play", Options{StopWait: 100 * time.Millisecond})
+	gen, err := mgr.Start("stuck")
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	_ = waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+	mgr.mu.Lock()
+	pgid := mgr.session.Pid()
+	mgr.mu.Unlock()
+
+	zombie := exec.Command(os.Args[0], "-test.run=^$")
+	zombie.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: pgid}
+	if err := zombie.Start(); err != nil {
+		t.Fatalf("start group member: %v", err)
+	}
+	t.Cleanup(func() { _ = zombie.Wait() })
+
+	mgr.Stop()
+	var last Event
+	for drained := false; !drained; {
+		select {
+		case ev := <-mgr.Events():
+			if ev.Generation == gen {
+				last = ev
+			}
+		default:
+			drained = true
+		}
+	}
+	if last.State != StateError {
+		t.Fatalf("last event state=%s reason=%s, want %s", last.State, last.Reason, StateError)
+	}
+	notes := mgr.Notes()
+	if len(notes) != 1 || !strings.Contains(notes[0], "SIGKILL") {
+		t.Fatalf("notes=%q want one about SIGKILL", notes)
 	}
 }
