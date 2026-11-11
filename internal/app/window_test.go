@@ -3,11 +3,15 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestOpenWindowReportsProbeError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("single window requires Linux")
+	}
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("WAYLAND_DISPLAY", "wayland-test")
