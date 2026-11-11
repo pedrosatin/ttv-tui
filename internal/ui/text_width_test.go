@@ -198,3 +198,39 @@ func TestPanelSeparatorColumnAlignedWithWideRunesInList(t *testing.T) {
 		})
 	}
 }
+
+// A filter typed with emoji does not go through fitListRow. Its row still
+// leaves the spare cell when the chat side ends in blank space, and the
+// separator keeps its column.
+func TestFilterRowWithWideRunesKeepsSpareCell(t *testing.T) {
+	for _, width := range []int{80, 100} {
+		t.Run(fmt.Sprintf("%dx24", width), func(t *testing.T) {
+			m, _, _ := setupTwoPanelModel(t)
+			m = resize(m, width, 24)
+			m.list.filter = strings.Repeat("🔥", 40)
+			rows := strings.Split(ansi.Strip(m.View()), "\n")
+			found := false
+			sepCol := -1
+			for i, row := range rows {
+				if idx := strings.Index(row, "│"); idx != -1 {
+					col := ansi.StringWidth(row[:idx])
+					if sepCol == -1 {
+						sepCol = col
+					} else if col != sepCol {
+						t.Fatalf("row %d has separator at col %d, want %d", i, col, sepCol)
+					}
+				}
+				if !strings.Contains(row, "🔥") {
+					continue
+				}
+				found = true
+				if got := ansi.StringWidth(row); got >= width {
+					t.Errorf("row %d with emoji filter is %d cells wide, want < %d: %q", i, got, width, row)
+				}
+			}
+			if !found {
+				t.Fatal("filter row not rendered")
+			}
+		})
+	}
+}

@@ -251,9 +251,11 @@ func (m Model) splitRows(listW, chatW, available int, overlayLines []string) []s
 		if i < len(chatLines) {
 			right = chatLines[i]
 		}
-		leftCell := padOrTruncateVisual(left, listW)
-		rightCell := fitScreenLines(padOrTruncateVisual(right, chatW), chatW)
-		combined = append(combined, leftCell+panelSeparator+rightCell)
+		// Each panel is cut to its own width first; the wide-rune guard then only
+		// trims trailing space from the composed row, so the separator keeps its
+		// column and the chat text is never cut for an emoji in the list.
+		row := padOrTruncateVisual(left, listW) + panelSeparator + padOrTruncateVisual(right, chatW)
+		combined = append(combined, fitScreenLines(row, listW+ansi.StringWidth(panelSeparator)+chatW))
 	}
 	return m.overlayHelpLines(combined, overlayLines, m.width, available)
 }
