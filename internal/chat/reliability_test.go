@@ -188,7 +188,7 @@ func TestReliabilityBlockedWriteAndNoReplay(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var dials atomic.Int64
 		release := make(chan struct{})
-		mgr := New(Options{Token: "test", PingInterval: time.Second, PongTimeout: time.Second, SendTimeout: time.Second,
+		mgr := New(Options{Token: "test", Username: "tester", PingInterval: time.Second, PongTimeout: time.Second, SendTimeout: time.Second,
 			InitialBackoff: time.Second, Dial: func(context.Context, string) (net.Conn, error) {
 				client, server := net.Pipe()
 				attempt := dials.Add(1)

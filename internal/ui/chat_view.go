@@ -136,8 +136,12 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 				headerLines = []string{withoutModes}
 			} else {
 				line1 := TruncateVisual(head, maxWidth)
-				line2 := TruncateVisual("  "+state, maxWidth)
-				headerLines = []string{line1, line2}
+				if m.chat.panel.state == ChatStateError {
+					headerLines = append([]string{line1}, wrapChatRow("  ", state, maxWidth)...)
+				} else {
+					line2 := TruncateVisual("  "+state, maxWidth)
+					headerLines = []string{line1, line2}
+				}
 			}
 		}
 	}

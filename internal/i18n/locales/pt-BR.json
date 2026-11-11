@@ -1,4 +1,5 @@
 {
+  "chat.auth_failed": "Login do chat recusado. Execute ttv-tui login e reinicie o app.",
   "store.save_failed": "Não salvo: verifique permissões/espaço",
   "list.empty_action": "Vazio: r tentar de novo · Esc voltar",
   "list.not_loaded": "A lista não carregou.",

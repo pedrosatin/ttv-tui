@@ -1,4 +1,5 @@
 {
+  "chat.auth_failed": "Chat login refused. Run ttv-tui login and restart the app.",
   "store.save_failed": "Not saved: check permissions/disk space",
   "list.empty_action": "Empty: r retry · Esc back",
   "list.not_loaded": "The list did not load.",

@@ -51,6 +51,7 @@ type ChatEventMsg struct {
 	// and ClearChat means a permanent ban.
 	BanDuration *int
 	ErrText     string
+	AuthFailed  bool
 	FromJoin    bool
 }
 
@@ -273,7 +274,9 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	} else if sender, ok := m.chat.session.(ChatSender); ok {
 		m.chat.panel.anonymous = !sender.HasToken()
 	}
-	if msg.ErrText != "" {
+	if msg.AuthFailed {
+		m.chat.panel.errText = m.t("chat.auth_failed")
+	} else if msg.ErrText != "" {
 		m.chat.panel.errText = msg.ErrText
 	} else if msg.State == ChatStateConnected {
 		m.chat.panel.errText = ""
