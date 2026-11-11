@@ -15,7 +15,7 @@ func (h *recordingHost) SetPanel(p HostPanel) { h.panels = append(h.panels, p) }
 // hostedModel is a model hosted in a window of the given size, with a chat panel.
 func hostedModel(t *testing.T, width, height int, withChat bool) Model {
 	t.Helper()
-	m := Model{hosted: hostedState{host: &recordingHost{}}, layout: layoutState{showList: true, showChat: true}}
+	m := Model{hosted: hostedState{host: &recordingHost{}, saves: &saveSlot{}}, layout: layoutState{showList: true, showChat: true}}
 	m.width, m.height = width, height
 	if withChat {
 		m.chat.panel.channel = "canal"
