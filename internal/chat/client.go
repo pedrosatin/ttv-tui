@@ -619,6 +619,7 @@ func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64
 		if connectedOnce {
 			backoff = m.opts.InitialBackoff
 			attempt = 0
+			refusals = 0
 		}
 
 		m.mu.Lock()

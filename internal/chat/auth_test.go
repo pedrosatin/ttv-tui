@@ -124,3 +124,33 @@ func TestAuthTokenWithoutUsernameNeverDials(t *testing.T) {
 		t.Fatalf("state=%s err=%v dials=%d", ev.State, ev.Err, dials.Load())
 	}
 }
+
+// A confirmed session clears the refusal count. Two refusals, a welcome and
+// two more refusals must not end the chat.
+func TestAuthRefusalsResetAfterConfirmedSession(t *testing.T) {
+	srv := newFakeIRCServer(t)
+	refuse := ":srv NOTICE * :Login authentication failed\r\n"
+	for _, reply := range []string{refuse, refuse, ":srv 001 tester :Welcome\r\n", refuse, refuse, refuse} {
+		srv.handlers <- func(conn net.Conn) {
+			defer func() { _ = conn.Close() }()
+			if _, err := readClientLines(conn, 4, time.Second); err != nil {
+				return
+			}
+			_, _ = io.WriteString(conn, reply)
+		}
+	}
+	mgr := New(Options{Token: "fixture", Username: "tester", Dial: srv.Dial,
+		Addr: srv.Addr(), InitialBackoff: time.Millisecond, MaxBackoff: 8 * time.Millisecond})
+	t.Cleanup(mgr.Close)
+	if _, err := mgr.Join("test"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 5; i++ {
+		if ev := authEvent(t, mgr); ev.State != StateReconnecting {
+			t.Fatalf("event %d state=%s err=%v, want reconnecting", i, ev.State, ev.Err)
+		}
+	}
+	if ev := authEvent(t, mgr); ev.State != StateError {
+		t.Fatalf("third refusal after the welcome: state=%s, want error", ev.State)
+	}
+}
