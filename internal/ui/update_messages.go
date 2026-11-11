@@ -154,6 +154,10 @@ func (m Model) applySavedAvailability(msg SavedAvailabilityMsg) (tea.Model, tea.
 
 // applyChannelSelected records the choice and starts the player and the chat.
 func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd) {
+	if m.quitting {
+		// The player was already stopped for the exit; nothing would stop this one.
+		return m, nil
+	}
 	selected := msg.Channel
 	m.list.selectedChannel = &selected
 	m.clearStaleStatusErrors()
@@ -173,6 +177,7 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		m.player.failure = PlayerFailureNone
 		m.player.breakElapsed = 0
 		m.player.switching = true
+		m.player.stopAfterStart = false
 		cmds = append(cmds, m.playback.Start(selected.Login))
 	}
 	if m.chat.session != nil || m.chat.panel.channel != "" {
@@ -210,6 +215,14 @@ func (m Model) applyConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 // applyPlayerStatus folds one player event into the model, unless it belongs
 // to a playback the model already left.
 func (m Model) applyPlayerStatus(msg PlayerStatusMsg) (tea.Model, tea.Cmd) {
+	var stop tea.Cmd
+	if msg.FromStart && m.player.switching && m.player.stopAfterStart {
+		// The Stop reply was dropped with the switch; this Start may have
+		// attached after it ran.
+		m.player.stopAfterStart = false
+		msg.State, msg.Failure, msg.LastLine = PlayerStateEnded, PlayerFailureNone, ""
+		stop = m.playback.Stop()
+	}
 	if !m.acceptPlayerStatus(msg) {
 		return m, nil
 	}
@@ -229,7 +242,7 @@ func (m Model) applyPlayerStatus(msg PlayerStatusMsg) (tea.Model, tea.Cmd) {
 	if m.player.state != stateBefore || m.player.volume != volumeBefore {
 		m.clearVolumeLimitNotice()
 	}
-	return m, nil
+	return m, stop
 }
 
 // acceptPlayerStatus tracks the playback generation and reports whether msg is
