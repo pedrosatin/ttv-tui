@@ -96,7 +96,7 @@ func pipePair(t *testing.T) (client, server net.Conn) {
 func TestPipeCarriesTheIPCProtocol(t *testing.T) {
 	client, server := pipePair(t)
 
-	if err := writeIPC(client, map[string]any{"command": []any{"observe_property", 1, "pause"}}); err != nil {
+	if err := writeIPC(client, ipcWriteWait, map[string]any{"command": []any{"observe_property", 1, "pause"}}); err != nil {
 		t.Fatalf("writeIPC: %v", err)
 	}
 	buf := make([]byte, 256)
