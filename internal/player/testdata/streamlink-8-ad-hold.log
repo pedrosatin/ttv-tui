@@ -1,0 +1,5 @@
+[plugins.twitch][info] Waiting for pre-roll ads to finish, be patient
+[plugins.twitch][info] Detected advertisement break of 30 seconds
+[stream.hls][info] Filtering out segments and pausing stream output
+[stream.hls][warning] Encountered a stream discontinuity. This is unsupported and will result in incoherent output data.
+[stream.hls][info] Resuming stream output

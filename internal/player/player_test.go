@@ -513,6 +513,9 @@ func TestClassifyAdLine(t *testing.T) {
 		{"[plugins.twitch][info] Waiting for pre-roll ads to finish, be patient", adSignalNone},
 		{"[plugins.twitch][info] Detected advertisement break of 15 seconds", adSignalNone},
 		{"[info] Opening stream...", adSignalNone},
+		{"[stream.hls][warning] Encountered a stream discontinuity. This is unsupported and will result in incoherent output data.", adSignalNone},
+		{"[stream.hls][info] Stream output resumed", adSignalUnknown},
+		{"[stream.hls][info] Filtering out segments, stream output paused", adSignalUnknown},
 		{"", adSignalNone},
 	}
 	for _, tc := range cases {

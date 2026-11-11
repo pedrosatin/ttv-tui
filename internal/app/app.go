@@ -115,7 +115,11 @@ func Run(opts Options) error {
 	caught := cancelOnSignal(ctx, cancel, sigCh)
 
 	playerMgr, stopPlayer := playerManager(opts.Player, registryDir)
-	defer stopPlayer()
+	defer func() {
+		// After the last Stop: it can note a group that outlived SIGKILL.
+		stopPlayer()
+		logPlayerNotes(logw, playerMgr.Notes(), catalog)
+	}()
 	chatMgr, stopChat := chatManager(opts.Chat, cfg)
 	defer stopChat()
 

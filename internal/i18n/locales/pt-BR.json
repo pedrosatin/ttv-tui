@@ -235,6 +235,7 @@
   "app.orphan_cleaned_log": "ttv-tui: encerrado um player que ficou tocando de uma sessão anterior (canal %s, pid %d)",
   "app.orphan_stop_failed": "ttv-tui: não foi possível encerrar o player anterior (pid %d): %v",
   "app.warn_input_conf": "ttv-tui: a janela do mpv ficou sem teclas porque o arquivo de teclas não pôde ser gravado: %v",
+  "app.warn_player": "ttv-tui: aviso do player: %s",
   "login.warn_expiry": "Aviso: o token está no fim da validade (expires_in=%ds); quando expirar, basta repetir 'ttv-tui login --from-browser'.",
   "login.warn_overwrite": "Aviso: já existe um token salvo na configuração; ele será substituído.",
   "login.warn_scopes": "Aviso: o token não inclui escopos para falar no chat (chat_login, chat:edit ou chat:read; escopos atuais: %s); o envio de mensagens não vai funcionar e é preciso logar de novo no navegador.",

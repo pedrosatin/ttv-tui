@@ -118,6 +118,14 @@ func logInputConfErr(log io.Writer, mgr *player.Manager, cat *i18n.Catalog) {
 	}
 }
 
+// logPlayerNotes records what the player sessions noted while the TUI owned the
+// terminal.
+func logPlayerNotes(log io.Writer, notes []string, cat *i18n.Catalog) {
+	for _, n := range notes {
+		_, _ = fmt.Fprintf(log, cat.T("app.warn_player")+"\n", n)
+	}
+}
+
 // forwardPlayerEvents sends Manager events into the running tea program.
 // It returns when ctx is cancelled or the Events channel is closed.
 func forwardPlayerEvents(ctx context.Context, p *tea.Program, mgr *player.Manager) {

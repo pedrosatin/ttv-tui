@@ -5,6 +5,7 @@ package player
 import (
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -172,6 +173,8 @@ type Manager struct {
 	order uint64
 	// inputConfErr is the last input.conf write failure, for the exit log.
 	inputConfErr error
+	// notes are the problems sessions recorded, for the exit log.
+	notes []string
 	// keptLogin and keptVolume are the channel of the last session to end and the
 	// volume it ended on. They outlive the session: a retry may follow a start that
 	// failed and left none.
@@ -340,6 +343,7 @@ func (m *Manager) start(login string, order uint64) (uint64, error) {
 		BreakMaxHold:       m.opts.BreakMaxHold,
 		RegistryDir:        m.opts.RegistryDir,
 		Emit:               m.emit,
+		Note:               m.note,
 	})
 	if err != nil {
 		m.emit(Event{
@@ -515,6 +519,23 @@ func (m *Manager) InputConfErr() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.inputConfErr
+}
+
+// Notes returns the problems sessions recorded, oldest first. Callers read them
+// after the TUI exits, like InputConfErr.
+func (m *Manager) Notes() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.notes...)
+}
+
+// note keeps msg for Notes, once.
+func (m *Manager) note(msg string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !slices.Contains(m.notes, msg) {
+		m.notes = append(m.notes, msg)
+	}
 }
 
 // Close stops playback and closes the Events channel. After Close, Start fails.

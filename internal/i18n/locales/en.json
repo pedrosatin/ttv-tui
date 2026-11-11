@@ -235,6 +235,7 @@
   "app.orphan_cleaned_log": "ttv-tui: stopped a player left running by a previous session (channel %s, pid %d)",
   "app.orphan_stop_failed": "ttv-tui: could not stop the previous player (pid %d): %v",
   "app.warn_input_conf": "ttv-tui: the mpv window ran without keys, its key file could not be written: %v",
+  "app.warn_player": "ttv-tui: player warning: %s",
   "login.warn_expiry": "Warning: token is nearing expiration (expires_in=%ds); once expired, simply run 'ttv-tui login --from-browser'.",
   "login.warn_overwrite": "Warning: a token is already saved in the config; it will be replaced.",
   "login.warn_scopes": "Warning: token lacks chat scopes (chat_login, chat:edit or chat:read; current scopes: %s); sending messages will not work and you must sign in again via browser.",
