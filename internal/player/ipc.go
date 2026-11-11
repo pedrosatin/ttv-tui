@@ -49,6 +49,9 @@ const (
 	// creating the socket file and starting to listen on it (two consecutive
 	// calls, microseconds apart); past it, nobody is going to listen.
 	ipcRefusedGrace = 2 * time.Second
+	// ipcWriteWait bounds one write to mpv. mpv reads its socket on a thread of
+	// its own, so a write that takes this long means it stopped reading.
+	ipcWriteWait = 2 * time.Second
 )
 
 var (
@@ -119,12 +122,17 @@ func dialIPCUntil(ctx context.Context, gone <-chan struct{}, endpoint string, de
 	}
 }
 
-func writeIPC(conn net.Conn, payload map[string]any) error {
+// writeIPC sends one command line, giving up after wait. Without the deadline
+// an mpv that stops reading holds the writer, and the cmdMu it holds, forever.
+func writeIPC(conn net.Conn, wait time.Duration, payload map[string]any) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 	data = append(data, '\n')
+	if err := conn.SetWriteDeadline(time.Now().Add(wait)); err != nil {
+		return err
+	}
 	_, err = conn.Write(data)
 	return err
 }

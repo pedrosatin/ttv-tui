@@ -27,6 +27,7 @@ type sessionConfig struct {
 	Prepare      func(runtimeDir string, gen uint64) (sessionLayout, error)
 	SocketWait   time.Duration
 	StopWait     time.Duration
+	WriteWait    time.Duration // bounds each IPC write; zero uses ipcWriteWait
 	BreakMaxHold time.Duration
 	RegistryDir  string
 	Emit         func(Event)
@@ -140,6 +141,9 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		}
 	}
 
+	if cfg.WriteWait <= 0 {
+		cfg.WriteWait = ipcWriteWait
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Session{
 		cfg:      cfg,
@@ -260,8 +264,11 @@ func (s *Session) Stop() {
 	s.mu.Unlock()
 
 	s.cancel()
-	s.closeIPC()
+	// The group goes first: closeIPC waits for cmdMu, which a command writing
+	// to an mpv that stopped reading holds until its deadline. Once mpv is
+	// gone, those writes fail at once.
 	s.terminateProcessGroup()
+	s.closeIPC()
 	<-s.waitDone
 	s.cleanupFiles()
 	s.group.release()
@@ -435,13 +442,13 @@ func (s *Session) superviseIPC(ctx context.Context) {
 	s.cmdMu.Unlock()
 	defer s.closeIPC()
 
-	_ = writeIPC(conn, map[string]any{
+	_ = writeIPC(conn, s.cfg.WriteWait, map[string]any{
 		"command": []any{"observe_property", 1, "idle-active"},
 	})
-	_ = writeIPC(conn, map[string]any{
+	_ = writeIPC(conn, s.cfg.WriteWait, map[string]any{
 		"command": []any{"observe_property", 2, "pause"},
 	})
-	_ = writeIPC(conn, map[string]any{
+	_ = writeIPC(conn, s.cfg.WriteWait, map[string]any{
 		"command": []any{"observe_property", 3, "volume"},
 	})
 	// Explicit baseline after connect: mpv softvol can open above 100 (observed
@@ -518,7 +525,9 @@ func (s *Session) handleCommandReply(msg ipcMessage) {
 		s.applyVolumeFromCommand(pending.volume)
 	}
 	if pending.osd {
-		s.showControlOSD(pending.kind)
+		// Not from this goroutine: it reads what mpv writes, and a write that
+		// waits for an mpv not reading would stop the replies behind it.
+		go s.showControlOSD(pending.kind)
 	}
 }
 
@@ -533,7 +542,7 @@ func (s *Session) showControlOSD(kind pendingKind) {
 	defer s.cmdMu.Unlock()
 	if s.ipcConn != nil {
 		// A plain list reaches the screen as the literal text; the flag asks mpv to expand it.
-		_ = writeIPC(s.ipcConn, map[string]any{"command": map[string]any{"name": "show-text", "text": text, "_flags": []any{"expand-properties"}}})
+		_ = writeIPC(s.ipcConn, s.cfg.WriteWait, map[string]any{"command": map[string]any{"name": "show-text", "text": text, "_flags": []any{"expand-properties"}}})
 	}
 }
 
@@ -712,7 +721,7 @@ func (s *Session) sendCommand(cmd []any, pending pendingCommand) error {
 	}
 	id := s.nextReq.Add(1)
 	s.pending[id] = pending
-	if err := writeIPC(s.ipcConn, map[string]any{
+	if err := writeIPC(s.ipcConn, s.cfg.WriteWait, map[string]any{
 		"command":    cmd,
 		"request_id": id,
 	}); err != nil {

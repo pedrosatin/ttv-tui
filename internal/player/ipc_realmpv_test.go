@@ -66,7 +66,7 @@ func (l *mpvLines) waitFor(t *testing.T, what string, match func(ipcMessage) boo
 // request sends one command and returns its successful reply.
 func (l *mpvLines) request(t *testing.T, id int64, command ...any) ipcMessage {
 	t.Helper()
-	if err := writeIPC(l.conn, map[string]any{"command": command, "request_id": id}); err != nil {
+	if err := writeIPC(l.conn, ipcWriteWait, map[string]any{"command": command, "request_id": id}); err != nil {
 		t.Fatalf("write %v: %v", command, err)
 	}
 	reply := l.waitFor(t, "reply", func(m ipcMessage) bool { return m.isCommandReply() && m.RequestID == id })
@@ -187,7 +187,7 @@ func TestRealMPVHandshake(t *testing.T) {
 		t.Logf("keypress %s -> show-text %q -> %s", tc.key, tc.text, got)
 	}
 
-	if err := writeIPC(conn, map[string]any{"command": []any{"quit"}}); err != nil {
+	if err := writeIPC(conn, ipcWriteWait, map[string]any{"command": []any{"quit"}}); err != nil {
 		t.Fatalf("write quit: %v", err)
 	}
 	for {
