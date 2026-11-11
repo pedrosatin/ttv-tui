@@ -155,9 +155,14 @@ func TestFastExitKeepsLastErrorLine(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := range jobs {
+				runtimeDir, err := os.MkdirTemp(t.TempDir(), "run-")
+				if err != nil {
+					errs <- fmt.Sprintf("run %d: runtime directory: %v", i, err)
+					continue
+				}
 				mgr := New(Options{
 					Command:    helperCommand("error-exit-now"),
-					RuntimeDir: t.TempDir(),
+					RuntimeDir: runtimeDir,
 					SocketWait: 30 * time.Second,
 					StopWait:   500 * time.Millisecond,
 				})
