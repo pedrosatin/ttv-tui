@@ -219,7 +219,7 @@ func SaveTo(path string, st State) error {
 
 func saveTo(path string, st State, maxRecents int) error {
 	if st.snapshot == nil {
-		return mergeTo(path, st, maxRecents, st.Favorites, nil)
+		return mergeTo(path, st, maxRecents, st.Favorites, nil, nil)
 	}
 	st.snapshot.mu.Lock()
 	defer st.snapshot.mu.Unlock()
@@ -232,14 +232,14 @@ func saveTo(path string, st State, maxRecents int) error {
 func saveSnapshot(path string, st State, maxRecents int, snapshot *favoriteSnapshot) error {
 	added := withoutChannels(st.Favorites, snapshot.favorites)
 	removed := withoutChannels(snapshot.favorites, st.Favorites)
-	if err := mergeTo(path, st, maxRecents, added, removed); err != nil {
+	if err := mergeTo(path, st, maxRecents, added, removed, snapshot.favorites); err != nil {
 		return err
 	}
 	snapshot.favorites = append([]Channel(nil), st.Favorites...)
 	return nil
 }
 
-func mergeTo(path string, st State, maxRecents int, added, removed []Channel) (err error) {
+func mergeTo(path string, st State, maxRecents int, added, removed, fallbackFavorites []Channel) (err error) {
 	release, err := lockState(path)
 	if err != nil {
 		return err
@@ -249,7 +249,11 @@ func mergeTo(path string, st State, maxRecents int, added, removed []Channel) (e
 	if err != nil && !errors.Is(err, ErrCorrupt) {
 		return err
 	}
-	st.Favorites = unionChannels(withoutChannels(disk.Favorites, removed), added)
+	baseFavorites := disk.Favorites
+	if errors.Is(err, ErrCorrupt) && len(fallbackFavorites) > 0 {
+		baseFavorites = fallbackFavorites
+	}
+	st.Favorites = unionChannels(withoutChannels(baseFavorites, removed), added)
 	st.Recents = unionChannels(st.Recents, disk.Recents)
 	if len(st.Recents) > maxRecents {
 		st.Recents = st.Recents[:maxRecents]
