@@ -204,7 +204,7 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 	body := make([]string, 0, msgBudget)
 	if len(msgs) == 0 {
 		if msgBudget > 0 && m.chat.panel.state == ChatStateConnected {
-			emptyLine := "  " + fmt.Sprintf(m.t("chat.empty"), m.chat.panel.channel)
+			emptyLine := "  " + fmt.Sprintf(m.t("chat.empty"), sanitizeScreenText(m.chat.panel.channel))
 			body = append(body, TruncateVisual(emptyLine, maxWidth))
 		}
 	} else {
