@@ -182,6 +182,11 @@ func prepareIn(runtimeDir string, gen uint64) (sessionLayout, error) {
 	if err := os.MkdirAll(runtimeDir, 0o700); err != nil {
 		return sessionLayout{}, err
 	}
+	if runtime.GOOS != "windows" {
+		if err := checkPrivateDir(runtimeDir); err != nil {
+			return sessionLayout{}, err
+		}
+	}
 	dir, err := os.MkdirTemp(runtimeDir, fmt.Sprintf("%d-", gen))
 	if err != nil {
 		return sessionLayout{}, err
