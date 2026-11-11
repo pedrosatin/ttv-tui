@@ -231,6 +231,7 @@ func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
 	m.player.lastLine = ""
 	m.player.breakElapsed = 0
 	m.player.switching = true
+	m.player.stopAfterStart = false
 	return m, m.playback.Start(login)
 }
 

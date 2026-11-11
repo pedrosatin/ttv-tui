@@ -282,6 +282,9 @@ type playbackState struct {
 	// no keys.
 	keysWarnedGen        uint64
 	containmentWarnedGen uint64
+	// stopAfterStart is a Ctrl+X pressed during the switch. The Start reply
+	// it outran ends as stopped, and its playback is stopped again.
+	stopAfterStart bool
 }
 
 // chatState is the chat session, its panel and the message being composed.
