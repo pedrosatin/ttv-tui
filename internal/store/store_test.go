@@ -786,3 +786,155 @@ func TestStore_TwoProcessOperations(t *testing.T) {
 		})
 	}
 }
+
+func TestStore_PreservesFavoritesWhenDiskCorruptedDuringSession(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		corruptFn func(path string) error
+		useStore  bool
+	}{
+		{
+			name: "store invalid json",
+			corruptFn: func(path string) error {
+				return os.WriteFile(path, []byte("{corrupt json"), 0o600)
+			},
+			useStore: true,
+		},
+		{
+			name: "store empty file",
+			corruptFn: func(path string) error {
+				return os.WriteFile(path, []byte(""), 0o600)
+			},
+			useStore: true,
+		},
+		{
+			name: "saveto invalid json",
+			corruptFn: func(path string) error {
+				return os.WriteFile(path, []byte("{corrupt json"), 0o600)
+			},
+			useStore: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.json")
+			s := New(path)
+			initial := State{
+				Favorites: []Channel{
+					{Login: "streamer_a"},
+					{Login: "streamer_b"},
+				},
+			}
+			if err := s.Save(initial); err != nil {
+				t.Fatal(err)
+			}
+
+			var st State
+			var err error
+			if tc.useStore {
+				st, err = s.Load()
+			} else {
+				st, err = LoadFrom(path)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := tc.corruptFn(path); err != nil {
+				t.Fatal(err)
+			}
+
+			st.ToggleFavorite(Channel{Login: "streamer_c"})
+			if tc.useStore {
+				if err := s.Save(st); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := SaveTo(path, st); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			got, err := LoadFrom(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, login := range []string{"streamer_a", "streamer_b", "streamer_c"} {
+				if !got.IsFavorite(Channel{Login: login}) {
+					t.Fatalf("expected favorite %q to be preserved, got %+v", login, got.Favorites)
+				}
+			}
+		})
+	}
+}
+
+func TestStore_RespectsRemovalWhenDiskCorruptedDuringSession(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		useStore bool
+	}{
+		{name: "store", useStore: true},
+		{name: "saveto", useStore: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.json")
+			s := New(path)
+			initial := State{
+				Favorites: []Channel{
+					{Login: "streamer_a"},
+					{Login: "streamer_b"},
+				},
+			}
+			if err := s.Save(initial); err != nil {
+				t.Fatal(err)
+			}
+
+			var st State
+			var err error
+			if tc.useStore {
+				st, err = s.Load()
+			} else {
+				st, err = LoadFrom(path)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Remove streamer_a before corruption
+			st.ToggleFavorite(Channel{Login: "streamer_a"})
+
+			// Corrupt file on disk during session
+			if err := os.WriteFile(path, []byte("{broken json"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			// Add streamer_c
+			st.ToggleFavorite(Channel{Login: "streamer_c"})
+
+			if tc.useStore {
+				if err := s.Save(st); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := SaveTo(path, st); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			got, err := LoadFrom(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got.IsFavorite(Channel{Login: "streamer_a"}) {
+				t.Fatalf("removed favorite streamer_a should not be present, got %+v", got.Favorites)
+			}
+			if !got.IsFavorite(Channel{Login: "streamer_b"}) {
+				t.Fatalf("expected streamer_b to be preserved, got %+v", got.Favorites)
+			}
+			if !got.IsFavorite(Channel{Login: "streamer_c"}) {
+				t.Fatalf("expected streamer_c to be preserved, got %+v", got.Favorites)
+			}
+		})
+	}
+}
