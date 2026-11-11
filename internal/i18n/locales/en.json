@@ -1,6 +1,7 @@
 {
   "chat.auth_failed": "Chat login refused. Run ttv-tui login and restart the app.",
   "store.save_failed": "Not saved: check permissions/disk space",
+  "saves.timeout": "saves still running after %v",
   "list.empty_action": "Empty: r retry · Esc back",
   "list.not_loaded": "The list did not load.",
   "player.info": "Player info: %s",
@@ -237,6 +238,7 @@
   "app.orphan_cleaned_log": "ttv-tui: stopped a player left running by a previous session (channel %s, pid %d)",
   "app.orphan_stop_failed": "ttv-tui: could not stop the previous player (pid %d): %v",
   "app.warn_input_conf": "ttv-tui: the mpv window ran without keys, its key file could not be written: %v",
+  "app.warn_save_on_exit": "ttv-tui: a change may not have been saved before exit: %v",
   "app.warn_player": "ttv-tui: player warning: %s",
   "login.warn_expiry": "Warning: token is nearing expiration (expires_in=%ds); once expired, simply run 'ttv-tui login --from-browser'.",
   "login.warn_overwrite": "Warning: a token is already saved in the config; it will be replaced.",

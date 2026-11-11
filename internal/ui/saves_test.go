@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -36,6 +37,25 @@ func (s *blockingStore) Save(store.State) error {
 }
 
 func (s *blockingStore) unblock() { s.once.Do(func() { close(s.release) }) }
+
+// flakyStore fails its first save and records how many favorites each later
+// save wrote.
+type flakyStore struct {
+	mu     sync.Mutex
+	failed bool
+	saved  []int
+}
+
+func (s *flakyStore) Save(st store.State) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.failed {
+		s.failed = true
+		return errors.New("disk busy")
+	}
+	s.saved = append(s.saved, len(st.Favorites))
+	return nil
+}
 
 // oneChannelModel lists a single channel, highlighted.
 func oneChannelModel(t *testing.T, opts ...Option) Model {
@@ -77,7 +97,9 @@ func TestFlushSavesWritesTheWidthStillWaitingForTheKey(t *testing.T) {
 		t.Fatal("Ctrl+→ did not change the list width")
 	}
 	m, _ = pressKey(m, keyQuit)
-	m.FlushSaves(time.Second)
+	if err := m.FlushSaves(time.Second); err != nil {
+		t.Fatal(err)
+	}
 	if !slices.Equal(saved, []int{want}) {
 		t.Fatalf("saved list widths %v, want [%d]", saved, want)
 	}
@@ -95,7 +117,9 @@ func TestFlushSavesLeavesAnUnchangedLayoutAlone(t *testing.T) {
 	next, cmd := m.Update(hostedSaveMsg{gen: m.hosted.saveGen})
 	m = next.(Model)
 	cmd()
-	m.FlushSaves(time.Second)
+	if err := m.FlushSaves(time.Second); err != nil {
+		t.Fatal(err)
+	}
 	if calls != 1 {
 		t.Fatalf("persist ran %d times, want once", calls)
 	}
@@ -116,7 +140,9 @@ func TestFlushSavesWaitsForTheFavoriteBeingSaved(t *testing.T) {
 	t.Cleanup(func() { flushStarted.Store(nil) })
 	flushed := make(chan struct{})
 	go func() {
-		m.FlushSaves(time.Minute)
+		if err := m.FlushSaves(time.Minute); err != nil {
+			t.Error(err)
+		}
 		close(flushed)
 	}()
 	select {
@@ -138,7 +164,9 @@ func TestFlushSavesGivesUpAfterTheTimeout(t *testing.T) {
 	m, save := pressKey(m, keyFavorite)
 	go save()
 	<-bs.entered
-	m.FlushSaves(time.Millisecond)
+	if err := m.FlushSaves(time.Millisecond); err == nil {
+		t.Fatal("FlushSaves returned nil past the timeout")
+	}
 	if bs.done.Load() {
 		t.Fatal("the save was expected to still be blocked")
 	}
@@ -189,5 +217,32 @@ func TestQuickFilterTogglesLeaveTheLastStateOnDisk(t *testing.T) {
 	first()
 	if len(onDisk) != 0 {
 		t.Fatalf("languages on disk = %v, want none", onDisk)
+	}
+}
+
+// "ff" where the second save fails once: the first must not land, and the exit
+// writes the state on screen once the error is gone.
+func TestFlushSavesRetriesTheNewestSaveThatFailed(t *testing.T) {
+	fs := &flakyStore{}
+	m := oneChannelModel(t, WithStore(fs))
+	m, first := pressKey(m, keyFavorite)
+	m, second := pressKey(m, keyFavorite)
+	second()
+	first()
+	if err := m.FlushSaves(time.Second); err != nil {
+		t.Fatalf("FlushSaves = %v, want nil", err)
+	}
+	if !slices.Equal(fs.saved, []int{0}) {
+		t.Fatalf("favorites in each save that went through = %v, want [0]", fs.saved)
+	}
+}
+
+// A save that fails during the exit comes back for the log.
+func TestFlushSavesReturnsTheErrorOfAFailedSave(t *testing.T) {
+	errDisk := errors.New("disk full")
+	m := hostedWithPersist(t, func(int, int, bool, bool, int) error { return errDisk })
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlRight})
+	if err := m.FlushSaves(time.Second); !errors.Is(err, errDisk) {
+		t.Fatalf("FlushSaves = %v, want %v", err, errDisk)
 	}
 }

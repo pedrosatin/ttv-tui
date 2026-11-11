@@ -1,6 +1,7 @@
 {
   "chat.auth_failed": "Login do chat recusado. Execute ttv-tui login e reinicie o app.",
   "store.save_failed": "Não salvo: verifique permissões/espaço",
+  "saves.timeout": "gravações ainda em andamento depois de %v",
   "list.empty_action": "Vazio: r tentar de novo · Esc voltar",
   "list.not_loaded": "A lista não carregou.",
   "player.info": "Informação do player: %s",
@@ -237,6 +238,7 @@
   "app.orphan_cleaned_log": "ttv-tui: encerrado um player que ficou tocando de uma sessão anterior (canal %s, pid %d)",
   "app.orphan_stop_failed": "ttv-tui: não foi possível encerrar o player anterior (pid %d): %v",
   "app.warn_input_conf": "ttv-tui: a janela do mpv ficou sem teclas porque o arquivo de teclas não pôde ser gravado: %v",
+  "app.warn_save_on_exit": "ttv-tui: uma mudança pode não ter sido gravada antes de sair: %v",
   "app.warn_player": "ttv-tui: aviso do player: %s",
   "login.warn_expiry": "Aviso: o token está no fim da validade (expires_in=%ds); quando expirar, basta repetir 'ttv-tui login --from-browser'.",
   "login.warn_overwrite": "Aviso: já existe um token salvo na configuração; ele será substituído.",

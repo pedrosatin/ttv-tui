@@ -159,7 +159,9 @@ func Run(opts Options) error {
 	go forwardChatEvents(ctx, p, chatMgr)
 	final, runErr := p.Run()
 	if m, ok := final.(ui.Model); ok {
-		m.FlushSaves(saveFlushTimeout)
+		if err := m.FlushSaves(saveFlushTimeout); err != nil {
+			_, _ = fmt.Fprintf(logw, catalog.T("app.warn_save_on_exit")+"\n", err)
+		}
 	}
 	// Stop the forwarders before the deferred player/chat shutdown.
 	cancel()
