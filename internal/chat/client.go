@@ -116,7 +116,6 @@ type Manager struct {
 	pending   []SendRequest
 	inFlight  []SendRequest
 	limiter   *rateLimiter
-	nextNonce uint64
 	connected bool
 }
 
@@ -226,10 +225,7 @@ func (m *Manager) Channel() string {
 
 // NextNonce allocates a unique outbound message nonce for tracking delivery.
 func (m *Manager) NextNonce() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.nextNonce++
-	return fmt.Sprintf("ttv-%d-%d", m.gen, m.nextNonce)
+	return rand.Text()
 }
 
 // Send enqueues an outbound message tied to req.Generation and req.Channel.
@@ -296,8 +292,7 @@ func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
 	}
 
 	if req.Nonce == "" {
-		m.nextNonce++
-		req.Nonce = fmt.Sprintf("ttv-%d-%d", m.gen, m.nextNonce)
+		req.Nonce = m.NextNonce()
 	}
 	req.Generation = m.gen
 	req.Channel = m.channel
@@ -343,8 +338,14 @@ func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
 		return upd, ErrRateLimited
 	}
 
-	m.pending = append(m.pending, req)
 	sendCh := m.sendCh
+	req.timer = time.AfterFunc(m.opts.SendTimeout, func() {
+		select {
+		case sendCh <- SendRequest{}:
+		default:
+		}
+	})
+	m.pending = append(m.pending, req)
 	gen := m.gen
 	ch := m.channel
 	m.mu.Unlock()
@@ -448,6 +449,9 @@ func (m *Manager) collectPendingLocked(sendCh chan SendRequest) []SendRequest {
 		out = append(out, m.inFlight...)
 		m.inFlight = nil
 	}
+	for _, req := range out {
+		req.stopTimer()
+	}
 	if sendCh != nil {
 		for {
 			select {
@@ -476,9 +480,8 @@ func (m *Manager) Stop() {
 	m.mu.Lock()
 	cancel := m.cancel
 	done := m.done
+	m.collectPendingLocked(m.sendCh)
 	m.sendCh = nil
-	m.pending = nil
-	m.inFlight = nil
 	m.channel = ""
 	m.mu.Unlock()
 
@@ -497,9 +500,8 @@ func (m *Manager) Close() {
 		m.closed = true
 		cancel := m.cancel
 		done := m.done
+		m.collectPendingLocked(m.sendCh)
 		m.sendCh = nil
-		m.pending = nil
-		m.inFlight = nil
 		m.channel = ""
 		m.mu.Unlock()
 
@@ -677,48 +679,26 @@ func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64
 	}
 }
 
-func (m *Manager) matchInFlight(nonce, user, body string) (SendRequest, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.inFlight) == 0 {
+func (m *Manager) matchInFlight(nonce, user string) (SendRequest, bool) {
+	if m.opts.Username == "" || !strings.EqualFold(user, m.opts.Username) {
 		return SendRequest{}, false
 	}
+	return m.matchInFlightByUserState(nonce)
+}
+
+func (m *Manager) matchInFlightByUserState(nonce string) (SendRequest, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if nonce != "" {
 		for i, req := range m.inFlight {
 			if req.Nonce == nonce {
-				m.inFlight = append(m.inFlight[:i], m.inFlight[i+1:]...)
-				return req, true
-			}
-		}
-	}
-	if m.opts.Username != "" && strings.EqualFold(user, m.opts.Username) {
-		for i, req := range m.inFlight {
-			if req.Body == body {
+				req.stopTimer()
 				m.inFlight = append(m.inFlight[:i], m.inFlight[i+1:]...)
 				return req, true
 			}
 		}
 	}
 	return SendRequest{}, false
-}
-
-func (m *Manager) matchInFlightByUserState(nonce string) (SendRequest, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.inFlight) == 0 {
-		return SendRequest{}, false
-	}
-	if nonce != "" {
-		for i, req := range m.inFlight {
-			if req.Nonce == nonce {
-				m.inFlight = append(m.inFlight[:i], m.inFlight[i+1:]...)
-				return req, true
-			}
-		}
-	}
-	req := m.inFlight[0]
-	m.inFlight = m.inFlight[1:]
-	return req, true
 }
 
 func (m *Manager) popEarliestInFlight() (SendRequest, bool) {
@@ -728,6 +708,7 @@ func (m *Manager) popEarliestInFlight() (SendRequest, bool) {
 		return SendRequest{}, false
 	}
 	req := m.inFlight[0]
+	req.stopTimer()
 	m.inFlight = m.inFlight[1:]
 	return req, true
 }
@@ -781,6 +762,7 @@ func (m *Manager) expireSends(gen uint64, channel string) []SendStatusUpdate {
 		kept := queue[:0]
 		for _, req := range queue {
 			if !req.expiresAt.IsZero() && !now.Before(req.expiresAt) {
+				req.stopTimer()
 				updates = append(updates, SendStatusUpdate{Generation: gen, Channel: channel, Nonce: req.Nonce, Body: req.Body, Status: DeliveryDiscarded, Reason: RejectTimeout})
 			} else {
 				kept = append(kept, req)

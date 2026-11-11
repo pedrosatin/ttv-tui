@@ -195,6 +195,7 @@ func (s *connSession) sendNext() (more bool, err error) {
 	}
 	head := m.pending[0]
 	if belongsElsewhere(head, s.gen, s.channel) {
+		head.stopTimer()
 		m.pending = m.pending[1:]
 		m.mu.Unlock()
 		s.addUpdate(head, DeliveryDiscarded, RejectChannelSwitched, "")
@@ -204,6 +205,7 @@ func (s *connSession) sendNext() (more bool, err error) {
 
 	wait, allowedNow, windowFull := m.limiter.DelayUntilReady(s.channel)
 	if windowFull {
+		head.stopTimer()
 		m.pending = m.pending[1:]
 		m.mu.Unlock()
 		s.addUpdate(head, DeliveryDiscarded, RejectRateLimited, "")
@@ -245,8 +247,6 @@ func (s *connSession) serve(sendCh <-chan SendRequest, linesCh <-chan lineResult
 
 	heartbeat := time.NewTicker(m.opts.PingInterval)
 	defer heartbeat.Stop()
-	expiry := time.NewTicker(max(time.Nanosecond, min(m.opts.SendTimeout/4, 100*time.Millisecond)))
-	defer expiry.Stop()
 
 	// Drain any pending messages queued right as the connection came up.
 	if err := s.sendQueued(); err != nil {
@@ -271,10 +271,6 @@ func (s *connSession) serve(sendCh <-chan SendRequest, linesCh <-chan lineResult
 			if werr := s.write("PING :ttv-tui\r\n", time.Time{}); werr != nil {
 				err = fmt.Errorf("heartbeat write: %w", werr)
 			}
-
-		case <-expiry.C:
-			s.updates = append(s.updates, m.expireSends(s.gen, s.channel)...)
-			s.flush()
 
 		case <-ticker.C:
 			s.flush()
@@ -355,7 +351,7 @@ func (s *connSession) handlePrivMsg(ev Event) {
 	if ev.Tags != nil {
 		clientNonce = ev.Tags["client-nonce"]
 	}
-	if matched, ok := s.m.matchInFlight(clientNonce, ev.User, ev.Body); ok {
+	if matched, ok := s.m.matchInFlight(clientNonce, ev.User); ok {
 		s.addUpdate(matched, DeliveryConfirmed, "", "")
 		s.flush()
 		return
@@ -445,7 +441,7 @@ func (s *connSession) handleUserNotice(ev Event) {
 // handleOther confirms an in-flight message when the server answers it with
 // USERSTATE. Every other command is only proof of life.
 func (s *connSession) handleOther(ev Event) {
-	if ev.Command != "USERSTATE" {
+	if ev.Command != "USERSTATE" || !s.forThisChannel(ev) {
 		return
 	}
 	clientNonce := ""

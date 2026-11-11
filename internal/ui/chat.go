@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"crypto/rand"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -92,7 +93,6 @@ type chatPanel struct {
 	roomState   ChatRoomState
 	errText     string
 	sendWarning string
-	nextNonce   uint64
 	// gapPending asks for the reconnect line once the new session is up.
 	gapPending bool
 
@@ -188,7 +188,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.chat.panel.channel == "" || m.chat.session == nil {
+	if m.chat.panel.switching || m.chat.panel.channel == "" || m.chat.session == nil {
 		return m, nil
 	}
 	sender, ok := m.chat.session.(ChatSender)
@@ -200,8 +200,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 		m.chat.panel = newChatPanel()
 	}
 
-	m.chat.panel.nextNonce++
-	nonce := fmt.Sprintf("ui-%d-%d", m.chat.panel.gen, m.chat.panel.nextNonce)
+	nonce := rand.Text()
 	displayName := m.chat.panel.username
 	if displayName == "" {
 		displayName = m.t("chat.self_name")

@@ -60,11 +60,18 @@ const (
 // SendRequest describes an outbound PRIVMSG tied to the channel generation in
 // which the user composed it.
 type SendRequest struct {
+	timer      *time.Timer
 	expiresAt  time.Time
 	Generation uint64
 	Channel    string
 	Nonce      string
 	Body       string
+}
+
+func (r SendRequest) stopTimer() {
+	if r.timer != nil {
+		r.timer.Stop()
+	}
 }
 
 // SendStatusUpdate reports a state transition for an outbound message tracked by Nonce.
@@ -103,6 +110,9 @@ func ClassifyRejectNotice(msgID, body string) (RejectReason, bool) {
 		return RejectOther, true
 	}
 
+	if id != "" {
+		return RejectNone, false
+	}
 	lower := strings.ToLower(strings.TrimSpace(body))
 	switch {
 	case strings.Contains(lower, "login authentication failed") || strings.Contains(lower, "improperly formatted auth") || strings.Contains(lower, "unsuccessful login"):
