@@ -3,11 +3,14 @@
 package player
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"os"
 	"os/exec"
+	"reflect"
 	"runtime"
 	"testing"
 	"time"
@@ -203,5 +206,49 @@ func TestCommandReplyDoesNotWaitForOSDWrite(t *testing.T) {
 	}
 	if got := s.Volume(); got != 40 {
 		t.Fatalf("volume = %d after the confirmed reply, want 40", got)
+	}
+}
+
+// A pause whose write expired never reached mpv, so mpv is still playing. The
+// next Space must ask for the pause again, and the reply still confirms it.
+func TestPauseAfterExpiredWriteStillPauses(t *testing.T) {
+	s, _ := stalledIPC(t, 100*time.Millisecond)
+	if err := s.togglePause(); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("first Space: err = %v, want a write deadline error", err)
+	}
+
+	conn, peer := net.Pipe()
+	t.Cleanup(func() {
+		_ = peer.Close()
+		_ = conn.Close()
+	})
+	s.cmdMu.Lock()
+	s.ipcConn = conn
+	s.cmdMu.Unlock()
+	line := make(chan []byte, 1)
+	go func() {
+		b, _ := bufio.NewReader(peer).ReadBytes('\n')
+		line <- b
+	}()
+	if err := s.togglePause(); err != nil {
+		t.Fatalf("second Space: %v", err)
+	}
+	var sent struct {
+		Command   []any `json:"command"`
+		RequestID int64 `json:"request_id"`
+	}
+	if err := json.Unmarshal(<-line, &sent); err != nil {
+		t.Fatalf("decode the second command: %v", err)
+	}
+	if want := []any{"set_property", "pause", true}; !reflect.DeepEqual(sent.Command, want) {
+		t.Fatalf("second Space sent %v to an mpv still playing, want %v", sent.Command, want)
+	}
+
+	s.handleIPCMessage(ipcMessage{Error: "success", RequestID: sent.RequestID})
+	s.mu.Lock()
+	paused, st := s.paused, s.state
+	s.mu.Unlock()
+	if !paused || st != StatePaused {
+		t.Fatalf("after the confirmed reply: paused = %v, state = %s, want paused", paused, st)
 	}
 }
