@@ -66,6 +66,64 @@ jobs:
           go vet ./...
           go test -buildvcs=false ./...
 
+  # The release ships the window only for Linux (ADR 0012). These builds keep the
+  # Windows (MSYS2 UCRT64) and macOS (Homebrew) code compiling and its tests running.
+  window-other:
+    name: Window (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install SDL3 and libmpv (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pkgconf sdl3 mpv
+
+      - name: Install SDL3 and libmpv (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-sdl3
+            mingw-w64-ucrt-x86_64-mpv
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: window/go.mod
+          cache: false
+
+      # The default macOS TMPDIR is too long for a Unix socket path.
+      - name: Build, vet and test (macOS)
+        if: runner.os == 'macOS'
+        working-directory: window
+        env:
+          TMPDIR: /tmp
+        run: |
+          go build -buildvcs=false -o ttv-tui-window .
+          go vet ./...
+          go test -buildvcs=false ./...
+
+      - name: Build, vet and test (Windows)
+        if: runner.os == 'Windows'
+        working-directory: window
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          go build -buildvcs=false -o ttv-tui-window.exe .
+          go vet ./...
+          go test -buildvcs=false ./...
+
   # Proves on every push that the app and its tests compile on each OS, and that
   # the suite runs there. The suite needs neither mpv nor streamlink; only the
   # Windows handshake step below uses a real mpv.
