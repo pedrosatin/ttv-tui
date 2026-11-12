@@ -179,7 +179,7 @@ O app junta três ferramentas e desenha a interface em volta delas:
 2. **Vídeo.** Quando você abre um canal, o app inicia o `streamlink`. Ele busca a live na melhor qualidade, descarta os trechos de anúncio e repassa o vídeo ao `mpv`. O app manda pausa, volume e parada ao `mpv` por um socket IPC JSON local.
 3. **Chat.** O chat se conecta ao IRC da Twitch por TLS. Sem token, entra como anônimo e só lê.
 
-O app toca um canal por vez. Abrir outro canal encerra o player anterior e leva o chat para a nova sala. `Ctrl+X` para só o vídeo, e o chat continua aberto. `Ctrl+Q` encerra o `streamlink` e o `mpv`, apaga os arquivos temporários de IPC e desconecta o chat.
+O app toca um canal por vez. Abrir outro canal encerra o player anterior e leva o chat para a nova sala. Cada canal guarda o próprio rascunho de mensagem até você sair do app; a troca nunca o envia, e voltar ao canal traz o rascunho de volta. `Ctrl+X` para só o vídeo, e o chat continua aberto. `Ctrl+Q` encerra o `streamlink` e o `mpv`, apaga os arquivos temporários de IPC e desconecta o chat.
 
 Os [ADRs](adr/) explicam cada escolha.
 
