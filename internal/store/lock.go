@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/pedrosatin/ttv-tui/internal/filelock"
@@ -28,9 +27,5 @@ func lockState(path string) (func() error, error) {
 }
 
 func lockStateFile(path string) (func() error, error) {
-	release, err := filelock.Lock(path)
-	if err != nil {
-		return nil, fmt.Errorf("acquire state lock: %w", err)
-	}
-	return release, nil
+	return filelock.Lock(path)
 }
