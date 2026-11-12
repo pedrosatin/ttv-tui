@@ -131,8 +131,8 @@ func TestEnterAfterTabOpensChannelOrStartsCompose(t *testing.T) {
 	if m.SelectedChannel() == nil || m.SelectedChannel().Login != "alanzoka" {
 		t.Fatalf("SelectedChannel=%+v, want alanzoka", m.SelectedChannel())
 	}
-	if m.ComposeDraft() != "texto intacto" {
-		t.Fatalf("draft lost after opening channel: %q", m.ComposeDraft())
+	if m.ComposeDraft() != "" {
+		t.Fatalf("draft after opening new channel: %q, want empty", m.ComposeDraft())
 	}
 
 	m = pressTab(m) // list → chat (may already be chat after select; force list then chat)
@@ -147,8 +147,25 @@ func TestEnterAfterTabOpensChannelOrStartsCompose(t *testing.T) {
 	if !m.Composing() || m.Focus() != FocusChat {
 		t.Fatalf("Enter on chat: Composing=%v Focus=%q", m.Composing(), m.Focus())
 	}
+	if m.ComposeDraft() != "" {
+		t.Fatalf("draft entering compose on new channel: %q, want empty", m.ComposeDraft())
+	}
+
+	// Returning to gaules restores the original draft.
+	m = pressTab(m)
+	m = sendKeys(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("Enter on list must select gaules")
+	}
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	if m.SelectedChannel() == nil || m.SelectedChannel().Login != "gaules" {
+		t.Fatalf("SelectedChannel=%+v, want gaules", m.SelectedChannel())
+	}
 	if m.ComposeDraft() != "texto intacto" {
-		t.Fatalf("draft lost entering compose: %q", m.ComposeDraft())
+		t.Fatalf("draft lost after returning to gaules: %q", m.ComposeDraft())
 	}
 }
 

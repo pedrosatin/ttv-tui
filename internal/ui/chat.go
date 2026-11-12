@@ -142,6 +142,16 @@ func (m *Model) startChatChannel(login string) tea.Cmd {
 		m.chat.panel = newChatPanel()
 	}
 	hadPending := m.chat.hasPendingOutgoing() && m.chat.panel.channel != "" && m.chat.panel.channel != norm
+	if m.chat.drafts == nil {
+		m.chat.drafts = make(map[string]string)
+	}
+	if m.chat.panel.channel != "" {
+		m.chat.drafts[m.chat.panel.channel] = m.chat.composeDraft
+	}
+	m.chat.composeDraft = m.chat.drafts[norm]
+	if norm != m.chat.panel.channel {
+		m.chat.composing = false
+	}
 	m.chat.panel.buf.Clear()
 	m.chat.panel.channel = norm
 	m.chat.panel.state = ChatStateConnecting
@@ -207,6 +217,9 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 	}
 
 	m.chat.composeDraft = ""
+	if m.chat.panel.channel != "" && m.chat.drafts != nil {
+		m.chat.drafts[m.chat.panel.channel] = ""
+	}
 	m.chat.panel.sendWarning = ""
 	beforeLen := m.chat.panel.buf.Len()
 	appended := m.chat.panel.buf.Append(ChatMessage{
