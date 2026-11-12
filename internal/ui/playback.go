@@ -294,3 +294,19 @@ func (m Model) manualInstallHintFor(goos string) string {
 		return m.t("components.manual_install.linux")
 	}
 }
+
+// manualInstallMPVHint returns platform-specific instructions for installing mpv manually.
+func (m Model) manualInstallMPVHint() string {
+	return m.manualInstallMPVHintFor(runtime.GOOS)
+}
+
+func (m Model) manualInstallMPVHintFor(goos string) string {
+	switch goos {
+	case "windows":
+		return m.t("components.manual_install_mpv.windows")
+	case "darwin":
+		return m.t("components.manual_install_mpv.darwin")
+	default:
+		return m.t("components.manual_install_mpv.linux")
+	}
+}

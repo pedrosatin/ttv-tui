@@ -69,6 +69,8 @@ func (m Model) blockingStatusLead() (statusLead, bool) {
 		lead := statusLead{primary: m.playerFailureText(), tone: toneError, detail: m.playerErrorDetail()}
 		if m.player.failure == PlayerFailureStreamlinkMissing || m.player.downloadFailed {
 			lead.hint = m.manualInstallHint()
+		} else if m.player.failure == PlayerFailureMPVMissing {
+			lead.hint = m.manualInstallMPVHint()
 		}
 		return lead, true
 	case m.notices.ctrlC != "":

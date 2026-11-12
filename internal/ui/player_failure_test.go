@@ -564,6 +564,66 @@ func TestPlayerFailureStreamlinkMissing_ShowsManualInstallHint(t *testing.T) {
 	}
 }
 
+func TestPlayerFailureMPVMissing_ShowsManualInstallHint(t *testing.T) {
+	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+		t.Run(lang, func(t *testing.T) {
+			m, _ := newFailureModel(t, lang, 200, "xaryu")
+			msg := PlayerStatusMsg{
+				Generation: 1,
+				State:      PlayerStateError,
+				Login:      "xaryu",
+				LastLine:   "mpv: command not found",
+				Failure:    PlayerFailureMPVMissing,
+			}
+			updated, _ := m.Update(msg)
+			m = updated.(Model)
+
+			lead, ok := m.blockingStatusLead()
+			if !ok {
+				t.Fatal("expected blockingStatusLead to be active on player error")
+			}
+			hint := lead.hint
+			if hint == "" {
+				t.Fatal("expected a manual install hint when mpv is missing")
+			}
+			bar := m.StatusBar()
+			detailAt := strings.Index(bar, "mpv: command not found")
+			hintAt := strings.Index(bar, string([]rune(hint)[:20]))
+			if detailAt < 0 || hintAt < 0 || hintAt < detailAt {
+				t.Fatalf("status bar should show the detail, then the hint:\n%s", bar)
+			}
+
+			// Verify Windows hint mentions winget and scoop
+			windowsHint := m.manualInstallMPVHintFor("windows")
+			if !strings.Contains(windowsHint, "winget install --id shinchiro.mpv -e") {
+				t.Fatalf("windows hint should mention winget command, got: %q", windowsHint)
+			}
+			if !strings.Contains(windowsHint, "Scoop") || !strings.Contains(windowsHint, "scoop install mpv") {
+				t.Fatalf("windows hint should mention Scoop, got: %q", windowsHint)
+			}
+
+			// Verify macOS specific hint
+			darwinHint := m.manualInstallMPVHintFor("darwin")
+			if !strings.Contains(darwinHint, "brew install mpv") {
+				t.Fatalf("darwin hint should mention brew install mpv, got: %q", darwinHint)
+			}
+
+			// Verify Linux specific hint
+			linuxHint := m.manualInstallMPVHintFor("linux")
+			if !strings.Contains(linuxHint, "pacman") {
+				t.Fatalf("linux hint should mention pacman, got: %q", linuxHint)
+			}
+
+			// Verify help overlay includes the hint
+			m.layout.helpVisible = true
+			helpText := strings.Join(m.renderHelpLines(120), "\n")
+			if !strings.Contains(helpText, hint) {
+				t.Fatalf("help overlay should include manual install hint:\n%s", helpText)
+			}
+		})
+	}
+}
+
 func TestComponentProgress_WaitingLock(t *testing.T) {
 	for _, tc := range []struct {
 		lang string
