@@ -17,13 +17,13 @@ O suporte a múltiplas plataformas (Twitch, Kick, YouTube e URLs avulsas) requer
    - O catálogo é decomposto em capacidades opcionais:
      - `Browser`: navegação de categorias, listagem de canais por categoria e busca de categorias (`SearchCategories`).
      - `Searcher`: busca de canais ao vivo (`Search`).
-     - `Resolver`: resolução de status de transmissão para canais salvos (`ChannelsByLogins`). O método mantém o nome histórico `ChannelsByLogins` provisoriamente para evitar retrabalho na UI atual; a renomeação para identificador neutro está planejada para a migração da lista na migração da lista.
+     - `Resolver`: resolução de status de transmissão para canais salvos (`ChannelsByLogins`). O método mantém o nome histórico `ChannelsByLogins` provisoriamente para evitar retrabalho na UI atual; a renomeação para identificador neutro está planejada para a migração da lista.
      - `catalog.Source`: preservado como a composição das três capacidades (`Browser`, `Searcher`, `Resolver`) para compatibilidade com a Twitch e a UI existente.
    - Em `internal/twitch/source.go`, os tipos correspondentes são expostos como apelidos de tipo (`type Channel = catalog.Channel`, etc.). Esses apelidos são provisórios e sustentam a compatibilidade até a migração da UI na migração da lista e do chat na migração do chat.
 
 2. **Lógica unificada de identidade**:
    - `catalog.SameChannel` e `catalog.StableID` centralizam a checagem de equivalência de canais e extração de identificadores estáveis.
-   - `catalog.StableID` remove o prefixo canônico `plataforma:` tanto de `Login` quanto de `ID`, normalizando identificadores qualificados de plataformas externas (como `kick:xqc`).
+   - `catalog.StableID` remove o prefixo canônico `plataforma:` tanto de `Login` quanto de `ID`, normalizando identificadores qualificados de plataformas externas (como `kick:xqc`). Antes, o store e a lista removiam o prefixo só do `ID` e usavam o `Login` cru; agora um canal da Kick salvo com `Login` `xqc` e outro com `kick:xqc` são o mesmo canal. Os dados gravados pelo app não têm `Login` prefixado, então nenhum favorito ou recente muda de identidade.
    - A comparação é sensível a maiúsculas e minúsculas no YouTube e insensível à caixa na Twitch e demais plataformas.
    - Cópias locais em `internal/store` e `internal/ui` foram removidas em favor dos métodos do catálogo.
 
