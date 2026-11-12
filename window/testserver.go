@@ -13,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // screenText devolve o texto atual da grade (usado só nos testes de fluxo).
@@ -103,6 +104,23 @@ func (a *app) serveTest(path string) {
 				}
 				fmt.Fprintf(c, "%d %d %d %d %d\n", a.buf[off], a.buf[off+1], a.buf[off+2], a.buf[off+3], top)
 				a.paintMu.Unlock()
+			case "fbpixel": // RGB do pixel da janela no quadro desenhado: o que a GPU pôs na tela
+				var x, y int
+				_, _ = fmt.Sscan(rest, &x, &y)
+				r := fbReq{x: x, y: y, reply: make(chan [3]byte, 1)}
+				select {
+				case a.fbq <- r:
+					C.push_ev(C.ev_ctl())
+				default:
+					fmt.Fprintln(c, "ocupado")
+					return
+				}
+				select {
+				case px := <-r.reply:
+					fmt.Fprintf(c, "%d %d %d\n", px[0], px[1], px[2])
+				case <-time.After(2 * time.Second):
+					fmt.Fprintln(c, "sem quadro")
+				}
 			case "quit": // mesmo caminho de fechar a janela
 				C.push_quit()
 				fmt.Fprintln(c, "ok")

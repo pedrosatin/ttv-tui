@@ -38,5 +38,6 @@ void tex_rows(GLuint t, int y, int w, int h, const void *p);
 void tex_rect(GLuint t, int x, int y, int w, int h, int stride_px, const void *p);
 void clear_to(int W, int H, float r, float g, float b);
 void draw_panel(GLuint t, int W, int H, int x, int y, int w, int h);
+void fb_pixel(int x, int y, unsigned char *rgba);
 
 #endif

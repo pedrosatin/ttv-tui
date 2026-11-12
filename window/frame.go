@@ -28,6 +28,7 @@ func (a *app) present(video bool) {
 	if a.buf != nil {
 		C.draw_panel(a.tex, W, H, C.int(a.px), 0, C.int(a.pw), C.int(a.ph))
 	}
+	a.answerFB()
 	C.SDL_GL_SwapWindow(a.win)
 	if a.sess != nil {
 		C.mpv_render_context_report_swap(a.sess.rc)
@@ -55,6 +56,18 @@ func (a *app) present(video bool) {
 		a.inputAt = time.Time{}
 	}
 	a.mu.Unlock()
+}
+
+// answerFB responde às leituras pendentes com o quadro que acabou de ser desenhado.
+func (a *app) answerFB() {
+	for len(a.fbq) > 0 {
+		r := <-a.fbq
+		var px [4]C.uchar
+		if r.x >= 0 && r.x < a.W && r.y >= 0 && r.y < a.H {
+			C.fb_pixel(C.int(r.x), C.int(a.H-1-r.y), &px[0])
+		}
+		r.reply <- [3]byte{byte(px[0]), byte(px[1]), byte(px[2])}
+	}
 }
 
 // painter roda em goroutine própria, no máximo a ~30 Hz.

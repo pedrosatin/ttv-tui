@@ -148,5 +148,8 @@ func (a *app) handle(ev *C.SDL_Event) {
 				}
 			}
 		}
+		if len(a.fbq) > 0 {
+			a.layoutDirty = true // a leitura acontece no próximo quadro, antes da troca de buffers
+		}
 	}
 }

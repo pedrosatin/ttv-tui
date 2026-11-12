@@ -50,6 +50,12 @@ type session struct {
 	setProperty func(string, string)
 }
 
+// fbReq pede a cor de um pixel da janela, com a origem em cima, à esquerda.
+type fbReq struct {
+	x, y  int
+	reply chan [3]byte
+}
+
 type ptyDevice interface {
 	io.ReadWriteCloser
 	Resize(cols, rows, pw, ph int) error
@@ -75,6 +81,7 @@ type app struct {
 	ctlq chan ctlMsg
 
 	inputq chan []byte
+	fbq    chan fbReq // leituras do framebuffer pedidas pelo socket de teste
 
 	tuiDirty     atomic.Bool
 	tuiPending   atomic.Bool

@@ -132,3 +132,7 @@ void draw_panel(GLuint t, int W, int H, int x, int y, int w, int h) {
     glDisable(GL_BLEND);
     glDisable(GL_TEXTURE_2D);
 }
+// fb_pixel lê um pixel do buffer de desenho, com a origem do OpenGL (embaixo, à esquerda).
+void fb_pixel(int x, int y, unsigned char *rgba) {
+    glReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+}
