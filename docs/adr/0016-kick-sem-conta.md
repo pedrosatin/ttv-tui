@@ -13,7 +13,7 @@ Nenhum dos dois tem contrato. O site fica atrás do Cloudflare, que já bloqueou
 
 ## Decisão
 
-1. **`internal/kick` é o provider da Kick.** Ele implementa `Provider` como a Twitch: `Resolver` sobre a rota `livestream` (uma requisição por canal, quatro por vez), `Chat` só leitura e `StreamTarget` com a URL do canal. Não tem `Browser` nem `Searcher`: o canal chega por URL colada, pelos favoritos ou pelos recentes. O vídeo continua com o `streamlink` (regra 1).
+1. **`internal/kick` é o provider da Kick.** Ele implementa `Provider` como a Twitch: `Resolver` sobre a rota `livestream` (uma requisição por canal, quatro por vez), `Chat` só leitura e `StreamTarget` com a URL do canal. Quando este ADR foi escrito ele não tinha `Browser` nem `Searcher`, e o canal chegava por URL colada, pelos favoritos ou pelos recentes; o catálogo veio depois, no [ADR 0017](0017-kick-catalogo.md). O vídeo continua com o `streamlink` (regra 1).
 
 2. **Toda resposta fora do esperado vira erro com tipo.** O 403 é `catalog.Bloqueio`, um tipo novo: a requisição foi recusada antes de chegar ao site, repetir na hora dá no mesmo e nada na resposta é dado da plataforma. O 404 embrulha `kick.ErrChannelNotFound`. No `Resolver`, canal inexistente ou ilegível fica sem evidência (não vira offline), e bloqueio, limite de taxa, erro de servidor ou de rede falham a consulta inteira.
 
@@ -29,6 +29,6 @@ Nenhum dos dois tem contrato. O site fica atrás do Cloudflare, que já bloqueou
 
 ## Consequências
 
-- Envio de mensagem, moderação visível (mensagem apagada, banimento) e catálogo da Kick ficam fora. Os eventos de moderação não apareceram na amostra real usada nos testes, então não foram implementados de memória.
+- Envio de mensagem e moderação visível (mensagem apagada, banimento) ficam fora. O catálogo, que também ficou fora aqui, está no [ADR 0017](0017-kick-catalogo.md). Os eventos de moderação não apareceram na amostra real usada nos testes, então não foram implementados de memória.
 - Se a Kick fechar o JSON do site ou trocar a chave, a Kick para de funcionar no app até uma atualização ou até o usuário pôr a chave nova. A Twitch não é afetada.
 - `go test ./internal/kick -run TestLive_Contract` com `TTV_KICK_LIVE_SLUG=<canal ao vivo>` confere os dois contratos contra a Kick real. O teste fica fora da suíte normal.

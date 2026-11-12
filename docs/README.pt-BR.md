@@ -84,7 +84,7 @@ ttv-tui login --import twt  # opcional: usa o token do twitch-tui para enviar me
 ttv-tui doctor              # confere dependências, caminhos e se há token
 ```
 
-Escolha uma categoria com `Enter` e depois um canal com `Enter`. Você também pode apertar `Ctrl+F` e colar a URL de uma transmissão (Twitch, Kick, YouTube) para tocar direto. A live começa e o chat abre à direita: Twitch e Kick têm chat, e o da Kick é só leitura. Aperte `?` para ver os atalhos.
+Escolha uma categoria com `Enter` e depois um canal com `Enter`. A lista abre na Twitch; o `p` troca para a Kick e volta. Você também pode apertar `Ctrl+F` e colar a URL de uma transmissão (Twitch, Kick, YouTube) para tocar direto. A live começa e o chat abre à direita: Twitch e Kick têm chat, e o da Kick é só leitura. Aperte `?` para ver os atalhos.
 
 ## Plataformas
 
@@ -112,7 +112,8 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Põe ou tira o canal dos favoritos |
 | `/` | Filtra a lista atual |
-| `Ctrl+F` ou `Ctrl+S` | Busca canais em toda a Twitch ou cola a URL de uma live |
+| `Ctrl+F` ou `Ctrl+S` | Busca canais e categorias na plataforma que a lista mostra, ou cola a URL de uma live |
+| `p` | Troca a lista entre Twitch e Kick; o vídeo e o chat continuam |
 | `l` | Filtra canais por idioma e público |
 | `r` | Tenta de novo carregar a lista ou o vídeo |
 | `Esc` | Limpa o filtro ou volta às categorias |
@@ -225,12 +226,15 @@ Não. Navegar, assistir e ler o chat funcionam sem login. O token só serve para
 <details>
 <summary><b>Dá para assistir Kick?</b></summary>
 
-Dá, pela URL: aperte `Ctrl+F` e cole `https://kick.com/<canal>`. O canal entra nos recentes, onde o `f` o põe nos favoritos, e a lista mostra se ele está ao vivo, com título e espectadores. Ainda não há catálogo da Kick para navegar.
+Dá. Aperte `p` e a lista mostra as categorias ao vivo da Kick, das mais assistidas para as menos. O `Enter` abre uma categoria e lista os canais dela com espectadores e título, o `/` filtra o que está carregado e o `Ctrl+F` busca canais e categorias da Kick pelo nome. O resultado da busca só diz se o canal está ao vivo; título e espectadores aparecem quando você o abre. O canal que esconde a contagem de espectadores na Kick mostra `[vivo]` no lugar do número. O `p` de novo volta para a Twitch.
+
+A URL também serve: aperte `Ctrl+F` e cole `https://kick.com/<canal>`. Todo canal aberto entra nos recentes, onde o `f` o põe nos favoritos, e a lista mostra se ele está ao vivo, com título e espectadores.
 
 O chat abre ao lado do vídeo e é só leitura. Enviar exige conta na Kick e um app registrado, que este projeto não usa. Emotes aparecem pelo nome, e a mensagem que um moderador apaga continua na tela.
 
 A Kick não tem API pública para nada disso sem conta. O app lê o JSON que o próprio site usa e a conexão de chat que o player do site abre, então os dois podem parar de funcionar quando a Kick mudar algo:
 
+- `Catálogo da Kick indisponível agora`: a barreira na frente do site (Cloudflare) recusou o app. Os favoritos e os recentes continuam na tela e ainda abrem. Aperte `r` para tentar mais tarde ou `p` para voltar à Twitch.
 - `Kick recusou o pedido (HTTP 403)`: a barreira na frente do site bloqueou o app. Espere um pouco e aperte `Ctrl+T` para tentar o chat de novo.
 - `Kick recusou a chave do chat`: a Kick trocou a chave do serviço de chat (Pusher). Abra um canal da Kick no navegador, ache na aba de rede o WebSocket para `ws-us2.pusher.com/app/<chave>` e ponha essa chave no `config.toml`:
 
