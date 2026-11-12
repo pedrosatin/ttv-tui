@@ -1159,6 +1159,9 @@ func TestInstallWindowsZip_DotDotCheck(t *testing.T) {
 }
 
 func TestDefaultExtractAppImage_RelativePaths(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("AppImage extraction runs a shell script and only happens on Linux")
+	}
 	tempDir := t.TempDir()
 
 	// Create a mock executable script acting as the AppImage

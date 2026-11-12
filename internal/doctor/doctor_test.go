@@ -220,6 +220,9 @@ func TestReportStreamlinkOrigins(t *testing.T) {
 	t.Run("config", func(t *testing.T) {
 		base := isolate(t)
 		cfgBin := filepath.Join(base, "custom-streamlink")
+		if runtime.GOOS == "windows" {
+			cfgBin += ".exe" // fakeTool adds the extension there
+		}
 		fakeTool(t, base, "custom-streamlink")
 		fakeTool(t, base, "mpv")
 		t.Setenv("PATH", base)
