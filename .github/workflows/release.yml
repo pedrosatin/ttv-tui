@@ -62,6 +62,7 @@ jobs:
             mingw-w64-ucrt-x86_64-sdl3
             mingw-w64-ucrt-x86_64-mpv
             mingw-w64-ucrt-x86_64-ntldd
+            unzip
             zip
 
       - name: Set up Go

@@ -96,6 +96,7 @@ jobs:
             mingw-w64-ucrt-x86_64-sdl3
             mingw-w64-ucrt-x86_64-mpv
             mingw-w64-ucrt-x86_64-ntldd
+            unzip
             zip
 
       - name: Set up Go
@@ -144,6 +145,11 @@ jobs:
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'window-zip'
           Expand-Archive -LiteralPath dist-window/ttv-tui-window.zip -DestinationPath $dir
+          $forbidden = Get-ChildItem -Path (Join-Path $dir 'ttv-tui-window') -Filter '*.dll' |
+            Where-Object { $_.Name -match '^(avcodec|avformat|avutil|swscale|swresample)' }
+          if ($forbidden) {
+            throw "MSYS2 FFmpeg DLLs found in zip: $($forbidden.Name -join ', ')"
+          }
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           $exe = Join-Path $dir 'ttv-tui-window\ttv-tui-window.exe'
           $p = Start-Process -FilePath $exe -ArgumentList '--probe' -Wait -PassThru -NoNewWindow

@@ -42,11 +42,12 @@ o IPC JSON e o filtro de anúncio do streamlink (regra 1). O que muda é o trans
 - As cópias do shim ficam numa pasta temporária, sem as DLLs do SDL3 e do libmpv. O `PATH` da TUI
   inclui a pasta do `ttv-tui-window.exe` logo depois da do shim.
 - O Windows não tem SDL3 nem libmpv do sistema. A release leva um zip com a pasta
-  `ttv-tui-window`: o executável, as DLLs que ele carrega do MSYS2 UCRT64 (`packaging/window-windows.sh`,
-  pelo `ntldd -R`) e o `THIRD-PARTY.txt` com os pacotes de origem, cujo código e licenças estão
-  em packages.msys2.org. O `install.ps1` põe essa pasta dentro da `bin` do `ttv-tui`, fora do `PATH`
-  do usuário, e o `ttv-tui` procura a janela ali também. Ele passa o próprio caminho em
-  `TTV_WINDOW_TUI`, e a janela roda essa mesma TUI. O CI confere que o zip carrega sem o MSYS2 no `PATH`.
+  `ttv-tui-window`: o executável, a `libmpv-2.dll` oficial LGPL do projeto mpv (ADR 0013),
+  o `SDL3.dll` do MSYS2 UCRT64 (`packaging/window-windows.sh`), e o `THIRD-PARTY.txt`
+  com a licença LGPL, links para os fontes e os pacotes MSYS2 de origem. O `install.ps1`
+  põe essa pasta dentro da `bin` do `ttv-tui`, fora do `PATH` do usuário, e o `ttv-tui`
+  procura a janela ali também. Ele passa o próprio caminho em `TTV_WINDOW_TUI`, e a janela
+  roda essa mesma TUI. O CI confere que o zip carrega sem o MSYS2 no `PATH`.
 - O shim cria o named pipe, manda o nome à janela pelo socket de controle e copia o stdin do
   streamlink para o pipe quando o libmpv conecta. Se a janela fechar o controle antes disso, o
   shim desiste e sai, e o streamlink vê o player encerrar.
