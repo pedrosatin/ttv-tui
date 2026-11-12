@@ -141,7 +141,7 @@ func TestCtrlT_KeepsHistoryAndMarksTheGap(t *testing.T) {
 			if !strings.Contains(view, "msg49") {
 				t.Fatalf("history not on screen:\n%s", m.View())
 			}
-			if strings.Contains(view, squash(fmt.Sprintf(cat.T("chat.empty"), "gaules"))) {
+			if strings.Contains(view, squash(fmt.Sprintf(cat.T("chat.empty"), "#gaules"))) {
 				t.Fatalf("empty chat text on screen:\n%s", m.View())
 			}
 
@@ -229,7 +229,7 @@ func TestReconnect_EmptyChatGetsNoGapLine(t *testing.T) {
 	if got := len(m.ChatMessages()); got != 0 {
 		t.Fatalf("buffer = %+v, want empty", m.ChatMessages())
 	}
-	if !strings.Contains(squash(m.View()), squash(fmt.Sprintf(cat.T("chat.empty"), "gaules"))) {
+	if !strings.Contains(squash(m.View()), squash(fmt.Sprintf(cat.T("chat.empty"), "#gaules"))) {
 		t.Fatalf("empty chat text missing:\n%s", m.View())
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/kick"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/provider"
 	"github.com/pedrosatin/ttv-tui/internal/store"
@@ -36,8 +37,11 @@ type Options struct {
 	Validate   func(ctx context.Context, token string) (auth.Validation, error)
 	Player     *player.Manager
 	Chat       *chat.Manager
-	Input      io.Reader
-	Output     io.Writer
+	// Kick replaces the Kick provider, so a test can run without the network
+	// (nil: the real one, built from the config).
+	Kick   *kick.Provider
+	Input  io.Reader
+	Output io.Writer
 	// Log receives warnings printed outside the TUI (nil: os.Stderr).
 	Log io.Writer
 }
@@ -101,9 +105,12 @@ func Run(opts Options) error {
 		source = twitch.NewGQLSource(twitch.GQLConfig{})
 	}
 
+	kickProvider, stopKick := kickProvider(opts.Kick, cfg)
+	defer stopKick()
+
 	twitchProvider := twitch.NewProvider(source, twitch.WithChat(chatMgr))
 	urlProvider := provider.NewURLProvider()
-	providerRegistry := provider.NewRegistry(twitchProvider, urlProvider)
+	providerRegistry := provider.NewRegistry(twitchProvider, kickProvider, urlProvider)
 
 	statePath, err := resolveStatePath(opts.StatePath)
 	if err != nil {
@@ -158,6 +165,7 @@ func Run(opts Options) error {
 		ui.WithFavorites(store.ToChannels(st.Favorites)),
 		ui.WithRecents(store.ToChannels(st.Recents)),
 	}
+	uiOpts = append(uiOpts, resolverOptions(providerRegistry)...)
 	uiOpts = append(uiOpts, configOptions(cfg, cfgPath)...)
 	if corruptNotice != "" {
 		uiOpts = append(uiOpts, ui.WithCorruptNotice(corruptNotice))
@@ -325,6 +333,37 @@ func chatManager(injected *chat.Manager, cfg config.Config) (*chat.Manager, func
 		Username: cfg.Username,
 	})
 	return mgr, mgr.Close
+}
+
+// kickProvider is chatManager for Kick: the provider with its live-state lookup
+// and its read-only chat, and what ends that chat when Run returns.
+func kickProvider(injected *kick.Provider, cfg config.Config) (*kick.Provider, func()) {
+	if injected != nil {
+		stop := func() {}
+		if c, ok := injected.Chat(); ok {
+			stop = c.Stop
+		}
+		return injected, stop
+	}
+	client := kick.NewClient(kick.ClientConfig{})
+	c := kick.NewChat(kick.ChatOptions{Rooms: client, PusherKey: cfg.KickPusherKey})
+	return kick.NewProvider(kick.WithResolver(client), kick.WithChat(c)), c.Close
+}
+
+// resolverOptions hands the UI the live-state lookup of every platform that has
+// one, so a saved channel is asked about on its own platform.
+func resolverOptions(reg *provider.Registry) []ui.Option {
+	var opts []ui.Option
+	for _, id := range reg.IDs() {
+		prov, ok := reg.Get(id)
+		if !ok {
+			continue
+		}
+		if r, ok := prov.Resolver(); ok && r != nil {
+			opts = append(opts, ui.WithPlatformResolver(id, r))
+		}
+	}
+	return opts
 }
 
 // loadState reads the saved favorites and recents. A missing state file starts

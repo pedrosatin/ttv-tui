@@ -151,6 +151,12 @@ func (m Model) applySavedAvailability(msg SavedAvailabilityMsg) (tea.Model, tea.
 		return c.Availability == catalog.AvailabilityUnknown
 	})
 	m.refreshSavedAvailability(known)
+	if sel := m.list.selectedChannel; sel != nil {
+		// The channel being watched may have been opened with no evidence of its
+		// state (a pasted URL); the bar shows what the lookup found.
+		updated := m.withLoadedAvailability([]catalog.Channel{*sel}, known)[0]
+		m.list.selectedChannel = &updated
+	}
 	m.reconcileHighlight()
 	return m, nil
 }
@@ -201,6 +207,13 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		m.player.awaiting = m.player.selection
 		m.player.stopAfterStart = false
 		cmds = append(cmds, m.playback.StartTarget(target, m.player.selection))
+	}
+	if selected.Availability == catalog.AvailabilityUnknown && selected.Viewers == nil {
+		// Opened with no evidence of its state: ask its platform now, so the
+		// bar and the recents row say whether it is live, with title and viewers.
+		if stateCmd := m.fetchChannelStateCmd(selected); stateCmd != nil {
+			cmds = append(cmds, stateCmd)
+		}
 	}
 	// Only a platform without a chat gets the "unsupported" panel; one with a
 	// read-only chat still joins it and its capabilities hide the input.

@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"net"
 	"os"
 	"os/exec"
@@ -20,8 +19,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/kick"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"golang.org/x/sys/unix"
 )
@@ -118,6 +120,19 @@ func runTUIHelper() int {
 		Source:     emptySource{},
 		Player:     mgr,
 	}
+	// Kick without the network: a fixed room, a chat that plays a recorded
+	// session and a channel the site would report as live.
+	frames, err := readKickFrames()
+	if err != nil {
+		return 3
+	}
+	kickProv, kickChat := offlineKickProvider(frames, fixedRooms{room: kick.Room{ChatroomID: 66973867}}, catalog.Channel{
+		ID: "kick:xqc", Login: "xqc", DisplayName: "xqc", Platform: platform.Kick, URL: "https://kick.com/xqc",
+		Availability: catalog.AvailabilityLive, Viewers: catalog.IntPtr(1234),
+		Title: catalog.StringPtr("pty kick title"), CategoryName: catalog.StringPtr("KickCat"),
+	})
+	defer kickChat.Close()
+	opts.Kick = kickProv
 	if body := os.Getenv("TTV_APP_CONFIG_BODY"); body != "" {
 		if err := os.WriteFile(opts.ConfigPath, []byte(body), 0o600); err != nil {
 			return 3

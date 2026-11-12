@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -122,7 +123,7 @@ func TestChatCapabilitiesFollowTheChannel(t *testing.T) {
 	if !m.ChatCapabilities().CanSend {
 		t.Fatal("Twitch chat must allow sending")
 	}
-	if line := m.renderChatInputLine(80); strings.Contains(line, cat.T("chat.input.unsupported")) {
+	if line := m.renderChatInputLine(80); strings.Contains(line, fmt.Sprintf(cat.T("chat.input.read_only_short"), "Twitch")) {
 		t.Fatalf("Twitch input line says it cannot send: %q", line)
 	}
 
@@ -133,7 +134,7 @@ func TestChatCapabilitiesFollowTheChannel(t *testing.T) {
 	if m.chat.panel.unsupported {
 		t.Fatal("a platform with a read-only chat has a chat: the panel is not 'unsupported'")
 	}
-	if line := m.renderChatInputLine(80); !strings.Contains(line, cat.T("chat.input.unsupported")) {
+	if line := m.renderChatInputLine(80); !strings.Contains(line, fmt.Sprintf(cat.T("chat.input.read_only"), testOnly)) {
 		t.Fatalf("read-only input line %q does not say it cannot send", line)
 	}
 	if fc.stopped != 0 {

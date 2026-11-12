@@ -821,5 +821,5 @@ func TestOSC52NoticeNeverConfirmsCopy(t *testing.T) {
 
 func expectedContextCopy(m Model, text string) string {
 	msg, _ := m.SelectedChatMessage()
-	return fmt.Sprintf(m.t("chat.copy.context"), m.chat.panel.channel, msg.ReceivedAt.Local().Format(time.DateTime[:16]), text)
+	return fmt.Sprintf(m.t("chat.copy.context"), m.chat.copyRoomLabel(), msg.ReceivedAt.Local().Format(time.DateTime[:16]), text)
 }

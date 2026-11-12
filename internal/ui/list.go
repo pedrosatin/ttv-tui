@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
@@ -583,7 +584,7 @@ func (m Model) returnToChannels() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
-	if m.browser == nil && m.searcher == nil && m.resolver == nil {
+	if m.browser == nil && m.searcher == nil && len(m.resolvers) == 0 {
 		return m, nil
 	}
 	m.list.tracker.cancelActive()
@@ -1093,28 +1094,29 @@ func (m Model) withHydrate(cmd tea.Cmd) tea.Cmd {
 	}
 }
 
-// savedIDs returns unique non-empty stable channel identifiers from favorites and recents.
-func (l listState) savedIDs() []string {
-	n := len(l.favorites) + len(l.recents)
-	if l.pendingRecents != nil {
-		n += len(l.pendingRecents)
-	}
-	seen := make(map[string]struct{}, n)
-	out := make([]string, 0, n)
+// savedIDs returns the unique stable identifiers of the favorites and recents,
+// grouped by canonical platform. An identifier only means something on its own
+// platform: "xqc" is one channel on Twitch and another on Kick.
+func (l listState) savedIDs() map[string][]string {
+	type key struct{ plat, id string }
+	seen := make(map[key]struct{}, len(l.favorites)+len(l.recents)+len(l.pendingRecents))
+	out := make(map[string][]string)
 	add := func(ch catalog.Channel) {
 		id := strings.TrimSpace(ch.StableID())
 		if id == "" {
-			id = strings.TrimSpace(ch.Login)
-		}
-		if id == "" {
 			return
 		}
-		key := strings.ToLower(id)
-		if _, ok := seen[key]; ok {
+		plat := ch.CanonicalPlatform()
+		k := key{plat: plat, id: id}
+		if plat != platform.YouTube {
+			// Identifiers fold case everywhere but on YouTube.
+			k.id = strings.ToLower(id)
+		}
+		if _, ok := seen[k]; ok {
 			return
 		}
-		seen[key] = struct{}{}
-		out = append(out, id)
+		seen[k] = struct{}{}
+		out[plat] = append(out[plat], id)
 	}
 	for _, ch := range l.favorites {
 		add(ch)
@@ -1128,23 +1130,80 @@ func (l listState) savedIDs() []string {
 	return out
 }
 
-// fetchHydrateCmd looks up Availability for favorites and recents in one batch.
-// An empty saved set returns nil so no request is issued.
+// fetchHydrateCmd looks up Availability for favorites and recents, each
+// platform's channels with that platform's resolver. Saved channels of a
+// platform with no resolver stay unverified. With nothing to ask it returns nil
+// so no request is issued.
 func (m Model) fetchHydrateCmd(gen uint64) tea.Cmd {
-	resolver := m.resolver
-	if resolver == nil {
+	return resolveCmd(gen, m.resolvers, m.list.savedIDs())
+}
+
+// fetchChannelStateCmd looks up the Availability of ch alone, for a channel
+// opened with no evidence of its state (a pasted URL).
+func (m Model) fetchChannelStateCmd(ch catalog.Channel) tea.Cmd {
+	id := strings.TrimSpace(ch.StableID())
+	if id == "" {
 		return nil
 	}
-	ids := m.list.savedIDs()
-	if len(ids) == 0 {
+	return resolveCmd(m.list.hydrateGen, m.resolvers, map[string][]string{ch.CanonicalPlatform(): {id}})
+}
+
+// resolveCmd asks each platform in ids its resolver, all at once, and delivers
+// what the ones that answered know. A platform that fails does not take the
+// others with it; Err is set only when none answered.
+func resolveCmd(gen uint64, resolvers map[string]catalog.Resolver, ids map[string][]string) tea.Cmd {
+	type lookup struct {
+		plat     string
+		resolver catalog.Resolver
+		ids      []string
+	}
+	var lookups []lookup
+	for plat, platIDs := range ids {
+		if r := resolvers[plat]; r != nil && len(platIDs) > 0 {
+			lookups = append(lookups, lookup{plat: plat, resolver: r, ids: platIDs})
+		}
+	}
+	if len(lookups) == 0 {
 		return nil
 	}
 	return func() tea.Msg {
-		channels, err := resolver.ChannelsByIDs(context.Background(), ids)
-		return SavedAvailabilityMsg{
-			Generation: gen,
-			Channels:   channels,
-			Err:        err,
+		results := make([][]catalog.Channel, len(lookups))
+		errs := make([]error, len(lookups))
+		var wg sync.WaitGroup
+		for i, l := range lookups {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				channels, err := l.resolver.ChannelsByIDs(context.Background(), l.ids)
+				if err != nil {
+					errs[i] = err
+					return
+				}
+				// A resolver answers for its platform; say so where it did not.
+				for j := range channels {
+					if channels[j].Platform == "" {
+						channels[j].Platform = l.plat
+					}
+				}
+				results[i] = channels
+			}()
 		}
+		wg.Wait()
+		msg := SavedAvailabilityMsg{Generation: gen}
+		failed := 0
+		for i := range lookups {
+			if errs[i] != nil {
+				failed++
+				if msg.Err == nil {
+					msg.Err = errs[i]
+				}
+				continue
+			}
+			msg.Channels = append(msg.Channels, results[i]...)
+		}
+		if failed < len(lookups) {
+			msg.Err = nil
+		}
+		return msg
 	}
 }

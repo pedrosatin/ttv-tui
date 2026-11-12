@@ -206,7 +206,7 @@ func (m Model) copyChatMessage() (tea.Model, tea.Cmd) {
 	}
 	plaintext := formatChatCopyText(msg)
 	if plaintext != "" && !msg.ReceivedAt.IsZero() {
-		plaintext = truncateUTF8Bytes(fmt.Sprintf(m.t("chat.copy.context"), sanitizeChatText(m.chat.panel.channel), msg.ReceivedAt.Local().Format(time.DateTime[:16]), plaintext), osc52MaxBytes)
+		plaintext = truncateUTF8Bytes(fmt.Sprintf(m.t("chat.copy.context"), m.chat.copyRoomLabel(), msg.ReceivedAt.Local().Format(time.DateTime[:16]), plaintext), osc52MaxBytes)
 	}
 	if plaintext == "" {
 		return m, nil

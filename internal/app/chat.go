@@ -360,6 +360,7 @@ func mapChatEvent(plat string, ev catalog.ChatEvent) ui.ChatEventMsg {
 		ClearMsgID:  ev.ClearMsgID,
 		BanDuration: ev.BanDuration,
 		ErrText:     errText,
+		ErrReason:   catalog.ChatErrorReasonOf(ev.Err),
 		AuthFailed:  errors.Is(ev.Err, catalog.ErrChatAuthentication),
 	}
 }

@@ -240,6 +240,7 @@ func TestObservePlayerRollsBackOnlyForStreamlinkFailure(t *testing.T) {
 		player.FailureStreamlinkMissing,
 		player.FailureMPVMissing,
 		player.FailureNoPlugin,
+		player.FailureBlocked,
 		player.FailureUnknown,
 		player.FailureStreamlinkBroken,
 	}

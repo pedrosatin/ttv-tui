@@ -86,7 +86,7 @@ func TestCtrlTKeepsHistory_PTY(t *testing.T) {
 			after := p.waitScreen(off, "Ana: depois da lacuna", gap, "Bob: msg 35", "Bob: msg 50")
 			t.Logf("PTY after Ctrl+T (%s):\n%s", tc.lang, after)
 
-			if empty := fmt.Sprintf(cat.T("chat.empty"), "ptychan"); strings.Contains(after, empty) {
+			if empty := fmt.Sprintf(cat.T("chat.empty"), "#ptychan"); strings.Contains(after, empty) {
 				t.Errorf("chat went back to the empty text:\n%s", after)
 			}
 		})

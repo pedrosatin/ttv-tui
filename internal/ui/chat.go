@@ -59,8 +59,11 @@ type ChatEventMsg struct {
 	// and ClearChat means a permanent ban.
 	BanDuration *int
 	ErrText     string
-	AuthFailed  bool
-	FromJoin    bool
+	// ErrReason names a failure the panel explains in its own words; with none
+	// the panel shows ErrText.
+	ErrReason  catalog.ChatErrorReason
+	AuthFailed bool
+	FromJoin   bool
 }
 
 // Chat is the UI->app bridge for managing the active channel chat session. It
@@ -183,6 +186,41 @@ func (c chatState) hasPendingOutgoing() bool {
 		}
 	}
 	return false
+}
+
+// chatErrorReasonText explains a chat failure that has a reason, naming the
+// platform of the panel. It returns "" for a failure without one.
+func (m Model) chatErrorReasonText(reason catalog.ChatErrorReason) string {
+	name := platform.DisplayName(m.chat.panel.platform)
+	switch reason {
+	case catalog.ChatErrorBlocked:
+		return fmt.Sprintf(m.t("chat.err.blocked"), name)
+	case catalog.ChatErrorNoRoom:
+		return fmt.Sprintf(m.t("chat.err.no_room"), name)
+	case catalog.ChatErrorKeyRefused:
+		return fmt.Sprintf(m.t("chat.err.key_refused"), name)
+	default:
+		return ""
+	}
+}
+
+// chatRoomLabel is the room as the panel names it: "#login" on Twitch, where
+// the "#" of IRC is how a channel is written, and the plain name elsewhere.
+func (c chatState) chatRoomLabel() string {
+	return roomLabel(c.panel.platform, sanitizeScreenText(c.panel.channel))
+}
+
+// copyRoomLabel is chatRoomLabel for text that goes to the clipboard.
+func (c chatState) copyRoomLabel() string {
+	return roomLabel(c.panel.platform, sanitizeChatText(c.panel.channel))
+}
+
+func roomLabel(plat, name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" || !platform.IsTwitch(plat) {
+		return name
+	}
+	return "#" + name
 }
 
 // chatChannelName is the name the panel shows for ch: its login, or the
@@ -428,6 +466,8 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.AuthFailed {
 		m.chat.panel.errText = m.t("chat.auth_failed")
+	} else if reason := m.chatErrorReasonText(msg.ErrReason); reason != "" {
+		m.chat.panel.errText = reason
 	} else if msg.ErrText != "" {
 		m.chat.panel.errText = msg.ErrText
 	} else if msg.State == ChatStateConnected {

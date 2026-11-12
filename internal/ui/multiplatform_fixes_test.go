@@ -139,8 +139,9 @@ func TestLateChatEventDoesNotOverwriteUnsupportedPanel(t *testing.T) {
 	if strings.Contains(view, "#gaules") {
 		t.Fatalf("view leaked #gaules into Kick live header:\n%s", view)
 	}
-	if !strings.Contains(view, "#xqc") {
-		t.Fatalf("view missing #xqc in chat header:\n%s", view)
+	// The "#" of IRC belongs to Twitch: a Kick room is named without it.
+	if !strings.Contains(view, "Chat — xqc") || strings.Contains(view, "#xqc") {
+		t.Fatalf("view does not name the Kick room as xqc in the chat header:\n%s", view)
 	}
 }
 

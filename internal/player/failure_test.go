@@ -23,6 +23,13 @@ func TestClassifyLine(t *testing.T) {
 		{"error: Unable to open URL: https://gql.twitch.tv/gql (HTTPSConnectionPool(host='gql.twitch.tv', port=443): Max retries exceeded with url: /gql (Caused by ConnectTimeoutError(<HTTPSConnection(host='gql.twitch.tv', port=443) at 0x7f>, 'Connection to gql.twitch.tv timed out. (connect timeout=0.001)')))", FailureTimeout},
 		{"error: Failed to start player: mpv (Player executable not found)", FailureMPVMissing},
 		{"error: No plugin can handle URL: https://example.com/unsupported", FailureNoPlugin},
+		// Kick: the API still lists the channel as live and the IVS playlist is gone.
+		{"error: Unable to open URL: https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.DsuAwCgUc9Bh.m3u8?token=REDACTED (404 Client Error: Not Found for url: https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.DsuAwCgUc9Bh.m3u8?token=REDACTED)", FailureOffline},
+		// Kick: no channel has that name (streamlink 8.6.2, real output).
+		{"error: Error while querying Kick API: 404 Client Error: Not Found for url: https://kick.com/api/v2/channels/zzzz-nao-existe-9981x/livestream", FailureOffline},
+		// The site refused the request (streamlink 8.6.2, real output for a playlist without its token).
+		{"error: Unable to open URL: https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.DsuAwCgUc9Bh.m3u8 (403 Client Error: Forbidden for url: https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.DsuAwCgUc9Bh.m3u8)", FailureBlocked},
+		{"error: Error while querying Kick API: 403 Client Error: Forbidden for url: https://kick.com/api/v2/channels/xqc/livestream", FailureBlocked},
 		{"bash: streamlink: command not found", FailureStreamlinkMissing},
 		{"error: Unable to validate response text: ValidationError(dict): Key 'data' not found in <dict>", FailureStreamlinkBroken},
 		{"streamlink.exceptions.PluginError: Unable to parse manifest", FailureStreamlinkBroken},
@@ -53,6 +60,7 @@ func TestOnlyStreamlinkFailuresBlameTheBuild(t *testing.T) {
 		FailureStreamlinkMissing: false,
 		FailureMPVMissing:        false,
 		FailureNoPlugin:          false,
+		FailureBlocked:           false,
 		FailureUnknown:           false,
 		FailureStreamlinkBroken:  true,
 	}

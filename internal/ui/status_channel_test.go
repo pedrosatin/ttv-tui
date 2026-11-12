@@ -35,7 +35,7 @@ func TestStatusBarKeepsLongChannelNameAt80And120(t *testing.T) {
 
 					bar := ansi.Strip(m.StatusBar())
 					assertStatusWidth(t, bar, width)
-					want := fmt.Sprintf(m.t("chat.connected"), ch)
+					want := fmt.Sprintf(m.t("chat.connected"), "#"+ch)
 					if !strings.Contains(bar, want) {
 						t.Fatalf("status bar at %d cols missing full chat channel %q:\n%q", width, want, bar)
 					}
@@ -173,7 +173,7 @@ func TestStatusBarLongChannelPTYCapture80(t *testing.T) {
 			printScreen(t, "Status com canal longo #"+ch+" em 80 colunas", m.View(), 80)
 
 			bar := ansi.Strip(m.StatusBar())
-			want := fmt.Sprintf(catPT.T("chat.connected"), ch)
+			want := fmt.Sprintf(catPT.T("chat.connected"), "#"+ch)
 			if !strings.Contains(bar, want) {
 				t.Fatalf("PTY 80 capture missing full %q:\n%q", want, bar)
 			}

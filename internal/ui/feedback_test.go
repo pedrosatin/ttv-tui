@@ -143,7 +143,7 @@ func TestFeedbackDisconnectedChat(t *testing.T) {
 			m := New(mustCatalog(t, lang))
 			m.chat.panel.channel, m.chat.panel.state, m.chat.panel.errText = "demo", state, "connection refused"
 			view := ansi.Strip(strings.Join(m.renderChatLines(12, 80), "\n"))
-			waiting := fmt.Sprintf(m.t("chat.empty"), "demo")
+			waiting := fmt.Sprintf(m.t("chat.empty"), "#demo")
 			if strings.Contains(view, waiting) {
 				t.Errorf("%s/%s contradicts connection state: %q", lang, state, view)
 			}

@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/store"
 )
 
@@ -132,7 +133,7 @@ func WithSource(src catalog.Source) Option {
 		if src != nil {
 			m.browser = src
 			m.searcher = src
-			m.resolver = src
+			m.setResolver(platform.Default, src)
 			m.list.loading = true
 		}
 	}
@@ -155,11 +156,35 @@ func WithSearcher(s catalog.Searcher) Option {
 	}
 }
 
-// WithResolver configures the Model to resolve channel availability with r.
+// WithResolver configures the Model to resolve the availability of the saved
+// channels of the default platform with r.
 func WithResolver(r catalog.Resolver) Option {
+	return WithPlatformResolver(platform.Default, r)
+}
+
+// WithPlatformResolver configures the Model to resolve the availability of the
+// saved channels of plat with r. Each platform answers for its own channels: an
+// identifier means nothing outside the platform it came from.
+func WithPlatformResolver(plat string, r catalog.Resolver) Option {
 	return func(m *Model) {
-		m.resolver = r
+		m.setResolver(plat, r)
 	}
+}
+
+// setResolver records r for plat; a nil r removes it. The map is replaced, not
+// changed: a Model copied by Bubble Tea must not share it.
+func (m *Model) setResolver(plat string, r catalog.Resolver) {
+	next := make(map[string]catalog.Resolver, len(m.resolvers)+1)
+	for k, v := range m.resolvers {
+		next[k] = v
+	}
+	plat = platform.Normalize(plat)
+	if r == nil {
+		delete(next, plat)
+	} else {
+		next[plat] = r
+	}
+	m.resolvers = next
 }
 
 // WithPageSize sets the number of items requested per page.
@@ -213,10 +238,12 @@ func WithCorruptNotice(notice string) Option {
 // it; the rest of the state is grouped by subject. The groups are values, not
 // pointers: Bubble Tea copies Model by value and a copy must not share state.
 type Model struct {
-	catalog    *i18n.Catalog
-	browser    catalog.Browser
-	searcher   catalog.Searcher
-	resolver   catalog.Resolver
+	catalog  *i18n.Catalog
+	browser  catalog.Browser
+	searcher catalog.Searcher
+	// resolvers holds the live-state lookup of each platform that has one,
+	// keyed by canonical platform name.
+	resolvers  map[string]catalog.Resolver
 	keys       keyMap
 	tokenCheck TokenCheckFunc
 	store      Store
@@ -455,10 +482,8 @@ func (m Model) Init() tea.Cmd {
 	if m.browser != nil {
 		cmds = append(cmds, m.fetchCategoriesCmd(m.list.generation, "", false))
 	}
-	if m.resolver != nil {
-		if hydrate := m.fetchHydrateCmd(m.list.hydrateGen); hydrate != nil {
-			cmds = append(cmds, hydrate)
-		}
+	if hydrate := m.fetchHydrateCmd(m.list.hydrateGen); hydrate != nil {
+		cmds = append(cmds, hydrate)
 	}
 	if m.tokenCheck != nil {
 		cmds = append(cmds, m.checkTokenCmd())

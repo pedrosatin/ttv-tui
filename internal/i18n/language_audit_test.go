@@ -26,7 +26,6 @@ var identicalInBothLanguages = map[string]string{
 	"channel_filter.audience_min":   "formato %d+",
 	"chat.usernotice.with_text":     "formato autor: texto",
 	"chat.input.counter":            "formato %d/%d",
-	"status.channel_ref":            "formato #canal",
 	// Units: s, m and h are the same symbols in pt-BR.
 	"chat.mod.dur_s":   "unidade s",
 	"chat.mod.dur_m":   "unidade m",

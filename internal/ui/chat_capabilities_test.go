@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -58,9 +59,9 @@ func TestChatReadOnlyPlatform_DisplaysMessagesAndDisablesInput(t *testing.T) {
 		t.Fatalf("unexpected chat messages: %+v", msgs)
 	}
 
-	// Verify footer shows "Unavailable for this platform" instead of input / ready prompt.
+	// Verify footer says the chat is read-only instead of input / ready prompt.
 	inputLine := m.renderChatInputLine(80)
-	wantHint := catEN.T("chat.input.unsupported")
+	wantHint := fmt.Sprintf(catEN.T("chat.input.read_only"), "Twitch")
 	if !strings.Contains(inputLine, wantHint) {
 		t.Fatalf("input line %q does not contain %q", inputLine, wantHint)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 func (m Model) errorMessage(err error) string {
@@ -21,6 +22,8 @@ func (m Model) errorMessage(err error) string {
 		return m.t("error.server")
 	case catalog.Contrato:
 		return m.t("error.contract")
+	case catalog.Bloqueio:
+		return m.t("error.blocked")
 	default:
 		return m.t("error.network")
 	}
@@ -49,6 +52,8 @@ func (m Model) listErrorAction() string {
 		return m.t("error.list.rate_limit")
 	case catalog.Servidor:
 		return m.t("error.list.server")
+	case catalog.Bloqueio:
+		return m.t("error.list.blocked")
 	default:
 		return m.t("error.list.unknown")
 	}
@@ -175,13 +180,14 @@ func (c chatState) primaryNamesChannel(primary string) bool {
 }
 
 // chatChannelRef is the short "#login" form used when the full chat status
-// does not fit but the channel name still can.
+// does not fit but the channel name still can. Only a Twitch room has one: the
+// "#" is what tells it from any other text on the bar, and a bare name from
+// another platform would read as a stray word next to the player status.
 func (m Model) chatChannelRef() string {
-	ch := strings.TrimSpace(sanitizeScreenText(m.chat.panel.channel))
-	if ch == "" || !m.chat.statusHasChannel() {
+	if strings.TrimSpace(m.chat.panel.channel) == "" || !m.chat.statusHasChannel() || !platform.IsTwitch(m.chat.panel.platform) {
 		return ""
 	}
-	return fmt.Sprintf(m.t("status.channel_ref"), ch)
+	return m.chat.chatRoomLabel()
 }
 
 // focusStatusText names the focused panel when both panels are visible.

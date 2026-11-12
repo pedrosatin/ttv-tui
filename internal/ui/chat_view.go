@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 const (
@@ -19,16 +20,23 @@ func (c chatState) hasPanel() bool {
 	return c.panel.channel != "" || c.panel.state != ChatStateNone || c.panel.unsupported || c.composing
 }
 
+// showsAnonymous reports whether the connected state says "anonymous". The
+// word explains why sending is off and a login would turn it on; on a chat that
+// cannot send at all it would promise a login that does not exist.
+func (c chatState) showsAnonymous() bool {
+	return c.panel.anonymous && c.panel.caps.CanSend
+}
+
 func (m Model) chatStatusSummary() string {
 	if m.chat.panel.unsupported {
 		return m.t("chat.unsupported")
 	}
-	ch := sanitizeScreenText(m.chat.panel.channel)
+	ch := m.chat.chatRoomLabel()
 	switch m.chat.panel.state {
 	case ChatStateConnecting:
 		return fmt.Sprintf(m.t("chat.connecting"), ch)
 	case ChatStateConnected:
-		if m.chat.panel.anonymous {
+		if m.chat.showsAnonymous() {
 			return fmt.Sprintf(m.t("chat.connected_anon"), ch)
 		}
 		return fmt.Sprintf(m.t("chat.connected"), ch)
@@ -83,7 +91,7 @@ func (m Model) chatHeaderState() string {
 	case ChatStateConnecting:
 		return m.t("chat.state.connecting")
 	case ChatStateConnected:
-		if m.chat.panel.anonymous {
+		if m.chat.showsAnonymous() {
 			return m.t("chat.state.connected_anon")
 		}
 		return m.t("chat.state.connected")
@@ -110,7 +118,7 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 	if showFocusChrome {
 		focusMarker = "▸ "
 	}
-	title := fmt.Sprintf(m.t("chat.title"), sanitizeScreenText(m.chat.panel.channel))
+	title := fmt.Sprintf(m.t("chat.title"), m.chat.chatRoomLabel())
 	state := m.chatHeaderState()
 	modes := m.chatRoomModesSummary()
 
@@ -246,7 +254,7 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 	body := make([]string, 0, msgBudget)
 	if len(msgs) == 0 {
 		if msgBudget > 0 && m.chat.panel.state == ChatStateConnected {
-			emptyLine := "  " + fmt.Sprintf(m.t("chat.empty"), sanitizeScreenText(m.chat.panel.channel))
+			emptyLine := "  " + fmt.Sprintf(m.t("chat.empty"), m.chat.chatRoomLabel())
 			body = append(body, TruncateVisual(emptyLine, maxWidth))
 		}
 	} else {
@@ -316,13 +324,18 @@ func formatComposeHintWithCounter(hint, counter string, maxWidth int) string {
 }
 
 func (m Model) renderChatInputLine(maxWidth int) string {
-	ch := sanitizeScreenText(m.chat.panel.channel)
+	ch := m.chat.chatRoomLabel()
 	if maxWidth > 1 && hasWideRune(ch+normalizeScreenText(m.chat.composeDraft)) {
 		maxWidth--
 	}
 	if !m.chat.panel.caps.CanSend {
-		line := "  > " + m.t("chat.input.unsupported")
-		line = TruncateVisual(line, maxWidth)
+		// The chat is there and can be read; only sending does not exist.
+		name := platform.DisplayName(m.chat.panel.platform)
+		hint := fmt.Sprintf(m.t("chat.input.read_only"), name)
+		if maxWidth > 0 && ansi.StringWidth("  > "+hint) > maxWidth {
+			hint = fmt.Sprintf(m.t("chat.input.read_only_short"), name)
+		}
+		line := TruncateVisual("  > "+hint, maxWidth)
 		return lipgloss.NewStyle().Faint(true).Render(line)
 	}
 	if !m.chat.hasToken() {

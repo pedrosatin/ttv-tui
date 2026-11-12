@@ -37,6 +37,7 @@ const (
 	PlayerFailureStreamlinkMissing PlayerFailure = "streamlink_missing"
 	PlayerFailureMPVMissing        PlayerFailure = "mpv_missing"
 	PlayerFailureNoPlugin          PlayerFailure = "no_plugin"
+	PlayerFailureBlocked           PlayerFailure = "blocked"
 	PlayerFailureUnknown           PlayerFailure = "unknown"
 )
 
@@ -153,11 +154,11 @@ func (m Model) playerStatusBase() string {
 		if m.player.login == "" {
 			return m.t("player.starting")
 		}
-		return fmt.Sprintf(m.t("player.starting_channel"), m.player.login)
+		return fmt.Sprintf(m.t("player.starting_channel"), m.playerLabel())
 	case PlayerStatePlaying:
-		return fmt.Sprintf(m.t("player.playing"), m.player.login)
+		return fmt.Sprintf(m.t("player.playing"), m.playerLabel())
 	case PlayerStatePaused:
-		return fmt.Sprintf(m.t("player.paused"), m.player.login)
+		return fmt.Sprintf(m.t("player.paused"), m.playerLabel())
 	case PlayerStateBreak:
 		sec := int(m.player.breakElapsed.Seconds())
 		if sec < 0 {
@@ -171,6 +172,25 @@ func (m Model) playerStatusBase() string {
 	default:
 		return ""
 	}
+}
+
+// playerLabel names what the player shows, as a person reads it. Outside Twitch
+// the session label is qualified ("kick:gaules") so two platforms never collide;
+// the bar shows the channel and its platform instead ("gaules (Kick)").
+func (m Model) playerLabel() string {
+	label := m.player.login
+	ch := m.player.target.Channel
+	if label == "" || platform.IsTwitch(ch.Platform) || !strings.EqualFold(ch.PlayerLabel(), label) {
+		return label
+	}
+	name := strings.TrimSpace(ch.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(ch.StableID())
+	}
+	if name == "" {
+		return label
+	}
+	return fmt.Sprintf("%s (%s)", name, platform.DisplayName(ch.Platform))
 }
 
 // playerVolumeText is the volume shown next to an active player state, or ""
@@ -225,6 +245,8 @@ func (m Model) playerFailureText() string {
 		return m.t("player.fail.mpv_missing")
 	case PlayerFailureNoPlugin:
 		return m.t("player.fail.no_plugin")
+	case PlayerFailureBlocked:
+		return m.t("player.fail.blocked")
 	default:
 		return m.t("player.fail.unknown")
 	}

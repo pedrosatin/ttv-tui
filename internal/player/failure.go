@@ -30,6 +30,9 @@ const (
 	FailureMPVMissing Failure = "mpv_missing"
 	// FailureNoPlugin: streamlink has no plugin capable of handling the URL.
 	FailureNoPlugin Failure = "no_plugin"
+	// FailureBlocked: the site answered HTTP 403 to streamlink, as an anti-bot
+	// wall does. The connection worked; the request was refused.
+	FailureBlocked Failure = "blocked"
 	// FailureStreamlinkBroken: this streamlink build failed on its own, not
 	// because of the channel or the network: a plugin or Python runtime error,
 	// a binary that cannot run, or an exit with an error status before any
@@ -42,7 +45,8 @@ const (
 
 // BlamesStreamlink reports whether f is evidence that the streamlink build in
 // use is broken. Offline channels, network and timeout failures, a URL no plugin
-// handles, missing tools and unclassified errors say nothing about the build, so
+// handles, a request the site refused, missing tools and unclassified errors say
+// nothing about the build, so
 // they never count: an update must not be undone because the channel is offline
 // or the network is down.
 func (f Failure) BlamesStreamlink() bool {
@@ -107,8 +111,15 @@ func ClassifyLine(line string) Failure {
 		return FailureNone
 	case strings.Contains(l, "no playable streams found"),
 		strings.Contains(l, "this stream is offline"),
-		strings.Contains(l, "channel is offline"):
+		strings.Contains(l, "channel is offline"),
+		// The site answered that the channel or its playlist does not exist: a
+		// channel the API still lists as live right after it ended, or a wrong
+		// name. The connection worked, so this is not a network error.
+		strings.Contains(l, "404 client error"):
 		return FailureOffline
+	case strings.Contains(l, "403 client error"):
+		// Before the network cases: streamlink reports it inside "Unable to open URL".
+		return FailureBlocked
 	case strings.Contains(l, "failed to start player") && strings.Contains(l, "mpv"),
 		strings.Contains(l, "mpv: command not found"),
 		strings.Contains(l, "mpv: not found"):

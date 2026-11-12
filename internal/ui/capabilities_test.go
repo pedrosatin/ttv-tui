@@ -184,7 +184,7 @@ func TestWithoutBrowserReturningToCategoriesStillHydratesSavedChannels(t *testin
 	}
 	resolver := &dummyResolver{}
 	saved := []catalog.Channel{{ID: "kick:xqc", Login: "xqc", Platform: "kick", URL: "https://kick.com/xqc"}}
-	m := New(cat, WithResolver(resolver), WithFavorites(saved))
+	m := New(cat, WithPlatformResolver("kick", resolver), WithFavorites(saved))
 
 	for name, step := range map[string]func(Model) (tea.Model, tea.Cmd){
 		"returnToCategories": Model.returnToCategories,
