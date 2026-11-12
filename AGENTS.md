@@ -16,7 +16,7 @@ arquitetura.
 2. **Acesso a dados de cada plataforma fica atrás de um `Provider`.** O catálogo
    opcional expõe capacidades granulares (`Browser`, `Searcher`, `Resolver`) e o
    chat declara as suas antes de conectar (`Chat`). A UI usa só os tipos de
-   `internal/catalog` e não importa `internal/twitch`, `internal/chat` nem
+   `internal/catalog` e não importa `internal/twitch`, `internal/kick`, `internal/chat` nem
    `internal/player`. O chat de cada plataforma é uma
    `catalog.Chat` entregue pelo próprio provider; a ponte de `internal/app` escolhe
    pela plataforma do canal e renumera as gerações numa sequência única. Nenhum
@@ -54,6 +54,7 @@ arquitetura.
 - `internal/ui`: modelo/update/view do bubbletea, sem I/O direto.
 - `internal/twitch`: clientes de dados (`Source`, GQL agora, Helix depois).
 - `internal/chat`: cliente IRC, parser de tags, envio de mensagens.
+- `internal/kick`: provider da Kick: JSON do site, chat só leitura pelo Pusher ([ADR 0016](docs/adr/0016-kick-sem-conta.md)).
 - `internal/player`: streamlink, mpv e o protocolo IPC.
 - `internal/config`: leitura/escrita do config e do token.
 - Erros: `fmt.Errorf("...: %w", err)`, sem `panic` fora do `main`.

@@ -37,7 +37,7 @@ jobs:
         run: go test -count=1 ./...
 
       - name: Run race detector on concurrent packages
-        run: go test -race -count=1 ./internal/player ./internal/chat ./internal/ui ./internal/store
+        run: go test -race -count=1 ./internal/player ./internal/chat ./internal/kick ./internal/ui ./internal/store
 
   # The window is its own module: it links SDL3 and libmpv, which only some
   # systems package, so the rest of the build never depends on it.

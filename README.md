@@ -84,7 +84,7 @@ ttv-tui login --import twt  # optional: reuse your twitch-tui token to send chat
 ttv-tui doctor              # check dependencies, paths and token presence
 ```
 
-Pick a category with `Enter`, then a channel with `Enter`. You can also press `Ctrl+F` and paste a stream URL (Twitch, Kick, YouTube) to play directly. The stream starts and its chat opens on the right. Press `?` for the shortcut list.
+Pick a category with `Enter`, then a channel with `Enter`. You can also press `Ctrl+F` and paste a stream URL (Twitch, Kick, YouTube) to play directly. The stream starts and its chat opens on the right: Twitch and Kick have chat, and the Kick one is read-only. Press `?` for the shortcut list.
 
 ## Platforms
 
@@ -223,6 +223,24 @@ No. Browsing, watching and reading chat work anonymously. You need a token only 
 </details>
 
 <details>
+<summary><b>Can I watch Kick?</b></summary>
+
+Yes, by URL: press `Ctrl+F` and paste `https://kick.com/<channel>`. The channel goes to your recent list, where `f` makes it a favorite, and the list shows whether it is live, with title and viewers. There is no Kick catalog to browse yet.
+
+The chat opens next to the video and is read-only. Sending needs a Kick account and a registered app, which this project does not use. Emotes show as their names, and a message a moderator deletes stays on screen.
+
+Kick has no public API for any of this without an account. The app reads the JSON the site itself uses and the chat connection the site's player opens, so both can stop working when Kick changes them:
+
+- `Kick refused the request (HTTP 403)`: the wall in front of the site blocked the app. Wait a while and press `Ctrl+T` to try the chat again.
+- `Kick refused the chat key`: Kick changed the key of its chat service (Pusher). Open a Kick channel in a browser, find the WebSocket to `ws-us2.pusher.com/app/<key>` in the network tab, and put that key in `config.toml`:
+
+  ```toml
+  kick_pusher_key = "<key>"
+  ```
+
+</details>
+
+<details>
 <summary><b>How do I log in to send messages?</b></summary>
 
 Pick one:
@@ -262,7 +280,9 @@ Deleting the local file does not end the session on Twitch. Do both:
 <details>
 <summary><b>Does it block ads?</b></summary>
 
-`streamlink` drops the ad segments from the stream. During an ad break, the status bar shows `Ad break: the video resumes on its own` with a countdown.
+On Twitch, `streamlink` drops the ad segments from the stream. During an ad break, the status bar shows `Ad break: the video resumes on its own` with a countdown.
+
+A Kick stream plays as Kick sends it. The app does not filter or detect ad breaks there.
 
 </details>
 

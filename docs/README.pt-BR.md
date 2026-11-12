@@ -84,7 +84,7 @@ ttv-tui login --import twt  # opcional: usa o token do twitch-tui para enviar me
 ttv-tui doctor              # confere dependências, caminhos e se há token
 ```
 
-Escolha uma categoria com `Enter` e depois um canal com `Enter`. Você também pode apertar `Ctrl+F` e colar a URL de uma transmissão (Twitch, Kick, YouTube) para tocar direto. A live começa e o chat abre à direita. Aperte `?` para ver os atalhos.
+Escolha uma categoria com `Enter` e depois um canal com `Enter`. Você também pode apertar `Ctrl+F` e colar a URL de uma transmissão (Twitch, Kick, YouTube) para tocar direto. A live começa e o chat abre à direita: Twitch e Kick têm chat, e o da Kick é só leitura. Aperte `?` para ver os atalhos.
 
 ## Plataformas
 
@@ -223,6 +223,24 @@ Não. Navegar, assistir e ler o chat funcionam sem login. O token só serve para
 </details>
 
 <details>
+<summary><b>Dá para assistir Kick?</b></summary>
+
+Dá, pela URL: aperte `Ctrl+F` e cole `https://kick.com/<canal>`. O canal entra nos recentes, onde o `f` o põe nos favoritos, e a lista mostra se ele está ao vivo, com título e espectadores. Ainda não há catálogo da Kick para navegar.
+
+O chat abre ao lado do vídeo e é só leitura. Enviar exige conta na Kick e um app registrado, que este projeto não usa. Emotes aparecem pelo nome, e a mensagem que um moderador apaga continua na tela.
+
+A Kick não tem API pública para nada disso sem conta. O app lê o JSON que o próprio site usa e a conexão de chat que o player do site abre, então os dois podem parar de funcionar quando a Kick mudar algo:
+
+- `Kick recusou o pedido (HTTP 403)`: a barreira na frente do site bloqueou o app. Espere um pouco e aperte `Ctrl+T` para tentar o chat de novo.
+- `Kick recusou a chave do chat`: a Kick trocou a chave do serviço de chat (Pusher). Abra um canal da Kick no navegador, ache na aba de rede o WebSocket para `ws-us2.pusher.com/app/<chave>` e ponha essa chave no `config.toml`:
+
+  ```toml
+  kick_pusher_key = "<chave>"
+  ```
+
+</details>
+
+<details>
 <summary><b>Como faço login para enviar mensagens?</b></summary>
 
 Escolha um:
@@ -262,7 +280,9 @@ Apagar o arquivo local não encerra a sessão na Twitch. Faça as duas coisas:
 <details>
 <summary><b>Bloqueia anúncio?</b></summary>
 
-O `streamlink` descarta os trechos de anúncio da transmissão. Durante o intervalo, a barra de status mostra `Intervalo comercial: o vídeo volta sozinho` com uma contagem regressiva.
+Na Twitch, o `streamlink` descarta os trechos de anúncio da transmissão. Durante o intervalo, a barra de status mostra `Intervalo comercial: o vídeo volta sozinho` com uma contagem regressiva.
+
+Uma live da Kick toca como a Kick a envia. O app não filtra nem detecta intervalo comercial nela.
 
 </details>
 
