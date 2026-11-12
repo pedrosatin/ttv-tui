@@ -1154,55 +1154,32 @@ func TestStore_MultiplatformChannelsAreDistinct(t *testing.T) {
 	})
 }
 
-func TestStore_OldVersionCompatibility(t *testing.T) {
-	// Represents how an older version of the app reads state.json without the "platform" field.
-	type legacyChannel struct {
-		ID          string `json:"id,omitempty"`
-		Login       string `json:"login"`
-		DisplayName string `json:"display_name,omitempty"`
-	}
-	type legacyState struct {
-		Favorites []legacyChannel `json:"favorites"`
-		Recents   []legacyChannel `json:"recents"`
-	}
-
+func TestStore_PlatformIsStoredCanonical(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	st := State{
-		Favorites: []Channel{
-			{Platform: PlatformTwitch, ID: "1", Login: "streamer_tw", DisplayName: "Streamer TW"},
-			{Platform: PlatformKick, ID: "2", Login: "streamer_kick", DisplayName: "Streamer Kick"},
-		},
-		Recents: []Channel{
-			{Platform: PlatformKick, ID: "2", Login: "streamer_kick", DisplayName: "Streamer Kick"},
-		},
+	var st State
+	st.ToggleFavorite(Channel{Platform: "Kick", ID: "1", Login: "a"})
+	st.ToggleFavorite(Channel{Platform: " ", ID: "2", Login: "b"})
+	st.AddRecent(Channel{Platform: " YouTube ", ID: "3", Login: "c"}, 0)
+	st.Recents = append(st.Recents, Channel{Platform: "TWITCH", ID: "4", Login: "d"})
+
+	want := map[string]string{"a": PlatformKick, "b": PlatformTwitch, "c": PlatformYouTube}
+	for _, ch := range append(append([]Channel(nil), st.Favorites...), st.Recents[:1]...) {
+		if ch.Platform != want[ch.Login] {
+			t.Fatalf("in memory %q: platform %q, want %q", ch.Login, ch.Platform, want[ch.Login])
+		}
 	}
 
 	if err := SaveTo(path, st); err != nil {
 		t.Fatalf("SaveTo: %v", err)
 	}
-
-	data, err := os.ReadFile(path)
+	loaded, err := LoadFrom(path)
 	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
+		t.Fatalf("LoadFrom: %v", err)
 	}
-
-	// Unmarshaling into the legacy struct without a Platform field succeeds without error.
-	var oldState legacyState
-	if err := json.Unmarshal(data, &oldState); err != nil {
-		t.Fatalf("legacy unmarshal failed on new state: %v", err)
-	}
-
-	if len(oldState.Favorites) != 2 || len(oldState.Recents) != 1 {
-		t.Fatalf("unexpected legacy state: %+v", oldState)
-	}
-
-	// In the old version, since it lacked the platform field, channels became twitch.Channel.
-	twCh := twitch.Channel{
-		ID:          oldState.Favorites[1].ID,
-		Login:       oldState.Favorites[1].Login,
-		DisplayName: oldState.Favorites[1].DisplayName,
-	}
-	if twCh.Login != "streamer_kick" {
-		t.Fatalf("unexpected channel: %+v", twCh)
+	want["d"] = PlatformTwitch
+	for _, ch := range append(append([]Channel(nil), loaded.Favorites...), loaded.Recents...) {
+		if ch.Platform != want[ch.Login] {
+			t.Fatalf("on disk %q: platform %q, want %q", ch.Login, ch.Platform, want[ch.Login])
+		}
 	}
 }

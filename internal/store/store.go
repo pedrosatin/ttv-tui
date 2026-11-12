@@ -38,12 +38,14 @@ type Channel struct {
 	DisplayName string `json:"display_name,omitempty"`
 }
 
-// CanonicalPlatform returns the lowercase platform name for c, or DefaultPlatform if empty.
+// CanonicalPlatform returns the trimmed, lowercase platform name for c, or
+// DefaultPlatform when nothing is left after trimming.
 func (c Channel) CanonicalPlatform() string {
-	if c.Platform == "" {
+	p := strings.ToLower(strings.TrimSpace(c.Platform))
+	if p == "" {
 		return DefaultPlatform
 	}
-	return strings.ToLower(strings.TrimSpace(c.Platform))
+	return p
 }
 
 // Matches reports whether two channels represent the same channel on the same platform.
@@ -126,9 +128,7 @@ type favoriteSnapshot struct {
 
 // AddRecent prepends ch to recents, removing any prior duplicate, and clamps to maxRecents.
 func (s *State) AddRecent(ch Channel, maxRecents int) {
-	if ch.Platform == "" {
-		ch.Platform = DefaultPlatform
-	}
+	ch.Platform = ch.CanonicalPlatform()
 	if maxRecents <= 0 {
 		maxRecents = DefaultMaxRecents
 	}
@@ -147,9 +147,7 @@ func (s *State) AddRecent(ch Channel, maxRecents int) {
 // ToggleFavorite toggles ch in favorites. If present, removes it and returns false.
 // If absent, appends it and returns true.
 func (s *State) ToggleFavorite(ch Channel) bool {
-	if ch.Platform == "" {
-		ch.Platform = DefaultPlatform
-	}
+	ch.Platform = ch.CanonicalPlatform()
 	if s.snapshot == nil {
 		s.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), s.Favorites...)}
 	}
@@ -332,11 +330,11 @@ func unionChannels(first, second []Channel) []Channel {
 	return out
 }
 
+// normalizeChannels stores the canonical platform on every channel, so what is
+// written matches what Matches compares.
 func normalizeChannels(channels []Channel) []Channel {
 	for i := range channels {
-		if channels[i].Platform == "" {
-			channels[i].Platform = DefaultPlatform
-		}
+		channels[i].Platform = channels[i].CanonicalPlatform()
 	}
 	return channels
 }
