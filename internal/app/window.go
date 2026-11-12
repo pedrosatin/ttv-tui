@@ -21,9 +21,12 @@ func installedWindow() string {
 	if err != nil {
 		return ""
 	}
-	dir := filepath.Dir(exe)
+	return findInstalledWindow(filepath.Dir(exe), runtime.GOOS)
+}
+
+func findInstalledWindow(dir, goos string) string {
 	candidates := []string{filepath.Join(dir, windowBinary)}
-	if runtime.GOOS == "windows" {
+	if goos == "windows" {
 		candidates = []string{
 			filepath.Join(dir, windowBinary+".exe"),
 			filepath.Join(dir, windowBinary, windowBinary+".exe"),

@@ -278,3 +278,106 @@ func TestReportStreamlinkOrigins(t *testing.T) {
 		}
 	})
 }
+
+func TestReport_WindowLibmpvWindows(t *testing.T) {
+	for _, subfolder := range []bool{false, true} {
+		name := "flat"
+		if subfolder {
+			name = "subfolder"
+		}
+		t.Run(name, func(t *testing.T) {
+			base := isolate(t)
+			fakeTool(t, base, "streamlink")
+			// No mpv in base/PATH
+			t.Setenv("PATH", base)
+
+			exeDir := t.TempDir()
+			targetDir := exeDir
+			if subfolder {
+				targetDir = filepath.Join(exeDir, "ttv-tui-window")
+				if err := os.MkdirAll(targetDir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(targetDir, "ttv-tui-window.exe"), []byte("mock-exe"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(targetDir, "libmpv-2.dll"), []byte("mock-dll"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			// PT-BR
+			var outPT bytes.Buffer
+			codePT := Run(&outPT, Options{Version: "test", Lang: "pt-BR", ExeDir: exeDir, GOOS: "windows"})
+			if codePT != 0 {
+				t.Fatalf("expected exit code 0 when window libmpv is present, got %d; output: %s", codePT, outPT.String())
+			}
+			if !strings.Contains(outPT.String(), "mpv: libmpv (janela)") {
+				t.Fatalf("expected 'mpv: libmpv (janela)' in output, got: %s", outPT.String())
+			}
+
+			// EN
+			var outEN bytes.Buffer
+			codeEN := Run(&outEN, Options{Version: "test", Lang: "en", ExeDir: exeDir, GOOS: "windows"})
+			if codeEN != 0 {
+				t.Fatalf("expected exit code 0 when window libmpv is present, got %d; output: %s", codeEN, outEN.String())
+			}
+			if !strings.Contains(outEN.String(), "mpv: libmpv (window)") {
+				t.Fatalf("expected 'mpv: libmpv (window)' in output, got: %s", outEN.String())
+			}
+		})
+	}
+}
+
+func TestReport_WindowLibmpvMissingDLL(t *testing.T) {
+	base := isolate(t)
+	fakeTool(t, base, "streamlink")
+	t.Setenv("PATH", base)
+
+	exeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(exeDir, "ttv-tui-window.exe"), []byte("mock-exe"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// libmpv-2.dll is NOT created
+
+	var outPT bytes.Buffer
+	codePT := Run(&outPT, Options{Version: "test", Lang: "pt-BR", ExeDir: exeDir, GOOS: "windows"})
+	if codePT != 1 {
+		t.Fatalf("expected exit code 1 when libmpv-2.dll is missing and no mpv on PATH, got %d", codePT)
+	}
+	if !strings.Contains(outPT.String(), "mpv: AUSENTE") {
+		t.Fatalf("expected 'mpv: AUSENTE' in output, got: %s", outPT.String())
+	}
+
+	var outEN bytes.Buffer
+	codeEN := Run(&outEN, Options{Version: "test", Lang: "en", ExeDir: exeDir, GOOS: "windows"})
+	if codeEN != 1 {
+		t.Fatalf("expected exit code 1 when libmpv-2.dll is missing and no mpv on PATH, got %d", codeEN)
+	}
+	if !strings.Contains(outEN.String(), "mpv: MISSING") {
+		t.Fatalf("expected 'mpv: MISSING' in output, got: %s", outEN.String())
+	}
+}
+
+func TestReport_WindowLibmpvNonWindows(t *testing.T) {
+	base := isolate(t)
+	fakeTool(t, base, "streamlink")
+	t.Setenv("PATH", base)
+
+	exeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(exeDir, "ttv-tui-window.exe"), []byte("mock-exe"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(exeDir, "libmpv-2.dll"), []byte("mock-dll"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	code := Run(&out, Options{Version: "test", Lang: "en", ExeDir: exeDir, GOOS: "linux"})
+	if code != 1 {
+		t.Fatalf("expected exit code 1 on linux when mpv is missing from PATH, got %d", code)
+	}
+	if !strings.Contains(out.String(), "mpv: MISSING") {
+		t.Fatalf("expected 'mpv: MISSING' on linux without mpv on PATH, got: %s", out.String())
+	}
+}

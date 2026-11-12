@@ -118,3 +118,32 @@ func TestInstalledWindowInSubfolderOnWindows(t *testing.T) {
 		t.Fatalf("installedWindow() = %q; quero %q", got, path)
 	}
 }
+
+func TestFindInstalledWindowCandidates(t *testing.T) {
+	// Tests Windows candidate detection (flat and subfolder) on any OS.
+	t.Run("windows flat", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, windowBinary+".exe")
+		if err := os.WriteFile(path, nil, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if got := findInstalledWindow(dir, "windows"); got != path {
+			t.Fatalf("findInstalledWindow() = %q, want %q", got, path)
+		}
+	})
+
+	t.Run("windows subfolder", func(t *testing.T) {
+		dir := t.TempDir()
+		sub := filepath.Join(dir, windowBinary)
+		if err := os.Mkdir(sub, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(sub, windowBinary+".exe")
+		if err := os.WriteFile(path, nil, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if got := findInstalledWindow(dir, "windows"); got != path {
+			t.Fatalf("findInstalledWindow() = %q, want %q", got, path)
+		}
+	})
+}

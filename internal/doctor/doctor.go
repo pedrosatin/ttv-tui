@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -23,6 +24,8 @@ type Options struct {
 	Version    string
 	Lang       string
 	ConfigPath string
+	ExeDir     string
+	GOOS       string
 }
 
 // Run prints a read-only report. Missing tools and unreadable configuration or
@@ -45,7 +48,7 @@ func Run(out io.Writer, opts Options) int {
 		code = 1
 	}
 
-	mpvVal, mpvOK := toolVersion("mpv", cat)
+	mpvVal, mpvOK := mpvStatus(opts, cat)
 	_, _ = fmt.Fprintf(out, "mpv: %s\n", mpvVal)
 	if !mpvOK {
 		code = 1
@@ -120,6 +123,41 @@ func streamlinkStatus(cfgStreamlink string, cat *i18n.Catalog) (string, bool) {
 		originLabel = cat.T("doctor.origin.path")
 	}
 	return fmt.Sprintf("%s (%s)", ver, originLabel), true
+}
+
+func mpvStatus(opts Options, cat *i18n.Catalog) (string, bool) {
+	goos := opts.GOOS
+	if goos == "" {
+		goos = runtime.GOOS
+	}
+	if _, ok := findWindowMpv(opts.ExeDir, goos); ok {
+		return fmt.Sprintf("libmpv (%s)", cat.T("doctor.origin.window")), true
+	}
+	return toolVersion("mpv", cat)
+}
+
+func findWindowMpv(dir, goos string) (string, bool) {
+	if goos != "windows" {
+		return "", false
+	}
+	if dir == "" {
+		if exe, err := os.Executable(); err == nil {
+			dir = filepath.Dir(exe)
+		}
+	}
+	candidates := []string{
+		filepath.Join(dir, "ttv-tui-window.exe"),
+		filepath.Join(dir, "ttv-tui-window", "ttv-tui-window.exe"),
+	}
+	for _, candidate := range candidates {
+		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
+			dll := filepath.Join(filepath.Dir(candidate), "libmpv-2.dll")
+			if stDLL, errDLL := os.Stat(dll); errDLL == nil && !stDLL.IsDir() {
+				return candidate, true
+			}
+		}
+	}
+	return "", false
 }
 
 func toolVersion(tool string, cat *i18n.Catalog) (string, bool) {
