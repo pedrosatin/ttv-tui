@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // One function per message that update dispatches.
@@ -67,7 +67,7 @@ func (m Model) applyCategoriesLoaded(msg CategoriesLoadedMsg) (tea.Model, tea.Cm
 			}
 		}
 	} else {
-		m.list.categories = make([]twitch.Category, len(msg.Page.Items))
+		m.list.categories = make([]catalog.Category, len(msg.Page.Items))
 		copy(m.list.categories, msg.Page.Items)
 	}
 	m.list.nextCursor = msg.Page.Cursor
@@ -99,7 +99,7 @@ func (m Model) applyChannelsLoaded(msg ChannelsLoadedMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	} else {
-		m.list.channels = make([]twitch.Channel, len(msg.Page.Items))
+		m.list.channels = make([]catalog.Channel, len(msg.Page.Items))
 		copy(m.list.channels, msg.Page.Items)
 	}
 	m.refreshSavedAvailability(msg.Page.Items)
@@ -120,15 +120,15 @@ func (m Model) applySearchLoaded(msg SearchLoadedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.list.err = nil
-	// Prefer exact name then viewers (twitch.PreferSearchCategories).
-	cats := twitch.PreferSearchCategories(msg.Query, msg.Categories)
-	m.list.search.categories = make([]twitch.Category, len(cats))
+	// Prefer exact name then viewers (catalog.PreferSearchCategories).
+	cats := catalog.PreferSearchCategories(msg.Query, msg.Categories)
+	m.list.search.categories = make([]catalog.Category, len(cats))
 	copy(m.list.search.categories, cats)
 	// Prefer exact login, exact display name, then live among clones
-	// (twitch.PreferSearchChannels).
+	// (catalog.PreferSearchChannels).
 	// Lives here so every Source gets the same Enter/highlight target.
-	items := twitch.PreferSearchChannels(msg.Query, msg.Page.Items)
-	m.list.channels = make([]twitch.Channel, len(items))
+	items := catalog.PreferSearchChannels(msg.Query, msg.Page.Items)
+	m.list.channels = make([]catalog.Channel, len(items))
 	copy(m.list.channels, items)
 	m.refreshSavedAvailability(items)
 	m.list.nextCursor = msg.Page.Cursor
@@ -147,8 +147,8 @@ func (m Model) applySavedAvailability(msg SavedAvailabilityMsg) (tea.Model, tea.
 	}
 	// A batch lookup is not a category listing: a channel without stream data
 	// has no evidence and must not be inferred live.
-	known := slices.DeleteFunc(slices.Clone(msg.Channels), func(c twitch.Channel) bool {
-		return c.Availability == twitch.AvailabilityUnknown
+	known := slices.DeleteFunc(slices.Clone(msg.Channels), func(c catalog.Channel) bool {
+		return c.Availability == catalog.AvailabilityUnknown
 	})
 	m.refreshSavedAvailability(known)
 	m.reconcileHighlight()
@@ -181,20 +181,19 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		cmds = append(cmds, m.saveStoreCmd())
 	}
 	target := PlayTarget{
-		URL:      selected.URL,
-		Label:    selected.PlayerLabel(),
-		Platform: selected.Platform,
+		Channel: selected,
 	}
-	if target.Label == "" {
-		target.Label = selected.Login
+	label := selected.PlayerLabel()
+	if label == "" {
+		label = selected.Login
 	}
 	if m.playback != nil {
 		// The player keeps the volume of a channel it restarts.
-		if target.Label != m.player.login {
+		if label != m.player.login {
 			m.player.volume = 100
 		}
 		m.player.target = target
-		m.player.login = target.Label
+		m.player.login = label
 		m.player.state = PlayerStateStarting
 		m.player.lastLine = ""
 		m.player.failure = PlayerFailureNone

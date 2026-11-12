@@ -67,6 +67,11 @@ func (c Channel) PlayerLabel() string {
 	return c.Login
 }
 
+// CanonicalPlatform returns the normalized canonical platform name for c.
+func (c Channel) CanonicalPlatform() string {
+	return platform.Normalize(c.Platform)
+}
+
 // StableID returns the stable channel identifier within its platform
 // (the login/slug that forms the PlayerLabel).
 func (c Channel) StableID() string {
@@ -186,17 +191,15 @@ type Searcher interface {
 }
 
 // Resolver resolves the current stream status/metadata for saved channels.
-// Note: ChannelsByLogins keeps its legacy name until the list migration, where a neutral
-// name will be introduced.
 type Resolver interface {
-	// ChannelsByLogins returns identity and Availability for the given logins,
-	// in as many upstream batches as needed. Empty logins yields an empty result with
-	// no network call. Logins that do not resolve are omitted so callers keep
+	// ChannelsByIDs returns identity and Availability for the given identifiers,
+	// in as many upstream batches as needed. Empty ids yields an empty result with
+	// no network call. Identifiers that do not resolve are omitted so callers keep
 	// AvailabilityUnknown. stream:null without an error is AvailabilityOffline.
 	// A null stream with an error on the same item stays AvailabilityUnknown;
 	// it is not evidence of offline. A stream object is AvailabilityLive with
 	// viewers/title when present.
-	ChannelsByLogins(ctx context.Context, logins []string) ([]Channel, error)
+	ChannelsByIDs(ctx context.Context, ids []string) ([]Channel, error)
 }
 
 // Source defines the complete catalog data contract consumed by the UI,

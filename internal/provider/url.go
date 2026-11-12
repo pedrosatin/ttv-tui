@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/streamurl"
 )
 
@@ -56,7 +57,8 @@ func (p *URLProvider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	}
 
 	label := ch.PlayerLabel()
-	if label == "" || label == rawURL {
+	plat := platform.Normalize(ch.Platform)
+	if label == "" || label == rawURL || (plat != "" && label == plat) {
 		label = info.Label
 	}
 	if label == "" {

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 // PlayerState is the UI-facing playback status shown in the status bar.
@@ -38,12 +40,9 @@ const (
 	PlayerFailureUnknown           PlayerFailure = "unknown"
 )
 
-// PlayTarget describes what to play: an optional ready URL, a qualified Label
-// for volume persistence and logs, and the platform name.
+// PlayTarget describes what to play: a catalog.Channel carrying identity, platform, and optional stream URL.
 type PlayTarget struct {
-	URL      string
-	Label    string
-	Platform string
+	Channel catalog.Channel
 }
 
 // PlayerStatusMsg is delivered by the injected Playback bridge whenever the
@@ -256,8 +255,8 @@ func (m Model) playerErrorDetail() string {
 // the player keeps that one.
 func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
 	target := m.player.target
-	if target.URL == "" && target.Label == "" {
-		target = PlayTarget{Label: m.player.login}
+	if target.Channel.URL == "" && target.Channel.Login == "" && target.Channel.ID == "" {
+		target = PlayTarget{Channel: catalog.Channel{Platform: platform.Twitch, Login: m.player.login}}
 	}
 	m.player.state = PlayerStateStarting
 	m.player.failure = PlayerFailureNone

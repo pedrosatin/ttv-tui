@@ -54,6 +54,10 @@ func (filterScrollSource) ChannelsByLogins(context.Context, []string) ([]twitch.
 	return nil, nil
 }
 
+func (filterScrollSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+	return nil, nil
+}
+
 func startFilterScrollTUI(t *testing.T) *ptyTUI {
 	t.Helper()
 	p := startTUIOnPTY(t, "TTV_APP_FILTER_SCROLL=1", "LANG=en_US.UTF-8", "LC_ALL=", "LC_MESSAGES=")

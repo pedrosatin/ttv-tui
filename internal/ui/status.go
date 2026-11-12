@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
@@ -112,7 +113,7 @@ func (m Model) activeContextSummary() string {
 
 // channelCategoryName returns the sanitized category label carried by ch, or
 // empty when unknown so the status bar can omit it.
-func channelCategoryName(ch *twitch.Channel) string {
+func channelCategoryName(ch *catalog.Channel) string {
 	if ch == nil || ch.CategoryName == nil {
 		return ""
 	}

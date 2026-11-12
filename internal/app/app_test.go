@@ -169,6 +169,10 @@ func (twoLanguageSource) ChannelsByLogins(context.Context, []string) ([]twitch.C
 	return nil, nil
 }
 
+func (twoLanguageSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+	return nil, nil
+}
+
 // settle feeds msg to the model and then every message its commands produce.
 // A command that does not answer in time is a timer and is left behind.
 func settle(t *testing.T, m tea.Model, msg tea.Msg) tea.Model {

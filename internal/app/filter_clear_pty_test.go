@@ -43,6 +43,10 @@ func (filterClearSource) ChannelsByLogins(context.Context, []string) ([]twitch.C
 	return nil, nil
 }
 
+func (filterClearSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+	return nil, nil
+}
+
 func seedFilterClearFavorite(statePath string) error {
 	if err := os.MkdirAll(filepath.Dir(statePath), 0o700); err != nil {
 		return err

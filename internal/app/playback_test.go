@@ -190,37 +190,43 @@ func TestPlaybackBridgeStartTargetTable(t *testing.T) {
 	}{
 		{
 			name:      "Twitch por login",
-			target:    ui.PlayTarget{Label: "gaules"},
+			target:    ui.PlayTarget{Channel: catalog.Channel{Login: "gaules", Platform: platform.Twitch}},
 			wantURL:   "https://www.twitch.tv/gaules",
 			wantLabel: "gaules",
 		},
 		{
 			name:      "Twitch com URL",
-			target:    ui.PlayTarget{URL: "https://www.twitch.tv/gaules", Label: "gaules", Platform: platform.Twitch},
+			target:    ui.PlayTarget{Channel: catalog.Channel{URL: "https://www.twitch.tv/gaules", Login: "gaules", Platform: platform.Twitch}},
 			wantURL:   "https://www.twitch.tv/gaules",
 			wantLabel: "gaules",
 		},
 		{
 			name:      "Kick colado (rotulo qualificado)",
-			target:    ui.PlayTarget{URL: "https://kick.com/xqc", Label: "kick:xqc", Platform: platform.Kick},
+			target:    ui.PlayTarget{Channel: catalog.Channel{URL: "https://kick.com/xqc", Login: "xqc", Platform: platform.Kick}},
+			wantURL:   "https://kick.com/xqc",
+			wantLabel: "kick:xqc",
+		},
+		{
+			name:      "Kick colado sem Login (rotulo qualificado preenchido pelo provider)",
+			target:    ui.PlayTarget{Channel: catalog.Channel{URL: "https://kick.com/xqc", Platform: platform.Kick}},
 			wantURL:   "https://kick.com/xqc",
 			wantLabel: "kick:xqc",
 		},
 		{
 			name:      "YouTube colado (rotulo qualificado)",
-			target:    ui.PlayTarget{URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", Label: "youtube:dQw4w9WgXcQ", Platform: platform.YouTube},
+			target:    ui.PlayTarget{Channel: catalog.Channel{URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", Login: "dQw4w9WgXcQ", Platform: platform.YouTube}},
 			wantURL:   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 			wantLabel: "youtube:dQw4w9WgXcQ",
 		},
 		{
 			name:      "host generico (facebook.com:<id>)",
-			target:    ui.PlayTarget{URL: "https://facebook.com/watch/live/?v=123", Label: "facebook.com:123", Platform: "facebook.com"},
+			target:    ui.PlayTarget{Channel: catalog.Channel{URL: "https://facebook.com/watch/live/?v=123", Platform: "facebook.com"}},
 			wantURL:   "https://facebook.com/watch/live/?v=123",
 			wantLabel: "facebook.com:123",
 		},
 		{
 			name:    "canal fora da Twitch sem URL (erro)",
-			target:  ui.PlayTarget{Label: "kick:xqc", Platform: platform.Kick},
+			target:  ui.PlayTarget{Channel: catalog.Channel{Login: "kick:xqc", Platform: platform.Kick}},
 			wantErr: true,
 		},
 	}

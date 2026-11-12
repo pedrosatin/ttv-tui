@@ -12,6 +12,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/components"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/provider"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
@@ -147,7 +148,12 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 }
 
 func (b *playbackBridge) Start(login string, selection uint64) tea.Cmd {
-	return b.StartTarget(ui.PlayTarget{Label: login}, selection)
+	return b.StartTarget(ui.PlayTarget{
+		Channel: catalog.Channel{
+			Platform: platform.Twitch,
+			Login:    login,
+		},
+	}, selection)
 }
 
 func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea.Cmd {
@@ -159,17 +165,17 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 		reg = provider.NewRegistry(twitch.NewProvider(nil), provider.NewURLProvider())
 	}
 
-	ch := catalog.Channel{
-		Platform: target.Platform,
-		Login:    target.Label,
-		URL:      target.URL,
-	}
+	ch := target.Channel
 	pTarget, err := reg.StreamTarget(ch)
 	if err != nil {
+		label := ch.PlayerLabel()
+		if label == "" {
+			label = ch.Login
+		}
 		return func() tea.Msg {
 			return ui.PlayerStatusMsg{
 				State:    ui.PlayerStateError,
-				Login:    target.Label,
+				Login:    label,
 				LastLine: err.Error(),
 				Failure:  ui.PlayerFailureUnknown,
 			}

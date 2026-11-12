@@ -75,7 +75,7 @@ func TestPasteKickURLInSearchPlaysDirectlyWithoutChat(t *testing.T) {
 			if len(pb.started) != 1 || pb.started[0] != "kick:xqc" {
 				t.Fatalf("playback started = %v, want [kick:xqc]", pb.started)
 			}
-			if len(pb.targets) != 1 || pb.targets[0].URL != kickURL || pb.targets[0].Platform != store.PlatformKick {
+			if len(pb.targets) != 1 || pb.targets[0].Channel.URL != kickURL || pb.targets[0].Channel.Platform != store.PlatformKick {
 				t.Fatalf("playback target = %+v, want URL %q, platform kick", pb.targets, kickURL)
 			}
 
@@ -115,7 +115,7 @@ func TestPasteYouTubeURLInSearchPlaysDirectly(t *testing.T) {
 	if len(pb.started) != 1 || pb.started[0] != "youtube:5qap5aO4i9A" {
 		t.Fatalf("playback started = %v, want [youtube:5qap5aO4i9A]", pb.started)
 	}
-	if len(pb.targets) != 1 || pb.targets[0].URL != ytURL || pb.targets[0].Platform != store.PlatformYouTube {
+	if len(pb.targets) != 1 || pb.targets[0].Channel.URL != ytURL || pb.targets[0].Channel.Platform != store.PlatformYouTube {
 		t.Fatalf("playback target = %+v, want YouTube target", pb.targets)
 	}
 }
@@ -176,7 +176,7 @@ func TestReopeningNonTwitchChannelFromRecentsPlaysURL(t *testing.T) {
 	if len(pb.started) != 1 || pb.started[0] != "kick:xqc" {
 		t.Fatalf("playback started = %v, want [kick:xqc]", pb.started)
 	}
-	if len(pb.targets) != 1 || pb.targets[0].URL != "https://kick.com/xqc" {
+	if len(pb.targets) != 1 || pb.targets[0].Channel.URL != "https://kick.com/xqc" {
 		t.Fatalf("playback target = %+v, want URL https://kick.com/xqc", pb.targets)
 	}
 }
@@ -224,10 +224,10 @@ func TestFavoritingNonTwitchChannelWorks(t *testing.T) {
 		t.Fatalf("expected xqc on kick to be in favorites: %+v", favs)
 	}
 
-	// Verify state saved to store contains the URL in favorites
+	// Verify state saved to store contains the platform and URL in favorites
 	st := m.list.toStoreState()
-	if len(st.Favorites) != 1 || st.Favorites[0].URL != "https://kick.com/xqc" {
-		t.Fatalf("store state favorites = %+v, want URL preserved", st.Favorites)
+	if len(st.Favorites) != 1 || st.Favorites[0].Platform != store.PlatformKick || st.Favorites[0].URL != "https://kick.com/xqc" {
+		t.Fatalf("store state favorites = %+v, want platform kick and URL preserved", st.Favorites)
 	}
 }
 
@@ -252,7 +252,7 @@ func TestRetryKeepsNonTwitchTarget(t *testing.T) {
 	if len(pb.started) != 2 || pb.started[1] != "kick:xqc" {
 		t.Fatalf("retry playback started = %v, want second start of kick:xqc", pb.started)
 	}
-	if len(pb.targets) != 2 || pb.targets[1].URL != "https://kick.com/xqc" {
+	if len(pb.targets) != 2 || pb.targets[1].Channel.URL != "https://kick.com/xqc" {
 		t.Fatalf("retry target = %+v, want URL preserved", pb.targets)
 	}
 }

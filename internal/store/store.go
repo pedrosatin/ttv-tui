@@ -50,11 +50,11 @@ func (c Channel) CanonicalPlatform() string {
 // Matches reports whether two channels represent the same channel on the same platform.
 // For non-Twitch channels, it compares platform and stable identifier rather than raw URL.
 func (c Channel) Matches(other Channel) bool {
-	return catalog.SameChannel(c.ToTwitch(), other.ToTwitch())
+	return catalog.SameChannel(c.ToChannel(), other.ToChannel())
 }
 
-// ToTwitch converts store.Channel to twitch.Channel.
-func (c Channel) ToTwitch() twitch.Channel {
+// ToChannel converts store.Channel to catalog.Channel.
+func (c Channel) ToChannel() catalog.Channel {
 	disp := c.DisplayName
 	if disp == "" {
 		disp = c.Login
@@ -63,7 +63,7 @@ func (c Channel) ToTwitch() twitch.Channel {
 	if id == "" {
 		id = c.Login
 	}
-	return twitch.Channel{
+	return catalog.Channel{
 		Platform:    c.CanonicalPlatform(),
 		ID:          id,
 		Login:       c.Login,
@@ -72,8 +72,8 @@ func (c Channel) ToTwitch() twitch.Channel {
 	}
 }
 
-// FromTwitch converts twitch.Channel to store.Channel.
-func FromTwitch(ch twitch.Channel) Channel {
+// FromChannel converts catalog.Channel to store.Channel.
+func FromChannel(ch catalog.Channel) Channel {
 	disp := ch.DisplayName
 	if disp == "" {
 		disp = ch.Login
@@ -82,12 +82,12 @@ func FromTwitch(ch twitch.Channel) Channel {
 	if id == "" {
 		id = ch.Login
 	}
-	platform := ch.Platform
-	if platform == "" {
-		platform = PlatformTwitch
+	plat := ch.Platform
+	if plat == "" {
+		plat = PlatformTwitch
 	}
 	return Channel{
-		Platform:    platform,
+		Platform:    plat,
 		ID:          id,
 		Login:       ch.Login,
 		DisplayName: disp,
@@ -95,22 +95,42 @@ func FromTwitch(ch twitch.Channel) Channel {
 	}
 }
 
-// ToTwitchChannels converts a slice of store.Channel to []twitch.Channel.
-func ToTwitchChannels(channels []Channel) []twitch.Channel {
-	out := make([]twitch.Channel, len(channels))
+// ToChannels converts a slice of store.Channel to []catalog.Channel.
+func ToChannels(channels []Channel) []catalog.Channel {
+	out := make([]catalog.Channel, len(channels))
 	for i, c := range channels {
-		out[i] = c.ToTwitch()
+		out[i] = c.ToChannel()
 	}
 	return out
 }
 
-// FromTwitchChannels converts a slice of twitch.Channel to []store.Channel.
-func FromTwitchChannels(channels []twitch.Channel) []Channel {
+// FromChannels converts a slice of catalog.Channel to []store.Channel.
+func FromChannels(channels []catalog.Channel) []Channel {
 	out := make([]Channel, len(channels))
 	for i, c := range channels {
-		out[i] = FromTwitch(c)
+		out[i] = FromChannel(c)
 	}
 	return out
+}
+
+// ToTwitch converts store.Channel to twitch.Channel (alias for ToChannel).
+func (c Channel) ToTwitch() twitch.Channel {
+	return c.ToChannel()
+}
+
+// FromTwitch converts twitch.Channel to store.Channel (alias for FromChannel).
+func FromTwitch(ch twitch.Channel) Channel {
+	return FromChannel(ch)
+}
+
+// ToTwitchChannels converts a slice of store.Channel to []twitch.Channel.
+func ToTwitchChannels(channels []Channel) []twitch.Channel {
+	return ToChannels(channels)
+}
+
+// FromTwitchChannels converts a slice of twitch.Channel to []store.Channel.
+func FromTwitchChannels(channels []twitch.Channel) []Channel {
+	return FromChannels(channels)
 }
 
 // State represents the persistent application state containing favorites and recents.

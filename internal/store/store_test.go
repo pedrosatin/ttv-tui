@@ -1238,7 +1238,7 @@ func TestStore_ChannelWithURLRoundTripAndLegacyCompat(t *testing.T) {
 		t.Fatalf("recent[1] Twitch URL = %q, want empty", loaded.Recents[1].URL)
 	}
 
-	// 2. Conversion to and from twitch.Channel preserves URL and Platform.
+	// 2. Conversion to and from twitch.Channel and catalog.Channel preserves URL and Platform.
 	tCh := loaded.Favorites[0].ToTwitch()
 	if tCh.Platform != PlatformKick || tCh.URL != "https://kick.com/xqc" {
 		t.Fatalf("ToTwitch did not preserve platform or URL: %+v", tCh)
@@ -1246,6 +1246,24 @@ func TestStore_ChannelWithURLRoundTripAndLegacyCompat(t *testing.T) {
 	backCh := FromTwitch(tCh)
 	if backCh.Platform != PlatformKick || backCh.URL != "https://kick.com/xqc" {
 		t.Fatalf("FromTwitch did not preserve platform or URL: %+v", backCh)
+	}
+
+	catCh := loaded.Favorites[0].ToChannel()
+	if catCh.Platform != PlatformKick || catCh.URL != "https://kick.com/xqc" {
+		t.Fatalf("ToChannel did not preserve platform or URL: %+v", catCh)
+	}
+	backCatCh := FromChannel(catCh)
+	if backCatCh.Platform != PlatformKick || backCatCh.URL != "https://kick.com/xqc" {
+		t.Fatalf("FromChannel did not preserve platform or URL: %+v", backCatCh)
+	}
+
+	catChs := ToChannels(loaded.Favorites)
+	if len(catChs) != 1 || catChs[0].Platform != PlatformKick || catChs[0].URL != "https://kick.com/xqc" {
+		t.Fatalf("ToChannels did not preserve platform or URL: %+v", catChs)
+	}
+	backFromChs := FromChannels(catChs)
+	if len(backFromChs) != 1 || backFromChs[0].Platform != PlatformKick || backFromChs[0].URL != "https://kick.com/xqc" {
+		t.Fatalf("FromChannels did not preserve platform or URL: %+v", backFromChs)
 	}
 
 	// 3. Matches compares platform + stable identifier, not raw URL.

@@ -8,51 +8,60 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 type fakeSource struct {
-	categoriesFn       func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error)
-	channelsFn         func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error)
-	searchFn           func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error)
-	searchCategoriesFn func(ctx context.Context, query string) ([]twitch.Category, error)
-	channelsByLoginsFn func(ctx context.Context, logins []string) ([]twitch.Channel, error)
+	categoriesFn       func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error)
+	channelsFn         func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error)
+	searchFn           func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error)
+	searchCategoriesFn func(ctx context.Context, query string) ([]catalog.Category, error)
+	channelsByIDsFn    func(ctx context.Context, ids []string) ([]catalog.Channel, error)
+	channelsByLoginsFn func(ctx context.Context, logins []string) ([]catalog.Channel, error)
 }
 
-func (f *fakeSource) Categories(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+func (f *fakeSource) Categories(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 	if f.categoriesFn != nil {
 		return f.categoriesFn(ctx, page)
 	}
-	return twitch.Page[twitch.Category]{}, nil
+	return catalog.Page[catalog.Category]{}, nil
 }
 
-func (f *fakeSource) Channels(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+func (f *fakeSource) Channels(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 	if f.channelsFn != nil {
 		return f.channelsFn(ctx, categoryID, page)
 	}
-	return twitch.Page[twitch.Channel]{}, nil
+	return catalog.Page[catalog.Channel]{}, nil
 }
 
-func (f *fakeSource) Search(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+func (f *fakeSource) Search(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 	if f.searchFn != nil {
 		return f.searchFn(ctx, query)
 	}
-	return twitch.Page[twitch.Channel]{}, nil
+	return catalog.Page[catalog.Channel]{}, nil
 }
 
-func (f *fakeSource) SearchCategories(ctx context.Context, query string) ([]twitch.Category, error) {
+func (f *fakeSource) SearchCategories(ctx context.Context, query string) ([]catalog.Category, error) {
 	if f.searchCategoriesFn != nil {
 		return f.searchCategoriesFn(ctx, query)
 	}
 	return nil, nil
 }
 
-func (f *fakeSource) ChannelsByLogins(ctx context.Context, logins []string) ([]twitch.Channel, error) {
+func (f *fakeSource) ChannelsByIDs(ctx context.Context, ids []string) ([]catalog.Channel, error) {
+	if f.channelsByIDsFn != nil {
+		return f.channelsByIDsFn(ctx, ids)
+	}
 	if f.channelsByLoginsFn != nil {
-		return f.channelsByLoginsFn(ctx, logins)
+		return f.channelsByLoginsFn(ctx, ids)
 	}
 	return nil, nil
+}
+
+func (f *fakeSource) ChannelsByLogins(ctx context.Context, logins []string) ([]catalog.Channel, error) {
+	return f.ChannelsByIDs(ctx, logins)
 }
 
 func TestCtrlQQuitsModel(t *testing.T) {
@@ -810,13 +819,16 @@ type fakePlayback struct {
 }
 
 func (f *fakePlayback) Start(login string, selection uint64) tea.Cmd {
-	return f.StartTarget(PlayTarget{Label: login}, selection)
+	return f.StartTarget(PlayTarget{Channel: catalog.Channel{Login: login}}, selection)
 }
 
 func (f *fakePlayback) StartTarget(target PlayTarget, selection uint64) tea.Cmd {
-	label := target.Label
+	label := target.Channel.PlayerLabel()
 	if label == "" {
-		label = target.URL
+		label = target.Channel.Login
+	}
+	if label == "" {
+		label = target.Channel.URL
 	}
 	f.started = append(f.started, label)
 	f.targets = append(f.targets, target)

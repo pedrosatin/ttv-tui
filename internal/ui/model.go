@@ -6,9 +6,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/store"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // defaultCategoryPageSize is the initial categories page size. Twitch's
@@ -36,7 +36,7 @@ const (
 // CategoriesLoadedMsg delivers the result of an asynchronous Categories page request.
 type CategoriesLoadedMsg struct {
 	Generation uint64
-	Page       twitch.Page[twitch.Category]
+	Page       catalog.Page[catalog.Category]
 	Append     bool
 	Err        error
 }
@@ -44,8 +44,8 @@ type CategoriesLoadedMsg struct {
 // ChannelsLoadedMsg delivers the result of an asynchronous Channels page request.
 type ChannelsLoadedMsg struct {
 	Generation uint64
-	Category   twitch.Category
-	Page       twitch.Page[twitch.Channel]
+	Category   catalog.Category
+	Page       catalog.Page[catalog.Channel]
 	Append     bool
 	Err        error
 }
@@ -55,8 +55,8 @@ type ChannelsLoadedMsg struct {
 type SearchLoadedMsg struct {
 	Generation uint64
 	Query      string
-	Page       twitch.Page[twitch.Channel]
-	Categories []twitch.Category
+	Page       catalog.Page[catalog.Channel]
+	Categories []catalog.Category
 	Err        error
 }
 
@@ -64,19 +64,19 @@ type SearchLoadedMsg struct {
 // recents. Failures leave saved channels unverified and never set Model.err.
 type SavedAvailabilityMsg struct {
 	Generation uint64
-	Channels   []twitch.Channel
+	Channels   []catalog.Channel
 	Err        error
 }
 
 // CategorySelectedMsg is emitted when the user presses Enter on a highlighted category
 // when no Source is attached.
 type CategorySelectedMsg struct {
-	Category twitch.Category
+	Category catalog.Category
 }
 
 // ChannelSelectedMsg is emitted when the user presses Enter on a highlighted channel.
 type ChannelSelectedMsg struct {
-	Channel twitch.Channel
+	Channel catalog.Channel
 	// Enter is the count of Enters on a channel row up to this one. A message
 	// from an earlier Enter that arrives after a later one is dropped.
 	Enter uint64
@@ -127,12 +127,39 @@ type AuthValidatedMsg struct {
 type Option func(*Model)
 
 // WithSource configures the Model to load data from src.
-func WithSource(src twitch.Source) Option {
+func WithSource(src catalog.Source) Option {
 	return func(m *Model) {
 		m.source = src
 		if src != nil {
+			m.browser = src
+			m.searcher = src
+			m.resolver = src
 			m.list.loading = true
 		}
+	}
+}
+
+// WithBrowser configures the Model to browse categories and channels with b.
+func WithBrowser(b catalog.Browser) Option {
+	return func(m *Model) {
+		m.browser = b
+		if b != nil {
+			m.list.loading = true
+		}
+	}
+}
+
+// WithSearcher configures the Model to search channels with s.
+func WithSearcher(s catalog.Searcher) Option {
+	return func(m *Model) {
+		m.searcher = s
+	}
+}
+
+// WithResolver configures the Model to resolve channel availability with r.
+func WithResolver(r catalog.Resolver) Option {
+	return func(m *Model) {
+		m.resolver = r
 	}
 }
 
@@ -161,17 +188,17 @@ func WithStore(s Store) Option {
 }
 
 // WithFavorites sets the initial favorites.
-func WithFavorites(favs []twitch.Channel) Option {
+func WithFavorites(favs []catalog.Channel) Option {
 	return func(m *Model) {
-		m.list.favorites = make([]twitch.Channel, len(favs))
+		m.list.favorites = make([]catalog.Channel, len(favs))
 		copy(m.list.favorites, favs)
 	}
 }
 
 // WithRecents sets the initial recents.
-func WithRecents(recs []twitch.Channel) Option {
+func WithRecents(recs []catalog.Channel) Option {
 	return func(m *Model) {
-		m.list.recents = make([]twitch.Channel, len(recs))
+		m.list.recents = make([]catalog.Channel, len(recs))
 		copy(m.list.recents, recs)
 	}
 }
@@ -188,7 +215,10 @@ func WithCorruptNotice(notice string) Option {
 // pointers: Bubble Tea copies Model by value and a copy must not share state.
 type Model struct {
 	catalog    *i18n.Catalog
-	source     twitch.Source
+	source     catalog.Source
+	browser    catalog.Browser
+	searcher   catalog.Searcher
+	resolver   catalog.Resolver
 	keys       keyMap
 	tokenCheck TokenCheckFunc
 	store      Store
@@ -216,8 +246,8 @@ type listState struct {
 	loading    bool
 	err        error
 	loadFailed bool // the last load failed; an empty list is missing data, not an empty result
-	categories []twitch.Category
-	channels   []twitch.Channel
+	categories []catalog.Category
+	channels   []catalog.Channel
 	nextCursor string
 	hasMore    bool
 	filter     string
@@ -229,17 +259,17 @@ type listState struct {
 	highlightedLogin string // secondary channel identity when upstream IDs churn between loads
 	highlightIndex   int    // VisibleItems index; nearest-neighbor fallback after refresh
 	focusResults     bool   // next channel/search load highlights its first result; see settleHighlightAfterLoad
-	selectedCategory *twitch.Category
-	selectedChannel  *twitch.Channel
+	selectedCategory *catalog.Category
+	selectedChannel  *catalog.Channel
 	// enters counts Enter on a channel row; see ChannelSelectedMsg.Enter.
 	enters uint64
 
-	favorites []twitch.Channel
-	recents   []twitch.Channel
+	favorites []catalog.Channel
+	recents   []catalog.Channel
 	// pendingRecents is the store-ordered recent list after a channel is opened.
 	// VisibleItems keeps using recents until the next list load (refresh, back
 	// to categories, reopen) applies this slice, so selection does not jump rows.
-	pendingRecents []twitch.Channel
+	pendingRecents []catalog.Channel
 }
 
 // searchState is the Ctrl+F search over the list.
@@ -253,7 +283,7 @@ type searchState struct {
 	// categories holds category hits for ModeSearch only. Kept separate from
 	// the list categories so Esc back to the live top list does not briefly
 	// show search results while the reload runs.
-	categories []twitch.Category
+	categories []catalog.Category
 }
 
 // channelPrefs holds the channel preference filters (ticket 01) and their
@@ -362,7 +392,7 @@ type noticeState struct {
 }
 
 // New creates a new UI Model backed by the given i18n catalog and options.
-func New(catalog *i18n.Catalog, opts ...Option) Model {
+func New(cat *i18n.Catalog, opts ...Option) Model {
 	// Only auto-detect once per process; tests may override via
 	// forceOrientationColorsForTest without New resetting them.
 	colorMu.RLock()
@@ -371,11 +401,11 @@ func New(catalog *i18n.Catalog, opts ...Option) Model {
 	if !inited {
 		configureOrientationColors()
 	}
-	if catalog == nil {
-		catalog, _ = i18n.New(i18n.LangEN)
+	if cat == nil {
+		cat, _ = i18n.New(i18n.LangEN)
 	}
 	m := Model{
-		catalog: catalog,
+		catalog: cat,
 		keys:    defaultKeyMap(),
 		list: listState{
 			tracker:    &requestTracker{},
@@ -383,8 +413,8 @@ func New(catalog *i18n.Catalog, opts ...Option) Model {
 			mode:       ModeCategories,
 			generation: 1,
 			hydrateGen: 1,
-			favorites:  make([]twitch.Channel, 0),
-			recents:    make([]twitch.Channel, 0),
+			favorites:  make([]catalog.Channel, 0),
+			recents:    make([]catalog.Channel, 0),
 			prefs:      channelPrefs{saves: &saveSlot{}},
 		},
 		player:     playbackState{volume: 100},
@@ -424,8 +454,10 @@ func (m Model) CtrlCNotice() string {
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
-	if m.source != nil {
+	if m.browser != nil {
 		cmds = append(cmds, m.fetchCategoriesCmd(m.list.generation, "", false))
+	}
+	if m.resolver != nil {
 		if hydrate := m.fetchHydrateCmd(m.list.hydrateGen); hydrate != nil {
 			cmds = append(cmds, hydrate)
 		}

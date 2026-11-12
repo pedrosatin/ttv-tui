@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
 // Audience thresholds offered in the channel filter menu. 0 clears the floor.
@@ -57,7 +57,7 @@ func normalizeUIFilterLanguages(in []string) []string {
 	seen := make(map[string]struct{}, len(in))
 	out := make([]string, 0, len(in))
 	for _, raw := range in {
-		lang := twitch.NormalizeLanguage(raw)
+		lang := catalog.NormalizeLanguage(raw)
 		if lang == "" {
 			continue
 		}
@@ -79,8 +79,8 @@ func (p channelPrefs) active() bool {
 }
 
 // channelLanguageUnknown reports whether ch has no usable language metadata.
-func channelLanguageUnknown(ch twitch.Channel) bool {
-	return ch.Language == nil || twitch.NormalizeLanguage(*ch.Language) == ""
+func channelLanguageUnknown(ch catalog.Channel) bool {
+	return ch.Language == nil || catalog.NormalizeLanguage(*ch.Language) == ""
 }
 
 // passes reports whether ch survives the language and audience
@@ -90,7 +90,7 @@ func channelLanguageUnknown(ch twitch.Channel) bool {
 // languages are selected, channels without a reported language stay visible
 // and are marked in the row as unknown. Hiding them would look like a silent
 // data loss when the API omits language.
-func (p channelPrefs) passes(ch twitch.Channel) bool {
+func (p channelPrefs) passes(ch catalog.Channel) bool {
 	if p.minViewers > 0 {
 		if ch.Viewers == nil || *ch.Viewers < p.minViewers {
 			return false
@@ -102,7 +102,7 @@ func (p channelPrefs) passes(ch twitch.Channel) bool {
 	if channelLanguageUnknown(ch) {
 		return true
 	}
-	lang := twitch.NormalizeLanguage(*ch.Language)
+	lang := catalog.NormalizeLanguage(*ch.Language)
 	for _, want := range p.languages {
 		if want == lang {
 			return true
@@ -143,11 +143,11 @@ type langCount struct {
 // Unknown-language channels are omitted from the menu counts.
 func (l listState) languagesInCurrentList() []langCount {
 	counts := make(map[string]int)
-	add := func(ch twitch.Channel) {
+	add := func(ch catalog.Channel) {
 		if channelLanguageUnknown(ch) {
 			return
 		}
-		counts[twitch.NormalizeLanguage(*ch.Language)]++
+		counts[catalog.NormalizeLanguage(*ch.Language)]++
 	}
 	for _, ch := range l.channels {
 		add(ch)

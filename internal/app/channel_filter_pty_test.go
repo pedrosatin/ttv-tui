@@ -39,6 +39,10 @@ func (channelFilterSource) ChannelsByLogins(context.Context, []string) ([]twitch
 	return nil, nil
 }
 
+func (channelFilterSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+	return nil, nil
+}
+
 // TestChannelFilterMenu_PTY opens the filter menu, selects PT and 500+, and
 // captures the PTY screen with the menu open and the active filters applied.
 func TestChannelFilterMenu_PTY(t *testing.T) {

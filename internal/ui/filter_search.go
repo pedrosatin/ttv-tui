@@ -7,9 +7,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/pedrosatin/ttv-tui/internal/store"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/streamurl"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // Filter returns the active filter string.
@@ -146,16 +146,16 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if info, ok := streamurl.Parse(q); ok {
-		var ch twitch.Channel
+		var ch catalog.Channel
 		if info.IsTwitch {
-			ch = twitch.Channel{
-				Platform:    store.PlatformTwitch,
+			ch = catalog.Channel{
+				Platform:    platform.Twitch,
 				ID:          info.Login,
 				Login:       info.Login,
 				DisplayName: info.DisplayName,
 			}
 		} else {
-			ch = twitch.Channel{
+			ch = catalog.Channel{
 				Platform:    info.Platform,
 				ID:          info.Label,
 				Login:       info.Login,
@@ -186,7 +186,7 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	m.list.nextCursor = ""
 	m.list.hasMore = false
 	m.clearStaleStatusErrors()
-	if m.source == nil {
+	if m.searcher == nil && m.browser == nil {
 		m.list.loading = false
 		return m, nil
 	}
@@ -197,7 +197,8 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) fetchSearchCmd(gen uint64, query string) tea.Cmd {
-	src := m.source
+	searcher := m.searcher
+	browser := m.browser
 	tracker := m.list.tracker
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -208,21 +209,26 @@ func (m Model) fetchSearchCmd(gen uint64, query string) tea.Cmd {
 		}
 
 		var (
-			page    twitch.Page[twitch.Channel]
-			cats    []twitch.Category
+			page    catalog.Page[catalog.Channel]
+			cats    []catalog.Category
 			pageErr error
 			catsErr error
 			wg      sync.WaitGroup
 		)
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			page, pageErr = src.Search(ctx, query)
-		}()
-		go func() {
-			defer wg.Done()
-			cats, catsErr = src.SearchCategories(ctx, query)
-		}()
+		if searcher != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				page, pageErr = searcher.Search(ctx, query)
+			}()
+		}
+		if browser != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				cats, catsErr = browser.SearchCategories(ctx, query)
+			}()
+		}
 		wg.Wait()
 
 		err := pageErr

@@ -37,6 +37,10 @@ func (oneChannelSource) ChannelsByLogins(context.Context, []string) ([]twitch.Ch
 	return nil, nil
 }
 
+func (oneChannelSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+	return nil, nil
+}
+
 var ansiSeq = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[@-Z\\-_]`)
 
 // screenSince is the PTY output written after byte offset off, without escape sequences.

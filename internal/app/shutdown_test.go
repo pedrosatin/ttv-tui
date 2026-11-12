@@ -70,6 +70,10 @@ func (emptySource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel
 	return nil, nil
 }
 
+func (emptySource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+	return nil, nil
+}
+
 func helperPlayerCommand(dir string) player.CommandFunc {
 	return func(target player.Target, socketPath string) *exec.Cmd {
 		line := fmt.Sprintf("%s\t%s\n", target.URL, target.Label)

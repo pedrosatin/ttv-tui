@@ -699,6 +699,11 @@ func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]Categ
 	return res.Items, nil
 }
 
+// ChannelsByIDs implements catalog.Resolver by resolving channels by login identifiers.
+func (s *GQLSource) ChannelsByIDs(ctx context.Context, ids []string) ([]Channel, error) {
+	return s.ChannelsByLogins(ctx, ids)
+}
+
 // ChannelsByLogins fetches Availability for many logins, maxUsersByLogins per
 // GraphQL request. An empty or all-blank logins slice returns nil without
 // contacting the network. Duplicate logins (case-insensitive) are collapsed.

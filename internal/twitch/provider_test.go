@@ -26,6 +26,10 @@ func (d *dummySource) SearchCategories(ctx context.Context, query string) ([]cat
 	return nil, nil
 }
 
+func (d *dummySource) ChannelsByIDs(ctx context.Context, ids []string) ([]catalog.Channel, error) {
+	return nil, nil
+}
+
 func (d *dummySource) ChannelsByLogins(ctx context.Context, logins []string) ([]catalog.Channel, error) {
 	return nil, nil
 }

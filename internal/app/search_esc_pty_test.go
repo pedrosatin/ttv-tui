@@ -42,6 +42,10 @@ func (searchEscSource) ChannelsByLogins(context.Context, []string) ([]twitch.Cha
 	return nil, nil
 }
 
+func (searchEscSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+	return nil, nil
+}
+
 // TestEscFromSearchReturnsToOrigin_PTY drives the real TUI: Esc from a search
 // opened inside a category restores that category's channels; Esc from a search
 // opened on the categories list restores the categories.

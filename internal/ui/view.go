@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
 const (
@@ -532,12 +532,12 @@ func listRowMarker(highlighted, favorite bool) string {
 }
 
 // channelRowTag keeps availability and unknown-language evidence together.
-func (m Model) channelRowTag(ch twitch.Channel, avail twitch.Availability) string {
+func (m Model) channelRowTag(ch catalog.Channel, avail catalog.Availability) string {
 	var tags []string
 	switch avail {
-	case twitch.AvailabilityOffline:
+	case catalog.AvailabilityOffline:
 		tags = append(tags, styleOffline(m.t("channels.offline_tag")))
-	case twitch.AvailabilityUnknown:
+	case catalog.AvailabilityUnknown:
 		tags = append(tags, styleUnverified(m.t("channels.unverified_tag")))
 	}
 	if len(m.list.prefs.languages) > 0 && channelLanguageUnknown(ch) {
@@ -546,7 +546,7 @@ func (m Model) channelRowTag(ch twitch.Channel, avail twitch.Availability) strin
 	return strings.Join(tags, " ")
 }
 
-func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.Availability, maxWidth int, tagWidths ...int) string {
+func (m Model) formatChannelRow(marker string, ch catalog.Channel, avail catalog.Availability, maxWidth int, tagWidths ...int) string {
 	displayName := sanitizeScreenText(ch.DisplayName)
 	login := sanitizeScreenText(ch.Login)
 	identity := displayName
@@ -560,7 +560,7 @@ func (m Model) formatChannelRow(marker string, ch twitch.Channel, avail twitch.A
 		title = sanitizeScreenText(strings.TrimSpace(*ch.Title))
 	}
 	viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
-	if avail == twitch.AvailabilityLive {
+	if avail == catalog.AvailabilityLive {
 		if ch.Viewers == nil {
 			viewers = styleLive(padOrTruncateVisual(m.t("channels.live_compact"), 7))
 		} else {
@@ -613,7 +613,7 @@ func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, m
 	return row
 }
 
-func (m Model) formatCategoryRow(marker string, cat twitch.Category, inSearch bool, maxWidth int) string {
+func (m Model) formatCategoryRow(marker string, cat catalog.Category, inSearch bool, maxWidth int) string {
 	name := sanitizeScreenText(cat.Name)
 	if inSearch && categoryNoBroadcast(cat) {
 		row := fmt.Sprintf("%s %7s  %s — %s", marker, m.t("categories.viewers_unknown"), name, m.t("categories.no_stream"))
@@ -629,7 +629,7 @@ func (m Model) formatCategoryRow(marker string, cat twitch.Category, inSearch bo
 	return fitListRow(row, maxWidth)
 }
 
-func categoryNoBroadcast(cat twitch.Category) bool {
+func categoryNoBroadcast(cat catalog.Category) bool {
 	return cat.Viewers == nil || *cat.Viewers <= 0
 }
 
