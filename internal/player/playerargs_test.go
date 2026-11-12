@@ -240,7 +240,9 @@ func TestStreamlinkTwitchArgvIdentical(t *testing.T) {
 		"https://www.twitch.tv/gaules",
 		"best",
 		"--player", "mpv",
-		"--player-args", buildPlayerArgs(mpvArgs(endpoint, inputConf)),
+		"--player-args", "--no-config --no-input-default-bindings --no-osc --osd-level=1 --osd-bar=no " +
+			"--volume-max=100 --input-ipc-server=/run/user/1000/ttv-tui/1/i --force-window=immediate " +
+			"--hwdec=auto-safe --input-conf=/run/user/1000/ttv-tui/1/mpv-input.conf",
 	}
 
 	if !reflect.DeepEqual(cmd.Args, wantArgs) {

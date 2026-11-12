@@ -1766,6 +1766,35 @@ func TestManagerStartRejectsEmptyURL(t *testing.T) {
 	}
 }
 
+func TestManagerStartRejectsURLsStreamlinkCouldReadAsOptions(t *testing.T) {
+	var started bool
+	mgr := New(Options{Command: func(Target, string) *exec.Cmd {
+		started = true
+		return exec.Command("true")
+	}})
+	t.Cleanup(mgr.Close)
+	for _, raw := range []string{
+		"--player=evil",
+		"-o/tmp/x",
+		"twitch.tv/gaules",
+		"file:///etc/passwd",
+		"https://",
+		"https://www.twitch.tv/gaules --player=evil",
+		"https://www.twitch.tv/gaules\n--player=evil",
+		"https://www.twitch.tv/gau\x00les",
+	} {
+		if _, err := mgr.Start(Target{URL: raw, Label: "x"}); err == nil {
+			t.Errorf("Start(%q) succeeded, want an error", raw)
+		}
+	}
+	if started {
+		t.Fatal("a rejected URL reached the command")
+	}
+	if err := checkStreamURL("https://kick.com/xqc"); err != nil {
+		t.Fatalf("checkStreamURL(kick) = %v, want nil", err)
+	}
+}
+
 func TestManagerPreservesVolumeByTargetIdentity(t *testing.T) {
 	mgr := newTestManager(t, "play-control", Options{})
 	target := Target{
@@ -1817,13 +1846,20 @@ func TestRegistryRecordStoresTargetAndIdentity(t *testing.T) {
 	if rec.Identity() != "gaules" {
 		t.Fatalf("Identity = %q, want gaules", rec.Identity())
 	}
-	if rec.Target().URL != "https://www.twitch.tv/gaules" {
-		t.Fatalf("Target.URL = %q, want https://www.twitch.tv/gaules", rec.Target().URL)
+	data, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	for _, want := range []string{`"login":"gaules"`, `"url":"https://www.twitch.tv/gaules"`, `"label":"gaules"`} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("record JSON %s lacks %s", data, want)
+		}
 	}
 
-	// Backwards compatibility with old record that only had Login:
-	oldRec := Record{
-		Login: "oldchan",
+	// A record written before url and label existed still names its channel.
+	var oldRec Record
+	if err := json.Unmarshal([]byte(`{"owner_pid":1,"pgid":5678,"socket":"/tmp/sock","dir":"/tmp/dir","login":"oldchan","generation":3}`), &oldRec); err != nil {
+		t.Fatalf("Unmarshal old record: %v", err)
 	}
 	if oldRec.Identity() != "oldchan" {
 		t.Fatalf("old Identity = %q, want oldchan", oldRec.Identity())

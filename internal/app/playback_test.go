@@ -110,3 +110,14 @@ func TestMapPlayerTerminalEvent(t *testing.T) {
 		}
 	}
 }
+
+func TestTwitchTargetEmptyLoginIsRefusedByThePlayer(t *testing.T) {
+	if got := twitchTarget(""); got.URL != "" {
+		t.Fatalf("twitchTarget(\"\").URL = %q, want empty", got.URL)
+	}
+	mgr := player.New(player.Options{})
+	t.Cleanup(mgr.Close)
+	if _, err := mgr.Start(twitchTarget("")); err == nil {
+		t.Fatal("Start with an empty login must fail, not open the Twitch home page")
+	}
+}

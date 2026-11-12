@@ -21,8 +21,13 @@ func newPlaybackBridge(mgr *player.Manager) *playbackBridge {
 	return &playbackBridge{mgr: mgr}
 }
 
-// twitchTarget builds the playback Target for a Twitch channel login.
+// twitchTarget builds the playback Target for a Twitch channel login. An empty
+// login yields an empty Target, which the player refuses: the bare Twitch home
+// page is not a channel.
 func twitchTarget(login string) player.Target {
+	if login == "" {
+		return player.Target{}
+	}
 	return player.Target{
 		URL:   fmt.Sprintf("https://www.twitch.tv/%s", login),
 		Label: login,

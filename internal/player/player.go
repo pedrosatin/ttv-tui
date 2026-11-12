@@ -4,6 +4,7 @@ package player
 
 import (
 	"fmt"
+	"net/url"
 	"os/exec"
 	"slices"
 	"strings"
@@ -83,11 +84,32 @@ func (t Target) Identity() string {
 }
 
 // TargetFromURL builds a Target with the given URL and optional extra streamlink arguments.
-func TargetFromURL(url string, extra ...string) Target {
+func TargetFromURL(rawURL string, extra ...string) Target {
 	return Target{
-		URL:       url,
-		ExtraArgs: extra,
+		URL:       rawURL,
+		ExtraArgs: slices.Clone(extra),
 	}
+}
+
+// checkStreamURL accepts only an absolute http(s) URL with a host and no
+// whitespace or control characters. The URL is a positional argument of
+// streamlink, so anything else (a leading "-" above all) could reach it as an
+// option.
+func checkStreamURL(rawURL string) error {
+	if rawURL == "" {
+		return fmt.Errorf("player: empty stream URL")
+	}
+	if strings.IndexFunc(rawURL, func(r rune) bool { return r <= ' ' || r == 0x7f }) >= 0 {
+		return fmt.Errorf("player: stream URL has whitespace or control characters")
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("player: invalid stream URL: %w", err)
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("player: stream URL must be an http(s) URL with a host")
+	}
+	return nil
 }
 
 // CommandFunc builds the process to supervise for a given Target and IPC
@@ -325,8 +347,8 @@ func (m *Manager) StartInOrder(target Target, order uint64) (uint64, error) {
 
 // start is Start, ordered when order is not 0.
 func (m *Manager) start(target Target, order uint64) (uint64, error) {
-	if target.URL == "" {
-		return 0, fmt.Errorf("player: empty stream URL")
+	if err := checkStreamURL(target.URL); err != nil {
+		return 0, err
 	}
 
 	m.mu.Lock()

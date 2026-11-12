@@ -30,14 +30,6 @@ type Record struct {
 	StartedAt  time.Time `json:"started_at"`
 }
 
-// Target returns the playback Target recorded on disk.
-func (r Record) Target() Target {
-	return Target{
-		URL:   r.URL,
-		Label: r.Identity(),
-	}
-}
-
 // Identity returns the human-readable identity (label, login, or URL).
 func (r Record) Identity() string {
 	if r.Label != "" {
