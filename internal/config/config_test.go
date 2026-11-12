@@ -394,3 +394,35 @@ func TestStreamlinkPathRoundTrip(t *testing.T) {
 		t.Fatalf("StreamlinkPath = %q, want %q", got.StreamlinkPath, want.StreamlinkPath)
 	}
 }
+
+func TestKickPusherKeyRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := SaveTo(path, Config{KickPusherKey: "0123456789abcdef0123"}); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if got.KickPusherKey != "0123456789abcdef0123" {
+		t.Fatalf("KickPusherKey = %q after a round trip", got.KickPusherKey)
+	}
+
+	// The sectioned form is accepted, and a config without the key means the
+	// built-in one.
+	for input, want := range map[string]string{
+		"[kick]\npusher_key = \" abc \"\n": "abc",
+		"language = \"pt-BR\"\n":           "",
+	} {
+		cfg, err := parseTOML(input)
+		if err != nil {
+			t.Fatalf("parseTOML(%q): %v", input, err)
+		}
+		if cfg.KickPusherKey != want {
+			t.Errorf("parseTOML(%q).KickPusherKey = %q, want %q", input, cfg.KickPusherKey, want)
+		}
+	}
+	if _, err := parseTOML("kick_pusher_key = sem aspas\n"); err == nil {
+		t.Error("unquoted kick_pusher_key: want a parse error")
+	}
+}

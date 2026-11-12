@@ -12,6 +12,57 @@ import (
 // failure, so the UI can tell it from a network error.
 var ErrChatAuthentication = errors.New("chat: authentication failed")
 
+// ChatErrorReason names a chat failure the UI explains in its own words instead
+// of showing the error text. The zero value means no such reason: the UI shows
+// the text of the error.
+type ChatErrorReason string
+
+const (
+	ChatErrorNone ChatErrorReason = ""
+	// ChatErrorBlocked: the platform refused the request that finds the chat
+	// room (an anti-bot wall). Retrying at once gets the same answer.
+	ChatErrorBlocked ChatErrorReason = "blocked"
+	// ChatErrorNoRoom: the channel does not exist, or what plays has no live
+	// chat room (a recording, a clip).
+	ChatErrorNoRoom ChatErrorReason = "no_room"
+	// ChatErrorKeyRefused: the chat service refused the application key the
+	// client presents. Only a new key fixes it.
+	ChatErrorKeyRefused ChatErrorReason = "key_refused"
+)
+
+// ChatError is the error a chat implementation puts in an event when the
+// failure has a ChatErrorReason.
+type ChatError struct {
+	Reason ChatErrorReason
+	Err    error
+}
+
+func (e *ChatError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return "chat: " + string(e.Reason)
+}
+
+func (e *ChatError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+// ChatErrorReasonOf returns the reason err carries, or ChatErrorNone.
+func ChatErrorReasonOf(err error) ChatErrorReason {
+	var ce *ChatError
+	if errors.As(err, &ce) && ce != nil {
+		return ce.Reason
+	}
+	return ChatErrorNone
+}
+
 // ChatCapabilities describes the features supported by a platform's chat implementation.
 type ChatCapabilities struct {
 	// CanSend reports whether sending messages is supported.

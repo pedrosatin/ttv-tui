@@ -33,3 +33,18 @@ func TestPlatformHelpers(t *testing.T) {
 		}
 	}
 }
+
+func TestDisplayName(t *testing.T) {
+	tests := map[string]string{
+		"":          "Twitch",
+		"twitch":    "Twitch",
+		" KICK ":    "Kick",
+		"youtube":   "YouTube",
+		"Vimeo.com": "vimeo.com",
+	}
+	for raw, want := range tests {
+		if got := DisplayName(raw); got != want {
+			t.Errorf("DisplayName(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}

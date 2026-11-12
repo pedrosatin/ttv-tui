@@ -35,6 +35,10 @@ type Config struct {
 	ChatOverlayOpacity int
 	// StreamlinkPath is an optional explicit path to the streamlink binary. TOML key: streamlink_path.
 	StreamlinkPath string
+	// KickPusherKey replaces the Pusher application key the Kick chat connects
+	// with. Empty means the built-in one. Kick does not publish the key and may
+	// rotate it. TOML key: kick_pusher_key.
+	KickPusherKey string
 }
 
 // Limits of a saved panel width. The UI applies the tighter limits of the moment.
@@ -269,6 +273,9 @@ func formatTOML(cfg Config) string {
 	if cfg.StreamlinkPath != "" {
 		fmt.Fprintf(&b, "streamlink_path = %s\n", quoteTOML(cfg.StreamlinkPath))
 	}
+	if cfg.KickPusherKey != "" {
+		fmt.Fprintf(&b, "kick_pusher_key = %s\n", quoteTOML(cfg.KickPusherKey))
+	}
 	return b.String()
 }
 
@@ -423,6 +430,12 @@ func parseTOML(input string) (Config, error) {
 				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
 			}
 			cfg.StreamlinkPath = val
+		case "kick_pusher_key", "kick.pusher_key":
+			val, err := unquoteTOML(rawVal)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+			}
+			cfg.KickPusherKey = strings.TrimSpace(val)
 		}
 	}
 	if err := scanner.Err(); err != nil {

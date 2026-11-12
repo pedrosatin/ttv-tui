@@ -2,6 +2,8 @@ package catalog
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -138,5 +140,31 @@ func TestHTTPStatusKind(t *testing.T) {
 		if got := HTTPStatusKind(status); got != want {
 			t.Errorf("HTTPStatusKind(%d) = %q, want %q", status, got, want)
 		}
+	}
+}
+
+func TestChatErrorReasonOf(t *testing.T) {
+	cause := errors.New("pusher: error 4001")
+	keyed := &ChatError{Reason: ChatErrorKeyRefused, Err: cause}
+	wrapped := fmt.Errorf("session: %w", keyed)
+	if got := ChatErrorReasonOf(wrapped); got != ChatErrorKeyRefused {
+		t.Errorf("reason of a wrapped ChatError = %q, want key_refused", got)
+	}
+	if !errors.Is(wrapped, cause) || keyed.Error() != cause.Error() {
+		t.Errorf("ChatError hides its cause: %v", keyed)
+	}
+	if got := ChatErrorReasonOf(cause); got != ChatErrorNone {
+		t.Errorf("reason of a plain error = %q, want none", got)
+	}
+	if got := ChatErrorReasonOf(nil); got != ChatErrorNone {
+		t.Errorf("reason of nil = %q, want none", got)
+	}
+	bare := &ChatError{Reason: ChatErrorNoRoom}
+	if bare.Error() != "chat: no_room" || bare.Unwrap() != nil {
+		t.Errorf("ChatError without a cause = %q / %v", bare.Error(), bare.Unwrap())
+	}
+	var none *ChatError
+	if none.Error() != "<nil>" || none.Unwrap() != nil {
+		t.Errorf("nil ChatError = %q / %v", none.Error(), none.Unwrap())
 	}
 }

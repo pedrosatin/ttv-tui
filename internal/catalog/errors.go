@@ -15,6 +15,10 @@ const (
 	RateLimit ErrorKind = "RateLimit"
 	Servidor  ErrorKind = "Servidor"
 	Contrato  ErrorKind = "Contrato"
+	// Bloqueio is a request the platform refused to a client that is not a
+	// browser (HTTP 403 from an anti-bot wall). Trying again right away gets the
+	// same answer, and nothing in the response is the platform's own data.
+	Bloqueio ErrorKind = "Bloqueio"
 )
 
 // Error is the typed error returned by catalog or source operations,

@@ -28,3 +28,18 @@ func IsTwitch(raw string) bool {
 func IsNonTwitch(raw string) bool {
 	return Normalize(raw) != Twitch
 }
+
+// DisplayName returns the name a person reads for raw platform: the brand for
+// the known ones, and the normalized text (a host such as "vimeo.com") for the rest.
+func DisplayName(raw string) string {
+	switch p := Normalize(raw); p {
+	case Twitch:
+		return "Twitch"
+	case Kick:
+		return "Kick"
+	case YouTube:
+		return "YouTube"
+	default:
+		return p
+	}
+}
