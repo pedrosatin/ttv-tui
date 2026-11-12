@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,6 +21,15 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 )
+
+// skipOnDarwin skips a test that needs the bridge's own resolver to see managed
+// installs, which macOS does not use.
+func skipOnDarwin(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		t.Skip("managed streamlink is not used on macOS")
+	}
+}
 
 // installManagedVersion lays out a managed streamlink for every platform's
 // resolver, so the bridge's own resolver finds it wherever the tests run.
@@ -116,6 +126,7 @@ func newManagedBridge(t *testing.T, cfgStreamlink, dataDir string, down *compone
 }
 
 func TestCheckStreamlinkUpdateInstallsNewerManagedVersion(t *testing.T) {
+	skipOnDarwin(t)
 	dataDir := t.TempDir()
 	installManagedVersion(t, dataDir, "8.6.3-1")
 	t.Setenv("PATH", t.TempDir())
@@ -202,6 +213,7 @@ func TestCheckStreamlinkUpdateLeavesUnmanagedStreamlinkAlone(t *testing.T) {
 // 8.6.3-1 kept as the previous version.
 func onTrialBridge(t *testing.T) (*playbackBridge, string) {
 	t.Helper()
+	skipOnDarwin(t)
 	dataDir := t.TempDir()
 	t.Setenv("PATH", t.TempDir())
 	installManagedVersion(t, dataDir, "8.6.3-1")
