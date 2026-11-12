@@ -742,34 +742,3 @@ func TestListHeader_NamesThePlatformAt80Columns(t *testing.T) {
 		assertStatusWidth(t, bar, 80)
 	}
 }
-
-// At 80 columns the "Kick · " prefix and a long category name used to push the
-// focus tag out of the list header. The title is cut first; the tag stays.
-func TestListHeader_KeepsTheFocusTagWithALongTitle(t *testing.T) {
-	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
-		tw, kick := twitchCatalog(), kickCatalog()
-		kick.category = append(kick.category, catalog.Category{ID: "8", Name: "原神 Genshin Impact: Version 9 Special Program Watch Party", Viewers: catalog.IntPtr(153523)})
-		m := twoPlatforms(t, lang, tw, kick, WithChat(&fakeChat{}))
-		m = openFirst(t, resize(m, 80, 24))
-		m = pressP(t, m)
-		for range 3 {
-			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyDown})
-		}
-		m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-		m = drainAll(t, m, cmd)
-		if cat := m.SelectedCategory(); m.Mode() != ModeChannels || cat == nil || cat.ID != "8" {
-			t.Fatalf("%s: mode %q category %+v", lang, m.Mode(), cat)
-		}
-		if m.Focus() != FocusList || !m.chatColumnVisible() || !m.listVisible() {
-			t.Fatalf("%s: focus %v, chat %v, list %v; want the list focused next to the chat", lang, m.Focus(), m.chatColumnVisible(), m.listVisible())
-		}
-		listW, _ := m.panelWidths()
-		tag := m.t("focus.active_tag")
-		for _, width := range []int{listW, 30} {
-			header := m.headerLine(width)
-			if !strings.HasSuffix(header, tag) || ansi.StringWidth(header) > width {
-				t.Errorf("%s: headerLine(%d) = %q (%d cells), want it to end in %q within the width", lang, width, header, ansi.StringWidth(header), tag)
-			}
-		}
-	}
-}

@@ -454,10 +454,7 @@ func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int
 	return lines
 }
 
-// headerLine is the list header within maxWidth cells. With the list focused
-// the title is cut before the focus tag is added, so a long category name never
-// pushes the tag out of the line.
-func (m Model) headerLine(maxWidth int) string {
+func (m Model) headerLine() string {
 	var title string
 	switch m.Mode() {
 	case ModeChannels:
@@ -482,12 +479,10 @@ func (m Model) headerLine(maxWidth int) string {
 
 	if m.chatColumnVisible() && m.listVisible() {
 		if m.Focus() == FocusList {
-			tag := " " + m.t("focus.active_tag")
-			room := maxWidth - ansi.StringWidth("▸ ") - ansi.StringWidth(tag)
-			if maxWidth > 0 && room > 0 {
-				title = fitListRow(title, room)
-			}
-			return "▸ " + title + tag
+			// When the line is too narrow the tag is what gets cut: the ▸ and the
+			// focus colour already say the list has the focus, and the bar says it
+			// too. Cutting the title instead would hide the category name.
+			return "▸ " + title + " " + m.t("focus.active_tag")
 		}
 		return "  " + title
 	}
@@ -506,7 +501,7 @@ func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
 }
 
 func (m Model) renderBodyLines(maxWidth int) []string {
-	header := fitListRow(m.headerLine(maxWidth), maxWidth)
+	header := fitListRow(m.headerLine(), maxWidth)
 	if m.chatColumnVisible() && m.listVisible() && m.Focus() == FocusList {
 		header = styleFocus(header)
 	}

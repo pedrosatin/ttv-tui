@@ -389,7 +389,9 @@ def flows():
     check(role, "decode por hardware", info.get("hwdec-current") == "vaapi", str(info))
     first = screen().splitlines()[0]
     s3 = stats()
-    check(role, "lista à esquerda e chat à direita", first.lstrip("▸ ").startswith("Live Channels") and "Chat" in first.rsplit("│", 1)[-1], first[:60] + " … " + first.rsplit("│", 1)[-1].strip()[:30])
+    # The list header names its platform first ("Twitch · Live Channels").
+    list_title = re.sub(r"^\w+ · ", "", first.lstrip("▸ "))
+    check(role, "lista à esquerda e chat à direita", list_title.startswith("Live Channels") and "Chat" in first.rsplit("│", 1)[-1], first[:60] + " … " + first.rsplit("│", 1)[-1].strip()[:30])
     check(role, "vídeo no centro", s3["holeOn"] and s3["hole"][0] > 1 and s3["hole"][0] - 1 + s3["hole"][2] < s3["cols"], str(s3["hole"]))
     L, V, R = regions()
     a, b = two_grabs("3col")
