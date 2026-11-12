@@ -63,7 +63,7 @@ func (a *app) startSession(msg ctlMsg) {
 	a.sessions++
 	a.lastIpc = msg.ipc
 	a.mu.Unlock()
-	url := C.CString(msg.streamUrl)
+	url := C.CString(msg.url)
 	C.load_fd(m, url)
 	C.free(unsafe.Pointer(url))
 	go func() {
@@ -112,12 +112,12 @@ func (a *app) serveCtl(l *net.UnixListener) {
 			return
 		}
 		go func(c *net.UnixConn) {
-			ipc, fd, streamUrl, err := parseCtlMsg(c)
+			msg, err := readStart(c)
 			if err != nil {
 				c.Close()
 				return
 			}
-			a.ctlq <- ctlMsg{kind: "start", ipc: ipc, fd: fd, streamUrl: streamUrl, conn: c}
+			a.ctlq <- msg
 			C.push_ev(C.ev_ctl())
 		}(c)
 	}

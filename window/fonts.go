@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"image"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"golang.org/x/image/font"
@@ -54,97 +51,40 @@ func loadFace(path string, px float64) (font.Face, *sfnt.Font, error) {
 	return face, f, err
 }
 
-// fcMatch resolves a fontconfig pattern to a file; empty when it cannot.
-func fcMatch(pattern string) string {
-	out, err := exec.Command("fc-match", "-f", "%{file}", pattern).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+// fontFiles lists font files in order of preference; missing ones are skipped.
+// systemFonts fills it for each platform: fontconfig on Linux and the BSDs, the
+// system font folders on Windows and macOS.
+type fontFiles struct {
+	regular, bold, fallback []string
 }
 
-func resolveFont(pattern string) string {
-	if runtime.GOOS == "windows" {
-		windir := os.Getenv("WINDIR")
-		if windir == "" {
-			windir = `C:\Windows`
+// loadFirst opens the first file in paths that parses.
+func loadFirst(paths []string, px float64) (font.Face, *sfnt.Font, error) {
+	err := fmt.Errorf("none of %q", paths)
+	for _, p := range paths {
+		var f font.Face
+		var sf *sfnt.Font
+		if f, sf, err = loadFace(p, px); err == nil {
+			return f, sf, nil
 		}
-		fdir := filepath.Join(windir, "Fonts")
-		switch pattern {
-		case "monospace":
-			for _, name := range []string{"CascadiaMono.ttf", "CascadiaCode.ttf", "consola.ttf", "lucon.ttf", "cour.ttf"} {
-				p := filepath.Join(fdir, name)
-				if _, err := os.Stat(p); err == nil {
-					return p
-				}
-			}
-		case "monospace:bold":
-			for _, name := range []string{"CascadiaMono-Bold.ttf", "CascadiaCode-Bold.ttf", "consolab.ttf", "courbd.ttf"} {
-				p := filepath.Join(fdir, name)
-				if _, err := os.Stat(p); err == nil {
-					return p
-				}
-			}
-		case "monospace:lang=ja":
-			for _, name := range []string{"msgothic.ttc", "meiryo.ttc"} {
-				p := filepath.Join(fdir, name)
-				if _, err := os.Stat(p); err == nil {
-					return p
-				}
-			}
-		}
-		return ""
 	}
-	return fcMatch(pattern)
+	return nil, nil, err
 }
 
 func newFontSet(px float64) (*fontSet, error) {
 	fs := &fontSet{cache: map[uint64]*glyph{}}
-	regPath := resolveFont("monospace")
-	reg, regF, err := loadFace(regPath, px)
+	files := systemFonts()
+	reg, regF, err := loadFirst(files.regular, px)
 	if err != nil {
-		return nil, fmt.Errorf("monospace font (%s): %w", regPath, err)
+		return nil, fmt.Errorf("monospace font: %w", err)
 	}
 	fs.faces, fs.fonts = []font.Face{reg}, []*sfnt.Font{regF}
-
-	var fallbackPaths []string
-	if runtime.GOOS == "windows" {
-		windir := os.Getenv("WINDIR")
-		if windir == "" {
-			windir = `C:\Windows`
-		}
-		fdir := filepath.Join(windir, "Fonts")
-		fallbackPaths = []string{
-			resolveFont("monospace:lang=ja"),
-			filepath.Join(fdir, "seguiemj.ttf"),
-			filepath.Join(fdir, "segoeui.ttf"),
-			filepath.Join(fdir, "msyh.ttc"),
-			filepath.Join(fdir, "malgun.ttf"),
-		}
-	} else {
-		fallbackPaths = []string{
-			resolveFont("monospace:lang=ja"),
-			"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-			"/usr/share/fonts/noto/NotoSans-Regular.ttf",
-			"/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf",
-			"/usr/share/fonts/noto/NotoSansSymbols-Regular.ttf",
-			"/usr/share/fonts/noto/NotoSansThai-Regular.ttf",
-			"/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
-			"/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf",
-			"/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf",
-			"/usr/share/fonts/noto/NotoSansMath-Regular.ttf",
-		}
-	}
-
-	for _, p := range fallbackPaths {
-		if p == "" {
-			continue
-		}
+	for _, p := range files.fallback {
 		if f, sf, err := loadFace(p, px); err == nil {
 			fs.faces, fs.fonts = append(fs.faces, f), append(fs.fonts, sf)
 		}
 	}
-	if b, bf, err := loadFace(resolveFont("monospace:bold"), px); err == nil {
+	if b, bf, err := loadFirst(files.bold, px); err == nil {
 		fs.bold, fs.boldF = b, bf
 	}
 	fs.cellW, fs.cellH, fs.base, err = cellMetrics(reg)

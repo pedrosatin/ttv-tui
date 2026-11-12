@@ -4,7 +4,10 @@
 package main
 
 /*
-#cgo !windows pkg-config: sdl3 mpv gl
+#cgo !windows,!darwin pkg-config: sdl3 mpv gl
+#cgo darwin pkg-config: sdl3 mpv
+#cgo darwin CFLAGS: -DGL_SILENCE_DEPRECATION
+#cgo darwin LDFLAGS: -framework OpenGL
 #cgo windows pkg-config: sdl3 mpv
 #cgo windows LDFLAGS: -lopengl32
 #include "bridge.h"
@@ -13,7 +16,6 @@ import "C"
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -28,31 +30,21 @@ import (
 
 func init() { runtime.LockOSThread() }
 
-func copyExecutable(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, in)
-	return err
-}
-
 func fileExists(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && !st.IsDir()
 }
 
+// calledAsMpv reports whether this binary runs as the shim. On Windows the
+// streamlink lookup (shutil.which with PATHEXT) may call it mpv.EXE or mpv.COM.
+func calledAsMpv(arg0 string) bool {
+	name := strings.ToLower(filepath.Base(arg0))
+	name = strings.TrimSuffix(strings.TrimSuffix(name, ".exe"), ".com")
+	return name == "mpv"
+}
+
 func main() {
-	baseName := strings.ToLower(filepath.Base(os.Args[0]))
-	baseName = strings.TrimSuffix(baseName, ".exe")
-	baseName = strings.TrimSuffix(baseName, ".com")
-	if baseName == "mpv" {
+	if calledAsMpv(os.Args[0]) {
 		shimMain()
 		return
 	}
@@ -60,11 +52,7 @@ func main() {
 	if tui == "" {
 		tui = filepath.Join(os.Getenv("HOME"), ".local/bin/ttv-tui")
 		if exe, err := os.Executable(); err == nil {
-			target := "ttv-tui"
-			if runtime.GOOS == "windows" {
-				target = "ttv-tui.exe"
-			}
-			if sib := filepath.Join(filepath.Dir(exe), target); fileExists(sib) {
+			if sib := filepath.Join(filepath.Dir(exe), "ttv-tui"+exeSuffix); fileExists(sib) {
 				tui = sib
 			}
 		}
@@ -91,22 +79,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, args...)
 		_ = os.RemoveAll(dir)
 		os.Exit(1)
-	}
-
-	shimName := "mpv"
-	if runtime.GOOS == "windows" {
-		shimName = "mpv.exe"
-	}
-	shimDst := filepath.Join(binDir, shimName)
-	if runtime.GOOS == "windows" {
-		if err := copyExecutable(exe, filepath.Join(binDir, "mpv.exe")); err != nil {
-			fatal("copy shim mpv.exe:", err)
-		}
-		if err := copyExecutable(exe, filepath.Join(binDir, "mpv.com")); err != nil {
-			fatal("copy shim mpv.com:", err)
-		}
-	} else {
-		_ = os.Symlink(exe, shimDst)
 	}
 	ctlLn, err := net.ListenUnix("unix", &net.UnixAddr{Name: ctlPath, Net: "unix"})
 	if err != nil {
@@ -157,6 +129,10 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--probe" {
 		return
 	}
+	// The shim comes after the probe: on Windows it is a copy of this binary.
+	if err := installShim(exe, binDir); err != nil {
+		fatal("mpv shim:", err)
+	}
 	C.SDL_GL_SetSwapInterval(1)
 	C.SDL_StartTextInput(win)
 	C.reg_events()
@@ -174,9 +150,8 @@ func main() {
 	go a.serveLayout(layoutLn)
 
 	a.cmd = exec.Command(tui, os.Args[1:]...)
-	pathSep := string(os.PathListSeparator)
 	a.cmd.Env = append(os.Environ(),
-		"PATH="+binDir+pathSep+filepath.Dir(exe)+pathSep+os.Getenv("PATH"),
+		"PATH="+shimPATH(binDir, filepath.Dir(exe), os.Getenv("PATH")),
 		"TTV_WINDOW_SOCK="+ctlPath,
 		"TTV_TUI_VIDEO_HOST="+layoutPath,
 		"TERM=xterm-256color", "COLORTERM=truecolor")
@@ -213,7 +188,7 @@ func main() {
 		a.frame()
 	}
 
-	_ = a.cmd.Process.Signal(os.Interrupt)
+	askTUIToQuit(a.cmd, a.ptmx)
 	waitTUI(tuiDone, tuiStopWait, func() { _ = a.cmd.Process.Kill() })
 	a.stopSession()
 }

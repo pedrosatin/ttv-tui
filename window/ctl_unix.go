@@ -9,17 +9,20 @@ import (
 	"syscall"
 )
 
+// closeFD closes a descriptor libmpv never took, so streamlink sees the pipe close.
 func closeFD(fd int) {
 	if fd >= 0 {
 		_ = syscall.Close(fd)
 	}
 }
 
-func parseCtlMsg(c *net.UnixConn) (string, int, string, error) {
+// readStart reads the shim's request: the IPC path in JSON and streamlink's
+// stdin by SCM_RIGHTS, which libmpv opens as fdclose://N.
+func readStart(c *net.UnixConn) (ctlMsg, error) {
 	data, oob := make([]byte, 8192), make([]byte, 128)
 	n, oobn, _, _, err := c.ReadMsgUnix(data, oob)
 	if err != nil {
-		return "", -1, "", err
+		return ctlMsg{}, err
 	}
 	var req struct {
 		IPC string `json:"ipc"`
@@ -31,9 +34,5 @@ func parseCtlMsg(c *net.UnixConn) (string, int, string, error) {
 			fd = fds[0]
 		}
 	}
-	streamUrl := ""
-	if fd >= 0 {
-		streamUrl = fmt.Sprintf("fdclose://%d", fd)
-	}
-	return req.IPC, fd, streamUrl, nil
+	return ctlMsg{kind: "start", ipc: req.IPC, fd: fd, url: fmt.Sprintf("fdclose://%d", fd), conn: c}, nil
 }

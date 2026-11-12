@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -41,6 +42,9 @@ func TestCellMetricsRejectInvalid(t *testing.T) {
 }
 
 func TestStartupProbe(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("os doubles dependem de LD_PRELOAD, gl.pc e do ld do GNU")
+	}
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("XDG_STATE_HOME", dir)

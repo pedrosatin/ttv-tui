@@ -26,13 +26,13 @@ type hostPanel struct {
 }
 
 type ctlMsg struct {
-	kind      string // "start" | "ended"
-	ipc       string
-	fd        int
-	streamUrl string
-	conn      *net.UnixConn
-	s         *session
-	host      hostPanel
+	kind string // "start" | "ended"
+	ipc  string
+	fd   int    // Unix: streamlink's stdin, closed if libmpv never takes it
+	url  string // what libmpv loads: fdclose://N or the shim's named pipe
+	conn *net.UnixConn
+	s    *session
+	host hostPanel
 }
 
 type session struct {

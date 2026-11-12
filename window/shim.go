@@ -5,28 +5,20 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
 // findMpv looks for the real mpv on path, skipping the directory of this shim.
 func findMpv(path, skip string) string {
 	for _, dir := range filepath.SplitList(path) {
-		if dir == "" || strings.EqualFold(dir, skip) {
+		if dir == "" || sameDir(dir, skip) {
 			continue
 		}
-		if runtime.GOOS == "windows" {
-			for _, name := range []string{"mpv.exe", "mpv.com"} {
-				candidate := filepath.Join(dir, name)
-				if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
-					return candidate
-				}
+		for _, name := range mpvNames {
+			candidate := filepath.Join(dir, name)
+			if st, err := os.Stat(candidate); err == nil && !st.IsDir() && isExecutable(st) {
+				return candidate
 			}
-			continue
-		}
-		candidate := filepath.Join(dir, "mpv")
-		if st, err := os.Stat(candidate); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
-			return candidate
 		}
 	}
 	return ""
@@ -34,7 +26,9 @@ func findMpv(path, skip string) string {
 
 // shimMain roda quando o binário é chamado como "mpv". Sem --input-ipc-server
 // (consultas como --version) repassa ao mpv real. Com ele, entrega o stdin do
-// streamlink ao shell e fica vivo enquanto a sessão existir.
+// streamlink ao shell (SCM_RIGHTS no Unix, named pipe no Windows) e fica vivo
+// enquanto a sessão existir: o streamlink e o ttv-tui acompanham este processo
+// como se fosse o player.
 func shimMain() {
 	ipc := ""
 	for _, a := range os.Args[1:] {

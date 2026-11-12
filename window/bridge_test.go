@@ -4,12 +4,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 // Compila a ponte com doubles das APIs do core, sem abrir SDL, GPU ou mpv.
 func TestRenderCoreCallsAreQueued(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("os doubles dependem de LD_PRELOAD, gl.pc e do ld do GNU")
+	}
 	dir := t.TempDir()
 	src := filepath.Join(dir, "probe.c")
 	if err := os.WriteFile(src, []byte(`
