@@ -29,8 +29,11 @@ o IPC JSON e o filtro de anúncio do streamlink (regra 1). O que muda é o trans
 - O `opengl32.dll` só exporta OpenGL 1.1. As cinco funções que o `gl_reset` usa vêm de
   `SDL_GL_GetProcAddress`; sem elas (driver básico, RDP), o painel continua e o vídeo falha ao
   criar o render context.
-- Sob o ConPTY, o `Stat` do stdin da TUI responde named pipe. O `isTerminal` aceita esse caso só no
-  Windows e só com `TTV_TUI_VIDEO_HOST` definido; no Unix a janela dá um PTY de verdade.
+- A janela cria a TUI no ConPTY com `STARTF_USESTDHANDLES` e os três handles nulos, como o
+  Windows Terminal faz. Sem isso, a TUI pode ficar com os handles redirecionados da janela, que o
+  `ttv-tui` abre com stdin e stdout em `NUL`: o stdin deixa de ser console, o Bubble Tea falha no
+  `GetConsoleMode` (issue #44) e a saída não chega à janela. Com o console do ConPTY, o
+  `isTerminal` passa sem caso especial. O CI do Windows confere que o filho recebe o console.
 - O bloco de ambiente do `CreateProcess` com `CREATE_UNICODE_ENVIRONMENT` sai sem nomes repetidos
   (sem diferenciar maiúsculas) e ordenado. Com o `PATH` herdado repetido, o Windows ignorava o
   diretório do shim.

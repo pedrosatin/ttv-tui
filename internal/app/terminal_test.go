@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -26,16 +25,18 @@ func TestRunRejectsNullInputWithoutTerminalOutput(t *testing.T) {
 	}
 }
 
-// Só o ConPTY do Windows dispensa a checagem; no Unix a janela dá um PTY real.
-func TestVideoHostSkipsTheCheckOnlyOnWindows(t *testing.T) {
+// Dentro da janela a checagem continua valendo em todo sistema: no Windows o
+// ConPTY entrega um console de verdade. Um NUL herdado no lugar dele é erro da
+// janela, e o Bubble Tea cairia logo depois no GetConsoleMode.
+func TestVideoHostKeepsTheCheck(t *testing.T) {
 	t.Setenv(videoHostEnv, filepath.Join(t.TempDir(), "layout.sock"))
 	null, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = null.Close() }()
-	if got, want := isTerminal(null), runtime.GOOS == "windows"; got != want {
-		t.Fatalf("isTerminal(%s) com %s = %v; quero %v", os.DevNull, videoHostEnv, got, want)
+	if isTerminal(null) {
+		t.Fatalf("isTerminal(%s) com %s passou", os.DevNull, videoHostEnv)
 	}
 	if isTerminal(&bytes.Buffer{}) {
 		t.Fatal("um buffer passou por terminal")

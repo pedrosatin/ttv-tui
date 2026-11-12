@@ -106,6 +106,12 @@ func startPTY(cmd *exec.Cmd, cols, rows, _, _ int) (ptyDevice, error) {
 
 	var si windows.StartupInfoEx
 	si.Cb = uint32(unsafe.Sizeof(si))
+	// STARTF_USESTDHANDLES with null handles gives the TUI the pseudoconsole's
+	// own. Without it the TUI may get this process's redirected handles instead
+	// (ttv-tui opens the window with NUL and its stderr): Bubble Tea then fails
+	// on GetConsoleMode and the output never reaches the window. Windows
+	// Terminal starts its tabs the same way.
+	si.Flags = windows.STARTF_USESTDHANDLES
 	si.ProcThreadAttributeList = al.List()
 
 	cmdLine, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(append([]string{cmd.Path}, cmd.Args[1:]...)))
