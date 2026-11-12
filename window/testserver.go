@@ -144,6 +144,10 @@ func (a *app) stats() map[string]any {
 		"rows": a.rows, "W": a.W, "H": a.H, "cellW": a.fs.cellW, "cellH": a.fs.cellH,
 		"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "overlay": a.host.OverlayCols, "overlayLeft": a.host.OverlayLeft, "overlayOpacity": a.host.OverlayOpacity, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
 	}
+	out["gl"] = map[string]any{
+		"version": a.glName, "npot": a.gl.npot, "bgra": a.gl.bgra, "maxTex": a.gl.maxTex,
+		"tiles": len(a.tiles), "errors": a.glErrors, "lastError": fmt.Sprintf("0x%04x", a.glLastError),
+	}
 	if len(a.latMs) > 0 {
 		out["latMs"] = a.latMs
 	}

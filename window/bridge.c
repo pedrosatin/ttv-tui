@@ -96,39 +96,53 @@ static void gl_reset(int W, int H) {
     glViewport(0, 0, W, H);
 }
 #endif
+// Tudo daqui para baixo é o caminho do painel e só usa OpenGL 1.1, que é o que o
+// opengl32.dll genérico do Windows oferece. O que passa disso (lados fora de potência de 2,
+// GL_BGRA, textura maior que o limite) é decidido em paneltex.go.
+const char *gl_str(GLenum name) { const GLubyte *s = glGetString(name); return s ? (const char *)s : ""; }
+int gl_max_tex(void) { GLint n = 0; glGetIntegerv(GL_MAX_TEXTURE_SIZE, &n); return n; }
+// gl_error devolve o primeiro erro pendente e esvazia a fila.
+int gl_error(void) {
+    GLenum first = glGetError();
+    for (int i = 0; first != GL_NO_ERROR && i < 16 && glGetError() != GL_NO_ERROR; i++) {}
+    return (int)first;
+}
 GLuint make_tex(void) {
     GLuint t; glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D, t);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     return t;
 }
-void tex_alloc(GLuint t, int w, int h) {
+void free_tex(GLuint t) { glDeleteTextures(1, &t); }
+// O formato dos pixels é validado mesmo sem dados, então a alocação também segue bgra.
+void tex_alloc(GLuint t, int w, int h, int bgra) {
     glBindTexture(GL_TEXTURE_2D, t);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, bgra ? GL_BGRA : GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 }
-void tex_rows(GLuint t, int y, int w, int h, const void *p) {
-    glBindTexture(GL_TEXTURE_2D, t);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, w, h, GL_BGRA, GL_UNSIGNED_BYTE, p);
-}
-void tex_rect(GLuint t, int x, int y, int w, int h, int stride_px, const void *p) {
+void tex_rect(GLuint t, int x, int y, int w, int h, int stride_px, const void *p, int bgra) {
     glBindTexture(GL_TEXTURE_2D, t);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, stride_px);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, GL_BGRA, GL_UNSIGNED_BYTE, p);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, bgra ? GL_BGRA : GL_RGBA, GL_UNSIGNED_BYTE, p);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 }
 void clear_to(int W, int H, float r, float g, float b) {
     gl_reset(W, H); glClearColor(r, g, b, 1); glClear(GL_COLOR_BUFFER_BIT);
 }
-void draw_panel(GLuint t, int W, int H, int x, int y, int w, int h) {
+void panel_begin(int W, int H) {
     gl_reset(W, H);
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); glOrtho(0, W, H, 0, -1, 1);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
     glEnable(GL_TEXTURE_2D); glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+}
+// panel_tile desenha um ladrilho: u e v são onde o painel acaba dentro da textura.
+void panel_tile(GLuint t, int x, int y, int w, int h, float u, float v) {
     glBindTexture(GL_TEXTURE_2D, t);
     glBegin(GL_QUADS);
-    glTexCoord2f(0, 0); glVertex2i(x, y); glTexCoord2f(1, 0); glVertex2i(x + w, y);
-    glTexCoord2f(1, 1); glVertex2i(x + w, y + h); glTexCoord2f(0, 1); glVertex2i(x, y + h);
+    glTexCoord2f(0, 0); glVertex2i(x, y); glTexCoord2f(u, 0); glVertex2i(x + w, y);
+    glTexCoord2f(u, v); glVertex2i(x + w, y + h); glTexCoord2f(0, v); glVertex2i(x, y + h);
     glEnd();
+}
+void panel_end(void) {
     glDisable(GL_BLEND);
     glDisable(GL_TEXTURE_2D);
 }

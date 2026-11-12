@@ -139,7 +139,7 @@ func main() {
 
 	a := &app{win: win, fs: fs, pt: pt, ctlq: make(chan ctlMsg, 16), fbq: make(chan fbReq, 4), paintReq: make(chan struct{}, 1), dirtyY1: -1}
 	go a.painter()
-	a.tex = C.make_tex()
+	a.readGL()
 	a.term = vt.NewSafeEmulator(80, 24)
 	a.relayout()
 	go a.serveCtl(ctlLn)

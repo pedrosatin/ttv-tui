@@ -63,7 +63,6 @@ type ptyDevice interface {
 
 type app struct {
 	win  *C.SDL_Window
-	tex  C.GLuint
 	W, H int
 	px   int // x do painel
 	cols int
@@ -79,6 +78,14 @@ type app struct {
 	prev []cellKey
 	sess *session
 	ctlq chan ctlMsg
+
+	// O painel fica em uma textura, ou em várias quando o OpenGL não aceita uma do
+	// tamanho dele (paneltex.go). texs[i] guarda tiles[i]; só a thread de render mexe.
+	gl      glCaps
+	glName  string // GL_VERSION e GL_RENDERER, para o stats e as mensagens de erro
+	tiles   []panelTile
+	texs    []C.GLuint
+	glCheck bool // confere glGetError no próximo quadro
 
 	inputq chan []byte
 	fbq    chan fbReq // leituras do framebuffer pedidas pelo socket de teste
@@ -105,6 +112,8 @@ type app struct {
 	maxMs       int64
 	stalls      int64
 	lastVideo   time.Time
+	glErrors    int64
+	glLastError int
 
 	// Pintura fora da thread de render: paintMu guarda buf, prev e as linhas
 	// sujas; a thread de render só faz TryLock e envia o que já está pronto.
