@@ -3,8 +3,10 @@ package twitch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -339,5 +341,35 @@ func TestGraphQLPartialTimeoutRetryReturnsFreshData(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(calls); got != 2 {
 		t.Fatalf("attempts = %d, want 2", got)
+	}
+}
+
+// The errors of the Twitch source name their platform and keep the text they
+// had when the platform was implied.
+func TestErrorsCarryPlatformAndKeepTheirText(t *testing.T) {
+	for status, want := range map[int]struct {
+		kind ErrorKind
+		text string
+	}{
+		http.StatusInternalServerError: {Servidor, "twitch categories [Servidor] (HTTP 500): upstream server error: status 500"},
+		http.StatusForbidden:           {Contrato, "twitch categories [Contrato] (HTTP 403): unexpected status 403"},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+		}))
+		src := NewGQLSource(GQLConfig{
+			Endpoint:   srv.URL,
+			HTTPClient: srv.Client(),
+			Sleep:      func(context.Context, time.Duration) error { return nil },
+		})
+		_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 10})
+		srv.Close()
+		var te *Error
+		if !errors.As(err, &te) {
+			t.Fatalf("status %d: error %T (%v), want *Error", status, err, err)
+		}
+		if te.Platform != platform.Twitch || te.Kind != want.kind || te.Error() != want.text {
+			t.Fatalf("status %d: platform %q kind %q text %q, want twitch %q %q", status, te.Platform, te.Kind, te.Error(), want.kind, want.text)
+		}
 	}
 }
