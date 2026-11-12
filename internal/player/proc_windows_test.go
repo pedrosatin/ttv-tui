@@ -73,7 +73,7 @@ func TestStreamlinkDeathLeavesDescendantForStop(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_CHILD_PIDFILE", pidFile)
 
 	mgr := newTestManager(t, "term-parent-stubborn-child", Options{})
-	gen, err := mgr.Start("tree")
+	gen, err := mgr.Start(testTarget("tree"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestAbruptOwnerDeathEndsTreeAndLeavesOnlyResidue(t *testing.T) {
 // Each channel switch makes a job, so one left open is a handle lost per session.
 func TestStopClosesTheJob(t *testing.T) {
 	mgr := newTestManager(t, "play", Options{})
-	gen, err := mgr.Start("released")
+	gen, err := mgr.Start(testTarget("released"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -276,15 +276,15 @@ func TestStartEndsProcessTheJobRefuses(t *testing.T) {
 		return originalStart(cmd)
 	}
 	mgr := New(Options{
-		Command: func(login, endpoint string) *exec.Cmd {
-			return helperCommand("silent-hang")(login, endpoint)
+		Command: func(target Target, endpoint string) *exec.Cmd {
+			return helperCommand("silent-hang")(target, endpoint)
 		},
 		RuntimeDir:  runtimeDir,
 		RegistryDir: regDir,
 	})
 	t.Cleanup(mgr.Close)
 
-	if _, err := mgr.Start("refused"); !errors.Is(err, windows.ERROR_INVALID_HANDLE) {
+	if _, err := mgr.Start(testTarget("refused")); !errors.Is(err, windows.ERROR_INVALID_HANDLE) {
 		t.Fatalf("Start = %v, want ERROR_INVALID_HANDLE", err)
 	}
 	if started == nil || started.ProcessState == nil {
@@ -339,7 +339,7 @@ func TestAssignAccessDeniedDegradesAndStopKillsTree(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child.pid")
 	t.Setenv("TTV_PLAYER_HELPER_CHILD_PIDFILE", pidFile)
 	mgr := newTestManager(t, "term-parent-stubborn-child", Options{})
-	gen, err := mgr.Start("restricted")
+	gen, err := mgr.Start(testTarget("restricted"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +374,7 @@ func TestStartDoesNotRetryCreationErrors(t *testing.T) {
 			calls := 0
 			startCommand = func(*exec.Cmd) error { calls++; return startErr }
 			mgr := newTestManager(t, "play", Options{})
-			if _, err := mgr.Start("missing"); !errors.Is(err, startErr) {
+			if _, err := mgr.Start(testTarget("missing")); !errors.Is(err, startErr) {
 				t.Fatalf("Start: %v, want %v", err, startErr)
 			}
 			if calls != 1 {
@@ -398,7 +398,7 @@ func TestAssignAccessDeniedPlaybackContinues(t *testing.T) {
 	t.Cleanup(func() { assignToJob = original })
 	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_ACCESS_DENIED }
 	mgr := newTestManager(t, "play", Options{})
-	gen, err := mgr.Start("restricted")
+	gen, err := mgr.Start(testTarget("restricted"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -134,7 +134,7 @@ func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
 			confPath.Store(path)
 			return writeInputConf(path)
 		},
-		Command: func(login, endpoint string) *exec.Cmd {
+		Command: func(target Target, endpoint string) *exec.Cmd {
 			path, _ := confPath.Load().(string)
 			var s seen
 			s.dir = filepath.Dir(path)
@@ -148,12 +148,12 @@ func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
 				s.content = string(raw)
 			}
 			saw <- s
-			return helperCommand("play")(login, endpoint)
+			return helperCommand("play")(target, endpoint)
 		},
 	})
 	t.Cleanup(mgr.Close)
 
-	gen, err := mgr.Start("confchan")
+	gen, err := mgr.Start(testTarget("confchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -183,13 +183,13 @@ func TestInputConfWriteFailureKeepsPlaying(t *testing.T) {
 	var usedFallback atomic.Bool
 	mgr := newTestManager(t, "play", Options{
 		WriteInputConf: func(string) error { return writeErr },
-		CommandNoInputConf: func(login, socketPath string) *exec.Cmd {
+		CommandNoInputConf: func(target Target, socketPath string) *exec.Cmd {
 			usedFallback.Store(true)
-			return helperCommand("play")(login, socketPath)
+			return helperCommand("play")(target, socketPath)
 		},
 	})
 
-	gen, err := mgr.Start("nokeys")
+	gen, err := mgr.Start(testTarget("nokeys"))
 	if err != nil {
 		t.Fatalf("Start must survive a failed input.conf write: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestInputConfWriteFailureWithCustomCommandKeepsCommand(t *testing.T) {
 	mgr := newTestManager(t, "play", Options{
 		WriteInputConf: func(string) error { return errors.New("disk full") },
 	})
-	gen, err := mgr.Start("custom")
+	gen, err := mgr.Start(testTarget("custom"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestSharedFallbackDirectory(t *testing.T) {
 	}
 
 	mgr := newTestManager(t, "play", Options{RuntimeDir: unusableRuntimeDir(t)})
-	gen, err := mgr.Start("shared")
+	gen, err := mgr.Start(testTarget("shared"))
 	if runtime.GOOS != "windows" {
 		if err == nil {
 			t.Fatal("Start accepted a shared fallback directory")
@@ -265,7 +265,7 @@ func TestDefaultFallbackDropsOnlyInputConf(t *testing.T) {
 	if mgr.opts.CommandNoInputConf == nil {
 		t.Fatal("default Manager has no CommandNoInputConf")
 	}
-	joined := strings.Join(mgr.opts.CommandNoInputConf("gaules", "/run/user/1000/ttv-tui/1/i").Args, " ")
+	joined := strings.Join(mgr.opts.CommandNoInputConf(testTarget("gaules"), "/run/user/1000/ttv-tui/1/i").Args, " ")
 	if strings.Contains(joined, "--input-conf") {
 		t.Fatalf("fallback still passes --input-conf: %q", joined)
 	}
@@ -278,7 +278,7 @@ func TestDefaultFallbackDropsOnlyInputConf(t *testing.T) {
 func TestVolumeChangedInMPVWindowReachesEvents(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_EXTERNAL_VOLUME", "35")
 	mgr := newTestManager(t, "play-control", Options{})
-	gen, err := mgr.Start("extvolume")
+	gen, err := mgr.Start(testTarget("extvolume"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}

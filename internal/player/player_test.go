@@ -30,14 +30,23 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func testTarget(name string) Target {
+	return Target{
+		URL:   "https://www.twitch.tv/" + name,
+		Label: name,
+	}
+}
+
 func helperCommand(mode string) CommandFunc {
-	return func(login, socketPath string) *exec.Cmd {
+	return func(target Target, socketPath string) *exec.Cmd {
+		login := target.Identity()
 		cmd := exec.Command(os.Args[0], "--", login, socketPath)
 		cmd.Env = append(os.Environ(),
 			"TTV_PLAYER_HELPER=1",
 			"TTV_PLAYER_HELPER_MODE="+mode,
 			"TTV_PLAYER_HELPER_SOCKET="+socketPath,
 			"TTV_PLAYER_HELPER_LOGIN="+login,
+			"TTV_PLAYER_HELPER_URL="+target.URL,
 		)
 		return cmd
 	}
@@ -107,7 +116,7 @@ func waitForState(t *testing.T, ch <-chan Event, gen uint64, want State, timeout
 
 func TestPlayingOnlyAfterIPCEvent(t *testing.T) {
 	mgr := newTestManager(t, "play", Options{})
-	gen, err := mgr.Start("gaules")
+	gen, err := mgr.Start(testTarget("gaules"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -132,19 +141,19 @@ func TestPlayingOnlyAfterIPCEvent(t *testing.T) {
 func TestChannelSwitchABCLeavesOnlyC(t *testing.T) {
 	mgr := newTestManager(t, "play-child", Options{StopWait: 300 * time.Millisecond})
 
-	genA, err := mgr.Start("channel-a")
+	genA, err := mgr.Start(testTarget("channel-a"))
 	if err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
 	_ = waitForState(t, mgr.Events(), genA, StateStarting, 3*time.Second)
 
-	genB, err := mgr.Start("channel-b")
+	genB, err := mgr.Start(testTarget("channel-b"))
 	if err != nil {
 		t.Fatalf("Start B: %v", err)
 	}
 	_ = waitForState(t, mgr.Events(), genB, StateStarting, 3*time.Second)
 
-	genC, err := mgr.Start("channel-c")
+	genC, err := mgr.Start(testTarget("channel-c"))
 	if err != nil {
 		t.Fatalf("Start C: %v", err)
 	}
@@ -189,7 +198,7 @@ func TestChannelSwitchABCLeavesOnlyC(t *testing.T) {
 
 func TestSIGTERMIgnoredEscalatesToSIGKILL(t *testing.T) {
 	mgr := newTestManager(t, "ignore-term", Options{StopWait: 200 * time.Millisecond})
-	gen, err := mgr.Start("stubborn")
+	gen, err := mgr.Start(testTarget("stubborn"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -217,7 +226,7 @@ func TestSIGTERMIgnoredEscalatesToSIGKILL(t *testing.T) {
 
 func TestSocketEOFBecomesEnded(t *testing.T) {
 	mgr := newTestManager(t, "socket-eof", Options{})
-	gen, err := mgr.Start("eofchan")
+	gen, err := mgr.Start(testTarget("eofchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -232,7 +241,7 @@ func TestSocketEOFBecomesEnded(t *testing.T) {
 
 func TestProcessErrorBecomesErrorWithLastLine(t *testing.T) {
 	mgr := newTestManager(t, "exit-error", Options{SocketWait: 2 * time.Second})
-	gen, err := mgr.Start("badchan")
+	gen, err := mgr.Start(testTarget("badchan"))
 	// Start itself may succeed (process spawned); error arrives asynchronously.
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -246,11 +255,11 @@ func TestProcessErrorBecomesErrorWithLastLine(t *testing.T) {
 
 func TestStaleGenerationEventsAreDiscardable(t *testing.T) {
 	mgr := newTestManager(t, "play", Options{})
-	genA, err := mgr.Start("aaa")
+	genA, err := mgr.Start(testTarget("aaa"))
 	if err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
-	genB, err := mgr.Start("bbb")
+	genB, err := mgr.Start(testTarget("bbb"))
 	if err != nil {
 		t.Fatalf("Start B: %v", err)
 	}
@@ -283,7 +292,7 @@ func TestStaleGenerationEventsAreDiscardable(t *testing.T) {
 func TestSocketRemovedAfterExit(t *testing.T) {
 	dir := t.TempDir()
 	mgr := newTestManager(t, "play", Options{RuntimeDir: dir})
-	gen, err := mgr.Start("sockchan")
+	gen, err := mgr.Start(testTarget("sockchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -322,7 +331,7 @@ func TestSocketRemovedAfterExit(t *testing.T) {
 // and returns to playing on the end line.
 func TestPreRollHoldEntersAndLeavesBreak(t *testing.T) {
 	mgr := newTestManager(t, "ad-then-play", Options{})
-	gen, err := mgr.Start("adchan")
+	gen, err := mgr.Start(testTarget("adchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -372,7 +381,7 @@ func expectNoBreak(t *testing.T, ch <-chan Event, gen uint64, d time.Duration) {
 // silent (stable idle-active/pause/volume). That is normal playback.
 func TestIPCSilenceNeverEntersBreak(t *testing.T) {
 	mgr := newTestManager(t, "play", Options{})
-	gen, err := mgr.Start("silentchan")
+	gen, err := mgr.Start(testTarget("silentchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -392,7 +401,7 @@ func TestIPCSilenceNeverEntersBreak(t *testing.T) {
 func TestAdHoldStartAndEndRecoversWithoutInteraction(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_ADS", "hold-end")
 	mgr := newTestManager(t, "play", Options{})
-	gen, err := mgr.Start("adchan")
+	gen, err := mgr.Start(testTarget("adchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -438,7 +447,7 @@ func TestAdHoldStartAndEndRecoversWithoutInteraction(t *testing.T) {
 func TestAdInfoLinesAloneDoNotClaimBreak(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_ADS", "info-only")
 	mgr := newTestManager(t, "play", Options{})
-	gen, err := mgr.Start("infochan")
+	gen, err := mgr.Start(testTarget("infochan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -454,7 +463,7 @@ func TestAdInfoLinesAloneDoNotClaimBreak(t *testing.T) {
 func TestAdHoldWithoutEndIsBounded(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_ADS", "hold-only")
 	mgr := newTestManager(t, "play", Options{BreakMaxHold: 1200 * time.Millisecond})
-	gen, err := mgr.Start("holdchan")
+	gen, err := mgr.Start(testTarget("holdchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -475,13 +484,13 @@ func TestAdHoldWithoutEndIsBounded(t *testing.T) {
 func TestAdHoldOldGenerationIgnored(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_ADS", "hold-only")
 	mgrA := newTestManager(t, "play", Options{})
-	genA, err := mgrA.Start("chan-a")
+	genA, err := mgrA.Start(testTarget("chan-a"))
 	if err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
 	_ = waitForState(t, mgrA.Events(), genA, StateBreak, 5*time.Second)
 	t.Setenv("TTV_PLAYER_HELPER_ADS", "")
-	genB, err := mgrA.Start("chan-b")
+	genB, err := mgrA.Start(testTarget("chan-b"))
 	if err != nil {
 		t.Fatalf("Start B: %v", err)
 	}
@@ -495,7 +504,7 @@ func TestAdHoldOldGenerationIgnored(t *testing.T) {
 func TestPauseDuringHoldKeepsPausedThenResumesBreak(t *testing.T) {
 	var got []Event
 	s := &Session{
-		cfg:   sessionConfig{Generation: 7, Login: "x", Emit: func(ev Event) { got = append(got, ev) }},
+		cfg:   sessionConfig{Generation: 7, Target: testTarget("x"), Emit: func(ev Event) { got = append(got, ev) }},
 		state: StatePlaying,
 	}
 	s.startAdHold()
@@ -916,7 +925,7 @@ func TestPlaybackBaselineSyncsVolumeAndPause(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "0")
 
 	mgr := newTestManager(t, "play-control", Options{})
-	gen, err := mgr.Start("baseline")
+	gen, err := mgr.Start(testTarget("baseline"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -968,7 +977,7 @@ func TestPauseCommandCorrelatesByRequestID(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "1")
 
 	mgr := newTestManager(t, "play-control", Options{})
-	gen, err := mgr.Start("pausechan")
+	gen, err := mgr.Start(testTarget("pausechan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -997,7 +1006,7 @@ func TestPauseCommandCorrelatesByRequestID(t *testing.T) {
 
 func TestStaleRequestIDReplyIgnored(t *testing.T) {
 	mgr := newTestManager(t, "play-control", Options{})
-	gen, err := mgr.Start("stalechan")
+	gen, err := mgr.Start(testTarget("stalechan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1050,7 +1059,7 @@ func TestSupersededPauseReplyIgnored(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "1")
 
 	mgr := newTestManager(t, "play-control", Options{})
-	gen, err := mgr.Start("superchan")
+	gen, err := mgr.Start(testTarget("superchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1106,13 +1115,13 @@ func TestSupersededPauseReplyIgnored(t *testing.T) {
 
 func TestPreviousGenerationEventDoesNotAffectCurrent(t *testing.T) {
 	mgr := newTestManager(t, "play-control", Options{})
-	genA, err := mgr.Start("gen-a")
+	genA, err := mgr.Start(testTarget("gen-a"))
 	if err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
 	_ = waitForState(t, mgr.Events(), genA, StatePlaying, 5*time.Second)
 
-	genB, err := mgr.Start("gen-b")
+	genB, err := mgr.Start(testTarget("gen-b"))
 	if err != nil {
 		t.Fatalf("Start B: %v", err)
 	}
@@ -1157,7 +1166,7 @@ func TestPreviousGenerationEventDoesNotAffectCurrent(t *testing.T) {
 func TestVolumeClampOnAdjust(t *testing.T) {
 	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "0")
 	mgr := newTestManager(t, "play-control", Options{})
-	gen, err := mgr.Start("volchan")
+	gen, err := mgr.Start(testTarget("volchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1276,7 +1285,7 @@ func TestRestartKeepsTheVolumeOfTheSameChannel(t *testing.T) {
 
 	start := func(login string) uint64 {
 		t.Helper()
-		gen, err := mgr.Start(login)
+		gen, err := mgr.Start(testTarget(login))
 		if err != nil {
 			t.Fatalf("Start(%s): %v", login, err)
 		}
@@ -1326,7 +1335,7 @@ func TestVolumeZeroSurvivesTheRestart(t *testing.T) {
 	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
 	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
 	mgr := newTestManager(t, "play-control", Options{})
-	gen, err := mgr.Start("gaules")
+	gen, err := mgr.Start(testTarget("gaules"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1335,7 +1344,7 @@ func TestVolumeZeroSurvivesTheRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitVolume(t, mgr, gen, 0, 3*time.Second)
-	gen, err = mgr.Start("gaules")
+	gen, err = mgr.Start(testTarget("gaules"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1368,7 +1377,7 @@ func waitVolume(t *testing.T, mgr *Manager, gen uint64, want int, timeout time.D
 func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
 	dir := t.TempDir()
 	mgr := newTestManager(t, "play-control", Options{RuntimeDir: dir})
-	gen, err := mgr.Start("stopchan")
+	gen, err := mgr.Start(testTarget("stopchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1400,7 +1409,7 @@ func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
 	}
 
 	// Manager remains usable for a new Start.
-	gen2, err := mgr.Start("again")
+	gen2, err := mgr.Start(testTarget("again"))
 	if err != nil {
 		t.Fatalf("Start again: %v", err)
 	}
@@ -1409,7 +1418,7 @@ func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
 
 func TestHelperExitBecomesEnded(t *testing.T) {
 	mgr := newTestManager(t, "exit-after-play", Options{})
-	gen, err := mgr.Start("bye")
+	gen, err := mgr.Start(testTarget("bye"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1422,7 +1431,7 @@ func TestHelperExitBecomesEnded(t *testing.T) {
 
 func TestPausePropertyChangeFromMPVWindow(t *testing.T) {
 	mgr := newTestManager(t, "play-control", Options{})
-	gen, err := mgr.Start("extpause")
+	gen, err := mgr.Start(testTarget("extpause"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1455,7 +1464,7 @@ func TestPausePropertyChangeFromMPVWindow(t *testing.T) {
 }
 
 func TestDefaultCommandShape(t *testing.T) {
-	cmd := DefaultCommand("gaules", "/run/user/1000/ttv-tui/1/i", "/run/user/1000/ttv-tui/1/mpv-input.conf")
+	cmd := DefaultCommand(testTarget("gaules"), "/run/user/1000/ttv-tui/1/i", "/run/user/1000/ttv-tui/1/mpv-input.conf")
 	if filepath.Base(cmd.Path) != "streamlink" && !strings.HasSuffix(cmd.Path, "streamlink") {
 		// exec.Command may leave Path empty until LookPath; check Args[0].
 		if cmd.Args[0] != "streamlink" {
@@ -1503,7 +1512,7 @@ func TestRealStreamlinkSmoke(t *testing.T) {
 	})
 	defer mgr.Close()
 
-	gen, err := mgr.Start("gaules")
+	gen, err := mgr.Start(testTarget("gaules"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1583,7 +1592,7 @@ func TestLongRuntimeAndTempDirsFallBackToShortBase(t *testing.T) {
 func assertLongRuntimeDirFallsBackTo(t *testing.T, longDir, base string) {
 	t.Helper()
 	mgr := newTestManager(t, "play", Options{RuntimeDir: longDir})
-	gen, err := mgr.Start("longchan")
+	gen, err := mgr.Start(testTarget("longchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1642,7 +1651,7 @@ func TestLongRuntimeDirDefaultEnvFallsBack(t *testing.T) {
 	mgr := New(opts)
 	defer mgr.Close()
 
-	gen, err := mgr.Start("xdgchan")
+	gen, err := mgr.Start(testTarget("xdgchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -1694,7 +1703,7 @@ func TestFallbackNotWritableReturnsError(t *testing.T) {
 	longDir := filepath.Join(t.TempDir(), strings.Repeat("long/", 30))
 	mgr := newTestManager(t, "play", Options{RuntimeDir: longDir})
 
-	gen, err := mgr.Start("errchan")
+	gen, err := mgr.Start(testTarget("errchan"))
 	if err == nil {
 		t.Fatal("expected Start to fail when fallback is not writable")
 	}
@@ -1743,4 +1752,80 @@ func helperSocketNoListener(socket string) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 	<-sig
+}
+
+func TestManagerStartRejectsEmptyURL(t *testing.T) {
+	mgr := New(Options{})
+	t.Cleanup(mgr.Close)
+	_, err := mgr.Start(Target{})
+	if err == nil {
+		t.Fatal("Start with empty Target.URL must fail")
+	}
+	if !strings.Contains(err.Error(), "empty stream URL") {
+		t.Fatalf("err = %v, want 'empty stream URL'", err)
+	}
+}
+
+func TestManagerPreservesVolumeByTargetIdentity(t *testing.T) {
+	mgr := newTestManager(t, "play-control", Options{})
+	target := Target{
+		URL:   "https://www.twitch.tv/volchan",
+		Label: "volchan",
+	}
+	gen, err := mgr.Start(target)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+
+	// Adjust volume to 40.
+	if err := mgr.AdjustVolume(-60); err != nil {
+		t.Fatalf("AdjustVolume: %v", err)
+	}
+	waitVolume(t, mgr, gen, 40, 3*time.Second)
+	mgr.Stop()
+
+	// Starting same identity preserves volume.
+	sameTarget := Target{
+		URL:   "https://www.twitch.tv/volchan",
+		Label: "volchan",
+	}
+	if vol := mgr.startVolume(sameTarget); vol != 40 {
+		t.Fatalf("startVolume same identity = %d, want 40", vol)
+	}
+
+	// Starting different identity uses baseline volume.
+	otherTarget := Target{
+		URL:   "https://www.twitch.tv/other",
+		Label: "other",
+	}
+	if vol := mgr.startVolume(otherTarget); vol != baselineVolume {
+		t.Fatalf("startVolume other identity = %d, want %d", vol, baselineVolume)
+	}
+}
+
+func TestRegistryRecordStoresTargetAndIdentity(t *testing.T) {
+	rec := Record{
+		OwnerPID: 1234,
+		PGID:     5678,
+		Socket:   "/tmp/sock",
+		Dir:      "/tmp/dir",
+		URL:      "https://www.twitch.tv/gaules",
+		Label:    "gaules",
+		Login:    "gaules",
+	}
+	if rec.Identity() != "gaules" {
+		t.Fatalf("Identity = %q, want gaules", rec.Identity())
+	}
+	if rec.Target().URL != "https://www.twitch.tv/gaules" {
+		t.Fatalf("Target.URL = %q, want https://www.twitch.tv/gaules", rec.Target().URL)
+	}
+
+	// Backwards compatibility with old record that only had Login:
+	oldRec := Record{
+		Login: "oldchan",
+	}
+	if oldRec.Identity() != "oldchan" {
+		t.Fatalf("old Identity = %q, want oldchan", oldRec.Identity())
+	}
 }

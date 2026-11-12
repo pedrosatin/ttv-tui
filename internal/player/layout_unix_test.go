@@ -39,7 +39,7 @@ func TestRuntimeBasePrivacy(t *testing.T) {
 			restore := setFallbackBaseDirForTest(fallback)
 			t.Cleanup(restore)
 			mgr := newTestManager(t, "play", Options{RuntimeDir: runtimeDir})
-			gen, err := mgr.Start("privacy")
+			gen, err := mgr.Start(testTarget("privacy"))
 			if err != nil {
 				t.Fatal(err)
 			}

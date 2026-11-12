@@ -118,7 +118,7 @@ func TestIPCEndpointRefused(t *testing.T) {
 func TestSessionFailsFastWhenSocketHasNoListener(t *testing.T) {
 	mgr := newTestManager(t, "socket-no-listener", Options{SocketWait: defaultSocketWait, StopWait: 300 * time.Millisecond})
 	start := time.Now()
-	gen, err := mgr.Start("chan")
+	gen, err := mgr.Start(testTarget("chan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}

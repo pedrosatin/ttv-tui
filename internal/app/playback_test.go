@@ -47,7 +47,7 @@ func TestLogInputConfErr(t *testing.T) {
 			mgr := player.New(player.Options{
 				RuntimeDir: t.TempDir(),
 				StopWait:   100 * time.Millisecond,
-				Command: func(string, string) *exec.Cmd {
+				Command: func(player.Target, string) *exec.Cmd {
 					return exec.Command(os.Args[0], "-test.run=^$")
 				},
 				WriteInputConf: func(string) error { return errors.New("disk full") },
@@ -60,7 +60,7 @@ func TestLogInputConfErr(t *testing.T) {
 				t.Fatalf("logged before any failure: %q", log.String())
 			}
 
-			if _, err := mgr.Start("gaules"); err != nil {
+			if _, err := mgr.Start(twitchTarget("gaules")); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
 			mgr.Stop()

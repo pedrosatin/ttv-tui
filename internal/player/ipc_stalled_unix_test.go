@@ -48,7 +48,7 @@ func stalledIPC(t *testing.T, writeWait time.Duration) (*Session, net.Conn) {
 	return &Session{
 		cfg: sessionConfig{
 			Generation: 1,
-			Login:      "stalled",
+			Target:     testTarget("stalled"),
 			WriteWait:  writeWait,
 			Emit:       func(Event) {},
 		},

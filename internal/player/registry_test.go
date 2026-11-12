@@ -82,7 +82,7 @@ func helperSessionOwner() {
 		RuntimeDir:  os.Getenv("TTV_PLAYER_HELPER_RUNTIME"),
 		RegistryDir: os.Getenv("TTV_PLAYER_HELPER_REGISTRY"),
 	})
-	if _, err := mgr.Start("owner"); err != nil {
+	if _, err := mgr.Start(testTarget("owner")); err != nil {
 		fmt.Fprintf(os.Stderr, "start session: %v\n", err)
 		os.Exit(1)
 	}
@@ -124,7 +124,7 @@ func TestStopKillsDescendantIgnoringTERMAfterParentExits(t *testing.T) {
 
 	const stopWait = 400 * time.Millisecond
 	mgr := newTestManager(t, "term-parent-stubborn-child", Options{StopWait: stopWait})
-	gen, err := mgr.Start("stubborn")
+	gen, err := mgr.Start(testTarget("stubborn"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestStopKillsDescendantIgnoringTERMAfterParentExits(t *testing.T) {
 func TestManagerRegistryRecordLifecycle(t *testing.T) {
 	regDir := t.TempDir()
 	mgr := newTestManager(t, "play-child", Options{RegistryDir: regDir, StopWait: 300 * time.Millisecond})
-	gen, err := mgr.Start("recorded")
+	gen, err := mgr.Start(testTarget("recorded"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}

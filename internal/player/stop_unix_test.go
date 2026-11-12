@@ -16,7 +16,7 @@ import (
 // signal it.
 func TestStopOfEndedSessionSignalsNoGroup(t *testing.T) {
 	mgr := newTestManager(t, "exit-after-play", Options{StopWait: 200 * time.Millisecond})
-	gen, err := mgr.Start("ended")
+	gen, err := mgr.Start(testTarget("ended"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestStopOfEndedSessionSignalsNoGroup(t *testing.T) {
 // this test, does not reap it stands in for that member.
 func TestGroupThatOutlivesSIGKILLIsAnError(t *testing.T) {
 	mgr := newTestManager(t, "play", Options{StopWait: 100 * time.Millisecond})
-	gen, err := mgr.Start("stuck")
+	gen, err := mgr.Start(testTarget("stuck"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}

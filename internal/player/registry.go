@@ -23,9 +23,30 @@ type Record struct {
 	PGID       int       `json:"pgid"`
 	Socket     string    `json:"socket"`
 	Dir        string    `json:"dir"`
+	URL        string    `json:"url,omitempty"`
+	Label      string    `json:"label,omitempty"`
 	Login      string    `json:"login"`
 	Generation uint64    `json:"generation"`
 	StartedAt  time.Time `json:"started_at"`
+}
+
+// Target returns the playback Target recorded on disk.
+func (r Record) Target() Target {
+	return Target{
+		URL:   r.URL,
+		Label: r.Identity(),
+	}
+}
+
+// Identity returns the human-readable identity (label, login, or URL).
+func (r Record) Identity() string {
+	if r.Label != "" {
+		return r.Label
+	}
+	if r.Login != "" {
+		return r.Login
+	}
+	return r.URL
 }
 
 // Orphan is a recorded player whose owning ttv-tui process is gone while its

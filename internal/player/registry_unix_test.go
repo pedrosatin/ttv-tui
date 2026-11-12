@@ -41,7 +41,7 @@ func TestFindOrphansDetectsAndTerminatesLeftoverPlayer(t *testing.T) {
 
 	// A player left behind by a run that died: its own process group, a parent
 	// that obeys SIGTERM and a descendant that ignores it.
-	cmd := helperCommand("term-parent-stubborn-child")("orphaned", socket)
+	cmd := helperCommand("term-parent-stubborn-child")(testTarget("orphaned"), socket)
 	cmd.Env = append(cmd.Env, "TTV_PLAYER_HELPER_CHILD_PIDFILE="+pidFile)
 	configureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {

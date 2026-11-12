@@ -48,6 +48,7 @@ const (
 type Event struct {
 	Generation   uint64
 	State        State
+	Target       Target
 	Login        string
 	LastLine     string
 	BreakElapsed time.Duration
@@ -64,30 +65,55 @@ type Event struct {
 	ContainmentDegraded bool
 }
 
-// CommandFunc builds the process to supervise for a given channel login and IPC
+// Target describes the stream to play: the ready stream URL, optional streamlink
+// CLI arguments, and an optional human-readable label/identity for the session
+// (used in logs, process registration, and orphan recovery).
+type Target struct {
+	URL       string
+	ExtraArgs []string
+	Label     string
+}
+
+// Identity returns the session identity: Label when non-empty, otherwise URL.
+func (t Target) Identity() string {
+	if t.Label != "" {
+		return t.Label
+	}
+	return t.URL
+}
+
+// TargetFromURL builds a Target with the given URL and optional extra streamlink arguments.
+func TargetFromURL(url string, extra ...string) Target {
+	return Target{
+		URL:       url,
+		ExtraArgs: extra,
+	}
+}
+
+// CommandFunc builds the process to supervise for a given Target and IPC
 // endpoint (a socket path on Unix, a pipe name on Windows). The endpoint is not
 // a place to find the session's other files. Tests inject a helper that mimics
 // streamlink+mpv without network or a real window.
-type CommandFunc func(login, endpoint string) *exec.Cmd
+type CommandFunc func(target Target, endpoint string) *exec.Cmd
 
 // sessionCommand is a CommandFunc that also sees the session's directory. The
 // default command needs it for --input-conf, which an endpoint cannot give.
-type sessionCommand func(login string, layout sessionLayout) *exec.Cmd
+type sessionCommand func(target Target, layout sessionLayout) *exec.Cmd
 
 // sessionCommandOf adapts a CommandFunc, which only needs the endpoint.
 func sessionCommandOf(f CommandFunc) sessionCommand {
 	if f == nil {
 		return nil
 	}
-	return func(login string, layout sessionLayout) *exec.Cmd {
-		return f(login, layout.Endpoint)
+	return func(target Target, layout sessionLayout) *exec.Cmd {
+		return f(target, layout.Endpoint)
 	}
 }
 
 // defaultSessionCommand is the production command: input.conf in the session
 // directory, IPC on the session endpoint.
-func defaultSessionCommand(login string, layout sessionLayout) *exec.Cmd {
-	return DefaultCommand(login, layout.Endpoint, inputConfPath(layout.Dir))
+func defaultSessionCommand(target Target, layout sessionLayout) *exec.Cmd {
+	return DefaultCommand(target, layout.Endpoint, inputConfPath(layout.Dir))
 }
 
 // Options configures a Manager. Zero values select production defaults.
@@ -177,11 +203,11 @@ type Manager struct {
 	inputConfErr error
 	// notes are the problems sessions recorded, for the exit log.
 	notes []string
-	// keptLogin and keptVolume are the channel of the last session to end and the
+	// keptIdentity and keptVolume are the channel/stream identity of the last session to end and the
 	// volume it ended on. They outlive the session: a retry may follow a start that
 	// failed and left none.
-	keptLogin  string
-	keptVolume int
+	keptIdentity string
+	keptVolume   int
 
 	// afterPrevStop, when set by a test, runs in Start once the previous
 	// session is down and before the new one is spawned.
@@ -280,27 +306,27 @@ func (m *Manager) Generation() uint64 {
 	return m.gen
 }
 
-// Start stops any previous session and starts playback for login in the mpv
+// Start stops any previous session and starts playback for target in the mpv
 // window. It returns the new generation. The first event is StateStarting.
 //
 // The new player is spawned only once no other session is being torn down and
 // no other Start is spawning, so two players never run at once. A Stop, Close
 // or newer Start that comes first cancels it.
-func (m *Manager) Start(login string) (uint64, error) {
-	return m.start(login, 0)
+func (m *Manager) Start(target Target) (uint64, error) {
+	return m.start(target, 0)
 }
 
 // StartInOrder is Start for a caller whose requests may reach the Manager out
 // of order. order grows with each request; a Start that comes after one with a
 // higher order is superseded at once and spawns nothing.
-func (m *Manager) StartInOrder(login string, order uint64) (uint64, error) {
-	return m.start(login, order)
+func (m *Manager) StartInOrder(target Target, order uint64) (uint64, error) {
+	return m.start(target, order)
 }
 
 // start is Start, ordered when order is not 0.
-func (m *Manager) start(login string, order uint64) (uint64, error) {
-	if login == "" {
-		return 0, fmt.Errorf("player: empty channel login")
+func (m *Manager) start(target Target, order uint64) (uint64, error) {
+	if target.URL == "" {
+		return 0, fmt.Errorf("player: empty stream URL")
 	}
 
 	m.mu.Lock()
@@ -352,7 +378,8 @@ func (m *Manager) start(login string, order uint64) (uint64, error) {
 		m.emit(Event{
 			Generation: gen,
 			State:      StateError,
-			Login:      login,
+			Target:     target,
+			Login:      target.Identity(),
 			LastLine:   err.Error(),
 			Failure:    FailureOf(err),
 		})
@@ -366,11 +393,11 @@ func (m *Manager) start(login string, order uint64) (uint64, error) {
 	}
 	sess, err := startSession(sessionConfig{
 		Generation:         gen,
-		Login:              login,
+		Target:             target,
 		RuntimeDir:         m.opts.RuntimeDir,
 		Command:            command,
 		CommandNoInputConf: noInputConf,
-		Volume:             m.startVolume(login),
+		Volume:             m.startVolume(target),
 		WriteInputConf:     m.opts.WriteInputConf,
 		SocketWait:         m.opts.SocketWait,
 		StopWait:           m.opts.StopWait,
@@ -383,7 +410,8 @@ func (m *Manager) start(login string, order uint64) (uint64, error) {
 		m.emit(Event{
 			Generation: gen,
 			State:      StateError,
-			Login:      login,
+			Target:     target,
+			Login:      target.Identity(),
 			LastLine:   err.Error(),
 			Failure:    FailureOf(err),
 		})
@@ -432,16 +460,16 @@ func (m *Manager) keepVolume(sess *Session) {
 	volume := sess.Volume()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.keptLogin, m.keptVolume = sess.cfg.Login, volume
+	m.keptIdentity, m.keptVolume = sess.cfg.Target.Identity(), volume
 }
 
-// startVolume is the volume a new session of login opens at: where the same
-// channel left it, so a retry changes nothing the user set, or the baseline for
+// startVolume is the volume a new session of target opens at: where the same
+// channel/identity left it, so a retry changes nothing the user set, or the baseline for
 // any other channel.
-func (m *Manager) startVolume(login string) int {
+func (m *Manager) startVolume(target Target) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if login == m.keptLogin {
+	if target.Identity() == m.keptIdentity {
 		return m.keptVolume
 	}
 	return baselineVolume
@@ -613,7 +641,7 @@ func (m *Manager) emit(ev Event) {
 	}
 }
 
-// DefaultCommand builds: streamlink https://www.twitch.tv/<login> best --player mpv
+// DefaultCommand builds: streamlink [extra...] <url> best --player mpv
 // with mpv IPC/window/hwdec flags. --no-config ignores user configs but keeps the
 // bindings compiled into mpv, so --no-input-default-bindings drops those and the
 // session's input.conf provides the only keys. --volume-max=100 holds the window
@@ -622,20 +650,20 @@ func (m *Manager) emit(ev Event) {
 //
 // endpoint goes to --input-ipc-server and inputConf to --input-conf; they are
 // independent paths (the endpoint can be a pipe name).
-func DefaultCommand(login, endpoint, inputConf string) *exec.Cmd {
-	return playerCommand(login, endpoint, inputConf)
+func DefaultCommand(target Target, endpoint, inputConf string) *exec.Cmd {
+	return playerCommand(target, endpoint, inputConf)
 }
 
 // commandNoInputConf is DefaultCommand for a session without an input.conf. The
 // built-in bindings stay off: the window ignores keys and the TUI keeps working,
 // which beats going back to bindings the user cannot see or undo.
-func commandNoInputConf(login, endpoint string) *exec.Cmd {
-	return playerCommand(login, endpoint, "")
+func commandNoInputConf(target Target, endpoint string) *exec.Cmd {
+	return playerCommand(target, endpoint, "")
 }
 
 // playerCommand omits --input-conf when inputConf is empty.
-func playerCommand(login, endpoint, inputConf string) *exec.Cmd {
-	return streamlinkCommand(login, mpvArgs(endpoint, inputConf))
+func playerCommand(target Target, endpoint, inputConf string) *exec.Cmd {
+	return streamlinkCommand(target.URL, mpvArgs(endpoint, inputConf), target.ExtraArgs...)
 }
 
 func mpvArgs(endpoint, inputConf string) []string {
@@ -656,10 +684,10 @@ func mpvArgs(endpoint, inputConf string) []string {
 	return args
 }
 
-func streamlinkCommand(login string, mpv []string, extra ...string) *exec.Cmd {
+func streamlinkCommand(streamURL string, mpv []string, extra ...string) *exec.Cmd {
 	args := append([]string{"--no-config", "--loglevel", "info"}, extra...)
 	args = append(args,
-		fmt.Sprintf("https://www.twitch.tv/%s", login),
+		streamURL,
 		"best",
 		"--player", "mpv",
 		"--player-args", buildPlayerArgs(mpv),

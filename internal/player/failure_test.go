@@ -61,7 +61,7 @@ func TestOfflineLineFailsFastAndEndsProcess(t *testing.T) {
 	var pid atomic.Int64
 	mgr := newTestManager(t, "offline-hang", Options{SocketWait: 30 * time.Second})
 	start := time.Now()
-	gen, err := mgr.Start("xqc")
+	gen, err := mgr.Start(testTarget("xqc"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestOfflineLineFailsFastAndEndsProcess(t *testing.T) {
 
 func TestOfflineWithExitZeroIsStillError(t *testing.T) {
 	mgr := newTestManager(t, "offline-exit0", Options{SocketWait: 30 * time.Second})
-	gen, err := mgr.Start("xqc")
+	gen, err := mgr.Start(testTarget("xqc"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestProcessFailuresAreClassified(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.mode, func(t *testing.T) {
 			mgr := newTestManager(t, c.mode, Options{SocketWait: c.socketWait})
-			gen, err := mgr.Start("chan")
+			gen, err := mgr.Start(testTarget("chan"))
 			if err != nil {
 				t.Fatalf("Start: %v", err)
 			}
@@ -166,7 +166,7 @@ func TestFastExitKeepsLastErrorLine(t *testing.T) {
 					SocketWait: 30 * time.Second,
 					StopWait:   500 * time.Millisecond,
 				})
-				gen, err := mgr.Start("chan")
+				gen, err := mgr.Start(testTarget("chan"))
 				if err != nil {
 					errs <- fmt.Sprintf("run %d: Start: %v", i, err)
 					mgr.Close()
@@ -220,7 +220,7 @@ func TestMissingToolIsReportedWithoutSpawning(t *testing.T) {
 			var spawned atomic.Int32
 			mgr := New(Options{
 				RuntimeDir: privateRuntimeDir(t),
-				Command: func(login, socket string) *exec.Cmd {
+				Command: func(target Target, socket string) *exec.Cmd {
 					spawned.Add(1)
 					return exec.Command(os.Args[0])
 				},
@@ -233,7 +233,7 @@ func TestMissingToolIsReportedWithoutSpawning(t *testing.T) {
 				},
 			})
 			t.Cleanup(mgr.Close)
-			gen, err := mgr.Start("gaules")
+			gen, err := mgr.Start(testTarget("gaules"))
 			if err == nil {
 				t.Fatal("Start must fail when a required tool is missing")
 			}
@@ -258,12 +258,12 @@ func TestMissingToolIsReportedWithoutSpawning(t *testing.T) {
 func TestStreamlinkNotOnPathIsClassified(t *testing.T) {
 	mgr := New(Options{
 		RuntimeDir: privateRuntimeDir(t),
-		Command: func(login, socket string) *exec.Cmd {
+		Command: func(target Target, socket string) *exec.Cmd {
 			return exec.Command("ttv-tui-test-streamlink-that-does-not-exist")
 		},
 	})
 	t.Cleanup(mgr.Close)
-	gen, err := mgr.Start("gaules")
+	gen, err := mgr.Start(testTarget("gaules"))
 	if err == nil {
 		t.Fatal("Start must fail")
 	}

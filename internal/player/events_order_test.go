@@ -52,7 +52,7 @@ func (r *emitRace) got() string {
 // mpv confirming playback and streamlink exiting race; the UI must not get
 // "playing" after "ended".
 func TestEventsLeaveInStateOrderPlayingThenEnded(t *testing.T) {
-	s := &Session{cfg: sessionConfig{Generation: 3, Login: "x"}, state: StateStarting}
+	s := &Session{cfg: sessionConfig{Generation: 3, Target: testTarget("x")}, state: StateStarting}
 	r := holdEmitAt(s, StatePlaying, func() {
 		s.transition(StateEnded, EndReasonStreamlinkExit, "")
 	})
@@ -66,7 +66,7 @@ func TestEventsLeaveInStateOrderPlayingThenEnded(t *testing.T) {
 // The interval counter tick and the hold-end line race; the UI must not get
 // "interval" after the interval ended.
 func TestEventsLeaveInStateOrderBreakTickThenEnd(t *testing.T) {
-	s := &Session{cfg: sessionConfig{Generation: 3, Login: "x", Emit: func(Event) {}}, state: StatePlaying}
+	s := &Session{cfg: sessionConfig{Generation: 3, Target: testTarget("x"), Emit: func(Event) {}}, state: StatePlaying}
 	s.startAdHold()
 	r := holdEmitAt(s, StateBreak, s.endAdHold)
 	s.emitStatus()
@@ -82,7 +82,7 @@ func feedLines(lines []string) (states []State, notes []string) {
 	s := &Session{
 		cfg: sessionConfig{
 			Generation: 1,
-			Login:      "x",
+			Target:     testTarget("x"),
 			Emit:       func(ev Event) { states = append(states, ev.State) },
 			Note:       func(n string) { notes = append(notes, n) },
 		},

@@ -21,10 +21,10 @@ type spawnedLogins struct {
 	logins []string
 }
 
-func (s *spawnedLogins) command(login, _ string) *exec.Cmd {
+func (s *spawnedLogins) command(target player.Target, _ string) *exec.Cmd {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.logins = append(s.logins, login)
+	s.logins = append(s.logins, target.Identity())
 	return exec.Command(os.Args[0], "-test.run=^$")
 }
 

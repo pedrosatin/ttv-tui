@@ -35,7 +35,7 @@ func TestPlaybackStopSurvivorBlocksStart(t *testing.T) {
 	mgr := player.New(player.Options{
 		RuntimeDir: t.TempDir(),
 		StopWait:   100 * time.Millisecond,
-		Command: func(_, socket string) *exec.Cmd {
+		Command: func(_ player.Target, socket string) *exec.Cmd {
 			spawns++
 			cmd = exec.Command(os.Args[0], "-test.run=^TestPlaybackStopSurvivorBlocksStart$")
 			cmd.Env = append(os.Environ(), "TTV_STOP_TEST_SOCKET="+socket)

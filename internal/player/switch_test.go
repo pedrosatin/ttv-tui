@@ -19,15 +19,16 @@ type spawnLog struct {
 	overlap []string
 }
 
-func (s *spawnLog) command(login, endpoint string) *exec.Cmd {
+func (s *spawnLog) command(target Target, endpoint string) *exec.Cmd {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	login := target.Identity()
 	for i, c := range s.cmds {
 		if c.Process != nil && groupExists(c.Process.Pid) {
 			s.overlap = append(s.overlap, login+" spawned while "+s.logins[i]+" was alive")
 		}
 	}
-	cmd := s.inner(login, endpoint)
+	cmd := s.inner(target, endpoint)
 	s.logins = append(s.logins, login)
 	s.cmds = append(s.cmds, cmd)
 	return cmd
@@ -63,7 +64,7 @@ func activeLogin(mgr *Manager) string {
 	if mgr.session == nil {
 		return ""
 	}
-	return mgr.session.cfg.Login
+	return mgr.session.cfg.Target.Identity()
 }
 
 // Ctrl+X while a switch is taking the old channel down: the switch must not
@@ -71,12 +72,12 @@ func activeLogin(mgr *Manager) string {
 func TestStopDuringStartDropsNewSession(t *testing.T) {
 	spawns := &spawnLog{inner: helperCommand("play")}
 	mgr := newSpawnManager(t, spawns, 500*time.Millisecond)
-	if _, err := mgr.Start("channel-a"); err != nil {
+	if _, err := mgr.Start(testTarget("channel-a")); err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
 
 	mgr.afterPrevStop = mgr.Stop
-	gen, err := mgr.Start("channel-b")
+	gen, err := mgr.Start(testTarget("channel-b"))
 	if err == nil {
 		t.Fatalf("Start B returned gen %d without error after the Stop", gen)
 	}
@@ -93,12 +94,12 @@ func TestStopDuringStartDropsNewSession(t *testing.T) {
 func TestCloseDuringStartLeavesNoPlayer(t *testing.T) {
 	spawns := &spawnLog{inner: helperCommand("play")}
 	mgr := newSpawnManager(t, spawns, 500*time.Millisecond)
-	if _, err := mgr.Start("channel-a"); err != nil {
+	if _, err := mgr.Start(testTarget("channel-a")); err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
 
 	mgr.afterPrevStop = mgr.Close
-	if gen, err := mgr.Start("channel-b"); err == nil {
+	if gen, err := mgr.Start(testTarget("channel-b")); err == nil {
 		t.Fatalf("Start B returned gen %d without error after Close", gen)
 	}
 	if got := spawns.spawned(); !slices.Equal(got, []string{"channel-a"}) {
@@ -111,7 +112,7 @@ func TestCloseDuringStartLeavesNoPlayer(t *testing.T) {
 func TestStartsInARowNeverRunTwoGroups(t *testing.T) {
 	spawns := &spawnLog{inner: helperCommand("play")}
 	mgr := newSpawnManager(t, spawns, 500*time.Millisecond)
-	if _, err := mgr.Start("channel-a"); err != nil {
+	if _, err := mgr.Start(testTarget("channel-a")); err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
 
@@ -122,9 +123,9 @@ func TestStartsInARowNeverRunTwoGroups(t *testing.T) {
 			return
 		}
 		fired = true
-		_, errC = mgr.Start("channel-c")
+		_, errC = mgr.Start(testTarget("channel-c"))
 	}
-	_, errB := mgr.Start("channel-b")
+	_, errB := mgr.Start(testTarget("channel-b"))
 	if errC != nil {
 		t.Fatalf("Start C: %v", errC)
 	}
@@ -144,7 +145,7 @@ func TestStartsInARowNeverRunTwoGroups(t *testing.T) {
 func TestStartWaitsForTeardownByAnotherStart(t *testing.T) {
 	spawns := &spawnLog{inner: helperCommand("ignore-term")}
 	mgr := newSpawnManager(t, spawns, 300*time.Millisecond)
-	genA, err := mgr.Start("channel-a")
+	genA, err := mgr.Start(testTarget("channel-a"))
 	if err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
@@ -154,7 +155,7 @@ func TestStartWaitsForTeardownByAnotherStart(t *testing.T) {
 	done := make(chan struct{}, 2)
 	for _, login := range []string{"channel-b", "channel-c"} {
 		go func() {
-			_, _ = mgr.Start(login)
+			_, _ = mgr.Start(testTarget(login))
 			done <- struct{}{}
 		}()
 	}
@@ -173,11 +174,11 @@ func TestStartWaitsForTeardownByAnotherStart(t *testing.T) {
 func TestStopGenerationIgnoresReplacedGeneration(t *testing.T) {
 	spawns := &spawnLog{inner: helperCommand("play")}
 	mgr := newSpawnManager(t, spawns, 500*time.Millisecond)
-	genA, err := mgr.Start("channel-a")
+	genA, err := mgr.Start(testTarget("channel-a"))
 	if err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
-	genB, err := mgr.Start("channel-b")
+	genB, err := mgr.Start(testTarget("channel-b"))
 	if err != nil {
 		t.Fatalf("Start B: %v", err)
 	}

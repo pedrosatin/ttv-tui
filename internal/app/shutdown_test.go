@@ -71,8 +71,8 @@ func (emptySource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel
 }
 
 func helperPlayerCommand(dir string) player.CommandFunc {
-	return func(login, socketPath string) *exec.Cmd {
-		cmd := exec.Command(os.Args[0], "--", login, socketPath)
+	return func(target player.Target, socketPath string) *exec.Cmd {
+		cmd := exec.Command(os.Args[0], "--", target.Identity(), socketPath)
 		cmd.Env = append(os.Environ(), "TTV_APP_HELPER=player", "TTV_APP_DIR="+dir, "TTV_APP_SOCKET="+socketPath)
 		return cmd
 	}
@@ -99,7 +99,7 @@ func runTUIHelper() int {
 	dir := os.Getenv("TTV_APP_DIR")
 	mgr := player.New(helperPlayerOptions(dir))
 	defer mgr.Close()
-	if _, err := mgr.Start("hup"); err != nil {
+	if _, err := mgr.Start(twitchTarget("hup")); err != nil {
 		return 3
 	}
 	opts := Options{
@@ -206,7 +206,7 @@ func runFakePlayerChild() {
 // running with a registry record, as a TUI killed abruptly would.
 func runOrphanOwner() {
 	mgr := player.New(helperPlayerOptions(os.Getenv("TTV_APP_DIR")))
-	if _, err := mgr.Start("orphaned"); err != nil {
+	if _, err := mgr.Start(twitchTarget("orphaned")); err != nil {
 		os.Exit(3)
 	}
 	for {

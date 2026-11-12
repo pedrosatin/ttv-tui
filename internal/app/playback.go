@@ -21,11 +21,20 @@ func newPlaybackBridge(mgr *player.Manager) *playbackBridge {
 	return &playbackBridge{mgr: mgr}
 }
 
+// twitchTarget builds the playback Target for a Twitch channel login.
+func twitchTarget(login string) player.Target {
+	return player.Target{
+		URL:   fmt.Sprintf("https://www.twitch.tv/%s", login),
+		Label: login,
+	}
+}
+
 func (b *playbackBridge) Start(login string, selection uint64) tea.Cmd {
 	mgr := b.mgr
+	target := twitchTarget(login)
 	return func() tea.Msg {
 		// Cmds run in goroutines that may not keep the order of the selections.
-		gen, err := mgr.StartInOrder(login, selection)
+		gen, err := mgr.StartInOrder(target, selection)
 		if err != nil {
 			return ui.PlayerStatusMsg{
 				Generation: gen,

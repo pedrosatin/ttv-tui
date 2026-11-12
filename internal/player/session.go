@@ -17,7 +17,7 @@ import (
 
 type sessionConfig struct {
 	Generation         uint64
-	Login              string
+	Target             Target
 	RuntimeDir         string
 	Command            sessionCommand
 	CommandNoInputConf sessionCommand
@@ -164,7 +164,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		inputConfErr: inputConfErr,
 	}
 
-	cmd := command(cfg.Login, layout)
+	cmd := command(cfg.Target, layout)
 	if cmd == nil {
 		s.cleanupFiles()
 		cancel()
@@ -198,7 +198,8 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	s.emit(Event{
 		Generation: cfg.Generation,
 		State:      StateStarting,
-		Login:      cfg.Login,
+		Target:     cfg.Target,
+		Login:      cfg.Target.Identity(),
 		Volume:     s.volume,
 	})
 
@@ -227,7 +228,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	if s.group.containmentDegraded() {
 		emit := s.cfg.Emit
 		s.cfg.Emit = func(ev Event) { ev.ContainmentDegraded = true; emit(ev) }
-		s.emit(Event{Generation: cfg.Generation, State: StateStarting, Login: cfg.Login, Volume: s.volume})
+		s.emit(Event{Generation: cfg.Generation, State: StateStarting, Target: cfg.Target, Login: cfg.Target.Identity(), Volume: s.volume})
 	}
 
 	if cfg.RegistryDir != "" {
@@ -237,7 +238,9 @@ func startSession(cfg sessionConfig) (*Session, error) {
 			PGID:       cmd.Process.Pid,
 			Socket:     endpoint,
 			Dir:        dir,
-			Login:      cfg.Login,
+			URL:        cfg.Target.URL,
+			Label:      cfg.Target.Label,
+			Login:      cfg.Target.Identity(),
 			Generation: cfg.Generation,
 			StartedAt:  time.Now(),
 		})
@@ -665,7 +668,8 @@ func (s *Session) emitStatusLocked() {
 	ev := Event{
 		Generation: s.cfg.Generation,
 		State:      s.state,
-		Login:      s.cfg.Login,
+		Target:     s.cfg.Target,
+		Login:      s.cfg.Target.Identity(),
 		LastLine:   s.lastLine,
 		Volume:     s.volume,
 	}
@@ -939,7 +943,8 @@ func (s *Session) transition(state State, reason EndReason, lastLine string) {
 	ev := Event{
 		Generation: s.cfg.Generation,
 		State:      state,
-		Login:      s.cfg.Login,
+		Target:     s.cfg.Target,
+		Login:      s.cfg.Target.Identity(),
 		LastLine:   s.lastLine,
 		Reason:     reason,
 		Volume:     s.volume,

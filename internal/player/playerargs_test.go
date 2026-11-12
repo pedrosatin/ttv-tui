@@ -123,7 +123,7 @@ func TestQuotePlayerArgForms(t *testing.T) {
 // A socket path with a space must reach mpv as a single argument.
 func TestDefaultCommandPlayerArgsSocketWithSpace(t *testing.T) {
 	socket := "/home/a b/x/i"
-	cmd := DefaultCommand("gaules", socket, "/home/a b/x/mpv-input.conf")
+	cmd := DefaultCommand(testTarget("gaules"), socket, "/home/a b/x/mpv-input.conf")
 	var playerArgs string
 	for i, a := range cmd.Args {
 		if a == "--player-args" && i+1 < len(cmd.Args) {
@@ -211,10 +211,68 @@ func mustJSONStrings(t *testing.T, argv []string) string {
 }
 
 func TestDefaultCommandStaysAWindow(t *testing.T) {
-	joined := strings.Join(DefaultCommand("gaules", "/run/ipc", "/run/input.conf").Args, " ")
+	joined := strings.Join(DefaultCommand(testTarget("gaules"), "/run/ipc", "/run/input.conf").Args, " ")
 	for _, unwanted := range []string{"--no-terminal", "--logfile", " -v "} {
 		if strings.Contains(joined, unwanted) {
 			t.Fatalf("default command has %q: %s", unwanted, joined)
 		}
+	}
+}
+
+// For a Twitch channel, streamlink command argv must be identical to the
+// previous invocation that built https://www.twitch.tv/<login> internally.
+func TestStreamlinkTwitchArgvIdentical(t *testing.T) {
+	endpoint := "/run/user/1000/ttv-tui/1/i"
+	inputConf := "/run/user/1000/ttv-tui/1/mpv-input.conf"
+	login := "gaules"
+
+	target := Target{
+		URL:   "https://www.twitch.tv/" + login,
+		Label: login,
+	}
+	cmd := DefaultCommand(target, endpoint, inputConf)
+
+	// Historical baseline argv: streamlink --no-config --loglevel info <url> best --player mpv --player-args <args>
+	wantArgs := []string{
+		"streamlink",
+		"--no-config",
+		"--loglevel", "info",
+		"https://www.twitch.tv/gaules",
+		"best",
+		"--player", "mpv",
+		"--player-args", buildPlayerArgs(mpvArgs(endpoint, inputConf)),
+	}
+
+	if !reflect.DeepEqual(cmd.Args, wantArgs) {
+		t.Fatalf("streamlink argv mismatch:\ngot:  %v\nwant: %v", cmd.Args, wantArgs)
+	}
+}
+
+// ExtraArgs are placed before the stream URL as streamlink CLI arguments.
+func TestStreamlinkExtraArgsPlacement(t *testing.T) {
+	endpoint := "/run/user/1000/ttv-tui/1/i"
+	inputConf := "/run/user/1000/ttv-tui/1/mpv-input.conf"
+
+	target := Target{
+		URL:       "https://kick.com/xqc",
+		Label:     "xqc",
+		ExtraArgs: []string{"--kick-low-latency", "--webbrowser", "false"},
+	}
+	cmd := DefaultCommand(target, endpoint, inputConf)
+
+	wantArgs := []string{
+		"streamlink",
+		"--no-config",
+		"--loglevel", "info",
+		"--kick-low-latency",
+		"--webbrowser", "false",
+		"https://kick.com/xqc",
+		"best",
+		"--player", "mpv",
+		"--player-args", buildPlayerArgs(mpvArgs(endpoint, inputConf)),
+	}
+
+	if !reflect.DeepEqual(cmd.Args, wantArgs) {
+		t.Fatalf("streamlink argv with extra args mismatch:\ngot:  %v\nwant: %v", cmd.Args, wantArgs)
 	}
 }

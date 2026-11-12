@@ -11,7 +11,7 @@ import (
 )
 
 func TestDefaultSessionCommandTakesInputConfFromDirNotEndpoint(t *testing.T) {
-	cmd := defaultSessionCommand("gaules", sessionLayout{Dir: "/data/sess", Endpoint: "ttv-tui-pipe"})
+	cmd := defaultSessionCommand(testTarget("gaules"), sessionLayout{Dir: "/data/sess", Endpoint: "ttv-tui-pipe"})
 	joined := strings.Join(cmd.Args, " ")
 	for _, want := range []string{
 		"--input-ipc-server=ttv-tui-pipe",
@@ -137,13 +137,13 @@ func TestSessionKeepsDirAndEndpointSeparate(t *testing.T) {
 	var gotEndpoint string
 	s, err := startSession(sessionConfig{
 		Generation: 1,
-		Login:      "split",
+		Target:     testTarget("split"),
 		Prepare: func(string, uint64) (sessionLayout, error) {
 			return sessionLayout{Dir: dir, Endpoint: endpoint}, nil
 		},
-		Command: func(login string, l sessionLayout) *exec.Cmd {
+		Command: func(target Target, l sessionLayout) *exec.Cmd {
 			gotEndpoint = l.Endpoint
-			return helperCommand("play")(login, l.Endpoint)
+			return helperCommand("play")(target, l.Endpoint)
 		},
 		WriteInputConf: func(path string) error {
 			confPath = path
