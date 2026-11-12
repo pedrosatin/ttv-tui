@@ -125,10 +125,24 @@ func LoadFrom(path string) (Config, error) {
 	}
 	cfg, err := parseTOML(string(data))
 	if err != nil {
-		return Default(), fmt.Errorf("parse config %s: %w", path, err)
+		return Default(), &ParseError{Path: path, Err: err}
 	}
 	return cfg, nil
 }
+
+// ParseError reports a config file that was read but is not valid. Path is the
+// file the caller can move aside to recover.
+type ParseError struct {
+	Path string
+	Err  error
+}
+
+func (e *ParseError) Error() string { return fmt.Sprintf("parse config %s: %v", e.Path, e.Err) }
+
+func (e *ParseError) Unwrap() error { return e.Err }
+
+// BackupPath is where the recovery hint suggests moving the invalid file.
+func (e *ParseError) BackupPath() string { return e.Path + ".bak" }
 
 // LoadTwtFrom reads and normalizes credentials from a twitch-tui config file at path.
 // Unlike LoadFrom, a missing file returns an error wrapping os.ErrNotExist.

@@ -678,7 +678,7 @@ func TestRunLoginInvalidConfigExplainsRecoveryAndPreservesFile(t *testing.T) {
 			if !strings.Contains(msg, tc.wantRecovery) {
 				t.Fatalf("error %q does not explain recovery %q", msg, tc.wantRecovery)
 			}
-			wantBakCmd := "mv " + cfgPath + " " + cfgPath + ".bak"
+			wantBakCmd := fmt.Sprintf("'mv %q %q'", cfgPath, cfgPath+".bak")
 			if !strings.Contains(msg, wantBakCmd) {
 				t.Fatalf("error %q does not contain backup command %q", msg, wantBakCmd)
 			}
