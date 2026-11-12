@@ -366,15 +366,6 @@ func TestBlockedErrorsHaveTheirOwnText(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		cat := mustCatalog(t, lang)
 		m := New(cat)
-		blocked := &catalog.Error{Platform: platform.Kick, Kind: catalog.Bloqueio, StatusCode: 403}
-		if got := m.errorMessage(blocked); got != cat.T("error.blocked") {
-			t.Errorf("%s: errorMessage = %q, want the blocked text", lang, got)
-		}
-		m.list.err = blocked
-		if got := m.listErrorAction(); got != cat.T("error.list.blocked") {
-			t.Errorf("%s: listErrorAction = %q, want the blocked text", lang, got)
-		}
-		m.list.err = nil
 		m.player.state, m.player.failure = PlayerStateError, PlayerFailureBlocked
 		if got := m.playerFailureText(); got != cat.T("player.fail.blocked") || strings.Contains(got, cat.T("player.fail.network")) {
 			t.Errorf("%s: playerFailureText = %q, want the blocked text", lang, got)

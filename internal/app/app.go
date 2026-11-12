@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -19,6 +20,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/kick"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/provider"
 	"github.com/pedrosatin/ttv-tui/internal/store"
@@ -158,13 +160,13 @@ func Run(opts Options) error {
 	chats := newChatBridge(ctx, providerRegistry)
 	uiOpts := []ui.Option{
 		hostOption,
-		ui.WithSource(source),
 		ui.WithPlayback(playback),
 		ui.WithChat(chats),
 		ui.WithStore(appStore),
 		ui.WithFavorites(store.ToChannels(st.Favorites)),
 		ui.WithRecents(store.ToChannels(st.Recents)),
 	}
+	uiOpts = append(uiOpts, catalogOptions(providerRegistry)...)
 	uiOpts = append(uiOpts, resolverOptions(providerRegistry)...)
 	uiOpts = append(uiOpts, configOptions(cfg, cfgPath)...)
 	if corruptNotice != "" {
@@ -347,7 +349,41 @@ func kickProvider(injected *kick.Provider, cfg config.Config) (*kick.Provider, f
 	}
 	client := kick.NewClient(kick.ClientConfig{})
 	c := kick.NewChat(kick.ChatOptions{Rooms: client, PusherKey: cfg.KickPusherKey})
-	return kick.NewProvider(kick.WithResolver(client), kick.WithChat(c)), c.Close
+	return kick.NewProvider(
+		kick.WithBrowser(client),
+		kick.WithSearcher(client),
+		kick.WithResolver(client),
+		kick.WithChat(c),
+	), c.Close
+}
+
+// catalogOptions hands the UI the catalog of every platform that has one. The
+// list opens on the default platform and p goes to the next, in this order.
+func catalogOptions(reg *provider.Registry) []ui.Option {
+	ids := reg.IDs()
+	// The default platform leads; the others follow in the registry's order.
+	sort.SliceStable(ids, func(i, j int) bool {
+		return ids[i] == platform.Default && ids[j] != platform.Default
+	})
+	var opts []ui.Option
+	for _, id := range ids {
+		prov, ok := reg.Get(id)
+		if !ok {
+			continue
+		}
+		browser, hasBrowser := prov.Browser()
+		searcher, hasSearcher := prov.Searcher()
+		if !hasBrowser {
+			browser = nil
+		}
+		if !hasSearcher {
+			searcher = nil
+		}
+		if browser != nil || searcher != nil {
+			opts = append(opts, ui.WithPlatformCatalog(id, browser, searcher))
+		}
+	}
+	return opts
 }
 
 // resolverOptions hands the UI the live-state lookup of every platform that has

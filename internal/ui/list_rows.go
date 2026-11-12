@@ -20,11 +20,17 @@ type listRow struct {
 func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	items := m.VisibleItems()
 	isSearch := m.Mode() == ModeSearch
+	// An unavailable catalog keeps the saved channels on screen and says so
+	// under them.
+	unavailable := m.catalogUnavailableLines(maxWidth)
 
 	if len(items) == 0 {
 		lines := m.appendPromptLines([]string{header}, maxWidth)
 		if m.list.loading {
 			return append(lines, TruncateVisual(m.listLoadingText(), maxWidth))
+		}
+		if len(unavailable) > 0 {
+			return append(lines, unavailable...)
 		}
 		return m.appendListEmptyLines(lines, maxWidth)
 	}
@@ -37,11 +43,12 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 
 	start, end := 0, len(rows)
 	if m.height > 0 {
-		start, end = m.list.rowWindow(rows, m.listRowBudget(len(lines), isSearch, maxWidth))
+		start, end = m.list.rowWindow(rows, m.listRowBudget(len(lines)+len(unavailable), isSearch, maxWidth))
 	}
 	for _, r := range rows[start:end] {
 		lines = append(lines, r.text)
 	}
+	lines = append(lines, unavailable...)
 	return m.appendListLoadingMore(lines, maxWidth)
 }
 

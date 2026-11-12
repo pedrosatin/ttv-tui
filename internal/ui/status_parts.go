@@ -43,6 +43,11 @@ func (m Model) statusParts() statusContent {
 
 	c.extra = appendStatusContext(c.extra, chatStatus, channelInPrimary, lead.context)
 	c.extra = m.appendPlayerInfo(c.extra)
+	// The list header already names the platform; the bar repeats it in the
+	// room the rest leaves.
+	if token := m.listPlatformStatus(); token != "" {
+		c.extra = append(c.extra, token)
+	}
 	c.primary = primary
 	return c
 }
@@ -57,6 +62,9 @@ func (m Model) statusLead() statusLead {
 		return lead
 	}
 	if lead, ok := m.activityStatusLead(); ok {
+		return lead
+	}
+	if lead, ok := m.unavailableStatusLead(); ok {
 		return lead
 	}
 	return m.selectionStatusLead()
@@ -76,7 +84,7 @@ func (m Model) blockingStatusLead() (statusLead, bool) {
 	case m.notices.ctrlC != "":
 		// Ctrl+C hint outranks filter/search prompts so every mode shows it.
 		return statusLead{primary: m.notices.ctrlC}, true
-	case m.list.err != nil:
+	case m.list.hardErr():
 		return statusLead{primary: m.listErrorAction(), tone: toneError, detail: m.listErrorDetail()}, true
 	case m.list.prefs.menuOpen && m.notices.statusWarns:
 		// A choice made in the menu may fail to save; the warning stays over
@@ -206,7 +214,7 @@ func (m Model) statusKeep(primary string, tone statusTone) []string {
 // statusChatLine is the chat status when it adds to the lead. A list error
 // leaves it out.
 func (m Model) statusChatLine(primary string) string {
-	if m.list.err != nil {
+	if m.list.hardErr() {
 		return ""
 	}
 	if s := m.chatStatusSummary(); s != "" && !strings.Contains(primary, s) {

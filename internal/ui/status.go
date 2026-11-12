@@ -12,21 +12,32 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
+// errorMessage explains a list load error. The platform it names is the one
+// that answered, which is not always the default one.
 func (m Model) errorMessage(err error) string {
+	name := platform.DisplayName(errorPlatform(err, m.ListPlatform()))
 	switch catalog.KindOf(err) {
 	case catalog.Rede:
 		return m.t("error.network")
 	case catalog.RateLimit:
 		return m.t("error.rate_limit")
 	case catalog.Servidor:
-		return m.t("error.server")
+		return fmt.Sprintf(m.t("error.server"), name)
 	case catalog.Contrato:
-		return m.t("error.contract")
-	case catalog.Bloqueio:
-		return m.t("error.blocked")
+		return fmt.Sprintf(m.t("error.contract"), name)
 	default:
 		return m.t("error.network")
 	}
+}
+
+// errorPlatform returns the platform a catalog error came from, or fallback
+// when the error does not say.
+func errorPlatform(err error, fallback string) string {
+	var ce *catalog.Error
+	if errors.As(err, &ce) && ce != nil && strings.TrimSpace(ce.Platform) != "" {
+		return ce.Platform
+	}
+	return fallback
 }
 
 // clearStaleStatusErrors drops list and player errors from the status bar when
@@ -52,8 +63,6 @@ func (m Model) listErrorAction() string {
 		return m.t("error.list.rate_limit")
 	case catalog.Servidor:
 		return m.t("error.list.server")
-	case catalog.Bloqueio:
-		return m.t("error.list.blocked")
 	default:
 		return m.t("error.list.unknown")
 	}
@@ -144,7 +153,7 @@ type statusContent struct {
 // chat channel. Player actions, errors, search/filter and one-shot notices keep
 // the lead (ticket 07 / orientation).
 func (m Model) softStatusPrimary() bool {
-	if m.list.err != nil || m.list.search.active || m.list.filtering || m.list.prefs.menuOpen || m.list.loading {
+	if m.list.hardErr() || m.list.search.active || m.list.filtering || m.list.prefs.menuOpen || m.list.loading {
 		return false
 	}
 	if m.notices.auth != "" || m.notices.corrupt != "" || m.chat.copyNotice != "" || m.notices.status != "" || m.notices.ctrlC != "" {
@@ -222,7 +231,7 @@ func (m Model) includeLayoutStatus() bool {
 	if m.LayoutMode() == LayoutSplit {
 		return false
 	}
-	if m.list.err != nil || m.list.prefs.menuOpen || m.list.search.active || m.list.filtering {
+	if m.list.hardErr() || m.list.prefs.menuOpen || m.list.search.active || m.list.filtering {
 		return false
 	}
 	if m.player.state == PlayerStateError {
@@ -250,7 +259,7 @@ func (m Model) statusLadder(lang string) []statusChrome {
 	// Focus lives in the chrome, not in the state message, so Tab has a stable
 	// place to announce the active panel. Skip it while an error detail needs
 	// the columns.
-	if focus := m.focusStatusText(); focus != "" && m.list.err == nil {
+	if focus := m.focusStatusText(); focus != "" && !m.list.hardErr() {
 		focusHints = fmt.Sprintf(" | %s · %s · %s ", focus, help, quit)
 	}
 	last := " | " + quit + " "

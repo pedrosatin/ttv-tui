@@ -208,9 +208,9 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		m.player.stopAfterStart = false
 		cmds = append(cmds, m.playback.StartTarget(target, m.player.selection))
 	}
-	if selected.Availability == catalog.AvailabilityUnknown && selected.Viewers == nil {
-		// Opened with no evidence of its state: ask its platform now, so the
-		// bar and the recents row say whether it is live, with title and viewers.
+	if needsStreamLookup(selected) {
+		// Ask its platform now, so the bar and the recents row say whether it
+		// is live, with title and viewers.
 		if stateCmd := m.fetchChannelStateCmd(selected); stateCmd != nil {
 			cmds = append(cmds, stateCmd)
 		}
@@ -230,6 +230,24 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		}
 	}
 	return m, tea.Batch(cmds...)
+}
+
+// needsStreamLookup reports a channel opened without what the bar shows about
+// its stream: one with no evidence of its state (a pasted URL), or a search hit
+// that says it is live and nothing else. A row of a category listing has title
+// and viewers, or hides the count on purpose.
+func needsStreamLookup(ch catalog.Channel) bool {
+	if ch.Viewers != nil {
+		return false
+	}
+	switch ch.Availability {
+	case catalog.AvailabilityUnknown:
+		return true
+	case catalog.AvailabilityLive:
+		return ch.Title == nil
+	default:
+		return false
+	}
 }
 
 func (m Model) applyStoreSaved(msg storeSavedMsg) (tea.Model, tea.Cmd) {

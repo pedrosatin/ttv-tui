@@ -126,11 +126,19 @@ func runTUIHelper() int {
 	if err != nil {
 		return 3
 	}
-	kickProv, kickChat := offlineKickProvider(frames, fixedRooms{room: kick.Room{ChatroomID: 66973867}}, catalog.Channel{
+	kickLive := catalog.Channel{
 		ID: "kick:xqc", Login: "xqc", DisplayName: "xqc", Platform: platform.Kick, URL: "https://kick.com/xqc",
 		Availability: catalog.AvailabilityLive, Viewers: catalog.IntPtr(1234),
 		Title: catalog.StringPtr("pty kick title"), CategoryName: catalog.StringPtr("KickCat"),
-	})
+	}
+	var kickCatalog *listedCatalog
+	if os.Getenv("TTV_APP_KICK_CATALOG") == "1" {
+		kickCatalog = &listedCatalog{
+			category: catalog.Category{ID: "28", Name: "KickSlots", Viewers: catalog.IntPtr(777)},
+			channels: []catalog.Channel{kickLive},
+		}
+	}
+	kickProv, kickChat := offlineKickProviderWith(frames, fixedRooms{room: kick.Room{ChatroomID: 66973867}}, kickCatalog, kickLive)
 	defer kickChat.Close()
 	opts.Kick = kickProv
 	if body := os.Getenv("TTV_APP_CONFIG_BODY"); body != "" {

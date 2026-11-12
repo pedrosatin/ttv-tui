@@ -90,7 +90,7 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case msg.Type == tea.KeyUp, msg.Type == tea.KeyDown:
-		if m.list.err != nil {
+		if m.list.hardErr() {
 			return m, nil
 		}
 		if msg.Type == tea.KeyUp {

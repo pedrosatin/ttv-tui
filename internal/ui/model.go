@@ -135,28 +135,25 @@ type Option func(*Model)
 func WithSource(src catalog.Source) Option {
 	return func(m *Model) {
 		if src != nil {
-			m.browser = src
-			m.searcher = src
+			m.setCatalog(platform.Default, src, src)
 			m.setResolver(platform.Default, src)
-			m.list.loading = true
 		}
 	}
 }
 
-// WithBrowser configures the Model to browse categories and channels with b.
+// WithBrowser configures the Model to browse the categories and channels of the
+// default platform with b.
 func WithBrowser(b catalog.Browser) Option {
 	return func(m *Model) {
-		m.browser = b
-		if b != nil {
-			m.list.loading = true
-		}
+		m.setCatalog(platform.Default, b, m.catalogOf(platform.Default).searcher)
 	}
 }
 
-// WithSearcher configures the Model to search channels with s.
+// WithSearcher configures the Model to search the channels of the default
+// platform with s.
 func WithSearcher(s catalog.Searcher) Option {
 	return func(m *Model) {
-		m.searcher = s
+		m.setCatalog(platform.Default, m.catalogOf(platform.Default).browser, s)
 	}
 }
 
@@ -242,7 +239,11 @@ func WithCorruptNotice(notice string) Option {
 // it; the rest of the state is grouped by subject. The groups are values, not
 // pointers: Bubble Tea copies Model by value and a copy must not share state.
 type Model struct {
-	catalog  *i18n.Catalog
+	catalog *i18n.Catalog
+	// catalogs holds what each platform offers the list, in the order the
+	// platforms take turns. browser and searcher are the ones of the platform
+	// on screen (list.platform).
+	catalogs []platformCatalog
 	browser  catalog.Browser
 	searcher catalog.Searcher
 	// resolvers holds the live-state lookup of each platform that has one,
@@ -267,8 +268,10 @@ type Model struct {
 // listState is the left panel: what is loaded, what is highlighted and
 // selected, and the text filter, search and channel preference filters over it.
 type listState struct {
-	tracker    *requestTracker
-	pageSize   int
+	tracker  *requestTracker
+	pageSize int
+	// platform is the canonical name of the platform the list shows.
+	platform   string
 	mode       Mode
 	generation uint64
 	hydrateGen uint64
@@ -457,6 +460,7 @@ func New(cat *i18n.Catalog, opts ...Option) Model {
 			opt(&m)
 		}
 	}
+	m.openInitialCatalog()
 	return m
 }
 

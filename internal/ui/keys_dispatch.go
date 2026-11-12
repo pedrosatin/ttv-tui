@@ -166,6 +166,9 @@ func (m Model) handleCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case key.Matches(msg, m.keys.ChannelFilter):
 		return handled(m.keyChannelFilter())
 
+	case key.Matches(msg, m.keys.SwitchPlatform):
+		return handled(m.keySwitchPlatform())
+
 	case key.Matches(msg, m.keys.Help):
 		m.toggleHelp()
 		return m, nil, true
@@ -317,7 +320,7 @@ func (m Model) keyUp() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
 		return m.scrollChatUp(1), nil
 	}
-	if m.list.err != nil {
+	if m.list.hardErr() {
 		return m, nil
 	}
 	m.moveHighlight(-1)
@@ -329,7 +332,7 @@ func (m Model) keyDown() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
 		return m.scrollChatDown(1), nil
 	}
-	if m.list.err != nil {
+	if m.list.hardErr() {
 		return m, nil
 	}
 	m.moveHighlight(1)

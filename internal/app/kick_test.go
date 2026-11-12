@@ -105,6 +105,12 @@ func readKickFrames() ([]string, error) {
 // offlineKickProvider is a Kick provider that never touches the network: the
 // room is fixed, the chat plays frames and the live state is the one given.
 func offlineKickProvider(frames []string, rooms kick.RoomFinder, live ...catalog.Channel) (*kick.Provider, *kick.Chat) {
+	return offlineKickProviderWith(frames, rooms, nil, live...)
+}
+
+// offlineKickProviderWith is offlineKickProvider with a catalog to browse and
+// search, when cat is not nil.
+func offlineKickProviderWith(frames []string, rooms kick.RoomFinder, cat *listedCatalog, live ...catalog.Channel) (*kick.Provider, *kick.Chat) {
 	c := kick.NewChat(kick.ChatOptions{
 		Rooms: rooms,
 		Dial: func(context.Context, string) (kick.Socket, error) {
@@ -112,7 +118,36 @@ func offlineKickProvider(frames []string, rooms kick.RoomFinder, live ...catalog
 		},
 		CoalesceInterval: time.Millisecond,
 	})
-	return kick.NewProvider(kick.WithResolver(fixedResolver{channels: live}), kick.WithChat(c)), c
+	opts := []kick.ProviderOption{kick.WithResolver(fixedResolver{channels: live}), kick.WithChat(c)}
+	if cat != nil {
+		opts = append(opts, kick.WithBrowser(cat), kick.WithSearcher(cat))
+	}
+	return kick.NewProvider(opts...), c
+}
+
+// listedCatalog is a Kick catalog with one live category and the channels in it.
+type listedCatalog struct {
+	category catalog.Category
+	channels []catalog.Channel
+}
+
+func (c *listedCatalog) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{Items: []catalog.Category{c.category}}, nil
+}
+
+func (c *listedCatalog) Channels(_ context.Context, id string, _ catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	if id != c.category.ID {
+		return catalog.Page[catalog.Channel]{}, errors.New("unknown category " + id)
+	}
+	return catalog.Page[catalog.Channel]{Items: c.channels}, nil
+}
+
+func (c *listedCatalog) SearchCategories(context.Context, string) ([]catalog.Category, error) {
+	return nil, nil
+}
+
+func (c *listedCatalog) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: c.channels}, nil
 }
 
 var kickGaules = catalog.Channel{Platform: platform.Kick, ID: "kick:gaules", Login: "gaules", DisplayName: "gaules", URL: "https://kick.com/gaules"}
@@ -233,6 +268,12 @@ func TestKickProviderFromConfig(t *testing.T) {
 	if _, ok := prov.Resolver(); !ok {
 		t.Error("the default Kick provider has no resolver")
 	}
+	if b, ok := prov.Browser(); !ok || b == nil {
+		t.Error("the default Kick provider has no catalog to browse")
+	}
+	if s, ok := prov.Searcher(); !ok || s == nil {
+		t.Error("the default Kick provider has no search")
+	}
 	c, ok := prov.Chat()
 	if !ok || c.Capabilities().CanSend {
 		t.Fatalf("the default Kick provider chat = (%v, %v), want a read-only one", c, ok)
@@ -281,6 +322,43 @@ func TestResolverOptions_OnePerPlatformWithAResolver(t *testing.T) {
 	for _, tc := range tests {
 		if got := len(resolverOptions(tc.reg)); got != tc.want {
 			t.Errorf("%s: %d resolver options, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
+// The list opens on the default platform and p takes it to the next one that
+// has a catalog, whatever the order the registry lists them in.
+func TestCatalogOptions_DefaultPlatformFirstThenTheOthers(t *testing.T) {
+	frames := kickFrames(t)
+	withCatalog, kc := offlineKickProviderWith(frames, fixedRooms{}, &listedCatalog{})
+	defer kc.Close()
+	bare, kc2 := offlineKickProvider(frames, fixedRooms{})
+	defer kc2.Close()
+	keyP := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
+	tests := []struct {
+		name   string
+		reg    *provider.Registry
+		opts   int
+		opens  string
+		afterP string
+	}{
+		{"twitch and kick", provider.NewRegistry(twitch.NewProvider(stubSource{}), withCatalog, provider.NewURLProvider()), 2, platform.Twitch, platform.Kick},
+		{"kick without a catalog", provider.NewRegistry(twitch.NewProvider(stubSource{}), bare, provider.NewURLProvider()), 1, platform.Twitch, platform.Twitch},
+		{"twitch without a source", provider.NewRegistry(twitch.NewProvider(nil), withCatalog, provider.NewURLProvider()), 1, platform.Kick, platform.Kick},
+		{"none", provider.NewRegistry(twitch.NewProvider(nil), bare), 0, platform.Twitch, platform.Twitch},
+	}
+	for _, tc := range tests {
+		opts := catalogOptions(tc.reg)
+		if len(opts) != tc.opts {
+			t.Errorf("%s: %d catalog options, want %d", tc.name, len(opts), tc.opts)
+		}
+		m := ui.New(nil, opts...)
+		if m.ListPlatform() != tc.opens {
+			t.Errorf("%s: the list opens on %q, want %q", tc.name, m.ListPlatform(), tc.opens)
+		}
+		next, _ := m.Update(keyP)
+		if got := next.(ui.Model).ListPlatform(); got != tc.afterP {
+			t.Errorf("%s: p took the list to %q, want %q", tc.name, got, tc.afterP)
 		}
 	}
 }

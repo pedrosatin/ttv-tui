@@ -389,6 +389,7 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		m.t("help.nav"),
 		m.t("help.esc"),
 		m.t("help.categories"),
+		m.helpPlatformLine(),
 		m.t("help.search"),
 		m.t("help.channel_filter"),
 		m.t("help.layout"),
@@ -398,6 +399,9 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 		m.t("help.app"),
 		m.t("help.nocolor"),
 	} {
+		if line == "" {
+			continue
+		}
 		out = append(out, wrapChatRow("  ", line, maxWidth)...)
 		if m.hosted.host != nil && line == m.t("help.layout") {
 			out = append(out, wrapChatRow("  ", m.t("help.hosted_resize"), maxWidth)...)
@@ -468,6 +472,10 @@ func (m Model) headerLine() string {
 	default:
 		title = m.t("categories.title")
 	}
+	if name := m.listPlatformName(); name != "" {
+		// The platform leads, so a long category name is what gets cut.
+		title = name + statusSep + title
+	}
 
 	if m.chatColumnVisible() && m.listVisible() {
 		if m.Focus() == FocusList {
@@ -495,7 +503,7 @@ func (m Model) renderBodyLines(maxWidth int) []string {
 		header = styleFocus(header)
 	}
 
-	if m.list.err != nil {
+	if m.list.hardErr() {
 		lines := []string{header}
 		lines = m.appendPromptLines(lines, maxWidth)
 		if maxWidth <= 0 {

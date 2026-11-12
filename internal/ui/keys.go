@@ -20,28 +20,30 @@ type keyMap struct {
 	Filter        key.Binding
 	Search        key.Binding
 	ChannelFilter key.Binding
-	Categories    key.Binding
-	Retry         key.Binding
-	Clear         key.Binding
-	Quit          key.Binding
-	Pause         key.Binding
-	VolUp         key.Binding
-	VolDown       key.Binding
-	StopVideo     key.Binding
-	ReconnectChat key.Binding
-	Compose       key.Binding
-	CopyMessage   key.Binding
-	Help          key.Binding
-	HelpGlobal    key.Binding
-	CloseHelp     key.Binding
-	Favorite      key.Binding
-	CycleLayout   key.Binding
-	ToggleList    key.Binding
-	ToggleChat    key.Binding
-	ListWider     key.Binding
-	ListNarrower  key.Binding
-	ChatWider     key.Binding
-	ChatNarrower  key.Binding
+	// SwitchPlatform shows the list of the next platform that has a catalog.
+	SwitchPlatform key.Binding
+	Categories     key.Binding
+	Retry          key.Binding
+	Clear          key.Binding
+	Quit           key.Binding
+	Pause          key.Binding
+	VolUp          key.Binding
+	VolDown        key.Binding
+	StopVideo      key.Binding
+	ReconnectChat  key.Binding
+	Compose        key.Binding
+	CopyMessage    key.Binding
+	Help           key.Binding
+	HelpGlobal     key.Binding
+	CloseHelp      key.Binding
+	Favorite       key.Binding
+	CycleLayout    key.Binding
+	ToggleList     key.Binding
+	ToggleChat     key.Binding
+	ListWider      key.Binding
+	ListNarrower   key.Binding
+	ChatWider      key.Binding
+	ChatNarrower   key.Binding
 	// ToggleChatOverlay only acts in the hosted window.
 	ToggleChatOverlay key.Binding
 	SwapSides         key.Binding
@@ -88,6 +90,11 @@ func defaultKeyMap() keyMap {
 		// l opens the channel language/audience filter menu (ticket 01).
 		ChannelFilter: key.NewBinding(
 			key.WithKeys("l"),
+		),
+		// p switches the list to the next platform (Twitch, Kick). What plays and
+		// the chat stay.
+		SwitchPlatform: key.NewBinding(
+			key.WithKeys("p"),
 		),
 		Categories: key.NewBinding(
 			key.WithKeys("ctrl+r"),
@@ -244,7 +251,7 @@ func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
 	if m.listVisible() || m.list.prefs.menuOpen || (m.chat.composing && m.chatColumnVisible()) {
 		return false
 	}
-	if key.Matches(msg, m.keys.Filter, m.keys.Search, m.keys.Favorite, m.keys.ChannelFilter) ||
+	if key.Matches(msg, m.keys.Filter, m.keys.Search, m.keys.Favorite, m.keys.ChannelFilter, m.keys.SwitchPlatform) ||
 		key.Matches(msg, m.keys.Retry) && !m.canRetryPlayer() {
 		return true
 	}
