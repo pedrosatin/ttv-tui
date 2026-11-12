@@ -606,6 +606,18 @@ func runPlayerHelper() {
 		fmt.Fprintln(os.Stderr, "[cli][info] Available streams: audio_only, 160p, 360p, 480p, 720p60, 1080p60")
 		fmt.Fprintln(os.Stderr, "error: Unable to open URL: https://gql.twitch.tv/gql (HTTPSConnectionPool(host='gql.twitch.tv', port=443): Max retries exceeded with url: /gql (Caused by NewConnectionError(\"Failed to establish a new connection: [Errno 111] Connection refused\")))")
 		os.Exit(1)
+	case "plugin-error":
+		fmt.Fprintln(os.Stderr, "[cli][info] Found matching plugin twitch for URL https://www.twitch.tv/"+login)
+		fmt.Fprintln(os.Stderr, "error: Unable to validate response text: ValidationError(dict): Key 'data' not found in <dict>")
+		os.Exit(1)
+	case "python-traceback":
+		fmt.Fprintln(os.Stderr, "Traceback (most recent call last):")
+		fmt.Fprintln(os.Stderr, "  File \"streamlink/plugins/twitch.py\", line 12, in <module>")
+		fmt.Fprintln(os.Stderr, "ModuleNotFoundError: No module named 'streamlink.compat'")
+		os.Exit(1)
+	case "exit-silent":
+		// Exits with an error status and says nothing that explains why.
+		os.Exit(3)
 	case "timeout-error":
 		fmt.Fprintln(os.Stderr, "error: Unable to open URL: https://gql.twitch.tv/gql (HTTPSConnectionPool(host='gql.twitch.tv', port=443): Max retries exceeded with url: /gql (Caused by ConnectTimeoutError(<HTTPSConnection(host='gql.twitch.tv', port=443)>, 'Connection to gql.twitch.tv timed out. (connect timeout=20.0)')))")
 		os.Exit(1)

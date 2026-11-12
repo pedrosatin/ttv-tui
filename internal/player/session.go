@@ -348,6 +348,14 @@ func (s *Session) waitProcess() {
 	already := s.state == StateEnded || s.state == StateError || s.stopped
 	last := s.lastLine
 	classified := s.failClass != FailureNone
+	var exitErr *exec.ExitError
+	if !already && !classified && s.failHint == FailureNone && s.state == StateStarting && errors.As(err, &exitErr) {
+		// Exiting with an error status before any stream reached the player,
+		// and no output that explains it as the channel or the network (that
+		// is checked on the last line when the failure is classified): this
+		// streamlink build failed to run.
+		s.failHint = FailureStreamlinkBroken
+	}
 	s.mu.Unlock()
 	if already {
 		s.cleanupFiles()

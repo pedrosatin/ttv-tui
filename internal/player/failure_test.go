@@ -24,6 +24,13 @@ func TestClassifyLine(t *testing.T) {
 		{"error: Failed to start player: mpv (Player executable not found)", FailureMPVMissing},
 		{"error: No plugin can handle URL: https://example.com/unsupported", FailureNoPlugin},
 		{"bash: streamlink: command not found", FailureStreamlinkMissing},
+		{"error: Unable to validate response text: ValidationError(dict): Key 'data' not found in <dict>", FailureStreamlinkBroken},
+		{"streamlink.exceptions.PluginError: Unable to parse manifest", FailureStreamlinkBroken},
+		{"ModuleNotFoundError: No module named 'streamlink.compat'", FailureStreamlinkBroken},
+		{"AppRun: error while loading shared libraries: libpython3.so: cannot open shared object file", FailureStreamlinkBroken},
+		// A plugin failure that names a network or offline cause keeps that cause.
+		{"error: Unable to validate response text: Max retries exceeded with url: /gql", FailureNetwork},
+		{"error: PluginError: No playable streams found on this URL", FailureOffline},
 		{"[cli][info] Found matching plugin twitch for URL https://www.twitch.tv/xqc", FailureNone},
 		{"", FailureNone},
 	}
@@ -31,6 +38,59 @@ func TestClassifyLine(t *testing.T) {
 		if got := ClassifyLine(c.line); got != c.want {
 			t.Errorf("ClassifyLine(%q) = %q, want %q", c.line, got, c.want)
 		}
+	}
+}
+
+// TestOnlyStreamlinkFailuresBlameTheBuild is what keeps an offline channel, a
+// dead network or a URL without a plugin from undoing a streamlink update: of
+// every failure class, only the build's own failure counts.
+func TestOnlyStreamlinkFailuresBlameTheBuild(t *testing.T) {
+	cases := map[Failure]bool{
+		FailureNone:              false,
+		FailureOffline:           false,
+		FailureNetwork:           false,
+		FailureTimeout:           false,
+		FailureStreamlinkMissing: false,
+		FailureMPVMissing:        false,
+		FailureNoPlugin:          false,
+		FailureUnknown:           false,
+		FailureStreamlinkBroken:  true,
+	}
+	for f, want := range cases {
+		if got := f.BlamesStreamlink(); got != want {
+			t.Errorf("%q.BlamesStreamlink() = %v, want %v", f, got, want)
+		}
+	}
+}
+
+// TestRealFailuresOfflineAndNetworkDoNotBlameTheBuild runs the same sessions
+// the app watches: the output of an offline channel or a broken connection must
+// come out as a class that does not blame streamlink, and the build's own
+// failures must.
+func TestRealFailuresOfflineAndNetworkDoNotBlameTheBuild(t *testing.T) {
+	cases := []struct {
+		mode  string
+		blame bool
+	}{
+		{"offline-exit0", false},
+		{"network-error", false},
+		{"error-exit-now", false},
+		{"timeout-error", false},
+		{"plugin-error", true},
+		{"exit-silent", true},
+	}
+	for _, c := range cases {
+		t.Run(c.mode, func(t *testing.T) {
+			mgr := newTestManager(t, c.mode, Options{SocketWait: 30 * time.Second})
+			gen, err := mgr.Start(testTarget("chan"))
+			if err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			ev := waitError(t, mgr, gen, 5*time.Second)
+			if got := ev.Failure.BlamesStreamlink(); got != c.blame {
+				t.Fatalf("Failure = %q (line %q): BlamesStreamlink = %v, want %v", ev.Failure, ev.LastLine, got, c.blame)
+			}
+		})
 	}
 }
 
@@ -129,7 +189,12 @@ func TestProcessFailuresAreClassified(t *testing.T) {
 		{"timeout-error", 30 * time.Second, FailureTimeout},
 		{"mpv-missing", 30 * time.Second, FailureMPVMissing},
 		{"silent-hang", 300 * time.Millisecond, FailureTimeout},
-		{"exit-error", 30 * time.Second, FailureUnknown},
+		// An error status before any stream reached the player, with nothing
+		// that blames the channel or the network, is the streamlink build's.
+		{"exit-error", 30 * time.Second, FailureStreamlinkBroken},
+		{"exit-silent", 30 * time.Second, FailureStreamlinkBroken},
+		{"plugin-error", 30 * time.Second, FailureStreamlinkBroken},
+		{"python-traceback", 30 * time.Second, FailureStreamlinkBroken},
 	}
 	for _, c := range cases {
 		t.Run(c.mode, func(t *testing.T) {

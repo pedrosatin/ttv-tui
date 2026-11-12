@@ -30,9 +30,24 @@ const (
 	FailureMPVMissing Failure = "mpv_missing"
 	// FailureNoPlugin: streamlink has no plugin capable of handling the URL.
 	FailureNoPlugin Failure = "no_plugin"
+	// FailureStreamlinkBroken: this streamlink build failed on its own, not
+	// because of the channel or the network: a plugin or Python runtime error,
+	// a binary that cannot run, or an exit with an error status before any
+	// stream reached the player. It is the only class that counts against a
+	// freshly updated managed streamlink (see BlamesStreamlink).
+	FailureStreamlinkBroken Failure = "streamlink_broken"
 	// FailureUnknown: an error without a recognized cause.
 	FailureUnknown Failure = "unknown"
 )
+
+// BlamesStreamlink reports whether f is evidence that the streamlink build in
+// use is broken. Offline channels, network and timeout failures, a URL no plugin
+// handles, missing tools and unclassified errors say nothing about the build, so
+// they never count: an update must not be undone because the channel is offline
+// or the network is down.
+func (f Failure) BlamesStreamlink() bool {
+	return f == FailureStreamlinkBroken
+}
 
 // MissingToolError reports a required executable that is not on PATH.
 type MissingToolError struct {
@@ -120,6 +135,21 @@ func ClassifyLine(line string) Failure {
 		strings.Contains(l, "proxyerror"),
 		strings.Contains(l, "sslerror"):
 		return FailureNetwork
+	case strings.Contains(l, "pluginerror"),
+		strings.Contains(l, "plugin error"),
+		strings.Contains(l, "unable to validate"),
+		strings.Contains(l, "modulenotfounderror"),
+		strings.Contains(l, "importerror"),
+		strings.Contains(l, "syntaxerror"),
+		strings.Contains(l, "attributeerror"),
+		strings.Contains(l, "typeerror"),
+		strings.Contains(l, "keyerror"),
+		strings.Contains(l, "fatal python error"),
+		strings.Contains(l, "error while loading shared libraries"),
+		strings.Contains(l, "exec format error"):
+		// Last on purpose: a plugin failure caused by the network or an
+		// offline channel is reported as such by the cases above.
+		return FailureStreamlinkBroken
 	default:
 		return FailureNone
 	}
