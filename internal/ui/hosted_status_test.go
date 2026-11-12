@@ -32,14 +32,33 @@ func TestHostedHelpDoesNotOfferTheTerminalVideo(t *testing.T) {
 
 func TestHostedNoticeExpiresOnlyIfStillShown(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.notices.status = "aviso"
-	next, _ := m.update(hostedNoticeMsg{text: "outro"})
+	m.announceHosted("aviso")
+	next, _ := m.update(hostedNoticeMsg{gen: m.notices.gen + 1})
 	if next.(Model).notices.status != "aviso" {
 		t.Fatal("expirou um aviso que já era outro")
 	}
-	next, _ = m.update(hostedNoticeMsg{text: "aviso"})
+	next, _ = m.update(hostedNoticeMsg{gen: m.notices.gen})
 	if next.(Model).notices.status != "" {
 		t.Fatal("o aviso devia sair e devolver o estado da reprodução à barra")
+	}
+}
+
+func TestHostedNoticeSameNoticeSequenceKeepsSecond(t *testing.T) {
+	m := hostedModel(t, 212, 49, true)
+	m.announceHosted("aviso")
+	timer1 := hostedNoticeMsg{gen: m.notices.gen}
+
+	m.announceHosted("aviso")
+	timer2 := hostedNoticeMsg{gen: m.notices.gen}
+
+	next, _ := m.update(timer1)
+	if next.(Model).notices.status != "aviso" {
+		t.Fatalf("o primeiro timer apagou o segundo aviso: status=%q", next.(Model).notices.status)
+	}
+
+	next2, _ := next.(Model).update(timer2)
+	if next2.(Model).notices.status != "" {
+		t.Fatalf("o segundo timer não apagou o aviso: status=%q", next2.(Model).notices.status)
 	}
 }
 

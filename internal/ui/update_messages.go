@@ -12,7 +12,7 @@ import (
 // One function per message that update dispatches.
 
 func (m Model) applyHostedNotice(msg hostedNoticeMsg) (tea.Model, tea.Cmd) {
-	if m.notices.status == msg.text {
+	if msg.gen == m.notices.gen {
 		m.clearStatusNotice()
 	}
 	return m, nil
