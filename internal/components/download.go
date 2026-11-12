@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +58,11 @@ type Downloader struct {
 	LockStaleAge    time.Duration
 	LockHeartbeat   time.Duration
 	OnLockAcquired  func()
+	// Now is the clock for update checks; nil uses time.Now.
+	Now func() time.Time
+	// UseStaleAge and UseHeartbeat tune the use markers; zero uses the defaults.
+	UseStaleAge  time.Duration
+	UseHeartbeat time.Duration
 }
 
 func (d *Downloader) lockStaleAge() time.Duration {
@@ -292,17 +298,55 @@ func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress Progress
 	// Clean up stale temporary directories left by crashed processes.
 	cleanStaleTemps(baseDir)
 
+	rel, err := d.fetchLatest(ctx, repo)
+	if err != nil {
+		return Result{}, err
+	}
+	// Nothing else is installed, so even a version once marked bad is the only
+	// option; forget the mark so the resolver accepts the fresh install.
+	if err := d.updateState(ctx, func(st *UpdateState) (bool, error) {
+		if !st.IsBad(rel.Version) {
+			return false, nil
+		}
+		st.Bad = slices.DeleteFunc(st.Bad, func(v string) bool { return v == rel.Version })
+		return true, nil
+	}); err != nil {
+		return Result{}, err
+	}
+
+	if err := d.installRelease(ctx, baseDir, rel, progress); err != nil {
+		return Result{}, err
+	}
+	res, ok := resolver.findManagedStreamlink()
+	if !ok {
+		return Result{}, fmt.Errorf("managed streamlink binary not found in %s after install", StreamlinkVersionDir(d.DataDir, rel.Version))
+	}
+	return res, nil
+}
+
+// latestRelease is the newest release of a platform build and the asset to
+// install, with the SHA-256 GitHub publishes for it.
+type latestRelease struct {
+	Version string
+	Asset   *gitHubAsset
+	Name    string
+	Hash    string
+}
+
+// fetchLatest reads the repository's latest release from the GitHub API and
+// picks the asset for the target platform. It downloads no asset.
+func (d *Downloader) fetchLatest(ctx context.Context, repo string) (latestRelease, error) {
 	apiURL := d.APIBaseURL
 	if apiURL == "" {
 		apiURL = fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
 	}
 	if _, err := d.validateURL(apiURL); err != nil {
-		return Result{}, fmt.Errorf("validate API URL: %w", err)
+		return latestRelease{}, fmt.Errorf("validate API URL: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
-		return Result{}, fmt.Errorf("create API request: %w", err)
+		return latestRelease{}, fmt.Errorf("create API request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "ttv-tui")
@@ -310,58 +354,67 @@ func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress Progress
 	client := d.httpClient()
 	resp, err := client.Do(req)
 	if err != nil {
-		return Result{}, fmt.Errorf("fetch latest release: %w", err)
+		return latestRelease{}, fmt.Errorf("fetch latest release: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return Result{}, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+		return latestRelease{}, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
 
 	var rel gitHubRelease
 	lr := io.LimitReader(resp.Body, maxReleaseJSONBytes)
 	if err := json.NewDecoder(lr).Decode(&rel); err != nil {
-		return Result{}, fmt.Errorf("decode release JSON: %w", err)
+		return latestRelease{}, fmt.Errorf("decode release JSON: %w", err)
 	}
 
 	if err := validateTagName(rel.TagName); err != nil {
-		return Result{}, fmt.Errorf("invalid release tag: %w", err)
+		return latestRelease{}, fmt.Errorf("invalid release tag: %w", err)
 	}
 
 	asset, err := d.matchAsset(rel.Assets)
 	if err != nil {
-		return Result{}, fmt.Errorf("match asset: %w", err)
+		return latestRelease{}, fmt.Errorf("match asset: %w", err)
 	}
 
 	assetName := filepath.Base(asset.Name)
 	if assetName == "" || assetName == "." || assetName == ".." || strings.Contains(assetName, "..") {
-		return Result{}, fmt.Errorf("invalid asset filename %q", asset.Name)
+		return latestRelease{}, fmt.Errorf("invalid asset filename %q", asset.Name)
 	}
 
 	expectedDigest := strings.TrimSpace(asset.Digest)
 	if !strings.HasPrefix(strings.ToLower(expectedDigest), "sha256:") {
-		return Result{}, fmt.Errorf("asset %q has no valid sha256 digest in GitHub API (got %q)", asset.Name, expectedDigest)
+		return latestRelease{}, fmt.Errorf("asset %q has no valid sha256 digest in GitHub API (got %q)", asset.Name, expectedDigest)
 	}
-	expectedHash := strings.ToLower(strings.TrimPrefix(expectedDigest, "sha256:"))
+	return latestRelease{
+		Version: rel.TagName,
+		Asset:   asset,
+		Name:    assetName,
+		Hash:    strings.ToLower(strings.TrimPrefix(expectedDigest, "sha256:")),
+	}, nil
+}
 
-	version := rel.TagName
-
+// installRelease downloads the release asset, checks its SHA-256, and promotes
+// a complete installation to the version directory with one rename. The caller
+// holds the download lock. A failed check leaves nothing behind, and an
+// existing complete installation of the same version is kept.
+func (d *Downloader) installRelease(ctx context.Context, baseDir string, rel latestRelease, progress ProgressFunc) error {
 	// Download into a temporary directory inside baseDir.
 	tempDir, err := os.MkdirTemp(baseDir, ".download-*")
 	if err != nil {
-		return Result{}, fmt.Errorf("create temp download dir: %w", err)
+		return fmt.Errorf("create temp download dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	tempFile := filepath.Join(tempDir, assetName)
-	if err := d.downloadAndVerify(ctx, asset.BrowserDownloadURL, tempFile, asset.Size, expectedHash, progress); err != nil {
-		return Result{}, fmt.Errorf("download asset: %w", err)
+	tempFile := filepath.Join(tempDir, rel.Name)
+	if err := d.downloadAndVerify(ctx, rel.Asset.BrowserDownloadURL, tempFile, rel.Asset.Size, rel.Hash, progress); err != nil {
+		return fmt.Errorf("download asset: %w", err)
 	}
 
 	// Prepare complete installation in a separate staging directory inside baseDir.
 	stagingDir, err := os.MkdirTemp(baseDir, ".install-*")
 	if err != nil {
-		return Result{}, fmt.Errorf("create staging directory: %w", err)
+		return fmt.Errorf("create staging directory: %w", err)
 	}
 	// stagingDir is deleted if not promoted.
 	staged := false
@@ -373,7 +426,7 @@ func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress Progress
 
 	if d.GOOS == "windows" {
 		if _, err := installWindowsZip(tempFile, stagingDir); err != nil {
-			return Result{}, fmt.Errorf("extract streamlink archive: %w", err)
+			return fmt.Errorf("extract streamlink archive: %w", err)
 		}
 	} else {
 		// Linux AppImage: extract via --appimage-extract
@@ -382,32 +435,26 @@ func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress Progress
 			extractFn = defaultExtractAppImage
 		}
 		if err := extractFn(ctx, tempFile, stagingDir); err != nil {
-			return Result{}, fmt.Errorf("extract appimage: %w", err)
+			return fmt.Errorf("extract appimage: %w", err)
 		}
 		if findStreamlinkBinaryInDir(stagingDir, d.GOOS) == "" {
-			return Result{}, fmt.Errorf("AppRun executable not found after extracting AppImage")
+			return fmt.Errorf("AppRun executable not found after extracting AppImage")
 		}
 	}
 
-	targetDir := StreamlinkVersionDir(d.DataDir, version)
-	existingBin := findStreamlinkBinaryInDir(targetDir, d.GOOS)
-	if existingBin != "" {
+	targetDir := StreamlinkVersionDir(d.DataDir, rel.Version)
+	if findStreamlinkBinaryInDir(targetDir, d.GOOS) != "" {
 		_ = os.RemoveAll(stagingDir)
 		staged = true
-	} else {
-		// Under the lock, remove an empty or partial target directory before promotion.
-		_ = os.RemoveAll(targetDir)
-		if err := renameDir(stagingDir, targetDir); err != nil {
-			return Result{}, fmt.Errorf("atomic rename staging to version dir %s: %w", targetDir, err)
-		}
-		staged = true
+		return nil
 	}
-
-	res, ok := resolver.findManagedStreamlink()
-	if !ok {
-		return Result{}, fmt.Errorf("managed streamlink binary not found in %s after install", targetDir)
+	// Under the lock, remove an empty or partial target directory before promotion.
+	_ = os.RemoveAll(targetDir)
+	if err := renameDir(stagingDir, targetDir); err != nil {
+		return fmt.Errorf("atomic rename staging to version dir %s: %w", targetDir, err)
 	}
-	return res, nil
+	staged = true
+	return nil
 }
 
 func renameDir(src, dst string) error {

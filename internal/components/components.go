@@ -130,22 +130,26 @@ func (r *Resolver) ResolveStreamlink(configPath string) (Result, error) {
 	return Result{}, ErrNotFound
 }
 
-// findManagedStreamlink looks for installed streamlink versions in the data directory.
-func (r *Resolver) findManagedStreamlink() (Result, bool) {
+// managedInstall is one installed streamlink version with its executable.
+type managedInstall struct {
+	Version string
+	Bin     string
+}
+
+// installedStreamlinks lists the usable managed versions, newest first. A
+// version marked bad is skipped, and so is a directory without an executable.
+func (r *Resolver) installedStreamlinks(bad UpdateState) []managedInstall {
 	baseDir := StreamlinkBaseDir(r.DataDir)
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
-		return Result{}, false
+		return nil
 	}
 
 	var versions []string
 	for _, entry := range entries {
-		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && !bad.IsBad(entry.Name()) {
 			versions = append(versions, entry.Name())
 		}
-	}
-	if len(versions) == 0 {
-		return Result{}, false
 	}
 
 	// Sort versions descending (newest first) numerically by components.
@@ -153,30 +157,54 @@ func (r *Resolver) findManagedStreamlink() (Result, bool) {
 		return compareVersions(versions[i], versions[j]) > 0
 	})
 
+	var out []managedInstall
 	for _, v := range versions {
-		vDir := filepath.Join(baseDir, v)
-		binPath := findStreamlinkBinaryInDir(vDir, r.GOOS)
-		if binPath != "" {
-			var env []string
-			if r.GOOS == "linux" && isAppImage(binPath) {
-				hasFuse := r.HasFUSE
-				if hasFuse == nil {
-					hasFuse = DefaultHasFUSE
-				}
-				if !hasFuse() {
-					env = append(env, "APPIMAGE_EXTRACT_AND_RUN=1")
-				}
-			}
-			return Result{
-				Path:    binPath,
-				Version: v,
-				Origin:  OriginManaged,
-				Env:     env,
-			}, true
+		if bin := findStreamlinkBinaryInDir(filepath.Join(baseDir, v), r.GOOS); bin != "" {
+			out = append(out, managedInstall{Version: v, Bin: bin})
 		}
 	}
+	return out
+}
 
-	return Result{}, false
+// ManagedVersions reports the newest managed version, the one in use, and the
+// previous one kept to go back to; either is empty when absent. It only reads.
+func (r *Resolver) ManagedVersions() (current, previous string) {
+	installed := r.installedStreamlinks(LoadUpdateState(r.DataDir))
+	if len(installed) > 0 {
+		current = installed[0].Version
+	}
+	if len(installed) > 1 {
+		previous = installed[1].Version
+	}
+	return current, previous
+}
+
+// findManagedStreamlink looks for installed streamlink versions in the data directory.
+func (r *Resolver) findManagedStreamlink() (Result, bool) {
+	installed := r.installedStreamlinks(LoadUpdateState(r.DataDir))
+	if len(installed) == 0 {
+		return Result{}, false
+	}
+	return r.managedResult(installed[0]), true
+}
+
+func (r *Resolver) managedResult(m managedInstall) Result {
+	var env []string
+	if r.GOOS == "linux" && isAppImage(m.Bin) {
+		hasFuse := r.HasFUSE
+		if hasFuse == nil {
+			hasFuse = DefaultHasFUSE
+		}
+		if !hasFuse() {
+			env = append(env, "APPIMAGE_EXTRACT_AND_RUN=1")
+		}
+	}
+	return Result{
+		Path:    m.Bin,
+		Version: m.Version,
+		Origin:  OriginManaged,
+		Env:     env,
+	}
 }
 
 // compareVersions compares two version strings component-wise.
