@@ -264,12 +264,14 @@ func (m *Model) resizeHostedChat(delta int) tea.Cmd {
 }
 
 // hostedNoticeMsg ends a layout notice, unless another one replaced it.
-type hostedNoticeMsg struct{ text string }
+type hostedNoticeMsg struct{ gen uint64 }
 
 // announceHosted shows a layout notice for a moment and saves the layout.
 func (m *Model) announceHosted(text string) tea.Cmd {
+	m.notices.gen++
+	gen := m.notices.gen
 	m.notices.status, m.notices.statusWarns = text, false
-	expire := tea.Tick(hostedNoticeDelay, func(time.Time) tea.Msg { return hostedNoticeMsg{text: text} })
+	expire := tea.Tick(hostedNoticeDelay, func(time.Time) tea.Msg { return hostedNoticeMsg{gen: gen} })
 	return tea.Batch(m.scheduleHostedSave(), expire)
 }
 

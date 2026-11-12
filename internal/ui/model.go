@@ -349,6 +349,7 @@ type noticeState struct {
 	corrupt     string
 	status      string
 	statusWarns bool
+	gen         uint64
 	// ctrlC is the transient "To quit use Ctrl+Q" status after Ctrl+C. It
 	// outranks filter/search prompts so the hint stays visible in every mode.
 	ctrlC string
@@ -587,11 +588,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // warnStatus leads the bar with a warning until the next key.
 func (m *Model) warnStatus(notice string) {
+	m.notices.gen++
 	m.notices.status = notice
 	m.notices.statusWarns = true
 }
 
 func (m *Model) clearStatusNotice() {
+	m.notices.gen++
 	m.notices.status = ""
 	m.notices.statusWarns = false
 }
