@@ -17,7 +17,7 @@ O suporte a múltiplas plataformas (Twitch, Kick, YouTube e URLs avulsas) requer
    - O catálogo é decomposto em capacidades opcionais:
      - `Browser`: navegação de categorias, listagem de canais por categoria e busca de categorias (`SearchCategories`).
      - `Searcher`: busca de canais ao vivo (`Search`).
-     - `Resolver`: resolução de status de transmissão para canais salvos (`ChannelsByLogins`). O método mantém o nome histórico `ChannelsByLogins` provisoriamente para evitar retrabalho na UI atual; a renomeação para identificador neutro está planejada para a migração da lista.
+     - `Resolver`: resolução de status de transmissão para canais salvos (`ChannelsByIDs`). Renomeado de `ChannelsByLogins` para identificador neutro na migração da lista, já que em plataformas como YouTube o identificador não é um login. Na Twitch, `ChannelsByIDs` delega para a resolução existente e `ChannelsByLogins` é mantido para compatibilidade.
      - `catalog.Source`: preservado como a composição das três capacidades (`Browser`, `Searcher`, `Resolver`) para compatibilidade com a Twitch e a UI existente.
    - Em `internal/twitch/source.go`, os tipos correspondentes são expostos como apelidos de tipo (`type Channel = catalog.Channel`, etc.). Esses apelidos são provisórios e sustentam a compatibilidade até a migração da UI na migração da lista e do chat na migração do chat.
 
