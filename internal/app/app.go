@@ -132,6 +132,7 @@ func Run(opts Options) error {
 
 	dataDir, _ := config.DataDir()
 	playback := newPlaybackBridge(playerMgr, cfg.StreamlinkPath, dataDir)
+	playback.setContext(ctx)
 	uiOpts := []ui.Option{
 		hostOption,
 		ui.WithSource(source),

@@ -328,6 +328,7 @@ func (m *Model) setPlayerState(msg PlayerStatusMsg) {
 func (m *Model) setPlayerFailure(msg PlayerStatusMsg) {
 	if msg.State == PlayerStateError {
 		m.player.failure = msg.Failure
+		m.player.downloadFailed = msg.DownloadFailed
 		// A classified offline failure is fresh evidence for this channel:
 		// the listing may still show stale viewers from before play.
 		if msg.Failure == PlayerFailureOffline {
@@ -336,6 +337,7 @@ func (m *Model) setPlayerFailure(msg PlayerStatusMsg) {
 		}
 	} else {
 		m.player.failure = PlayerFailureNone
+		m.player.downloadFailed = false
 	}
 }
 
@@ -354,11 +356,14 @@ func (m *Model) warnPlayerDegraded(msg PlayerStatusMsg) {
 
 func (m Model) applyComponentProgress(msg ComponentProgressMsg) (tea.Model, tea.Cmd) {
 	if msg.Done {
-		m.clearStatusNotice()
+		if m.notices.componentProgress {
+			m.clearStatusNotice()
+		}
 		return m, nil
 	}
 	m.notices.gen++
 	m.notices.status = fmt.Sprintf(m.t("components.downloading_progress"), msg.Component, msg.Percent)
 	m.notices.statusWarns = false
+	m.notices.componentProgress = true
 	return m, nil
 }

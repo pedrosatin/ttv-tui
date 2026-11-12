@@ -255,6 +255,11 @@ var allowedExceptions = map[string]bool{
 	"unknown":            true,
 	"dev":                true,
 
+	// OS identifiers
+	"windows": true,
+	"darwin":  true,
+	"linux":   true,
+
 	// Raised when the embedded catalogs themselves fail to load: no catalog
 	// exists to localize it.
 	"initialize i18n catalog: %w": true,

@@ -64,7 +64,13 @@ func (m Model) statusLead() statusLead {
 func (m Model) blockingStatusLead() (statusLead, bool) {
 	switch {
 	case m.player.state == PlayerStateError:
-		return statusLead{primary: m.playerFailureText(), tone: toneError, detail: m.playerErrorDetail()}, true
+		lead := statusLead{primary: m.playerFailureText(), tone: toneError, detail: m.playerErrorDetail()}
+		if m.player.downloadFailed {
+			if hint := m.manualInstallHint(); hint != "" {
+				lead.context = append(lead.context, hint)
+			}
+		}
+		return lead, true
 	case m.notices.ctrlC != "":
 		// Ctrl+C hint outranks filter/search prompts so every mode shows it.
 		return statusLead{primary: m.notices.ctrlC}, true

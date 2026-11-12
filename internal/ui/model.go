@@ -293,6 +293,7 @@ type playbackState struct {
 	// no keys.
 	keysWarnedGen        uint64
 	containmentWarnedGen uint64
+	downloadFailed       bool
 	// stopAfterStart is a Ctrl+X pressed during the switch. The Start reply
 	// it outran ends as stopped, and its playback is stopped again.
 	stopAfterStart bool
@@ -347,10 +348,11 @@ type hostedState struct {
 
 // noticeState holds the status bar notices.
 type noticeState struct {
-	auth        string
-	corrupt     string
-	status      string
-	statusWarns bool
+	auth              string
+	corrupt           string
+	status            string
+	statusWarns       bool
+	componentProgress bool
 	// gen rises on every status write; a notice timer clears only the
 	// instance that scheduled it.
 	gen uint64
@@ -598,12 +600,14 @@ func (m *Model) warnStatus(notice string) {
 	m.notices.gen++
 	m.notices.status = notice
 	m.notices.statusWarns = true
+	m.notices.componentProgress = false
 }
 
 func (m *Model) clearStatusNotice() {
 	m.notices.gen++
 	m.notices.status = ""
 	m.notices.statusWarns = false
+	m.notices.componentProgress = false
 }
 
 // clearVolumeLimitNotice drops a limit notice the player has outdated. A change

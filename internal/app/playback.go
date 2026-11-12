@@ -24,6 +24,7 @@ type playbackBridge struct {
 	dataDir       string
 	sender        func(tea.Msg)
 	down          *components.Downloader
+	ctx           context.Context
 
 	mu          sync.Mutex
 	resolved    components.Result
@@ -41,6 +42,12 @@ func newPlaybackBridge(mgr *player.Manager, opts ...string) *playbackBridge {
 	return b
 }
 
+func (b *playbackBridge) setContext(ctx context.Context) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.ctx = ctx
+}
+
 func (b *playbackBridge) setSender(send func(tea.Msg)) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -55,6 +62,11 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 	}
 	cfgPath := b.cfgStreamlink
 	dataDir := b.dataDir
+	if ctx == nil || ctx == context.Background() {
+		if b.ctx != nil {
+			ctx = b.ctx
+		}
+	}
 	b.mu.Unlock()
 
 	resolver := components.NewResolver()
@@ -74,6 +86,10 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 
 	if !errors.Is(err, components.ErrNotFound) {
 		return err
+	}
+
+	if resolver.GOOS == "darwin" {
+		return &player.MissingToolError{Tool: "streamlink"}
 	}
 
 	downloader := b.down
@@ -155,15 +171,29 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 	}
 	identity := pTarget.Identity()
 	return func() tea.Msg {
-		if err := b.ensureStreamlink(context.Background()); err != nil {
+		b.mu.Lock()
+		appCtx := b.ctx
+		if appCtx == nil {
+			appCtx = context.Background()
+		}
+		b.mu.Unlock()
+
+		if err := b.ensureStreamlink(appCtx); err != nil {
 			gen := mgr.Generation()
+			lastLine := err.Error()
+			var missing *player.MissingToolError
+			isMissing := errors.As(err, &missing)
+			if isMissing {
+				lastLine = missing.Error()
+			}
 			return ui.PlayerStatusMsg{
-				Generation: gen,
-				State:      ui.PlayerStateError,
-				Login:      login,
-				LastLine:   err.Error(),
-				Failure:    ui.PlayerFailureStreamlinkMissing,
-				Selection:  selection,
+				Generation:     gen,
+				State:          ui.PlayerStateError,
+				Login:          identity,
+				LastLine:       lastLine,
+				Failure:        ui.PlayerFailureStreamlinkMissing,
+				DownloadFailed: !isMissing,
+				Selection:      selection,
 			}
 		}
 

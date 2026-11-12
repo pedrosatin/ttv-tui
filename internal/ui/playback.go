@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -67,6 +68,8 @@ type PlayerStatusMsg struct {
 	InputConfFailed bool
 	// ContainmentDegraded means Windows refused Job Object containment.
 	ContainmentDegraded bool
+	// DownloadFailed marks an error that occurred while attempting to download a managed component.
+	DownloadFailed bool
 }
 
 // ComponentProgressMsg reports progress of an automatic background download
@@ -273,4 +276,16 @@ func clampPlayerVolume(v int) int {
 		return 100
 	}
 	return v
+}
+
+// manualInstallHint returns platform-specific instructions for installing streamlink manually.
+func (m Model) manualInstallHint() string {
+	switch runtime.GOOS {
+	case "windows":
+		return m.t("components.manual_install.windows")
+	case "darwin":
+		return m.t("components.manual_install.darwin")
+	default:
+		return m.t("components.manual_install.linux")
+	}
 }
