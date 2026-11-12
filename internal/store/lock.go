@@ -1,16 +1,11 @@
 package store
 
 import (
-	"errors"
 	"fmt"
-	"math/rand/v2"
-	"os"
-	"path/filepath"
 	"sync"
-	"time"
-)
 
-const staleLockAge = time.Minute
+	"github.com/pedrosatin/ttv-tui/internal/filelock"
+)
 
 // Serialize local file transactions so goroutines do not exhaust the bounded
 // cross-process lock retries competing with their own process.
@@ -33,59 +28,9 @@ func lockState(path string) (func() error, error) {
 }
 
 func lockStateFile(path string) (func() error, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, fmt.Errorf("create state dir: %w", err)
+	release, err := filelock.Lock(path)
+	if err != nil {
+		return nil, fmt.Errorf("acquire state lock: %w", err)
 	}
-	lockPath := path + ".lock"
-	for attempt := 0; attempt < 10; attempt++ {
-		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			info, statErr := f.Stat()
-			closeErr := f.Close()
-			if err := errors.Join(statErr, closeErr); err != nil {
-				return nil, errors.Join(fmt.Errorf("close state lock: %w", err), os.Remove(lockPath))
-			}
-			return func() error {
-				current, err := os.Stat(lockPath)
-				if errors.Is(err, os.ErrNotExist) {
-					return nil
-				}
-				if err != nil {
-					return fmt.Errorf("stat state lock: %w", err)
-				}
-				// Do not remove a successor's lock after this owner's lease expired.
-				if !os.SameFile(info, current) {
-					return nil
-				}
-				if err := os.Remove(lockPath); err != nil {
-					return fmt.Errorf("release state lock: %w", err)
-				}
-				return nil
-			}, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("create state lock: %w", err)
-		}
-		info, err := os.Stat(lockPath)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("stat state lock: %w", err)
-		}
-		if err == nil && time.Since(info.ModTime()) > staleLockAge {
-			// Recheck identity so competing stale-lock recovery does not knowingly
-			// remove a different owner's newly acquired lock.
-			current, statErr := os.Stat(lockPath)
-			if statErr == nil && os.SameFile(info, current) {
-				if err := os.Remove(lockPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-					return nil, fmt.Errorf("remove stale state lock: %w", err)
-				}
-			}
-		}
-		if attempt < 9 {
-			// Nine waits total 450-495ms (excluding I/O and scheduling), allowing
-			// fsync under CI/race load. Saves run in a Tea command, off the key
-			// handler. Jitter spreads competing processes; O_EXCL stays exclusive.
-			time.Sleep(time.Duration(10+attempt*10+rand.IntN(6)) * time.Millisecond)
-		}
-	}
-	return nil, fmt.Errorf("acquire state lock %s: %w", lockPath, os.ErrExist)
+	return release, nil
 }
