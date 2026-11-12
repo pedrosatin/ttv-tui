@@ -3,6 +3,8 @@ package twitch
 import (
 	"context"
 	"strings"
+
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 // Category represents a live Twitch category (game or topic) with a stable ID.
@@ -51,14 +53,28 @@ type Channel struct {
 // PlayerLabel returns the qualified session label for playback: platform:login
 // when platform is not Twitch and non-empty, otherwise login.
 func (c Channel) PlayerLabel() string {
-	plat := strings.ToLower(strings.TrimSpace(c.Platform))
-	if plat != "" && plat != "twitch" {
+	plat := platform.Normalize(c.Platform)
+	if plat != platform.Twitch {
 		if c.Login != "" {
 			return plat + ":" + c.Login
 		}
 		return plat
 	}
 	return c.Login
+}
+
+// StableID returns the stable channel identifier within its platform
+// (the login/slug that forms the PlayerLabel).
+func (c Channel) StableID() string {
+	if c.Login != "" {
+		return c.Login
+	}
+	plat := platform.Normalize(c.Platform)
+	prefix := plat + ":"
+	if strings.HasPrefix(strings.ToLower(c.ID), prefix) {
+		return c.ID[len(prefix):]
+	}
+	return c.ID
 }
 
 // NormalizeLanguage trims and lowercases a Twitch stream language code
