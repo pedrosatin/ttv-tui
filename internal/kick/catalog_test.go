@@ -179,6 +179,31 @@ func TestCategories_AnswerWithoutThePageNumber(t *testing.T) {
 	}
 }
 
+// A renamed field leaves rows the parser cannot read. An answer with rows and
+// none readable is a broken contract, not an empty listing: the list must say
+// "unexpected response", not "no categories".
+func TestCatalog_RenamedFieldIsAContractError(t *testing.T) {
+	s := newCatalogServer(t, map[string]func(http.ResponseWriter){
+		categoriesPath:     body([]byte(`{"current_page":1,"next_page_url":null,"data":[{"id":7,"name":"Chess","viewer_total":2},{"id":8,"name":"Slots","viewer_total":1}]}`)),
+		channelsPath:       body([]byte(`{"data":{"livestreams":[{"title":"t","viewer_count":9,"streamer":{"slug":"gaules"}}],"pagination":{"next_cursor":""}}}`)),
+		channelSearchPath:  body([]byte(`{"data":[{"channel_slug":"gaules","is_live":true}]}`)),
+		categorySearchPath: body([]byte(`{"data":[{"category_id":7,"title":"Chess"}]}`)),
+	})
+	ctx := context.Background()
+	if page, err := s.Categories(ctx, catalog.PageRequest{}); catalog.KindOf(err) != catalog.Contrato {
+		t.Errorf("Categories = %+v, %v; want Contrato", page, err)
+	}
+	if page, err := s.Channels(ctx, "1", catalog.PageRequest{}); catalog.KindOf(err) != catalog.Contrato {
+		t.Errorf("Channels = %+v, %v; want Contrato", page, err)
+	}
+	if page, err := s.Search(ctx, "gaules"); catalog.KindOf(err) != catalog.Contrato {
+		t.Errorf("Search = %+v, %v; want Contrato", page, err)
+	}
+	if cats, err := s.SearchCategories(ctx, "chess"); catalog.KindOf(err) != catalog.Contrato {
+		t.Errorf("SearchCategories = %+v, %v; want Contrato", cats, err)
+	}
+}
+
 func TestCategories_InvalidCursorAsksNothing(t *testing.T) {
 	s := newCatalogServer(t, nil)
 	for _, cursor := range []string{"abc", "0", "-1"} {

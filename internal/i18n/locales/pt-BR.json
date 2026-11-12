@@ -10,7 +10,6 @@
   "status.loading": "Carregando categorias...",
   "status.quit_hint": "Ctrl+Q sair",
   "status.ctrl_c_hint": "Para sair use Ctrl+Q",
-  "status.nav_hint": "↑/↓ ou j/k mover · Enter selecionar · f favoritar · / filtrar · l idioma/audiência · p plataforma · Ctrl+F buscar · Ctrl+R categorias · r tentar novamente",
   "categories.title": "Categorias ao vivo",
   "categories.loading": "Carregando categorias ao vivo...",
   "categories.loading_more": "Carregando mais categorias...",

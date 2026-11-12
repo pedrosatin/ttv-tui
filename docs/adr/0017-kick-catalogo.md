@@ -52,7 +52,8 @@ Nenhuma dessas rotas tem contrato, e os três hosts ficam atrás do Cloudflare, 
 
 ## Consequências
 
-- O catálogo da Kick depende de três hosts e de quatro rotas sem contrato. Se uma mudar, a parte dela falha com "Resposta inesperada da API da Kick" e as outras continuam; a Twitch não é afetada. `TTV_KICK_LIVE_CATALOG=1 go test ./internal/kick -run TestLive_Catalog -v` confere as quatro contra a Kick real e fica fora da suíte normal.
+- O catálogo da Kick depende de três hosts e de quatro rotas sem contrato. Se uma mudar (inclusive um campo renomeado, que deixa a resposta sem nenhuma linha legível), a parte dela falha com "Resposta inesperada da API da Kick" e as outras continuam; a Twitch não é afetada. `TTV_KICK_LIVE_CATALOG=1 go test ./internal/kick -run TestLive_Catalog -v` confere as quatro contra a Kick real e fica fora da suíte normal.
+- Depois de um `403`, descer até o fim da lista não pede a página de novo: só o `r` tenta, para o app não insistir contra a barreira a cada tecla.
 - O `403` real do Cloudflare não apareceu durante o desenvolvimento. O tratamento está coberto por testes com um servidor que responde `403`, não por um bloqueio de verdade. Resolver o desafio do Cloudflare com um navegador fica para outro trabalho.
 - A ordem das categorias muda entre uma página e a seguinte, porque a contagem é ao vivo. A UI descarta as repetidas; uma categoria pode faltar até o próximo recarregamento.
 - A plataforma da lista não é gravada: o app sempre abre na Twitch.

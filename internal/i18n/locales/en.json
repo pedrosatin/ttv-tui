@@ -10,7 +10,6 @@
   "status.loading": "Loading categories...",
   "status.quit_hint": "Ctrl+Q quit",
   "status.ctrl_c_hint": "To quit use Ctrl+Q",
-  "status.nav_hint": "↑/↓ or j/k move · Enter select · f favorite · / filter · l language/audience · p platform · Ctrl+F search · Ctrl+R categories · r retry",
   "categories.title": "Live Categories",
   "categories.loading": "Loading live categories...",
   "categories.loading_more": "Loading more categories...",

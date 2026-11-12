@@ -136,16 +136,23 @@ func parseCategories(requested int, body []byte) (catalog.Page[catalog.Category]
 		return out, nil
 	}
 	watched := true
+	readable := 0
 	for _, row := range *env.Data {
 		name := strings.TrimSpace(row.Name)
 		if row.ID <= 0 || name == "" {
 			continue
+		}
+		if row.Viewers != nil {
+			readable++
 		}
 		if row.Viewers == nil || *row.Viewers <= 0 {
 			watched = false
 			continue
 		}
 		out.Items = append(out.Items, catalog.Category{ID: strconv.FormatInt(row.ID, 10), Name: name, Viewers: row.Viewers})
+	}
+	if err := unreadable(op, len(*env.Data), readable); err != nil {
+		return catalog.Page[catalog.Category]{}, err
 	}
 	more := env.NextPageURL != nil && strings.TrimSpace(*env.NextPageURL) != ""
 	if more && watched && len(out.Items) > 0 && requested < maxCategoryPages {
@@ -211,6 +218,9 @@ func parseChannels(body []byte) (catalog.Page[catalog.Channel], error) {
 		ch.Language = catalog.LanguagePtr(row.Language)
 		out.Items = append(out.Items, ch)
 	}
+	if err := unreadable(op, len(*env.Data.Livestreams), len(out.Items)); err != nil {
+		return catalog.Page[catalog.Channel]{}, err
+	}
 	if p := env.Data.Pagination; p != nil && strings.TrimSpace(p.NextCursor) != "" && len(out.Items) > 0 {
 		out.Cursor = strings.TrimSpace(p.NextCursor)
 		out.HasMore = true
@@ -258,6 +268,9 @@ func parseChannelSearch(query string, body []byte) (catalog.Page[catalog.Channel
 		}
 		items = append(items, ch)
 	}
+	if err := unreadable(op, len(*env.Data), len(items)); err != nil {
+		return catalog.Page[catalog.Channel]{}, err
+	}
 	return catalog.Page[catalog.Channel]{Items: catalog.PreferSearchChannels(query, items)}, nil
 }
 
@@ -293,7 +306,20 @@ func parseCategorySearch(query string, body []byte) ([]catalog.Category, error) 
 		}
 		items = append(items, catalog.Category{ID: strconv.FormatInt(row.ID, 10), Name: name, Viewers: row.ViewerCount})
 	}
+	if err := unreadable(op, len(*env.Data), len(items)); err != nil {
+		return nil, err
+	}
 	return catalog.PreferSearchCategories(query, items), nil
+}
+
+// unreadable reports an answer with rows of which none could be read: a field
+// the parser needs was renamed or dropped. That is a broken contract, not an
+// empty listing, and the list says so instead of "no channels".
+func unreadable(op string, rows, read int) error {
+	if rows > 0 && read == 0 {
+		return contractError(op, fmt.Errorf("none of the %d rows has the fields the app reads", rows))
+	}
+	return nil
 }
 
 // listedChannel builds the identity of a channel a listing names. A row without
