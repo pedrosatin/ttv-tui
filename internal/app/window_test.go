@@ -9,13 +9,13 @@ import (
 	"testing"
 )
 
+// Wayland e X11 chegam ao probe; o erro dele vai para o log.
 func TestOpenWindowReportsProbeError(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("single window requires Linux")
+	if runtime.GOOS == "windows" {
+		t.Skip("o probe falso é um script de shell")
 	}
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("WAYLAND_DISPLAY", "wayland-test")
 	t.Setenv(videoHostEnv, "")
 	exe, err := os.Executable()
 	if err != nil {
@@ -32,12 +32,19 @@ func TestOpenWindowReportsProbeError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var capture bytes.Buffer
-	if openWindow(Options{Log: &capture}) {
-		t.Fatal("failed probe opened window")
-	}
-	if out := capture.String(); !strings.Contains(out, "injected window error") {
-		t.Fatalf("window error discarded; stderr = %q", out)
+	for name, env := range map[string][2]string{
+		"wayland": {"wayland-test", ""},
+		"x11":     {"", ":0"},
+	} {
+		t.Setenv("WAYLAND_DISPLAY", env[0])
+		t.Setenv("DISPLAY", env[1])
+		var capture bytes.Buffer
+		if openWindow(Options{Log: &capture}) {
+			t.Fatalf("%s: failed probe opened window", name)
+		}
+		if out := capture.String(); !strings.Contains(out, "injected window error") {
+			t.Fatalf("%s: window error discarded; stderr = %q", name, out)
+		}
 	}
 }
 
@@ -62,10 +69,29 @@ func TestOpenWindowNeverLoopsInsideTheWindow(t *testing.T) {
 	}
 }
 
-func TestOpenWindowNeedsWayland(t *testing.T) {
+// Sem Wayland nem X11 o probe nem roda: o console de texto fica no terminal.
+func TestOpenWindowNeedsADisplayOnLinux(t *testing.T) {
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		t.Skip("Windows e macOS deixam a decisão para o probe")
+	}
 	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("DISPLAY", "")
 	t.Setenv(videoHostEnv, "")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(filepath.Dir(exe), windowBinary)
+	marker := filepath.Join(t.TempDir(), "probe-ran")
+	script := "#!/bin/sh\ntouch '" + marker + "'\n"
+	if err := os.WriteFile(path, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
 	if openWindow(Options{}) {
-		t.Fatal("sem Wayland o app fica no terminal")
+		t.Fatal("sem Wayland nem X11 o app fica no terminal")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("o probe rodou sem display")
 	}
 }

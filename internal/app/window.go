@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// windowBinary is the single-window host, installed next to ttv-tui on Linux.
+// windowBinary is the single-window host, installed next to ttv-tui.
 const windowBinary = "ttv-tui-window"
 
 // installedWindow returns the window executable next to this one, or "". Only the
@@ -19,11 +19,11 @@ func installedWindow() string {
 	if err != nil {
 		return ""
 	}
-	target := windowBinary
+	name := windowBinary
 	if runtime.GOOS == "windows" {
-		target += ".exe"
+		name += ".exe"
 	}
-	path := filepath.Join(filepath.Dir(exe), target)
+	path := filepath.Join(filepath.Dir(exe), name)
 	if st, err := os.Stat(path); err != nil || st.IsDir() {
 		return ""
 	}
@@ -33,7 +33,7 @@ func installedWindow() string {
 // openWindow starts the window and reports whether it took over. Anything short of
 // a confirmed window leaves the app in the terminal, as it always worked.
 func openWindow(opts Options) bool {
-	if opts.Terminal || os.Getenv(videoHostEnv) != "" {
+	if opts.Terminal || os.Getenv(videoHostEnv) != "" || !hasDisplay() {
 		return false
 	}
 	path := installedWindow()
@@ -62,4 +62,14 @@ func openWindow(opts Options) bool {
 	}
 	_ = cmd.Process.Release()
 	return true
+}
+
+// hasDisplay skips the probe where no window can open: a Linux or BSD console
+// without Wayland or X11. Windows and macOS leave the answer to the probe.
+func hasDisplay() bool {
+	switch runtime.GOOS {
+	case "windows", "darwin":
+		return true
+	}
+	return os.Getenv("WAYLAND_DISPLAY") != "" || os.Getenv("DISPLAY") != ""
 }
