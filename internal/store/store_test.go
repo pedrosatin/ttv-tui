@@ -48,11 +48,11 @@ func TestStore_RoundTripAtomicAndPermissions0600(t *testing.T) {
 
 	want := State{
 		Favorites: []Channel{
-			{ID: "101", Login: "streamer_a", DisplayName: "Streamer A"},
-			{ID: "102", Login: "streamer_b", DisplayName: "Streamer B"},
+			{Platform: PlatformTwitch, ID: "101", Login: "streamer_a", DisplayName: "Streamer A"},
+			{Platform: PlatformTwitch, ID: "102", Login: "streamer_b", DisplayName: "Streamer B"},
 		},
 		Recents: []Channel{
-			{ID: "201", Login: "streamer_c", DisplayName: "Streamer C"},
+			{Platform: PlatformKick, ID: "201", Login: "streamer_c", DisplayName: "Streamer C"},
 		},
 	}
 
@@ -936,5 +936,273 @@ func TestStore_RespectsRemovalWhenDiskCorruptedDuringSession(t *testing.T) {
 				t.Fatalf("expected streamer_c to be preserved, got %+v", got.Favorites)
 			}
 		})
+	}
+}
+
+func TestStore_LegacyStateWithoutPlatformLoadsAsTwitch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+
+	// Legacy state file without "platform" field.
+	legacyJSON := `{
+  "favorites": [
+    {
+      "id": "1",
+      "login": "streamer_a",
+      "display_name": "Streamer A"
+    },
+    {
+      "id": "2",
+      "login": "streamer_b",
+      "display_name": "Streamer B"
+    }
+  ],
+  "recents": [
+    {
+      "id": "3",
+      "login": "streamer_c",
+      "display_name": "Streamer C"
+    },
+    {
+      "id": "4",
+      "login": "streamer_d",
+      "display_name": "Streamer D"
+    }
+  ]
+}`
+
+	if err := os.WriteFile(path, []byte(legacyJSON), 0o600); err != nil {
+		t.Fatalf("write legacy state: %v", err)
+	}
+
+	st, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom legacy state: %v", err)
+	}
+
+	if len(st.Favorites) != 2 {
+		t.Fatalf("expected 2 favorites, got %d", len(st.Favorites))
+	}
+	if len(st.Recents) != 2 {
+		t.Fatalf("expected 2 recents, got %d", len(st.Recents))
+	}
+
+	// Verify all channels loaded with PlatformTwitch as default without losing metadata.
+	for i, want := range []struct {
+		id, login, disp string
+	}{
+		{"1", "streamer_a", "Streamer A"},
+		{"2", "streamer_b", "Streamer B"},
+	} {
+		fav := st.Favorites[i]
+		if fav.Platform != PlatformTwitch || fav.ID != want.id || fav.Login != want.login || fav.DisplayName != want.disp {
+			t.Fatalf("favorite[%d]: got %+v, want platform %q, id %q, login %q, display %q", i, fav, PlatformTwitch, want.id, want.login, want.disp)
+		}
+	}
+
+	// Verify recents order and metadata are preserved.
+	for i, want := range []struct {
+		id, login, disp string
+	}{
+		{"3", "streamer_c", "Streamer C"},
+		{"4", "streamer_d", "Streamer D"},
+	} {
+		rec := st.Recents[i]
+		if rec.Platform != PlatformTwitch || rec.ID != want.id || rec.Login != want.login || rec.DisplayName != want.disp {
+			t.Fatalf("recent[%d]: got %+v, want platform %q, id %q, login %q, display %q", i, rec, PlatformTwitch, want.id, want.login, want.disp)
+		}
+	}
+
+	// Save back to disk and verify the file now includes "platform": "twitch".
+	if err := SaveTo(path, st); err != nil {
+		t.Fatalf("SaveTo migrated state: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read saved state: %v", err)
+	}
+
+	var raw map[string][]map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal raw saved state: %v", err)
+	}
+	for _, fav := range raw["favorites"] {
+		if fav["platform"] != PlatformTwitch {
+			t.Fatalf("saved favorite missing platform: %v", fav)
+		}
+	}
+	for _, rec := range raw["recents"] {
+		if rec["platform"] != PlatformTwitch {
+			t.Fatalf("saved recent missing platform: %v", rec)
+		}
+	}
+}
+
+func TestStore_MultiplatformChannelsAreDistinct(t *testing.T) {
+	twitchCh := Channel{Platform: PlatformTwitch, ID: "100", Login: "xqc", DisplayName: "xQc"}
+	kickCh := Channel{Platform: PlatformKick, ID: "100", Login: "xqc", DisplayName: "xQc"}
+	ytCh := Channel{Platform: PlatformYouTube, ID: "100", Login: "xqc", DisplayName: "xQc"}
+	defaultCh := Channel{ID: "100", Login: "xqc", DisplayName: "xQc"} // empty platform defaults to twitch
+
+	t.Run("Matches respects platform distinction", func(t *testing.T) {
+		if twitchCh.Matches(kickCh) {
+			t.Fatalf("expected twitch channel not to match kick channel with same login/id")
+		}
+		if kickCh.Matches(twitchCh) {
+			t.Fatalf("expected kick channel not to match twitch channel")
+		}
+		if kickCh.Matches(ytCh) {
+			t.Fatalf("expected kick channel not to match youtube channel")
+		}
+		if !twitchCh.Matches(defaultCh) {
+			t.Fatalf("expected twitch channel to match channel with empty platform default")
+		}
+		if !defaultCh.Matches(twitchCh) {
+			t.Fatalf("expected channel with empty platform default to match twitch channel")
+		}
+		if defaultCh.Matches(kickCh) {
+			t.Fatalf("expected channel with empty platform default not to match kick channel")
+		}
+	})
+
+	t.Run("ToggleFavorite and IsFavorite handle distinct platforms", func(t *testing.T) {
+		var st State
+
+		if !st.ToggleFavorite(twitchCh) {
+			t.Fatal("expected adding twitch channel to succeed")
+		}
+		if !st.IsFavorite(twitchCh) {
+			t.Fatal("expected twitch channel to be favorite")
+		}
+		if st.IsFavorite(kickCh) {
+			t.Fatal("expected kick channel not to be favorite yet")
+		}
+
+		// Adding kick channel should coexist without removing or overwriting twitch channel
+		if !st.ToggleFavorite(kickCh) {
+			t.Fatal("expected adding kick channel to succeed")
+		}
+		if !st.IsFavorite(twitchCh) || !st.IsFavorite(kickCh) {
+			t.Fatalf("expected both twitch and kick channels to be favorites, got %+v", st.Favorites)
+		}
+		if len(st.Favorites) != 2 {
+			t.Fatalf("expected 2 favorites, got %d", len(st.Favorites))
+		}
+
+		// Removing twitch channel should leave kick channel intact
+		if st.ToggleFavorite(twitchCh) {
+			t.Fatal("expected toggling twitch channel again to remove it")
+		}
+		if st.IsFavorite(twitchCh) {
+			t.Fatal("expected twitch channel to no longer be favorite")
+		}
+		if !st.IsFavorite(kickCh) {
+			t.Fatal("expected kick channel to remain favorite")
+		}
+		if len(st.Favorites) != 1 {
+			t.Fatalf("expected 1 favorite remaining, got %d", len(st.Favorites))
+		}
+	})
+
+	t.Run("AddRecent preserves both platforms and updates recents order correctly", func(t *testing.T) {
+		var st State
+
+		st.AddRecent(twitchCh, 10)
+		st.AddRecent(kickCh, 10)
+
+		if len(st.Recents) != 2 {
+			t.Fatalf("expected 2 recents, got %d", len(st.Recents))
+		}
+		if st.Recents[0].Platform != PlatformKick || st.Recents[1].Platform != PlatformTwitch {
+			t.Fatalf("expected [kick, twitch], got %+v", st.Recents)
+		}
+
+		// Re-adding twitch channel moves it to the top without removing kick channel
+		st.AddRecent(twitchCh, 10)
+		if len(st.Recents) != 2 {
+			t.Fatalf("expected 2 recents without duplicates, got %d", len(st.Recents))
+		}
+		if st.Recents[0].Platform != PlatformTwitch || st.Recents[1].Platform != PlatformKick {
+			t.Fatalf("expected [twitch, kick], got %+v", st.Recents)
+		}
+	})
+
+	t.Run("Persistence and union across platforms", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "state.json")
+
+		st := State{
+			Favorites: []Channel{twitchCh, kickCh},
+			Recents:   []Channel{kickCh, twitchCh},
+		}
+
+		if err := SaveTo(path, st); err != nil {
+			t.Fatalf("SaveTo multiplatform state: %v", err)
+		}
+
+		loaded, err := LoadFrom(path)
+		if err != nil {
+			t.Fatalf("LoadFrom multiplatform state: %v", err)
+		}
+
+		if len(loaded.Favorites) != 2 || !loaded.IsFavorite(twitchCh) || !loaded.IsFavorite(kickCh) {
+			t.Fatalf("favorites after roundtrip: %+v", loaded.Favorites)
+		}
+		if len(loaded.Recents) != 2 || loaded.Recents[0].Platform != PlatformKick || loaded.Recents[1].Platform != PlatformTwitch {
+			t.Fatalf("recents after roundtrip: %+v", loaded.Recents)
+		}
+	})
+}
+
+func TestStore_OldVersionCompatibility(t *testing.T) {
+	// Represents how an older version of the app reads state.json without the "platform" field.
+	type legacyChannel struct {
+		ID          string `json:"id,omitempty"`
+		Login       string `json:"login"`
+		DisplayName string `json:"display_name,omitempty"`
+	}
+	type legacyState struct {
+		Favorites []legacyChannel `json:"favorites"`
+		Recents   []legacyChannel `json:"recents"`
+	}
+
+	path := filepath.Join(t.TempDir(), "state.json")
+	st := State{
+		Favorites: []Channel{
+			{Platform: PlatformTwitch, ID: "1", Login: "streamer_tw", DisplayName: "Streamer TW"},
+			{Platform: PlatformKick, ID: "2", Login: "streamer_kick", DisplayName: "Streamer Kick"},
+		},
+		Recents: []Channel{
+			{Platform: PlatformKick, ID: "2", Login: "streamer_kick", DisplayName: "Streamer Kick"},
+		},
+	}
+
+	if err := SaveTo(path, st); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	// Unmarshaling into the legacy struct without a Platform field succeeds without error.
+	var oldState legacyState
+	if err := json.Unmarshal(data, &oldState); err != nil {
+		t.Fatalf("legacy unmarshal failed on new state: %v", err)
+	}
+
+	if len(oldState.Favorites) != 2 || len(oldState.Recents) != 1 {
+		t.Fatalf("unexpected legacy state: %+v", oldState)
+	}
+
+	// In the old version, since it lacked the platform field, channels became twitch.Channel.
+	twCh := twitch.Channel{
+		ID:          oldState.Favorites[1].ID,
+		Login:       oldState.Favorites[1].Login,
+		DisplayName: oldState.Favorites[1].DisplayName,
+	}
+	if twCh.Login != "streamer_kick" {
+		t.Fatalf("unexpected channel: %+v", twCh)
 	}
 }

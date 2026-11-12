@@ -20,15 +20,37 @@ const DefaultMaxRecents = 50
 // and was renamed to a backup file (.bak).
 var ErrCorrupt = errors.New("state file corrupted")
 
-// Channel represents the persistent metadata of a saved Twitch channel.
+// Platform constants for supported streaming platforms.
+const (
+	PlatformTwitch  = "twitch"
+	PlatformKick    = "kick"
+	PlatformYouTube = "youtube"
+)
+
+// DefaultPlatform is the platform assigned to channels when none is specified.
+const DefaultPlatform = PlatformTwitch
+
+// Channel represents the persistent metadata of a saved channel.
 type Channel struct {
+	Platform    string `json:"platform"`
 	ID          string `json:"id,omitempty"`
 	Login       string `json:"login"`
 	DisplayName string `json:"display_name,omitempty"`
 }
 
-// Matches reports whether two channels represent the same Twitch channel.
+// CanonicalPlatform returns the lowercase platform name for c, or DefaultPlatform if empty.
+func (c Channel) CanonicalPlatform() string {
+	if c.Platform == "" {
+		return DefaultPlatform
+	}
+	return strings.ToLower(strings.TrimSpace(c.Platform))
+}
+
+// Matches reports whether two channels represent the same channel on the same platform.
 func (c Channel) Matches(other Channel) bool {
+	if c.CanonicalPlatform() != other.CanonicalPlatform() {
+		return false
+	}
 	if c.ID != "" && other.ID != "" && c.ID == other.ID {
 		return true
 	}
@@ -63,6 +85,7 @@ func FromTwitch(ch twitch.Channel) Channel {
 		id = ch.Login
 	}
 	return Channel{
+		Platform:    PlatformTwitch,
 		ID:          id,
 		Login:       ch.Login,
 		DisplayName: disp,
@@ -103,6 +126,9 @@ type favoriteSnapshot struct {
 
 // AddRecent prepends ch to recents, removing any prior duplicate, and clamps to maxRecents.
 func (s *State) AddRecent(ch Channel, maxRecents int) {
+	if ch.Platform == "" {
+		ch.Platform = DefaultPlatform
+	}
 	if maxRecents <= 0 {
 		maxRecents = DefaultMaxRecents
 	}
@@ -121,6 +147,9 @@ func (s *State) AddRecent(ch Channel, maxRecents int) {
 // ToggleFavorite toggles ch in favorites. If present, removes it and returns false.
 // If absent, appends it and returns true.
 func (s *State) ToggleFavorite(ch Channel) bool {
+	if ch.Platform == "" {
+		ch.Platform = DefaultPlatform
+	}
 	if s.snapshot == nil {
 		s.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), s.Favorites...)}
 	}
@@ -205,6 +234,8 @@ func loadFrom(path string) (State, error) {
 	if st.Recents == nil {
 		st.Recents = []Channel{}
 	}
+	st.Favorites = normalizeChannels(st.Favorites)
+	st.Recents = normalizeChannels(st.Recents)
 	st.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), st.Favorites...)}
 	return st, nil
 }
@@ -301,6 +332,15 @@ func unionChannels(first, second []Channel) []Channel {
 	return out
 }
 
+func normalizeChannels(channels []Channel) []Channel {
+	for i := range channels {
+		if channels[i].Platform == "" {
+			channels[i].Platform = DefaultPlatform
+		}
+	}
+	return channels
+}
+
 // writeState replaces path with a complete file in the same directory.
 // Its caller must hold the state lock.
 func writeState(path string, st State) error {
@@ -325,6 +365,9 @@ func writeState(path string, st State) error {
 		_ = tmp.Close()
 		return fmt.Errorf("chmod temp state: %w", err)
 	}
+
+	st.Favorites = normalizeChannels(st.Favorites)
+	st.Recents = normalizeChannels(st.Recents)
 
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
