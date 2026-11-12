@@ -312,8 +312,8 @@ func TestReport_WindowLibmpvWindows(t *testing.T) {
 			if codePT != 0 {
 				t.Fatalf("expected exit code 0 when window libmpv is present, got %d; output: %s", codePT, outPT.String())
 			}
-			if !strings.Contains(outPT.String(), "mpv: libmpv (janela)") {
-				t.Fatalf("expected 'mpv: libmpv (janela)' in output, got: %s", outPT.String())
+			if !strings.Contains(outPT.String(), "mpv: libmpv (janela); o modo terminal (--terminal) ainda precisa do mpv") {
+				t.Fatalf("expected the window player and the terminal-mode note in output, got: %s", outPT.String())
 			}
 
 			// EN
@@ -322,8 +322,8 @@ func TestReport_WindowLibmpvWindows(t *testing.T) {
 			if codeEN != 0 {
 				t.Fatalf("expected exit code 0 when window libmpv is present, got %d; output: %s", codeEN, outEN.String())
 			}
-			if !strings.Contains(outEN.String(), "mpv: libmpv (window)") {
-				t.Fatalf("expected 'mpv: libmpv (window)' in output, got: %s", outEN.String())
+			if !strings.Contains(outEN.String(), "mpv: libmpv (window); terminal mode (--terminal) still needs mpv") {
+				t.Fatalf("expected the window player and the terminal-mode note in output, got: %s", outEN.String())
 			}
 		})
 	}

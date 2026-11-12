@@ -100,6 +100,11 @@ try {
         if (-not (Get-Command $dependency[0] -ErrorAction SilentlyContinue)) {
             Write-Host "$($dependency[0]) not found. Install with: winget install --id $($dependency[1]) -e"
             Write-Host "Or, with the Scoop extras bucket: scoop install extras/$($dependency[0])"
+            if ($dependency[0] -eq 'streamlink') {
+                Write-Host 'Without it, ttv-tui downloads the official streamlink build on the first playback.'
+            } elseif (Test-Path -LiteralPath (Join-Path $binDir 'ttv-tui-window\ttv-tui-window.exe')) {
+                Write-Host 'The single window plays video without mpv; only the terminal mode (--terminal) needs it.'
+            }
         }
     }
     Write-Host 'Run ttv-tui --version here or in a new terminal.'

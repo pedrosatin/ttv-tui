@@ -406,9 +406,10 @@ func (m Model) renderHelpLines(maxWidth int) []string {
 	out = append(out, m.renderHelpColorLines(maxWidth)...)
 	if line := m.player.errorLine(); line != "" {
 		out = append(out, wrapChatRow("  ", fmt.Sprintf(m.t("help.player_error"), line), maxWidth)...)
-		if hint := m.manualInstallMPVHint(); m.player.failure == PlayerFailureMPVMissing && hint != "" {
+		// Same priority as the status bar: streamlink first, then mpv.
+		if hint := m.manualInstallHint(); (m.player.failure == PlayerFailureStreamlinkMissing || m.player.downloadFailed) && hint != "" {
 			out = append(out, wrapChatRow("  ", hint, maxWidth)...)
-		} else if hint := m.manualInstallHint(); (m.player.failure == PlayerFailureStreamlinkMissing || m.player.downloadFailed) && hint != "" {
+		} else if hint := m.manualInstallMPVHint(); m.player.failure == PlayerFailureMPVMissing && hint != "" {
 			out = append(out, wrapChatRow("  ", hint, maxWidth)...)
 		}
 	}

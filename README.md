@@ -23,7 +23,7 @@ Shortcut help, opened with `?`:
 
 ## Install
 
-You need `streamlink` and `mpv` to play video. On Linux and Windows, `streamlink` is downloaded automatically on first playback if missing. The [FAQ](#faq) has the install command for each system.
+You need `streamlink` and `mpv` to play video. On Linux and Windows, `streamlink` is downloaded automatically on first playback if missing. On Windows, the single window plays video without `mpv`; only the terminal mode needs it. The [FAQ](#faq) has the install command for each system.
 
 **Linux and macOS.** The script verifies the SHA-256 checksum and installs to `~/.local/bin`:
 

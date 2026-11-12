@@ -131,7 +131,13 @@ func mpvStatus(opts Options, cat *i18n.Catalog) (string, bool) {
 		goos = runtime.GOOS
 	}
 	if _, ok := findWindowMpv(opts.ExeDir, goos); ok {
-		return fmt.Sprintf("libmpv (%s)", cat.T("doctor.origin.window")), true
+		status := fmt.Sprintf("libmpv (%s)", cat.T("doctor.origin.window"))
+		// The window plays without mpv, but --terminal, or a window whose probe
+		// fails, falls back to the mpv executable: say so instead of hiding it.
+		if version, found := toolVersion("mpv", cat); found {
+			return status + "; mpv " + version, true
+		}
+		return status + "; " + cat.T("doctor.window.terminal_needs_mpv"), true
 	}
 	return toolVersion("mpv", cat)
 }

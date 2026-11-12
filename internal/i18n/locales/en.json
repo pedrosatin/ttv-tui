@@ -314,6 +314,7 @@
   "doctor.origin.managed": "managed",
   "doctor.origin.path": "PATH",
   "doctor.origin.window": "window",
+  "doctor.window.terminal_needs_mpv": "terminal mode (--terminal) still needs mpv",
   "components.downloading_progress": "Downloading %s (%d%%)...",
   "components.waiting_lock": "Waiting for another download...",
   "components.manual_install.windows": "install streamlink from https://github.com/streamlink/windows-builds/releases or use Scoop ('scoop install streamlink')",

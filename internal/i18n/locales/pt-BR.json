@@ -314,6 +314,7 @@
   "doctor.origin.managed": "gerenciado",
   "doctor.origin.path": "PATH",
   "doctor.origin.window": "janela",
+  "doctor.window.terminal_needs_mpv": "o modo terminal (--terminal) ainda precisa do mpv",
   "components.downloading_progress": "Baixando %s (%d%%)...",
   "components.waiting_lock": "Aguardando outro download...",
   "components.manual_install.windows": "baixe o instalador oficial em https://github.com/streamlink/windows-builds/releases ou use o Scoop ('scoop install streamlink')",
