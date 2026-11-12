@@ -17,9 +17,9 @@ Para oferecer uma experiência imediata de reprodução sem quebrar instalaçõe
 
 2. **Download sob demanda**:
    - Caso nenhuma das opções anteriores encontre o executável, na primeira tentativa de reprodução o aplicativo baixa a versão mais recente oficial do repositório da organização Streamlink no GitHub:
-     - Linux (x86_64 e aarch64): AppImage manylinux de `streamlink/streamlink-appimage`;
+     - Linux (x86_64 e aarch64): AppImage oficial com prefixo `streamlink-` (evitando o pacote `streamlink+ffmpeg-`, maior e com ffmpeg GPL embutido);
      - Windows (x86_64): arquivo zip portátil de `streamlink/windows-builds`.
-   - O progresso do download é comunicado à interface TUI por mensagens assíncronas, mantendo a camada de visualização desacoplada de operações de I/O.
+   - O progresso do download é comunicado à interface TUI por mensagens assíncronas, mantendo a camada de visualização desacoplada de operações de I/O. Enquanto aguarda o lock entre processos mantido por outro download ativo, a interface exibe estado explícito de espera ("Aguardando outro download...").
 
 3. **Verificação de integridade e segurança**:
    - O asset é consultado pela API oficial do GitHub (`releases/latest`), obtendo o campo `digest` (`sha256:...`) informado para o arquivo.
@@ -27,9 +27,10 @@ Para oferecer uma experiência imediata de reprodução sem quebrar instalaçõe
    - O arquivo só é gravado e tornado executável se o hash SHA-256 computado bater exatamente com o digest esperado. Em caso de divergência, o arquivo é imediatamente removido e a falha é exibida com orientações para instalação manual.
 
 4. **Instalação atômica e compatibilidade de execução**:
-   - Todo download e montagem de componentes ocorre em diretórios temporários sob o diretório base (`$XDG_DATA_HOME/ttv-tui/components/streamlink/`), protegidos por lock de arquivo entre processos e promovidos atomicamente via renomeação (`os.Rename`), sem sobrescrever nem remover instalações existentes.
-   - No Linux, após validação do SHA-256, a AppImage é extraída uma única vez durante a instalação com `--appimage-extract`, executando diretamente o binário `squashfs-root/AppRun`. Isso elimina qualquer necessidade de FUSE (`/dev/fuse` ou `fusermount`), garantindo compatibilidade imediata em contêineres e sistemas restritos.
-   - No Windows, o zip portátil é extraído com validação estrita de tipos de entrada (rejeitando symlinks e travessia de caminho) e limite de tamanho descompactado, localizando o executável em `bin/streamlink.exe`.
+   - Todo download e montagem de componentes ocorre em diretórios temporários sob o diretório base (`$XDG_DATA_HOME/ttv-tui/components/streamlink/`), protegidos por lock de arquivo entre processos com expiração de ~30 s (`staleAge`) renovada periodicamente a cada ~5 s via batimento (heartbeat). Isso impede que processos abortados travem a reprodução subsequente por 10 minutos.
+   - Sob o lock, se o diretório de versão de destino já existir completo com binário válido, o staging é descartado; se existir vazio ou parcial de uma execução interrompida, é removido antes da promoção atômica via renomeação (`os.Rename`, com retentativa curta no Windows para absorver travas temporárias de antivírus ou indexador). O caminho final retornado é sempre validado pela rotina de descoberta de componentes instalados (`findManagedStreamlink`).
+   - No Linux, após validação do SHA-256, a AppImage é extraída uma única vez durante a instalação com `--appimage-extract` (resolvendo caminhos absolutos para compatibilidade com `XDG_DATA_HOME` relativo), executando diretamente o binário `squashfs-root/AppRun`. Isso elimina qualquer necessidade de FUSE (`/dev/fuse` ou `fusermount`), garantindo compatibilidade imediata em contêineres e sistemas restritos.
+   - No Windows, o zip portátil é extraído com validação estrita de segmentos de caminho (rejeitando symlinks e travessia `..`, mas permitindo nomes legítimos com pontos duplos como `a..b`) e limite de tamanho descompactado, localizando o executável em `bin/streamlink.exe`.
 
 5. **Inspeção**:
    - O subcomando `ttv-tui doctor` relata a versão e a origem do `streamlink` em uso (`config`, `gerenciado` ou `PATH`).
