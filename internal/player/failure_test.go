@@ -38,6 +38,15 @@ func TestFailureOfStartErrors(t *testing.T) {
 	if got := FailureOf(&MissingToolError{Tool: "mpv"}); got != FailureMPVMissing {
 		t.Fatalf("mpv missing = %q", got)
 	}
+	if got := FailureOf(&MissingToolError{Tool: "mpv.exe"}); got != FailureMPVMissing {
+		t.Fatalf("mpv.exe missing = %q", got)
+	}
+	if got := FailureOf(&MissingToolError{Tool: "mpv.com"}); got != FailureMPVMissing {
+		t.Fatalf("mpv.com missing = %q", got)
+	}
+	if got := FailureOf(&MissingToolError{Tool: `C:\tools\mpv.exe`}); got != FailureMPVMissing {
+		t.Fatalf(`C:\tools\mpv.exe missing = %q`, got)
+	}
 	if got := FailureOf(&MissingToolError{Tool: "/usr/bin/streamlink"}); got != FailureStreamlinkMissing {
 		t.Fatalf("streamlink missing = %q", got)
 	}

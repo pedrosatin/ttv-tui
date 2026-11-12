@@ -2,6 +2,7 @@ package player
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -1897,4 +1898,57 @@ func TestCustomStreamlinkPathAndEnv(t *testing.T) {
 	if !strings.Contains(err.Error(), "/updated/streamlink") {
 		t.Fatalf("expected error mentioning /updated/streamlink, got %v", err)
 	}
+}
+
+func TestCheckTools_WindowShimWithoutRealMpv(t *testing.T) {
+	shimDir := t.TempDir()
+	streamlinkDir := t.TempDir()
+
+	// Create fake streamlink in streamlinkDir
+	streamlinkName := "streamlink"
+	if runtime.GOOS == "windows" {
+		streamlinkName += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(streamlinkDir, streamlinkName), []byte("fake"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create window shim in shimDir (named mpv or mpv.exe/mpv.com)
+	for _, name := range []string{"mpv", "mpv.exe", "mpv.com"} {
+		if err := os.WriteFile(filepath.Join(shimDir, name), []byte("shim"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Case 1: Window available — shimDir is on PATH (first).
+	// checkTools succeeds without any real mpv installed.
+	t.Run("window shim on PATH", func(t *testing.T) {
+		t.Setenv("PATH", shimDir+string(os.PathListSeparator)+streamlinkDir)
+		mgr := New(Options{})
+		defer mgr.Close()
+
+		if err := mgr.checkTools(); err != nil {
+			t.Fatalf("checkTools with window shim on PATH failed: %v", err)
+		}
+	})
+
+	// Case 2: Terminal mode without mpv — PATH only has streamlink, no mpv or shim.
+	// checkTools must report missing mpv, and FailureOf must be FailureMPVMissing.
+	t.Run("terminal mode without mpv", func(t *testing.T) {
+		t.Setenv("PATH", streamlinkDir)
+		mgr := New(Options{})
+		defer mgr.Close()
+
+		err := mgr.checkTools()
+		if err == nil {
+			t.Fatal("expected checkTools to fail when mpv is not on PATH")
+		}
+		var missing *MissingToolError
+		if !errors.As(err, &missing) {
+			t.Fatalf("expected MissingToolError, got: %T (%v)", err, err)
+		}
+		if FailureOf(err) != FailureMPVMissing {
+			t.Fatalf("FailureOf(%v) = %q, want %q", err, FailureOf(err), FailureMPVMissing)
+		}
+	})
 }

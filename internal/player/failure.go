@@ -51,7 +51,12 @@ func (e *MissingToolError) Unwrap() error { return e.Err }
 
 // failureForTool maps an executable name to its missing-tool class.
 func failureForTool(tool string) Failure {
-	if strings.EqualFold(filepath.Base(tool), "mpv") {
+	base := filepath.Base(tool)
+	if i := strings.LastIndex(base, `\`); i >= 0 {
+		base = base[i+1:]
+	}
+	name := strings.TrimSuffix(strings.TrimSuffix(strings.ToLower(base), ".exe"), ".com")
+	if name == "mpv" {
 		return FailureMPVMissing
 	}
 	return FailureStreamlinkMissing
