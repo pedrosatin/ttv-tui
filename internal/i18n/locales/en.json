@@ -76,6 +76,7 @@
   "player.window_notice": "Video opened in a separate window (mpv)",
   "player.warn.containment": "Windows: video may keep running if the app crashes",
   "player.warn.input_conf": "mpv window has no keys: use Space and +/- in the terminal",
+  "player.warn.missing_url": "Cannot play channel: URL is missing",
   "chat.title": "Chat — #%s",
   "chat.connecting": "Connecting to #%s...",
   "chat.connected": "Connected to #%s",

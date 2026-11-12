@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/store"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
@@ -146,19 +147,21 @@ func (m Model) Recents() []twitch.Channel {
 }
 
 func channelMatches(a, b twitch.Channel) bool {
-	platA := a.Platform
-	if platA == "" {
-		platA = store.PlatformTwitch
-	}
-	platB := b.Platform
-	if platB == "" {
-		platB = store.PlatformTwitch
-	}
-	if !strings.EqualFold(platA, platB) {
+	platA := platform.Normalize(a.Platform)
+	platB := platform.Normalize(b.Platform)
+	if platA != platB {
 		return false
 	}
-	if a.URL != "" && b.URL != "" {
-		return strings.EqualFold(a.URL, b.URL)
+	if platA != platform.Twitch {
+		idA := a.StableID()
+		idB := b.StableID()
+		if idA == "" || idB == "" {
+			return false
+		}
+		if platA == platform.YouTube {
+			return idA == idB
+		}
+		return strings.EqualFold(idA, idB)
 	}
 	if a.ID != "" && b.ID != "" && a.ID == b.ID {
 		return true
@@ -383,8 +386,8 @@ func (p playbackState) isPlaying(ch twitch.Channel) bool {
 	}
 	switch p.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
-		if ch.Platform != "" && ch.Platform != store.PlatformTwitch {
-			return strings.EqualFold(p.login, ch.PlayerLabel()) || strings.EqualFold(p.login, ch.Login)
+		if platform.IsNonTwitch(ch.Platform) {
+			return strings.EqualFold(p.login, ch.PlayerLabel())
 		}
 		return strings.EqualFold(p.login, ch.Login)
 	default:
@@ -392,19 +395,19 @@ func (p playbackState) isPlaying(ch twitch.Channel) bool {
 	}
 }
 
-// markChannelOffline records explicit offline evidence for login in the
-// channels listing, favorites and recents. Only the matching channel is
+// markChannelOffline records explicit offline evidence for the channel identified by label
+// in the channels listing, favorites and recents. Only the matching channel is
 // touched: viewers of other channels stay intact. The slices are copied so
 // earlier Model values that share a backing array are not mutated.
-func (m *Model) markChannelOffline(login string) {
-	if strings.TrimSpace(login) == "" {
+func (m *Model) markChannelOffline(label string) {
+	if strings.TrimSpace(label) == "" {
 		return
 	}
 	apply := func(chs []twitch.Channel) []twitch.Channel {
 		out := make([]twitch.Channel, len(chs))
 		copy(out, chs)
 		for i := range out {
-			if !strings.EqualFold(out[i].Login, login) {
+			if !strings.EqualFold(out[i].PlayerLabel(), label) {
 				continue
 			}
 			out[i].Availability = twitch.AvailabilityOffline

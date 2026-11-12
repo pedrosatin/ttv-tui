@@ -120,6 +120,7 @@ func (m *Model) setChatUnsupported(channel string) {
 	if m.chat.panel.buf == nil {
 		m.chat.panel = newChatPanel()
 	}
+	m.chat.panel.gen++
 	m.chat.panel.buf.Clear()
 	m.chat.panel.channel = channel
 	m.chat.panel.unsupported = true
@@ -258,6 +259,13 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	if m.chat.panel.buf == nil {
 		m.chat.panel = newChatPanel()
+	}
+
+	if m.chat.panel.unsupported {
+		// Ignore events from the previous session while the panel is unsupported.
+		if msg.Generation <= m.chat.panel.gen || (msg.Channel != "" && normalizeChatChannel(msg.Channel) != m.chat.panel.channel) {
+			return m, nil
+		}
 	}
 
 	if m.chat.panel.switching {

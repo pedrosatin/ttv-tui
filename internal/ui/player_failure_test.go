@@ -78,6 +78,7 @@ func TestPlayerFailureMessagesPerClass(t *testing.T) {
 		{PlayerFailureTimeout, "error: Connection to gql.twitch.tv timed out", "Erro: tempo esgotado · r repetir · ? detalhes", "Player error: timed out · r retry · ? details"},
 		{PlayerFailureStreamlinkMissing, "player: streamlink not found: exec: \"streamlink\": executable file not found in $PATH", "Erro: streamlink ausente · r repetir · ? detalhes", "Player error: streamlink missing · r retry · ? details"},
 		{PlayerFailureMPVMissing, "error: Failed to start player: mpv (Player executable not found)", "Erro: mpv ausente · r repetir · ? detalhes", "Player error: mpv missing · r retry · ? details"},
+		{PlayerFailureNoPlugin, "error: No plugin can handle URL: https://example.com/unsupported", "Erro: URL não suportada · sem plugin do streamlink · ? detalhes", "Player error: unsupported URL · no streamlink plugin · ? details"},
 		{PlayerFailureUnknown, "streamlink exited with code 1", "Falha no player: r para tentar de novo · ? detalhes", "Player failed: press r to retry · ? details"},
 	}
 	for _, c := range cases {
@@ -443,5 +444,72 @@ func TestPlayerTerminalStatesRender(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestPlayerFailureNoPlugin_UIUsable(t *testing.T) {
+	noPluginLine := "error: No plugin can handle URL: https://example.com/unsupported"
+	for _, tc := range []struct {
+		lang string
+		want string
+	}{
+		{i18n.LangEN, "Player error: unsupported URL · no streamlink plugin · ? details"},
+		{i18n.LangPTBR, "Erro: URL não suportada · sem plugin do streamlink · ? detalhes"},
+	} {
+		t.Run(tc.lang, func(t *testing.T) {
+			m, pb := newFailureModel(t, tc.lang, 200, "kick:xqc")
+			initialGen := m.PlayerGeneration()
+
+			// Delivery of PlayerFailureNoPlugin status message
+			msg := PlayerStatusMsg{
+				Generation: initialGen,
+				State:      PlayerStateError,
+				Login:      m.PlayerLogin(),
+				LastLine:   noPluginLine,
+				Failure:    PlayerFailureNoPlugin,
+			}
+			updated, cmd := m.Update(msg)
+			m = updated.(Model)
+
+			// 1. Sem nova tentativa automática: cmd returned is nil, playback not re-invoked
+			if cmd != nil {
+				t.Fatalf("expected nil cmd after FailureNoPlugin (no auto-retry), got %v", cmd)
+			}
+			if len(pb.started) > 1 {
+				t.Fatalf("playback was automatically retried: started=%v", pb.started)
+			}
+			if m.PlayerGeneration() != initialGen {
+				t.Fatalf("generation advanced without user action: got %d, want %d", m.PlayerGeneration(), initialGen)
+			}
+
+			// 2. Mensagem traduzida na barra de status
+			bar := ansi.Strip(m.StatusBar())
+			if !strings.Contains(bar, tc.want) {
+				t.Fatalf("status bar lacks translated message %q:\n%s", tc.want, bar)
+			}
+
+			// 3. TUI usável depois:
+			// Help key (?) opens help overlay showing the technical failure detail
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+			m = updated.(Model)
+			helpDetail := fmt.Sprintf(m.t("help.player_error"), noPluginLine)
+			view := ansi.Strip(m.View())
+			if !strings.Contains(view, helpDetail) {
+				t.Fatalf("help overlay missing technical failure line %q:\n%s", helpDetail, view)
+			}
+
+			// Esc closes help overlay
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			m = updated.(Model)
+			view = ansi.Strip(m.View())
+			if strings.Contains(view, helpDetail) {
+				t.Fatalf("help overlay did not close on Esc:\n%s", view)
+			}
+
+			// Navigation keys (down arrow / j) do not crash and move highlight
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+			m = updated.(Model)
+			_ = m.View()
+		})
 	}
 }

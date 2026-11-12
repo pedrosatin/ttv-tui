@@ -76,6 +76,7 @@
   "player.window_notice": "O vídeo abriu em outra janela (mpv)",
   "player.warn.containment": "Windows: se o app cair, o vídeo pode continuar",
   "player.warn.input_conf": "Janela do mpv sem teclas: use Espaço e +/- no terminal",
+  "player.warn.missing_url": "Não é possível reproduzir o canal: URL ausente",
   "chat.title": "Chat — #%s",
   "chat.connecting": "Conectando em #%s...",
   "chat.connected": "Conectado em #%s",

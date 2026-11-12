@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/pedrosatin/ttv-tui/internal/store"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
@@ -167,12 +167,18 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 	selected := msg.Channel
 	m.list.selectedChannel = &selected
 	m.clearStaleStatusErrors()
+
+	isNonTwitch := platform.IsNonTwitch(selected.Platform)
+	if isNonTwitch && strings.TrimSpace(selected.URL) == "" {
+		m.warnStatus(m.t("player.warn.missing_url"))
+		return m, nil
+	}
+
 	m.queueRecent(selected)
 	var cmds []tea.Cmd
 	if m.store != nil {
 		cmds = append(cmds, m.saveStoreCmd())
 	}
-	isNonTwitch := selected.Platform != "" && selected.Platform != store.PlatformTwitch
 	target := PlayTarget{
 		URL:      selected.URL,
 		Label:    selected.PlayerLabel(),
