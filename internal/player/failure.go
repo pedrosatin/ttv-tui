@@ -106,6 +106,11 @@ func FailureOf(err error) Failure {
 // "Max retries exceeded" connection error.
 func ClassifyLine(line string) Failure {
 	l := strings.ToLower(line)
+	// A 404 or 403 on one segment or on one playlist reload happens during
+	// normal playback (a prefetch segment that expired, a reload racing the
+	// end of an ad) and streamlink keeps going. Only the same status on the
+	// channel or its playlist says something about the channel.
+	perSegment := isPerSegmentLine(l)
 	switch {
 	case l == "":
 		return FailureNone
@@ -115,9 +120,9 @@ func ClassifyLine(line string) Failure {
 		// The site answered that the channel or its playlist does not exist: a
 		// channel the API still lists as live right after it ended, or a wrong
 		// name. The connection worked, so this is not a network error.
-		strings.Contains(l, "404 client error"):
+		!perSegment && strings.Contains(l, "404 client error"):
 		return FailureOffline
-	case strings.Contains(l, "403 client error"):
+	case !perSegment && strings.Contains(l, "403 client error"):
 		// Before the network cases: streamlink reports it inside "Unable to open URL".
 		return FailureBlocked
 	case strings.Contains(l, "failed to start player") && strings.Contains(l, "mpv"),
@@ -164,6 +169,16 @@ func ClassifyLine(line string) Failure {
 	default:
 		return FailureNone
 	}
+}
+
+// isPerSegmentLine reports the streamlink HLS lines about a single segment,
+// its map or one playlist reload, which the stream survives
+// (stream/hls/hls.py in streamlink 8.6).
+func isPerSegmentLine(l string) bool {
+	return strings.Contains(l, "failed to fetch segment") ||
+		strings.Contains(l, "failed to fetch map for segment") ||
+		strings.Contains(l, "download of segment") ||
+		strings.Contains(l, "reloading failed")
 }
 
 // isFatalLine reports lines after which streamlink cannot recover: playback

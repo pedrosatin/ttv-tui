@@ -48,6 +48,30 @@ func TestClassifyLine(t *testing.T) {
 	}
 }
 
+// A 404 or 403 on one segment, its map or one playlist reload happens while a
+// live plays normally, on Twitch and on Kick alike; streamlink keeps going. The
+// lines follow the format streamlink 8.6.2 prints at --loglevel info
+// (stream/hls/hls.py). They must not end the session as "offline", nor leave
+// "blocked" as the cause of a later failure.
+func TestPerSegmentHTTPErrorsAreNotFatal(t *testing.T) {
+	lines := []string{
+		"[stream.hls][error] Failed to fetch segment 4521: Unable to open URL: https://video-edge-c2a3b4.fra05.abs.hls.ttvnw.net/v1/segment/CuwF.ts (404 Client Error: Not Found for url: https://video-edge-c2a3b4.fra05.abs.hls.ttvnw.net/v1/segment/CuwF.ts)",
+		"[stream.hls][warning] Reloading failed: Unable to open URL: https://video-weaver.fra05.hls.ttvnw.net/v1/playlist/Cq8F.m3u8 (404 Client Error: Not Found for url: https://video-weaver.fra05.hls.ttvnw.net/v1/playlist/Cq8F.m3u8)",
+		"[stream.hls][error] Failed to fetch segment 812: Unable to open URL: https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.DsuAwCgUc9Bh/812.ts (404 Client Error: Not Found for url: https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.DsuAwCgUc9Bh/812.ts)",
+		"[stream.hls][error] Failed to fetch map for segment 812: Unable to open URL: https://fa723fc1b171.us-west-2.playback.live-video.net/init.mp4 (403 Client Error: Forbidden for url: https://fa723fc1b171.us-west-2.playback.live-video.net/init.mp4)",
+		"[stream.hls][error] Download of segment 813 failed: Unable to open URL: https://fa723fc1b171.us-west-2.playback.live-video.net/813.ts (403 Client Error: Forbidden for url: https://fa723fc1b171.us-west-2.playback.live-video.net/813.ts)",
+	}
+	for _, line := range lines {
+		got := ClassifyLine(line)
+		if got != FailureNetwork {
+			t.Errorf("ClassifyLine(%q) = %q, want %q", line, got, FailureNetwork)
+		}
+		if isFatalLine(got) {
+			t.Errorf("isFatalLine(ClassifyLine(%q)) = true: one segment ends the session", line)
+		}
+	}
+}
+
 // TestOnlyStreamlinkFailuresBlameTheBuild is what keeps an offline channel, a
 // dead network or a URL without a plugin from undoing a streamlink update: of
 // every failure class, only the build's own failure counts.
