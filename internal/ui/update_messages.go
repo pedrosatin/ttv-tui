@@ -186,7 +186,7 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		m.player.stopAfterStart = false
 		cmds = append(cmds, m.playback.Start(selected.Login, m.player.selection))
 	}
-	if m.chat.session != nil || m.chat.panel.channel != "" || m.chat.composeDraft != "" {
+	if m.chat.session != nil || m.chat.panel.channel != "" {
 		if chatCmd := m.startChatChannel(selected.Login); chatCmd != nil {
 			cmds = append(cmds, chatCmd)
 		}

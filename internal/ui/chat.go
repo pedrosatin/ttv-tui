@@ -217,9 +217,6 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 	}
 
 	m.chat.composeDraft = ""
-	if m.chat.panel.channel != "" && m.chat.drafts != nil {
-		m.chat.drafts[m.chat.panel.channel] = ""
-	}
 	m.chat.panel.sendWarning = ""
 	beforeLen := m.chat.panel.buf.Len()
 	appended := m.chat.panel.buf.Append(ChatMessage{
