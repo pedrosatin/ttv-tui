@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ func listErrorModel(t *testing.T, lang string) Model {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat, WithFavorites([]twitch.Channel{
+	m := New(cat, WithFavorites([]catalog.Channel{
 		{ID: "fav-a", Login: "alpha", DisplayName: "Alpha"},
 		{ID: "fav-b", Login: "beta", DisplayName: "Beta"},
 		{ID: "fav-c", Login: "gamma", DisplayName: "Gamma"},
@@ -78,7 +79,7 @@ func TestClearedLoadErrorSaysListDidNotLoad(t *testing.T) {
 			m := listErrorModel(t, tc.lang)
 			m.list.favorites = nil
 			m.list.mode = ModeChannels
-			m.list.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
+			m.list.selectedCategory = &catalog.Category{ID: "cat-1", Name: "Just Chatting"}
 			m.list.loading = true
 			updated, _ := m.Update(ChannelsLoadedMsg{Generation: m.list.generation, Err: loadFailure()})
 			m = updated.(Model)
@@ -105,11 +106,11 @@ func TestClearedLoadErrorSaysListDidNotLoad(t *testing.T) {
 func TestHydrationWithoutStreamKeepsFavoriteUnverified(t *testing.T) {
 	m := listErrorModel(t, i18n.LangEN)
 	m.list.mode = ModeChannels
-	m.list.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
+	m.list.selectedCategory = &catalog.Category{ID: "cat-1", Name: "Just Chatting"}
 
 	updated, _ := m.Update(SavedAvailabilityMsg{
 		Generation: m.list.hydrateGen,
-		Channels:   []twitch.Channel{{ID: "1", Login: "alpha", DisplayName: "Alpha"}},
+		Channels:   []catalog.Channel{{ID: "1", Login: "alpha", DisplayName: "Alpha"}},
 	})
 	m = updated.(Model)
 
@@ -117,7 +118,7 @@ func TestHydrationWithoutStreamKeepsFavoriteUnverified(t *testing.T) {
 		if it.Login() != "alpha" {
 			continue
 		}
-		if it.Availability != twitch.AvailabilityUnknown {
+		if it.Availability != catalog.AvailabilityUnknown {
 			t.Fatalf("alpha availability = %v, want unknown", it.Availability)
 		}
 		if view := plainView(m); !strings.Contains(view, "[unverified]") {

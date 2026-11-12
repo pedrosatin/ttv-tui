@@ -1,12 +1,12 @@
 package ui
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // Ctrl+X while the channel is still coming up: the Stop reply comes before the
@@ -28,7 +28,7 @@ func TestStopDuringSwitchEndsStopped(t *testing.T) {
 			m := New(catEN, WithPlayback(pb))
 			updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 			m = updated.(Model)
-			updated, _ = m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+			updated, _ = m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 			m = updated.(Model)
 
 			updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
@@ -72,7 +72,7 @@ func TestChannelSelectedAfterQuitStartsNothing(t *testing.T) {
 	if !m.Quitting() {
 		t.Fatal("Ctrl+Q did not quit")
 	}
-	_, _ = m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	_, _ = m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	if len(pb.started) != 0 {
 		t.Fatalf("Start called after quit for %v", pb.started)
 	}

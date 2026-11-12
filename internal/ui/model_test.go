@@ -122,10 +122,10 @@ func TestCategoriesLoadingAndOptionalViewersRender(t *testing.T) {
 	}
 
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{
-					{ID: "509658", Name: "Just Chatting", Viewers: twitch.IntPtr(560000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{
+					{ID: "509658", Name: "Just Chatting", Viewers: catalog.IntPtr(560000)},
 					{ID: "99999", Name: "Mystery Game", Viewers: nil},
 				},
 				Cursor:  "cur-2",
@@ -175,21 +175,21 @@ func TestCategoriesNavigationArrowsJKAndNextPage(t *testing.T) {
 
 	var requestedCursors []string
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 			requestedCursors = append(requestedCursors, page.Cursor)
 			if page.Cursor == "" {
-				return twitch.Page[twitch.Category]{
-					Items: []twitch.Category{
-						{ID: "cat-1", Name: "One", Viewers: twitch.IntPtr(3000)},
-						{ID: "cat-2", Name: "Two", Viewers: twitch.IntPtr(2000)},
+				return catalog.Page[catalog.Category]{
+					Items: []catalog.Category{
+						{ID: "cat-1", Name: "One", Viewers: catalog.IntPtr(3000)},
+						{ID: "cat-2", Name: "Two", Viewers: catalog.IntPtr(2000)},
 					},
 					Cursor:  "cursor-1",
 					HasMore: true,
 				}, nil
 			}
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{
-					{ID: "cat-3", Name: "Three", Viewers: twitch.IntPtr(1000)},
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{
+					{ID: "cat-3", Name: "Three", Viewers: catalog.IntPtr(1000)},
 				},
 				Cursor:  "cursor-2",
 				HasMore: false,
@@ -253,11 +253,11 @@ func TestSelectionByIDPreservedWhenFiltering(t *testing.T) {
 	m := New(catEN)
 	updated, _ := m.Update(CategoriesLoadedMsg{
 		Generation: m.Generation(),
-		Page: twitch.Page[twitch.Category]{
-			Items: []twitch.Category{
-				{ID: "id-chat", Name: "Just Chatting", Viewers: twitch.IntPtr(500000)},
-				{ID: "id-wc3", Name: "Warcraft III", Viewers: twitch.IntPtr(20000)},
-				{ID: "id-wow", Name: "World of Warcraft", Viewers: twitch.IntPtr(15000)},
+		Page: catalog.Page[catalog.Category]{
+			Items: []catalog.Category{
+				{ID: "id-chat", Name: "Just Chatting", Viewers: catalog.IntPtr(500000)},
+				{ID: "id-wc3", Name: "Warcraft III", Viewers: catalog.IntPtr(20000)},
+				{ID: "id-wow", Name: "World of Warcraft", Viewers: catalog.IntPtr(15000)},
 			},
 		},
 	})
@@ -313,19 +313,19 @@ func TestErrorStateDisplaysActionableMessageAndRetryRecovers(t *testing.T) {
 
 	calls := 0
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 			calls++
 			if calls == 1 {
-				return twitch.Page[twitch.Category]{}, &twitch.Error{
+				return catalog.Page[catalog.Category]{}, &twitch.Error{
 					Kind:       twitch.Servidor,
 					Op:         "categories",
 					StatusCode: 503,
 					Err:        errors.New("service unavailable"),
 				}
 			}
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{
-					{ID: "21779", Name: "League of Legends", Viewers: twitch.IntPtr(400000)},
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{
+					{ID: "21779", Name: "League of Legends", Viewers: catalog.IntPtr(400000)},
 				},
 			}, nil
 		},
@@ -372,11 +372,11 @@ func TestCancelActiveRequestCancelsContextAndDiscardsStaleGeneration(t *testing.
 	started := make(chan struct{})
 	canceled := make(chan error, 1)
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 			close(started)
 			<-ctx.Done()
 			canceled <- ctx.Err()
-			return twitch.Page[twitch.Category]{}, ctx.Err()
+			return catalog.Page[catalog.Category]{}, ctx.Err()
 		},
 	}
 
@@ -397,8 +397,8 @@ func TestCancelActiveRequestCancelsContextAndDiscardsStaleGeneration(t *testing.
 	// Stale message from previous generation must be ignored.
 	updated, _ := m.Update(CategoriesLoadedMsg{
 		Generation: staleGen,
-		Page: twitch.Page[twitch.Category]{
-			Items: []twitch.Category{{ID: "1", Name: "Stale"}},
+		Page: catalog.Page[catalog.Category]{
+			Items: []catalog.Category{{ID: "1", Name: "Stale"}},
 		},
 	})
 	m = updated.(Model)
@@ -415,24 +415,24 @@ func TestOpenCategoryLoadsChannelsAndEnterEmitsChannelSelectedMsg(t *testing.T) 
 
 	var gotCategoryID string
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{
-					{ID: "32399", Name: "Counter-Strike", Viewers: twitch.IntPtr(180000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{
+					{ID: "32399", Name: "Counter-Strike", Viewers: catalog.IntPtr(180000)},
 				},
 			}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			gotCategoryID = categoryID
-			return twitch.Page[twitch.Channel]{
-				Items: []twitch.Channel{
+			return catalog.Page[catalog.Channel]{
+				Items: []catalog.Channel{
 					{
 						ID:          "181077473",
 						Login:       "gaules",
 						DisplayName: "Gaules",
-						Viewers:     twitch.IntPtr(45200),
-						Title:       twitch.StringPtr("Major CS2 Ao Vivo"),
-						CategoryID:  twitch.StringPtr("32399"),
+						Viewers:     catalog.IntPtr(45200),
+						Title:       catalog.StringPtr("Major CS2 Ao Vivo"),
+						CategoryID:  catalog.StringPtr("32399"),
 					},
 					{
 						ID:          "999000",
@@ -513,18 +513,18 @@ func TestLocalFilterSlashAndEscPreservesSelectionByIDWithoutNetworkRequest(t *te
 
 	channelsCalls := 0
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{{ID: "1", Name: "CS2", Viewers: twitch.IntPtr(10000)}},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{{ID: "1", Name: "CS2", Viewers: catalog.IntPtr(10000)}},
 			}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			channelsCalls++
-			return twitch.Page[twitch.Channel]{
-				Items: []twitch.Channel{
-					{ID: "ch-alanzoka", Login: "alanzoka", DisplayName: "alanzoka", Viewers: twitch.IntPtr(30000), Title: twitch.StringPtr("Playing Horror")},
-					{ID: "ch-caze", Login: "casimito", DisplayName: "Casimito", Viewers: twitch.IntPtr(25000), Title: twitch.StringPtr("Reacts da Madrugada")},
-					{ID: "ch-gaules", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(20000), Title: twitch.StringPtr("Tribo Major")},
+			return catalog.Page[catalog.Channel]{
+				Items: []catalog.Channel{
+					{ID: "ch-alanzoka", Login: "alanzoka", DisplayName: "alanzoka", Viewers: catalog.IntPtr(30000), Title: catalog.StringPtr("Playing Horror")},
+					{ID: "ch-caze", Login: "casimito", DisplayName: "Casimito", Viewers: catalog.IntPtr(25000), Title: catalog.StringPtr("Reacts da Madrugada")},
+					{ID: "ch-gaules", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(20000), Title: catalog.StringPtr("Tribo Major")},
 				},
 			}, nil
 		},
@@ -615,19 +615,19 @@ func TestCtrlFSearchAndCtrlRReturnsToCategories(t *testing.T) {
 	var searchedQuery string
 	categoriesCalls := 0
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 			categoriesCalls++
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{
-					{ID: "509658", Name: "Just Chatting", Viewers: twitch.IntPtr(500000)},
-					{ID: "21779", Name: "League of Legends", Viewers: twitch.IntPtr(300000)},
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{
+					{ID: "509658", Name: "Just Chatting", Viewers: catalog.IntPtr(500000)},
+					{ID: "21779", Name: "League of Legends", Viewers: catalog.IntPtr(300000)},
 				},
 			}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			searchedQuery = query
-			return twitch.Page[twitch.Channel]{
-				Items: []twitch.Channel{
+			return catalog.Page[catalog.Channel]{
+				Items: []catalog.Channel{
 					{ID: "181077473", Login: "gaules", DisplayName: "Gaules"},
 					{ID: "36029255", Login: "riotgames", DisplayName: "Riot Games"},
 				},
@@ -692,24 +692,24 @@ func TestEmptyAndErrorStatesInChannelsAndSearch(t *testing.T) {
 
 	channelAttempts := 0
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{{ID: "1", Name: "Artifact", Viewers: twitch.IntPtr(10)}},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{{ID: "1", Name: "Artifact", Viewers: catalog.IntPtr(10)}},
 			}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			channelAttempts++
 			if channelAttempts == 1 {
-				return twitch.Page[twitch.Channel]{}, &twitch.Error{
+				return catalog.Page[catalog.Channel]{}, &twitch.Error{
 					Kind: twitch.Rede,
 					Op:   "channels",
 					Err:  errors.New("connection reset"),
 				}
 			}
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{}}, nil
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{}}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{}}, nil
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{}}, nil
 		},
 	}
 
@@ -763,11 +763,11 @@ func TestInvalidTokenWarnsOnceInStatusBarWithoutCrashingApp(t *testing.T) {
 
 	secretToken := "supersecrettoken1234567890abcd"
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{
-					{ID: "509658", Name: "Just Chatting", Viewers: twitch.IntPtr(1000)},
-					{ID: "32399", Name: "Counter-Strike", Viewers: twitch.IntPtr(2000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{
+					{ID: "509658", Name: "Just Chatting", Viewers: catalog.IntPtr(1000)},
+					{ID: "32399", Name: "Counter-Strike", Viewers: catalog.IntPtr(2000)},
 				},
 			}, nil
 		},
@@ -871,7 +871,7 @@ func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {
 	}
 	pb := &fakePlayback{}
 	m := New(catEN, WithPlayback(pb))
-	ch := twitch.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}
+	ch := catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}
 
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: ch})
 	m = updated.(Model)
@@ -922,7 +922,7 @@ func TestPlayerControlKeys(t *testing.T) {
 	pb := &fakePlayback{}
 	m := New(catEN, WithPlayback(pb))
 
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
@@ -994,7 +994,7 @@ func TestSpaceDoesNotPauseWhileComposing(t *testing.T) {
 	}
 	pb := &fakePlayback{}
 	m := New(catEN, WithPlayback(pb))
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
@@ -1034,12 +1034,12 @@ func TestPlayerStatusDiscardsStaleGeneration(t *testing.T) {
 	pb := &fakePlayback{}
 	m := New(catEN, WithPlayback(pb))
 
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "aaa"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "aaa"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
 
-	updated, cmd = m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "bbb"}})
+	updated, cmd = m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "bbb"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
@@ -1069,7 +1069,7 @@ func TestPlayerBreakStaleGenerationAndRecovery(t *testing.T) {
 	m := New(catPT, WithPlayback(pb))
 
 	for _, login := range []string{"aaa", "bbb"} {
-		updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: login}})
+		updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: login}})
 		m = updated.(Model)
 		updated, _ = m.Update(cmd())
 		m = updated.(Model)
@@ -1124,14 +1124,14 @@ func TestPlayerVolumeClampedInUIAndStaleSwitchEventsDiscarded(t *testing.T) {
 	m := New(catEN, WithPlayback(pb))
 
 	// Select channel A (gen 1) and finish start handshake.
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "chanA"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "chanA"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
 
 	// Select channel B (gen 2): while its Start reply is awaited, an in-flight
 	// pump event from gen 1 must be ignored.
-	updated, cmdB := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "chanB"}})
+	updated, cmdB := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "chanB"}})
 	m = updated.(Model)
 	updated, _ = m.Update(PlayerStatusMsg{
 		Generation: 1,

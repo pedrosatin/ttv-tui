@@ -3,13 +3,13 @@ package ui
 import (
 	"context"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 const (
@@ -34,9 +34,9 @@ func setupHomeModel(t *testing.T, width int, fc *fakeChat) Model {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	src := &fakeSource{
-		categoriesFn: func(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "cat-cs", Name: "Counter-Strike", Viewers: twitch.IntPtr(250000)},
+		categoriesFn: func(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "cat-cs", Name: "Counter-Strike", Viewers: catalog.IntPtr(250000)},
 			}}, nil
 		},
 	}
@@ -427,7 +427,7 @@ func TestNarrowNoticeNeverHidesTheHighlight(t *testing.T) {
 	m.list.channels = nil
 	for i := range 12 {
 		login := fmt.Sprintf("canal%02d", i)
-		m.list.channels = append(m.list.channels, twitch.Channel{ID: login, Login: login, DisplayName: login, Viewers: twitch.IntPtr(10)})
+		m.list.channels = append(m.list.channels, catalog.Channel{ID: login, Login: login, DisplayName: login, Viewers: catalog.IntPtr(10)})
 	}
 	for range 40 {
 		m = sendKeys(m, tea.KeyMsg{Type: tea.KeyDown})

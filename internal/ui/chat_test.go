@@ -8,7 +8,6 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 type fakeChat struct {
@@ -105,7 +104,7 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 	m := New(catEN, WithChat(fc))
 
 	// 1. Select first channel "gaules" -> starts chat connecting.
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
 	if m.ChatState() != ChatStateConnecting || m.ChatChannel() != "gaules" {
 		t.Fatalf("ChatState=%q ChatChannel=%q", m.ChatState(), m.ChatChannel())
@@ -221,7 +220,7 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 	}
 
 	// 4. Switch to a second channel "alanzoka": clears previous messages and ignores stale generation 1 events.
-	updated, cmd = m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "2", Login: "alanzoka", DisplayName: "alanzoka"}})
+	updated, cmd = m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "2", Login: "alanzoka", DisplayName: "alanzoka"}})
 	m = updated.(Model)
 	if len(m.ChatMessages()) != 0 {
 		t.Fatalf("expected chat buffer cleared on channel switch, got %d messages", len(m.ChatMessages()))
@@ -292,7 +291,7 @@ func TestChatCompose_KeysDraftPreservationEmptySendAndDeliveryLifecycle(t *testi
 	m := New(catEN, WithChat(fc))
 
 	// Join #gaules (generation 1).
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
@@ -454,7 +453,7 @@ func TestChatCompose_NoTokenBlocksSendWithLoginInstruction(t *testing.T) {
 	fc := &fakeChat{hasToken: false}
 	m := New(catEN, WithChat(fc))
 
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
@@ -483,7 +482,7 @@ func joinChatFixture(t *testing.T, lang string) Model {
 	}
 	fc := &fakeChat{}
 	m := New(cat, WithChat(fc))
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)

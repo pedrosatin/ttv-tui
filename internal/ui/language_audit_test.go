@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"regexp"
 	"strings"
 	"testing"
@@ -9,7 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // expectKey is one catalog key (with its format arguments) that a rendered
@@ -54,7 +54,7 @@ func auditChannelOpen(t *testing.T, lang string, width int) Model {
 	t.Helper()
 	m := New(auditCatalog(t, lang), WithPlayback(&fakePlayback{}), WithChat(&fakeChat{}))
 	m = auditSend(m, tea.WindowSizeMsg{Width: width, Height: 30})
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
 	if cmd != nil {
 		m = auditSend(m, cmd())

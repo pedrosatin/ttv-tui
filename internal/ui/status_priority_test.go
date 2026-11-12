@@ -3,6 +3,7 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 const (
@@ -78,7 +78,7 @@ func playingState(state PlayerState, login string) func(t *testing.T, m Model) M
 		m.player.state = state
 		m.player.login = login
 		m.player.volume = 100
-		m.list.selectedChannel = &twitch.Channel{Login: login, DisplayName: login, Viewers: twitch.IntPtr(1234)}
+		m.list.selectedChannel = &catalog.Channel{Login: login, DisplayName: login, Viewers: catalog.IntPtr(1234)}
 		return m
 	}
 }

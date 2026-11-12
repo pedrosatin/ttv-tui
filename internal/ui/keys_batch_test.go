@@ -2,13 +2,13 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func batchCategoriesModel(t *testing.T, n int) Model {
@@ -17,18 +17,18 @@ func batchCategoriesModel(t *testing.T, n int) Model {
 	if err != nil {
 		t.Fatalf("i18n.New(en): %v", err)
 	}
-	items := make([]twitch.Category, n)
+	items := make([]catalog.Category, n)
 	for i := 0; i < n; i++ {
-		items[i] = twitch.Category{
+		items[i] = catalog.Category{
 			ID:      fmt.Sprintf("cat-%d", i+1),
 			Name:    fmt.Sprintf("Category %d", i+1),
-			Viewers: twitch.IntPtr((n - i) * 1000),
+			Viewers: catalog.IntPtr((n - i) * 1000),
 		}
 	}
 	m := New(catEN)
 	updated, _ := m.Update(CategoriesLoadedMsg{
 		Generation: m.Generation(),
-		Page:       twitch.Page[twitch.Category]{Items: items},
+		Page:       catalog.Page[catalog.Category]{Items: items},
 	})
 	m = updated.(Model)
 	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
@@ -99,11 +99,11 @@ func TestBatchedMixedRunesAndShortcuts(t *testing.T) {
 	m := New(catEN, WithPlayback(pb))
 	updated, _ := m.Update(CategoriesLoadedMsg{
 		Generation: m.Generation(),
-		Page: twitch.Page[twitch.Category]{
-			Items: []twitch.Category{
-				{ID: "cat-1", Name: "One", Viewers: twitch.IntPtr(3)},
-				{ID: "cat-2", Name: "Two", Viewers: twitch.IntPtr(2)},
-				{ID: "cat-3", Name: "Three", Viewers: twitch.IntPtr(1)},
+		Page: catalog.Page[catalog.Category]{
+			Items: []catalog.Category{
+				{ID: "cat-1", Name: "One", Viewers: catalog.IntPtr(3)},
+				{ID: "cat-2", Name: "Two", Viewers: catalog.IntPtr(2)},
+				{ID: "cat-3", Name: "Three", Viewers: catalog.IntPtr(1)},
 			},
 		},
 	})

@@ -1,12 +1,12 @@
 package ui
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func testCatalog(t *testing.T, lang string) *i18n.Catalog {
@@ -22,11 +22,11 @@ func channelFilterFixture(t *testing.T) Model {
 	t.Helper()
 	m := New(testCatalog(t, i18n.LangEN))
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
-		{ID: "1", Login: "gaules", DisplayName: "Gaules", Language: twitch.LanguagePtr("PT"), Viewers: twitch.IntPtr(1200), Availability: twitch.AvailabilityLive},
-		{ID: "2", Login: "xqc", DisplayName: "xQc", Language: twitch.LanguagePtr("EN"), Viewers: twitch.IntPtr(800), Availability: twitch.AvailabilityLive},
-		{ID: "3", Login: "small", DisplayName: "Small", Language: twitch.LanguagePtr("PT"), Viewers: twitch.IntPtr(40), Availability: twitch.AvailabilityLive},
-		{ID: "4", Login: "mystery", DisplayName: "Mystery", Viewers: twitch.IntPtr(900), Availability: twitch.AvailabilityLive},
+	m.list.channels = []catalog.Channel{
+		{ID: "1", Login: "gaules", DisplayName: "Gaules", Language: catalog.LanguagePtr("PT"), Viewers: catalog.IntPtr(1200), Availability: catalog.AvailabilityLive},
+		{ID: "2", Login: "xqc", DisplayName: "xQc", Language: catalog.LanguagePtr("EN"), Viewers: catalog.IntPtr(800), Availability: catalog.AvailabilityLive},
+		{ID: "3", Login: "small", DisplayName: "Small", Language: catalog.LanguagePtr("PT"), Viewers: catalog.IntPtr(40), Availability: catalog.AvailabilityLive},
+		{ID: "4", Login: "mystery", DisplayName: "Mystery", Viewers: catalog.IntPtr(900), Availability: catalog.AvailabilityLive},
 	}
 	m.reconcileHighlight()
 	return m
@@ -77,7 +77,7 @@ func TestChannelFilterByLanguageAndAudience(t *testing.T) {
 func TestChannelFilterDoesNotAffectCategories(t *testing.T) {
 	m := New(testCatalog(t, i18n.LangEN))
 	m.list.mode = ModeCategories
-	m.list.categories = []twitch.Category{{ID: "c1", Name: "Just Chatting", Viewers: twitch.IntPtr(10)}}
+	m.list.categories = []catalog.Category{{ID: "c1", Name: "Just Chatting", Viewers: catalog.IntPtr(10)}}
 	m.list.prefs.languages = []string{"pt"}
 	m.list.prefs.minViewers = 5000
 	items := m.VisibleItems()
@@ -211,8 +211,8 @@ func TestChannelFilterI18nAndWidths(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		m := New(testCatalog(t, lang), WithChannelFilters([]string{"pt"}, 500, nil))
 		m.list.mode = ModeChannels
-		m.list.channels = []twitch.Channel{
-			{ID: "1", Login: "gaules", DisplayName: "Gaules", Language: twitch.LanguagePtr("pt"), Viewers: twitch.IntPtr(900), Availability: twitch.AvailabilityLive},
+		m.list.channels = []catalog.Channel{
+			{ID: "1", Login: "gaules", DisplayName: "Gaules", Language: catalog.LanguagePtr("pt"), Viewers: catalog.IntPtr(900), Availability: catalog.AvailabilityLive},
 		}
 		m = m.openChannelFilterMenu()
 		for _, width := range []int{80, 120} {
@@ -252,7 +252,7 @@ func TestWithChannelFiltersAppliedOnOpen(t *testing.T) {
 	}
 }
 
-func loginsOf(chs []twitch.Channel) []string {
+func loginsOf(chs []catalog.Channel) []string {
 	out := make([]string, len(chs))
 	for i, ch := range chs {
 		out[i] = ch.Login

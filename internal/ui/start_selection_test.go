@@ -1,12 +1,12 @@
 package ui
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"slices"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // Enter on X and right away on Y: Y's Start supersedes X's, whose reply comes
@@ -23,10 +23,10 @@ func TestStartReplyOfEarlierSelectionIsIgnored(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = updated.(Model)
 
-	updated, startX := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "xqc"}})
+	updated, startX := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "xqc"}})
 	m = updated.(Model)
 	pb.startMsg = PlayerStatusMsg{}
-	updated, startY := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	updated, startY := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
 
 	m = drainCmd(t, m, startX)
@@ -57,7 +57,7 @@ func TestLateSelectionMessageDoesNotOverrideNewerEnter(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
+	m.list.channels = []catalog.Channel{
 		liveChannel("a-id", "alpha", "Alpha", 20000),
 		liveChannel("b-id", "beta", "Beta", 5000),
 	}

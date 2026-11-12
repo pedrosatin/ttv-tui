@@ -2,13 +2,13 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 const reconnectGapKey = "chat.reconnected_gap"
@@ -22,7 +22,7 @@ func rcLive(t *testing.T, lang string, fc *fakeChat, n int) (Model, *i18n.Catalo
 		t.Fatalf("i18n.New: %v", err)
 	}
 	m := New(cat, WithChat(fc))
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
 	if cmd != nil {
 		m = rcSend(t, m, cmd())
@@ -342,7 +342,7 @@ func TestCtrlT_FailureKeepsHistoryAndSession(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	m := New(cat, WithChat(failingReconnect{&fakeChat{hasToken: true, username: "tester"}}))
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "1", Login: "gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules"}})
 	m = updated.(Model)
 	m = rcSend(t, m, cmd())
 	m = rcDeliver(t, m, 1, 0, 50)
@@ -387,7 +387,7 @@ func TestChannelSwitch_StillClearsHistory(t *testing.T) {
 	fc := &fakeChat{hasToken: true, username: "tester"}
 	m, cat := rcLive(t, i18n.LangEN, fc, 50)
 
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "2", Login: "alanzoka"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "2", Login: "alanzoka"}})
 	m = updated.(Model)
 	m = rcSend(t, m, cmd())
 	m = rcSend(t, m, ChatEventMsg{Generation: 2, Channel: "alanzoka", State: ChatStateConnected})
@@ -406,7 +406,7 @@ func TestChannelSwitch_DropsThePendingGapLine(t *testing.T) {
 	m, cat := rcLive(t, i18n.LangEN, fc, 50)
 	m = rcSend(t, m, ChatEventMsg{Generation: 1, Channel: "gaules", State: ChatStateReconnecting})
 
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{ID: "2", Login: "alanzoka"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "2", Login: "alanzoka"}})
 	m = updated.(Model)
 	m = rcSend(t, m, cmd())
 	m = rcSend(t, m, ChatEventMsg{

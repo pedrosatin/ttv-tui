@@ -3,6 +3,7 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/store"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 type feedbackStore struct {
@@ -27,7 +27,7 @@ func feedbackModel(t *testing.T, s Store) Model {
 	m := New(mustCatalog(t, i18n.LangPTBR), WithStore(s))
 	m.width, m.height = 80, 24
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{{ID: "1", Login: "demo", DisplayName: "Demo"}}
+	m.list.channels = []catalog.Channel{{ID: "1", Login: "demo", DisplayName: "Demo"}}
 	m.reconcileHighlight()
 	return m
 }
@@ -42,7 +42,7 @@ func TestFeedbackFavoriteSave(t *testing.T) {
 				}
 				m := feedbackModel(t, s)
 				if removed {
-					m.list.favorites = append([]twitch.Channel(nil), m.list.channels...)
+					m.list.favorites = append([]catalog.Channel(nil), m.list.channels...)
 				}
 				m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 				if m.StatusNotice() != "" {
@@ -167,7 +167,7 @@ func TestFeedbackReadOnlyState(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := feedbackModel(t, store.New(filepath.Join(s.Path(), "state.json")))
-	m.list.favorites = []twitch.Channel{ch.ToChannel()}
+	m.list.favorites = []catalog.Channel{ch.ToChannel()}
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 	if m.StatusNotice() != "" {
 		t.Fatal("success before save")

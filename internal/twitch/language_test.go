@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"encoding/json"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,15 +20,15 @@ func TestNormalizeLanguage(t *testing.T) {
 		{"  ", ""},
 	}
 	for _, tc := range cases {
-		if got := NormalizeLanguage(tc.in); got != tc.want {
-			t.Fatalf("NormalizeLanguage(%q) = %q, want %q", tc.in, got, tc.want)
+		if got := catalog.NormalizeLanguage(tc.in); got != tc.want {
+			t.Fatalf("catalog.NormalizeLanguage(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
-	if LanguagePtr("PT") == nil || *LanguagePtr("PT") != "pt" {
-		t.Fatalf("LanguagePtr(PT) failed")
+	if catalog.LanguagePtr("PT") == nil || *catalog.LanguagePtr("PT") != "pt" {
+		t.Fatalf("catalog.LanguagePtr(PT) failed")
 	}
-	if LanguagePtr("  ") != nil {
-		t.Fatalf("LanguagePtr blank must be nil")
+	if catalog.LanguagePtr("  ") != nil {
+		t.Fatalf("catalog.LanguagePtr blank must be nil")
 	}
 }
 
@@ -54,7 +55,7 @@ func TestChannelsParsesLanguage(t *testing.T) {
 	defer srv.Close()
 
 	src := NewGQLSource(GQLConfig{Endpoint: srv.URL, HTTPClient: srv.Client()})
-	page, err := src.Channels(context.Background(), "1", PageRequest{Limit: 10})
+	page, err := src.Channels(context.Background(), "1", catalog.PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatalf("Channels: %v", err)
 	}
@@ -97,7 +98,7 @@ func TestSearchParsesLanguage(t *testing.T) {
 	if len(page.Items) < 1 {
 		t.Fatalf("expected search hits")
 	}
-	var gaules *Channel
+	var gaules *catalog.Channel
 	for i := range page.Items {
 		if page.Items[i].Login == "gaules" {
 			gaules = &page.Items[i]

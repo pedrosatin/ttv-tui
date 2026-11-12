@@ -5,56 +5,55 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // filterScrollSource feeds 30 stream languages for the filter menu and a search
 // where the exact channel competes with ten categories, nine of them empty.
 type filterScrollSource struct{}
 
-func (filterScrollSource) Categories(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-	return twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "cat-many", Name: "ManyLanguages"}}}, nil
+func (filterScrollSource) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat-many", Name: "ManyLanguages"}}}, nil
 }
 
-func (filterScrollSource) Channels(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-	items := make([]twitch.Channel, 0, 30)
+func (filterScrollSource) Channels(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	items := make([]catalog.Channel, 0, 30)
 	for i := range 30 {
-		items = append(items, twitch.Channel{
+		items = append(items, catalog.Channel{
 			ID:           fmt.Sprintf("ch-%d", i),
 			Login:        fmt.Sprintf("chan%d", i),
 			DisplayName:  fmt.Sprintf("Chan%d", i),
-			Language:     twitch.LanguagePtr(fmt.Sprintf("%c%c", 'a'+i/26, 'a'+i%26)),
-			Viewers:      twitch.IntPtr(100 + i),
-			Availability: twitch.AvailabilityLive,
+			Language:     catalog.LanguagePtr(fmt.Sprintf("%c%c", 'a'+i/26, 'a'+i%26)),
+			Viewers:      catalog.IntPtr(100 + i),
+			Availability: catalog.AvailabilityLive,
 		})
 	}
-	return twitch.Page[twitch.Channel]{Items: items}, nil
+	return catalog.Page[catalog.Channel]{Items: items}, nil
 }
 
-func (filterScrollSource) Search(context.Context, string) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-		{ID: "clone", Login: "gaules_fan", DisplayName: "gaules_fan", Viewers: twitch.IntPtr(9000), Availability: twitch.AvailabilityLive},
-		{ID: "exact", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(30000), Availability: twitch.AvailabilityLive},
+func (filterScrollSource) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+		{ID: "clone", Login: "gaules_fan", DisplayName: "gaules_fan", Viewers: catalog.IntPtr(9000), Availability: catalog.AvailabilityLive},
+		{ID: "exact", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(30000), Availability: catalog.AvailabilityLive},
 	}}, nil
 }
 
-func (filterScrollSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
-	cats := make([]twitch.Category, 0, 10)
+func (filterScrollSource) SearchCategories(context.Context, string) ([]catalog.Category, error) {
+	cats := make([]catalog.Category, 0, 10)
 	for i := range 9 {
-		cats = append(cats, twitch.Category{ID: fmt.Sprintf("dead-%d", i), Name: fmt.Sprintf("Gale Game %d", i)})
+		cats = append(cats, catalog.Category{ID: fmt.Sprintf("dead-%d", i), Name: fmt.Sprintf("Gale Game %d", i)})
 	}
-	return append(cats, twitch.Category{ID: "xd", Name: "Pokémon XD: Gale of Darkness", Viewers: twitch.IntPtr(14)}), nil
+	return append(cats, catalog.Category{ID: "xd", Name: "Pokémon XD: Gale of Darkness", Viewers: catalog.IntPtr(14)}), nil
 }
 
-func (filterScrollSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+func (filterScrollSource) ChannelsByLogins(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 
-func (filterScrollSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+func (filterScrollSource) ChannelsByIDs(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 

@@ -3,43 +3,43 @@ package ui
 import (
 	"context"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // gaulesSource reproduces Marina's search: ten categories, nine of them without
 // a broadcast, and the exact channel behind a look-alike.
 func gaulesSource(opened *string) *fakeSource {
 	return &fakeSource{
-		categoriesFn: func(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "top1", Name: "Just Chatting", Viewers: twitch.IntPtr(100000)},
+		categoriesFn: func(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "top1", Name: "Just Chatting", Viewers: catalog.IntPtr(100000)},
 			}}, nil
 		},
-		searchFn: func(context.Context, string) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-				{ID: "clone", Login: "gaules_fan", DisplayName: "gaules_fan", Viewers: twitch.IntPtr(9000), Availability: twitch.AvailabilityLive},
-				{ID: "exact", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(30000), Availability: twitch.AvailabilityLive},
-				{ID: "old", Login: "gaulesclips", DisplayName: "GaulesClips", Availability: twitch.AvailabilityOffline},
+		searchFn: func(context.Context, string) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+				{ID: "clone", Login: "gaules_fan", DisplayName: "gaules_fan", Viewers: catalog.IntPtr(9000), Availability: catalog.AvailabilityLive},
+				{ID: "exact", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(30000), Availability: catalog.AvailabilityLive},
+				{ID: "old", Login: "gaulesclips", DisplayName: "GaulesClips", Availability: catalog.AvailabilityOffline},
 			}}, nil
 		},
-		searchCategoriesFn: func(context.Context, string) ([]twitch.Category, error) {
-			cats := []twitch.Category{}
+		searchCategoriesFn: func(context.Context, string) ([]catalog.Category, error) {
+			cats := []catalog.Category{}
 			for i := range 9 {
-				cats = append(cats, twitch.Category{ID: fmt.Sprintf("dead-%d", i), Name: fmt.Sprintf("Gale Game %d", i)})
+				cats = append(cats, catalog.Category{ID: fmt.Sprintf("dead-%d", i), Name: fmt.Sprintf("Gale Game %d", i)})
 			}
-			return append(cats, twitch.Category{ID: "xd", Name: "Pokémon XD: Gale of Darkness", Viewers: twitch.IntPtr(14)}), nil
+			return append(cats, catalog.Category{ID: "xd", Name: "Pokémon XD: Gale of Darkness", Viewers: catalog.IntPtr(14)}), nil
 		},
-		channelsFn: func(_ context.Context, categoryID string, _ twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(_ context.Context, categoryID string, _ catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			if opened != nil {
 				*opened = categoryID
 			}
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-				{ID: "c1", Login: "inside", DisplayName: "Inside", Viewers: twitch.IntPtr(5)},
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+				{ID: "c1", Login: "inside", DisplayName: "Inside", Viewers: catalog.IntPtr(5)},
 			}}, nil
 		},
 	}
@@ -119,10 +119,10 @@ func TestSearchExactIgnoresCaseAndSpaces(t *testing.T) {
 
 func TestSearchExactDisplayNameComesFirst(t *testing.T) {
 	src := gaulesSource(nil)
-	src.searchFn = func(context.Context, string) (twitch.Page[twitch.Channel], error) {
-		return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-			{ID: "other", Login: "hangeul_fan", DisplayName: "hangeul_fan", Availability: twitch.AvailabilityLive},
-			{ID: "kr", Login: "koreanstreamer", DisplayName: "한글이름", Availability: twitch.AvailabilityOffline},
+	src.searchFn = func(context.Context, string) (catalog.Page[catalog.Channel], error) {
+		return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+			{ID: "other", Login: "hangeul_fan", DisplayName: "hangeul_fan", Availability: catalog.AvailabilityLive},
+			{ID: "kr", Login: "koreanstreamer", DisplayName: "한글이름", Availability: catalog.AvailabilityOffline},
 		}}, nil
 	}
 	m := runSearch(t, newSearchCategoriesModel(t, src), "한글이름")
@@ -147,7 +147,7 @@ func TestEnterOnFirstSearchResultOpensExactChannel(t *testing.T) {
 
 func TestSearchCategoriesWithoutBroadcastComeAfterLiveOnes(t *testing.T) {
 	m := runSearch(t, newSearchCategoriesModel(t, gaulesSource(nil)), "gaules")
-	var cats []twitch.Category
+	var cats []catalog.Category
 	for _, it := range m.VisibleItems() {
 		if it.Category != nil {
 			cats = append(cats, *it.Category)
@@ -166,9 +166,9 @@ func TestSearchCategoriesWithoutBroadcastComeAfterLiveOnes(t *testing.T) {
 func TestSearchByCategoryNameStillOpensCategory(t *testing.T) {
 	var opened string
 	src := gaulesSource(&opened)
-	src.searchFn = func(context.Context, string) (twitch.Page[twitch.Channel], error) {
-		return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-			{ID: "fan", Login: "darkness_fan", DisplayName: "darkness_fan", Availability: twitch.AvailabilityLive},
+	src.searchFn = func(context.Context, string) (catalog.Page[catalog.Channel], error) {
+		return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+			{ID: "fan", Login: "darkness_fan", DisplayName: "darkness_fan", Availability: catalog.AvailabilityLive},
 		}}, nil
 	}
 	m := runSearch(t, newSearchCategoriesModel(t, src), "Pokémon XD: Gale of Darkness")
@@ -214,15 +214,15 @@ func TestSearchWithoutExactMatchKeepsCurrentOrder(t *testing.T) {
 func TestSearchExactChannelBeatsExactCategoryWhichStaysNext(t *testing.T) {
 	var opened string
 	src := gaulesSource(&opened)
-	src.searchFn = func(context.Context, string) (twitch.Page[twitch.Channel], error) {
-		return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-			{ID: "official", Login: "valorant", DisplayName: "VALORANT", Availability: twitch.AvailabilityOffline},
+	src.searchFn = func(context.Context, string) (catalog.Page[catalog.Channel], error) {
+		return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+			{ID: "official", Login: "valorant", DisplayName: "VALORANT", Availability: catalog.AvailabilityOffline},
 		}}, nil
 	}
-	src.searchCategoriesFn = func(context.Context, string) ([]twitch.Category, error) {
-		return []twitch.Category{
-			{ID: "other", Name: "Valorant Mobile", Viewers: twitch.IntPtr(900000)},
-			{ID: "val", Name: "VALORANT", Viewers: twitch.IntPtr(200000)},
+	src.searchCategoriesFn = func(context.Context, string) ([]catalog.Category, error) {
+		return []catalog.Category{
+			{ID: "other", Name: "Valorant Mobile", Viewers: catalog.IntPtr(900000)},
+			{ID: "val", Name: "VALORANT", Viewers: catalog.IntPtr(200000)},
 		}, nil
 	}
 	m := runSearch(t, newSearchCategoriesModel(t, src), "valorant")
@@ -242,7 +242,7 @@ func TestSearchExactChannelBeatsExactCategoryWhichStaysNext(t *testing.T) {
 
 func TestSearchExactFavoriteGetsTheCursorWhereItRenders(t *testing.T) {
 	m := newSearchCategoriesModel(t, gaulesSource(nil))
-	m.list.favorites = []twitch.Channel{
+	m.list.favorites = []catalog.Channel{
 		{ID: "fav", Login: "alanzoka", DisplayName: "alanzoka"},
 		{ID: "exact", Login: "gaules", DisplayName: "Gaules"},
 	}
@@ -292,8 +292,8 @@ func TestLocalFilterOverSearchResultsStillWorks(t *testing.T) {
 
 func TestExactSectionAloneWhenItIsTheOnlyChannel(t *testing.T) {
 	src := gaulesSource(nil)
-	src.searchFn = func(context.Context, string) (twitch.Page[twitch.Channel], error) {
-		return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+	src.searchFn = func(context.Context, string) (catalog.Page[catalog.Channel], error) {
+		return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
 			{ID: "exact", Login: "gaules", DisplayName: "Gaules"},
 		}}, nil
 	}

@@ -19,7 +19,8 @@ O suporte a múltiplas plataformas (Twitch, Kick, YouTube e URLs avulsas) requer
      - `Searcher`: busca de canais ao vivo (`Search`).
      - `Resolver`: resolução de status de transmissão para canais salvos (`ChannelsByIDs`). Renomeado de `ChannelsByLogins` para identificador neutro na migração da lista, já que em plataformas como YouTube o identificador não é um login. Na Twitch, `ChannelsByIDs` delega para a resolução existente e `ChannelsByLogins` é mantido para compatibilidade.
      - `catalog.Source`: preservado como a composição das três capacidades (`Browser`, `Searcher`, `Resolver`) para compatibilidade com a Twitch e a UI existente.
-   - Em `internal/twitch/source.go`, os tipos correspondentes são expostos como apelidos de tipo (`type Channel = catalog.Channel`, etc.). Esses apelidos são provisórios e sustentam a compatibilidade até a migração da UI na migração da lista e do chat na migração do chat.
+   - Os apelidos provisórios em `internal/twitch/source.go` foram removidos: todos os pacotes e testes consom diretamente os tipos de `internal/catalog`.
+   - A classificação de erros de rede (`ErrorKind`, `Error`, `KindOf`) reside em `internal/catalog`, com apelidos em `internal/twitch/errors.go` mantidos para callers da Twitch.
 
 2. **Lógica unificada de identidade**:
    - `catalog.SameChannel` e `catalog.StableID` centralizam a checagem de equivalência de canais e extração de identificadores estáveis.
@@ -34,8 +35,8 @@ O suporte a múltiplas plataformas (Twitch, Kick, YouTube e URLs avulsas) requer
      - `Searcher() (catalog.Searcher, bool)`: capacidade opcional de busca de canais.
      - `Resolver() (catalog.Resolver, bool)`: capacidade opcional de resolução de status de canais salvos.
      - `StreamTarget(ch catalog.Channel) (catalog.Stream, error)`: montagem do alvo neutro de reprodução (`URL`, `ExtraArgs` do streamlink e rótulo qualificado `Label`).
-     - `Chat() (catalog.Chat, bool)`: interface mínima para acomodar o chat de cada plataforma (a ser expandida na migração do chat).
-   - **Isolamento de dependências**: `internal/provider` e `internal/twitch` dependem apenas de `catalog`, `platform` e `streamurl` (além da biblioteca padrão), sem importar `internal/player`. `internal/twitch` implementa `Provider` implicitamente sem importar `internal/provider`.
+     - `Chat() (catalog.Chat, bool)`: interface de chat neutra (`catalog.Chat`) com capacidades declaradas antes da conexão (`catalog.ChatCapabilities`: envio, limite de caracteres, slow mode, avisos próprios). Permite chats somente leitura (Kick via WebSocket, YouTube via polling) e bidirecionais (Twitch via IRC).
+   - **Isolamento de dependências**: `internal/provider` e `internal/twitch` dependem apenas de `catalog`, `platform` e `streamurl` (além da biblioteca padrão), sem importar `internal/player`. A UI não importa `internal/twitch`, `internal/chat` ou `internal/player`, dependendo exclusivamente das interfaces e tipos de `internal/catalog`. `internal/twitch` implementa `Provider` implicitamente sem importar `internal/provider`.
    - `provider.Registry` gerencia providers registrados com `Register`, `Get(id)` e `IDs()` (em ordem alfabética estável e determinística).
    - Em `Registry.ProviderFor(ch)`, caso a plataforma de um canal não esteja registrada, um erro explícito é retornado em vez de cair silenciosamente no provider genérico de URL, exceto quando o canal possui uma URL de stream que o provider de URL sabe manipular.
 

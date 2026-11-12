@@ -1,25 +1,25 @@
 package ui
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func TestChannelDensityIdentity(t *testing.T) {
 	m := New(mustCatalog(t, i18n.LangPTBR))
 	title := "0123456789abcdefghijklmnopqrstuv"
-	ch := twitch.Channel{Login: "alanzoka", DisplayName: "Alanzoka", Title: &title, Viewers: twitch.IntPtr(999)}
-	row := ansi.Strip(m.formatChannelRow("  ", ch, twitch.AvailabilityLive, 40))
+	ch := catalog.Channel{Login: "alanzoka", DisplayName: "Alanzoka", Title: &title, Viewers: catalog.IntPtr(999)}
+	row := ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 40))
 	if strings.Contains(row, "(alanzoka)") || !strings.Contains(row, "0123456789") {
 		t.Fatalf("80-column split must retain 10+ title cells: %q", row)
 	}
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{ch}
+	m.list.channels = []catalog.Channel{ch}
 	m.chat.panel.channel = ch.Login
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := ansi.Strip(m.View())
@@ -27,12 +27,12 @@ func TestChannelDensityIdentity(t *testing.T) {
 		t.Fatalf("80-column split lost title cells: %s", view)
 	}
 	ch.DisplayName = "Outro nome"
-	row = ansi.Strip(m.formatChannelRow("  ", ch, twitch.AvailabilityLive, 80))
+	row = ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 80))
 	if !strings.Contains(row, "Outro nome (alanzoka)") {
 		t.Fatal(row)
 	}
 	ch.DisplayName = ""
-	row = ansi.Strip(m.formatChannelRow("  ", ch, twitch.AvailabilityLive, 80))
+	row = ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 80))
 	if strings.Contains(row, "(alanzoka)") || !strings.Contains(row, "alanzoka") {
 		t.Fatal(row)
 	}
@@ -54,8 +54,8 @@ func TestChannelDensityViewers(t *testing.T) {
 		}
 	}
 	var nameAt int
-	for i, v := range []*int{nil, twitch.IntPtr(999), twitch.IntPtr(1000), twitch.IntPtr(100000), twitch.IntPtr(999950)} {
-		row := ansi.Strip(m.formatChannelRow("  ", twitch.Channel{Login: "Canal", DisplayName: "Canal", Viewers: v}, twitch.AvailabilityLive, 40))
+	for i, v := range []*int{nil, catalog.IntPtr(999), catalog.IntPtr(1000), catalog.IntPtr(100000), catalog.IntPtr(999950)} {
+		row := ansi.Strip(m.formatChannelRow("  ", catalog.Channel{Login: "Canal", DisplayName: "Canal", Viewers: v}, catalog.AvailabilityLive, 40))
 		at := ansi.StringWidth(row[:strings.Index(row, "Canal")])
 		if i == 0 {
 			nameAt = at
@@ -80,7 +80,7 @@ func TestChannelDensitySelection(t *testing.T) {
 			defer resetOrientationColorsForTest()
 			m := New(mustCatalog(t, i18n.LangPTBR))
 			m.list.mode = ModeChannels
-			m.list.channels = []twitch.Channel{{ID: "1", Login: "Canal", DisplayName: "Canal", Viewers: twitch.IntPtr(999)}}
+			m.list.channels = []catalog.Channel{{ID: "1", Login: "Canal", DisplayName: "Canal", Viewers: catalog.IntPtr(999)}}
 			m.list.highlightedID = "1"
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 			for _, row := range strings.Split(m.View(), "\n") {
@@ -109,7 +109,7 @@ func TestChannelDensityMarkers(t *testing.T) {
 	m.list.mode = ModeSearch
 	language := "pt"
 	m.list.prefs.languages = []string{"pt"}
-	m.list.channels = []twitch.Channel{{ID: "1", Login: "Short", DisplayName: "Short", Language: &language, Availability: twitch.AvailabilityOffline}, {ID: "2", Login: "LongerName", DisplayName: "LongerName", Language: &language}, {ID: "3", Login: "Live", DisplayName: "Live", Viewers: twitch.IntPtr(10)}}
+	m.list.channels = []catalog.Channel{{ID: "1", Login: "Short", DisplayName: "Short", Language: &language, Availability: catalog.AvailabilityOffline}, {ID: "2", Login: "LongerName", DisplayName: "LongerName", Language: &language}, {ID: "3", Login: "Live", DisplayName: "Live", Viewers: catalog.IntPtr(10)}}
 	rows := m.renderListBodyLines("", 80)
 	positions := []int{}
 	for _, row := range rows {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -40,7 +41,7 @@ func TestCategoriesSuccessSortedAndOptionalViewers(t *testing.T) {
 		HTTPClient: srv.Client(),
 	})
 
-	page, err := src.Categories(context.Background(), PageRequest{Limit: 4})
+	page, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 4})
 	if err != nil {
 		t.Fatalf("Categories returned unexpected error: %v", err)
 	}
@@ -62,9 +63,9 @@ func TestCategoriesSuccessSortedAndOptionalViewers(t *testing.T) {
 		name    string
 		viewers *int
 	}{
-		{id: "509658", name: "Just Chatting", viewers: IntPtr(560000)},
-		{id: "21779", name: "League of Legends", viewers: IntPtr(430000)},
-		{id: "33214", name: "Fortnite", viewers: IntPtr(120000)},
+		{id: "509658", name: "Just Chatting", viewers: catalog.IntPtr(560000)},
+		{id: "21779", name: "League of Legends", viewers: catalog.IntPtr(430000)},
+		{id: "33214", name: "Fortnite", viewers: catalog.IntPtr(120000)},
 		{id: "99999", name: "Mystery Game", viewers: nil},
 	}
 
@@ -111,7 +112,7 @@ func TestCategoriesClampsLimitToMaxGamesFirst(t *testing.T) {
 		Endpoint:   srv.URL,
 		HTTPClient: srv.Client(),
 	})
-	if _, err := src.Categories(context.Background(), PageRequest{Limit: 120}); err != nil {
+	if _, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 120}); err != nil {
 		t.Fatalf("Categories: %v", err)
 	}
 	if gotN != MaxGamesFirst {
@@ -167,7 +168,7 @@ func TestCategoriesPaginationPassesCursor(t *testing.T) {
 		HTTPClient: srv.Client(),
 	})
 
-	p1, err := src.Categories(context.Background(), PageRequest{Limit: 1})
+	p1, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 1})
 	if err != nil {
 		t.Fatalf("page 1 error: %v", err)
 	}
@@ -175,7 +176,7 @@ func TestCategoriesPaginationPassesCursor(t *testing.T) {
 		t.Fatalf("page 1 = (%+v), want HasMore=true, Cursor=cursor-page-1", p1)
 	}
 
-	p2, err := src.Categories(context.Background(), PageRequest{Cursor: p1.Cursor, Limit: 1})
+	p2, err := src.Categories(context.Background(), catalog.PageRequest{Cursor: p1.Cursor, Limit: 1})
 	if err != nil {
 		t.Fatalf("page 2 error: %v", err)
 	}
@@ -223,7 +224,7 @@ func TestCategoriesRateLimit429RespectsReset(t *testing.T) {
 			},
 		})
 
-		page, err := src.Categories(context.Background(), PageRequest{Limit: 10})
+		page, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 10})
 		if err != nil {
 			t.Fatalf("expected retry after Ratelimit-Reset to succeed, got: %v", err)
 		}
@@ -251,7 +252,7 @@ func TestCategoriesRateLimit429RespectsReset(t *testing.T) {
 			Sleep:      func(_ context.Context, _ time.Duration) error { return nil },
 		})
 
-		_, err := src.Categories(context.Background(), PageRequest{Limit: 10})
+		_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 10})
 		if err == nil {
 			t.Fatal("expected error on persistent 429, got nil")
 		}
@@ -287,7 +288,7 @@ func TestCategoriesRateLimit429RespectsReset(t *testing.T) {
 			},
 		})
 
-		_, err := src.Categories(context.Background(), PageRequest{Limit: 10})
+		_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 10})
 		if KindOf(err) != RateLimit {
 			t.Fatalf("KindOf(err) = %q, want %q (err=%v)", KindOf(err), RateLimit, err)
 		}
@@ -328,7 +329,7 @@ func TestCategoriesServer500RetriesOnceWithBackoff(t *testing.T) {
 			},
 		})
 
-		page, err := src.Categories(context.Background(), PageRequest{Limit: 5})
+		page, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 5})
 		if err != nil {
 			t.Fatalf("unexpected error on recovered 500: %v", err)
 		}
@@ -357,7 +358,7 @@ func TestCategoriesServer500RetriesOnceWithBackoff(t *testing.T) {
 			Sleep:      func(_ context.Context, _ time.Duration) error { return nil },
 		})
 
-		_, err := src.Categories(context.Background(), PageRequest{Limit: 5})
+		_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 5})
 		if KindOf(err) != Servidor {
 			t.Fatalf("KindOf(err) = %q, want %q (err=%v)", KindOf(err), Servidor, err)
 		}
@@ -409,7 +410,7 @@ func TestCategoriesPartialJSONAndContractErrorsDoNotRetry(t *testing.T) {
 				},
 			})
 
-			_, err := src.Categories(context.Background(), PageRequest{Limit: 5})
+			_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 5})
 			if KindOf(err) != Contrato {
 				t.Fatalf("KindOf(err) = %q, want %q (err=%v)", KindOf(err), Contrato, err)
 			}
@@ -499,7 +500,7 @@ func TestCategoriesTimeoutAndContextCancellation(t *testing.T) {
 		var slept []time.Duration
 		src := stallingSource(tr, &slept)
 
-		_, err := src.Categories(context.Background(), PageRequest{Limit: 5})
+		_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 5})
 		assertTimeoutRetriedOnce(t, "Categories", tr, slept, err)
 	})
 
@@ -520,7 +521,7 @@ func TestCategoriesTimeoutAndContextCancellation(t *testing.T) {
 			},
 		})
 
-		_, err := src.Categories(ctx, PageRequest{Limit: 5})
+		_, err := src.Categories(ctx, catalog.PageRequest{Limit: 5})
 		if KindOf(err) != Rede {
 			t.Fatalf("KindOf(err) = %q, want %q (err=%v)", KindOf(err), Rede, err)
 		}
@@ -587,7 +588,7 @@ func TestChannelsSuccessAndEmptyFixtures(t *testing.T) {
 			CacheTTL:   time.Minute,
 		})
 
-		page, err := src.Channels(context.Background(), "509658", PageRequest{Limit: 10})
+		page, err := src.Channels(context.Background(), "509658", catalog.PageRequest{Limit: 10})
 		if err != nil {
 			t.Fatalf("Channels returned unexpected error: %v", err)
 		}
@@ -605,8 +606,8 @@ func TestChannelsSuccessAndEmptyFixtures(t *testing.T) {
 		if first.Viewers == nil || *first.Viewers != 42500 {
 			t.Fatalf("first.Viewers = %v, want 42500", first.Viewers)
 		}
-		if first.Availability != AvailabilityLive {
-			t.Fatalf("first.Availability = %v, want AvailabilityLive (game streams are live)", first.Availability)
+		if first.Availability != catalog.AvailabilityLive {
+			t.Fatalf("first.Availability = %v, want catalog.AvailabilityLive (game streams are live)", first.Availability)
 		}
 		if first.Title == nil || *first.Title != "Major CS2 Ao Vivo !loja" {
 			t.Fatalf("first.Title = %v, want normalized title", first.Title)
@@ -627,7 +628,7 @@ func TestChannelsSuccessAndEmptyFixtures(t *testing.T) {
 		}
 
 		// Repeat call hits in-memory cache.
-		if _, err := src.Channels(context.Background(), "509658", PageRequest{Limit: 10}); err != nil {
+		if _, err := src.Channels(context.Background(), "509658", catalog.PageRequest{Limit: 10}); err != nil {
 			t.Fatalf("cached Channels error: %v", err)
 		}
 		if got := atomic.LoadInt32(&hits); got != 1 {
@@ -642,7 +643,7 @@ func TestChannelsSuccessAndEmptyFixtures(t *testing.T) {
 				"data": {
 					"game": {
 						"id": "509658",
-						"name": "Empty Category",
+						"name": "Empty catalog.Category",
 						"streams": {
 							"edges": [],
 							"pageInfo": {"hasNextPage": false}
@@ -658,7 +659,7 @@ func TestChannelsSuccessAndEmptyFixtures(t *testing.T) {
 			HTTPClient: srv.Client(),
 		})
 
-		page, err := src.Channels(context.Background(), "Empty Category", PageRequest{Limit: 20})
+		page, err := src.Channels(context.Background(), "Empty catalog.Category", catalog.PageRequest{Limit: 20})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -696,7 +697,7 @@ func TestChannelsErrorClassificationsAndIntegrityCheck(t *testing.T) {
 			},
 		})
 
-		page, err := src.Channels(context.Background(), "1", PageRequest{Limit: 5})
+		page, err := src.Channels(context.Background(), "1", catalog.PageRequest{Limit: 5})
 		if err != nil {
 			t.Fatalf("expected retry after 429 to succeed, got: %v", err)
 		}
@@ -722,7 +723,7 @@ func TestChannelsErrorClassificationsAndIntegrityCheck(t *testing.T) {
 			Sleep:      func(_ context.Context, _ time.Duration) error { return nil },
 		})
 
-		_, err := src.Channels(context.Background(), "509658", PageRequest{Limit: 5})
+		_, err := src.Channels(context.Background(), "509658", catalog.PageRequest{Limit: 5})
 		if KindOf(err) != Servidor {
 			t.Fatalf("KindOf(err) = %q, want %q (err=%v)", KindOf(err), Servidor, err)
 		}
@@ -761,7 +762,7 @@ func TestChannelsErrorClassificationsAndIntegrityCheck(t *testing.T) {
 					},
 				})
 
-				_, err := src.Channels(context.Background(), "509658", PageRequest{Limit: 5})
+				_, err := src.Channels(context.Background(), "509658", catalog.PageRequest{Limit: 5})
 				if KindOf(err) != Contrato {
 					t.Fatalf("KindOf(err) = %q, want %q (err=%v)", KindOf(err), Contrato, err)
 				}
@@ -784,7 +785,7 @@ func TestChannelsErrorClassificationsAndIntegrityCheck(t *testing.T) {
 			HTTPClient: srv.Client(),
 		})
 
-		page, err := src.Channels(context.Background(), "509658", PageRequest{Cursor: "c1", Limit: 20})
+		page, err := src.Channels(context.Background(), "509658", catalog.PageRequest{Cursor: "c1", Limit: 20})
 		if err != nil {
 			t.Fatalf("unexpected error on IntegrityCheckFailed: %v", err)
 		}
@@ -995,7 +996,7 @@ func TestCategoriesIntegrityCheckFailedReturnsEmptyPageWithoutLooping(t *testing
 		})
 
 		ctx := context.Background()
-		page, err := src.Categories(ctx, PageRequest{Cursor: "cursor-page-1", Limit: 20})
+		page, err := src.Categories(ctx, catalog.PageRequest{Cursor: "cursor-page-1", Limit: 20})
 		if err != nil {
 			t.Fatalf("Categories returned unexpected error: %v", err)
 		}
@@ -1018,7 +1019,7 @@ func TestCategoriesIntegrityCheckFailedReturnsEmptyPageWithoutLooping(t *testing
 		for curr.HasMore && curr.Cursor != "" {
 			loopCalls++
 			var nextErr error
-			curr, nextErr = src.Categories(ctx, PageRequest{Cursor: curr.Cursor, Limit: 20})
+			curr, nextErr = src.Categories(ctx, catalog.PageRequest{Cursor: curr.Cursor, Limit: 20})
 			if nextErr != nil {
 				t.Fatalf("unexpected error in pagination loop: %v", nextErr)
 			}
@@ -1028,7 +1029,7 @@ func TestCategoriesIntegrityCheckFailedReturnsEmptyPageWithoutLooping(t *testing
 		}
 
 		// A subsequent call with the same cursor hits the cache and avoids repeated network requests.
-		repeatPage, err := src.Categories(ctx, PageRequest{Cursor: "cursor-page-1", Limit: 20})
+		repeatPage, err := src.Categories(ctx, catalog.PageRequest{Cursor: "cursor-page-1", Limit: 20})
 		if err != nil {
 			t.Fatalf("repeat call returned unexpected error: %v", err)
 		}
@@ -1068,12 +1069,12 @@ func TestCategoriesIntegrityCheckFailedReturnsEmptyPageWithoutLooping(t *testing
 		ctx := context.Background()
 		cursor := ""
 		hasMore := true
-		var collected []Category
+		var collected []catalog.Category
 		requestCount := 0
 
 		for hasMore {
 			requestCount++
-			p, err := src.Categories(ctx, PageRequest{Cursor: cursor, Limit: 10})
+			p, err := src.Categories(ctx, catalog.PageRequest{Cursor: cursor, Limit: 10})
 			if err != nil {
 				t.Fatalf("unexpected error at request %d: %v", requestCount, err)
 			}
@@ -1100,7 +1101,7 @@ func TestCategoriesIntegrityCheckFailedReturnsEmptyPageWithoutLooping(t *testing
 func TestChannelsAndSearchTimeoutRetriesOnceAndReturnsRede(t *testing.T) {
 	trCh := &stallingTransport{}
 	var sleptCh []time.Duration
-	_, err := stallingSource(trCh, &sleptCh).Channels(context.Background(), "509658", PageRequest{Limit: 5})
+	_, err := stallingSource(trCh, &sleptCh).Channels(context.Background(), "509658", catalog.PageRequest{Limit: 5})
 	assertTimeoutRetriedOnce(t, "Channels", trCh, sleptCh, err)
 
 	trSearch := &stallingTransport{}
@@ -1140,8 +1141,8 @@ func TestSearchStreamFieldDrivesAvailability(t *testing.T) {
 	}
 
 	live := page.Items[0]
-	if live.Availability != AvailabilityLive {
-		t.Fatalf("live.Availability = %v, want AvailabilityLive", live.Availability)
+	if live.Availability != catalog.AvailabilityLive {
+		t.Fatalf("live.Availability = %v, want catalog.AvailabilityLive", live.Availability)
 	}
 	if live.Viewers == nil || *live.Viewers != 327 {
 		t.Fatalf("live.Viewers = %v, want 327", live.Viewers)
@@ -1156,10 +1157,10 @@ func TestSearchStreamFieldDrivesAvailability(t *testing.T) {
 		t.Fatalf("live.CategoryName = %v, want Just Chatting", live.CategoryName)
 	}
 
-	if off := page.Items[1]; off.Availability != AvailabilityOffline || off.Viewers != nil {
+	if off := page.Items[1]; off.Availability != catalog.AvailabilityOffline || off.Viewers != nil {
 		t.Fatalf("stream:null must be offline evidence without viewers, got %+v", off)
 	}
-	if unk := page.Items[2]; unk.Availability != AvailabilityUnknown {
+	if unk := page.Items[2]; unk.Availability != catalog.AvailabilityUnknown {
 		t.Fatalf("absent stream field must stay unknown, got %v", unk.Availability)
 	}
 }
@@ -1363,8 +1364,8 @@ func TestChannelsByLoginsLiveOfflineAndAbsent(t *testing.T) {
 	}
 
 	live := got[0]
-	if live.Login != "live_one" || live.Availability != AvailabilityLive {
-		t.Fatalf("live = %+v, want live_one / AvailabilityLive", live)
+	if live.Login != "live_one" || live.Availability != catalog.AvailabilityLive {
+		t.Fatalf("live = %+v, want live_one / catalog.AvailabilityLive", live)
 	}
 	if live.Viewers == nil || *live.Viewers != 327 {
 		t.Fatalf("live.Viewers = %v, want 327", live.Viewers)
@@ -1380,7 +1381,7 @@ func TestChannelsByLoginsLiveOfflineAndAbsent(t *testing.T) {
 	}
 
 	off := got[1]
-	if off.Login != "off_one" || off.Availability != AvailabilityOffline || off.Viewers != nil {
+	if off.Login != "off_one" || off.Availability != catalog.AvailabilityOffline || off.Viewers != nil {
 		t.Fatalf("off = %+v, want offline without viewers", off)
 	}
 }

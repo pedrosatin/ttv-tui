@@ -1,10 +1,10 @@
 package ui
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func TestVisibleItems_MalformedData(t *testing.T) {
@@ -12,13 +12,13 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 
 	t.Run("empty logins do not match different channels", func(t *testing.T) {
 		m := New(catEN,
-			WithFavorites([]twitch.Channel{
+			WithFavorites([]catalog.Channel{
 				{ID: "1", Login: ""},
 			}),
 		)
 		m.list.mode = ModeChannels
-		m.list.channels = []twitch.Channel{
-			{ID: "2", Login: "", Viewers: twitch.IntPtr(1)},
+		m.list.channels = []catalog.Channel{
+			{ID: "2", Login: "", Viewers: catalog.IntPtr(1)},
 		}
 
 		items := m.VisibleItems()
@@ -35,7 +35,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 
 	t.Run("duplicate favorites", func(t *testing.T) {
 		m := New(catEN,
-			WithFavorites([]twitch.Channel{
+			WithFavorites([]catalog.Channel{
 				{ID: "1", Login: "a"},
 				{ID: "1", Login: "a"},
 			}),
@@ -48,17 +48,17 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 
 	t.Run("case 3 recent resolving to duplicate favorite login", func(t *testing.T) {
 		m := New(catEN,
-			WithFavorites([]twitch.Channel{
+			WithFavorites([]catalog.Channel{
 				{ID: "10", Login: "a"},
 			}),
-			WithRecents([]twitch.Channel{
+			WithRecents([]catalog.Channel{
 				{ID: "11", Login: ""},
 			}),
 		)
 		m.list.mode = ModeChannels
-		m.list.channels = []twitch.Channel{
-			{ID: "10", Login: "a", Viewers: twitch.IntPtr(5)},
-			{ID: "11", Login: "a", Viewers: twitch.IntPtr(6)},
+		m.list.channels = []catalog.Channel{
+			{ID: "10", Login: "a", Viewers: catalog.IntPtr(5)},
+			{ID: "11", Login: "a", Viewers: catalog.IntPtr(6)},
 		}
 
 		items := m.VisibleItems()
@@ -72,7 +72,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 
 	t.Run("empty favorite ignored", func(t *testing.T) {
 		m := New(catEN,
-			WithFavorites([]twitch.Channel{
+			WithFavorites([]catalog.Channel{
 				{ID: "", Login: ""},
 			}),
 		)
@@ -83,7 +83,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 
 	t.Run("empty recents ignored", func(t *testing.T) {
 		m := New(catEN,
-			WithRecents([]twitch.Channel{
+			WithRecents([]catalog.Channel{
 				{ID: "", Login: ""},
 				{ID: "", Login: ""},
 			}),
@@ -98,14 +98,14 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 func TestVisibleItems_ReclaimedLoginPreservesListingChannel(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	m := New(catEN,
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "1", Login: "old"},
 		}),
 	)
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
-		{ID: "1", Login: "new", Viewers: twitch.IntPtr(5)},
-		{ID: "9", Login: "old", Viewers: twitch.IntPtr(6)},
+	m.list.channels = []catalog.Channel{
+		{ID: "1", Login: "new", Viewers: catalog.IntPtr(5)},
+		{ID: "9", Login: "old", Viewers: catalog.IntPtr(6)},
 	}
 
 	items := m.VisibleItems()

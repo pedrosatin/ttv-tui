@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,7 +17,6 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/store"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
 
@@ -146,30 +146,30 @@ func TestConfigWriterReportsARemovedConfigOnce(t *testing.T) {
 // the filter menu has something to toggle.
 type twoLanguageSource struct{}
 
-func (twoLanguageSource) Categories(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-	return twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "cat", Name: "Cat"}}}, nil
+func (twoLanguageSource) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat", Name: "Cat"}}}, nil
 }
 
-func (twoLanguageSource) Channels(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-		{ID: "pt", Login: "ptlive", DisplayName: "PtLive", Language: twitch.LanguagePtr("PT"), Viewers: twitch.IntPtr(750), Availability: twitch.AvailabilityLive},
-		{ID: "en", Login: "enlive", DisplayName: "EnLive", Language: twitch.LanguagePtr("EN"), Viewers: twitch.IntPtr(2000), Availability: twitch.AvailabilityLive},
+func (twoLanguageSource) Channels(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+		{ID: "pt", Login: "ptlive", DisplayName: "PtLive", Language: catalog.LanguagePtr("PT"), Viewers: catalog.IntPtr(750), Availability: catalog.AvailabilityLive},
+		{ID: "en", Login: "enlive", DisplayName: "EnLive", Language: catalog.LanguagePtr("EN"), Viewers: catalog.IntPtr(2000), Availability: catalog.AvailabilityLive},
 	}}, nil
 }
 
-func (twoLanguageSource) Search(context.Context, string) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{}, nil
+func (twoLanguageSource) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{}, nil
 }
 
-func (twoLanguageSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+func (twoLanguageSource) SearchCategories(context.Context, string) ([]catalog.Category, error) {
 	return nil, nil
 }
 
-func (twoLanguageSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+func (twoLanguageSource) ChannelsByLogins(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 
-func (twoLanguageSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+func (twoLanguageSource) ChannelsByIDs(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 

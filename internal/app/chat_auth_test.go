@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"context"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"io"
 	"net"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
 
@@ -47,7 +47,7 @@ func TestChatAuthFailureRemainsVisible(t *testing.T) {
 			m := ui.New(cat)
 			update := func(msg tea.Msg) { next, _ := m.Update(msg); m = next.(ui.Model) }
 			update(tea.WindowSizeMsg{Width: 160, Height: 30})
-			update(ui.ChannelSelectedMsg{Channel: twitch.Channel{ID: "1", Login: "test"}})
+			update(ui.ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "test"}})
 			if _, err := mgr.Join("test"); err != nil {
 				t.Fatal(err)
 			}
@@ -74,7 +74,7 @@ func TestChatAuthFailureRemainsVisible(t *testing.T) {
 					t.Fatalf("missing localized error %q in %s", tc.text, view)
 				}
 			}
-			update(ui.ChannelSelectedMsg{Channel: twitch.Channel{ID: "2", Login: "other"}})
+			update(ui.ChannelSelectedMsg{Channel: catalog.Channel{ID: "2", Login: "other"}})
 			if strings.Contains(m.View(), tc.text) {
 				t.Fatal("error survived channel change")
 			}

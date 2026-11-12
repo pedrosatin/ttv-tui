@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"io"
 	"math"
 	"net/http"
@@ -158,12 +159,12 @@ type GQLConfig struct {
 }
 
 type cachedCategoriesPage struct {
-	page      Page[Category]
+	page      catalog.Page[catalog.Category]
 	expiresAt time.Time
 }
 
 type cachedChannelsPage struct {
-	page      Page[Channel]
+	page      catalog.Page[catalog.Channel]
 	expiresAt time.Time
 }
 
@@ -473,11 +474,11 @@ type gqlUsersByLoginsData struct {
 }
 
 // Categories fetches a page of live categories ordered by viewer count descending.
-func (s *GQLSource) Categories(ctx context.Context, page PageRequest) (Page[Category], error) {
+func (s *GQLSource) Categories(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 	const op = "categories"
 
 	if err := ctx.Err(); err != nil {
-		return Page[Category]{}, &Error{
+		return catalog.Page[catalog.Category]{}, &Error{
 			Kind: Rede,
 			Op:   op,
 			Err:  fmt.Errorf("context canceled before request: %w", err),
@@ -509,7 +510,7 @@ func (s *GQLSource) Categories(ctx context.Context, page PageRequest) (Page[Cate
 		Variables: vars,
 	})
 	if err != nil {
-		return Page[Category]{}, &Error{
+		return catalog.Page[catalog.Category]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("encode graphql request: %w", err),
@@ -519,10 +520,10 @@ func (s *GQLSource) Categories(ctx context.Context, page PageRequest) (Page[Cate
 	res, reqErr := executeWithRetry(s, ctx, op, payload, s.parseCategoriesResponse)
 	if reqErr != nil {
 		if page.Cursor == "" || !errors.Is(reqErr, errIntegrityCheck) {
-			return Page[Category]{}, reqErr
+			return catalog.Page[catalog.Category]{}, reqErr
 		}
 		// Paginar categorias exige um token de integridade que não temos, então a lista termina aqui.
-		res = Page[Category]{Items: []Category{}}
+		res = catalog.Page[catalog.Category]{Items: []catalog.Category{}}
 	}
 	s.rememberCategories(res.Items)
 	s.setCachedCategories(cacheKey, res)
@@ -530,11 +531,11 @@ func (s *GQLSource) Categories(ctx context.Context, page PageRequest) (Page[Cate
 }
 
 // Channels fetches a page of live channels for the given category.
-func (s *GQLSource) Channels(ctx context.Context, categoryID string, page PageRequest) (Page[Channel], error) {
+func (s *GQLSource) Channels(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 	const op = "channels"
 
 	if err := ctx.Err(); err != nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Rede,
 			Op:   op,
 			Err:  fmt.Errorf("context canceled before request: %w", err),
@@ -543,7 +544,7 @@ func (s *GQLSource) Channels(ctx context.Context, categoryID string, page PageRe
 
 	catKey := strings.TrimSpace(categoryID)
 	if catKey == "" {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  errors.New("categoryID is required"),
@@ -580,33 +581,33 @@ func (s *GQLSource) Channels(ctx context.Context, categoryID string, page PageRe
 		Variables: vars,
 	})
 	if err != nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("encode graphql request: %w", err),
 		}
 	}
 
-	res, reqErr := executeWithRetry(s, ctx, op, payload, func(body []byte) (Page[Channel], *Error) {
+	res, reqErr := executeWithRetry(s, ctx, op, payload, func(body []byte) (catalog.Page[catalog.Channel], *Error) {
 		return s.parseChannelsResponse(body, catKey)
 	})
 	if reqErr != nil {
 		if page.Cursor == "" || !errors.Is(reqErr, errIntegrityCheck) {
-			return Page[Channel]{}, reqErr
+			return catalog.Page[catalog.Channel]{}, reqErr
 		}
 		// Paginar canais exige um token de integridade que não temos, então a lista termina aqui.
-		res = Page[Channel]{Items: []Channel{}}
+		res = catalog.Page[catalog.Channel]{Items: []catalog.Channel{}}
 	}
 	s.setCachedChannels(cacheKey, res)
 	return res, nil
 }
 
 // Search searches channels globally by user query.
-func (s *GQLSource) Search(ctx context.Context, query string) (Page[Channel], error) {
+func (s *GQLSource) Search(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 	const op = "search"
 
 	if err := ctx.Err(); err != nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Rede,
 			Op:   op,
 			Err:  fmt.Errorf("context canceled before request: %w", err),
@@ -615,8 +616,8 @@ func (s *GQLSource) Search(ctx context.Context, query string) (Page[Channel], er
 
 	q := strings.TrimSpace(query)
 	if q == "" {
-		return Page[Channel]{
-			Items:   []Channel{},
+		return catalog.Page[catalog.Channel]{
+			Items:   []catalog.Channel{},
 			Cursor:  "",
 			HasMore: false,
 		}, nil
@@ -636,7 +637,7 @@ func (s *GQLSource) Search(ctx context.Context, query string) (Page[Channel], er
 		Variables: vars,
 	})
 	if err != nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("encode graphql request: %w", err),
@@ -645,7 +646,7 @@ func (s *GQLSource) Search(ctx context.Context, query string) (Page[Channel], er
 
 	res, reqErr := executeWithRetry(s, ctx, op, payload, s.parseSearchResponse)
 	if reqErr != nil {
-		return Page[Channel]{}, reqErr
+		return catalog.Page[catalog.Channel]{}, reqErr
 	}
 	// Prefer an exact name, then live among clones; see PreferSearchChannels.
 	res.Items = PreferSearchChannels(q, res.Items)
@@ -654,7 +655,7 @@ func (s *GQLSource) Search(ctx context.Context, query string) (Page[Channel], er
 }
 
 // SearchCategories searches categories globally by user query via searchFor.games.
-func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]Category, error) {
+func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]catalog.Category, error) {
 	const op = "searchCategories"
 
 	if err := ctx.Err(); err != nil {
@@ -667,7 +668,7 @@ func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]Categ
 
 	q := strings.TrimSpace(query)
 	if q == "" {
-		return []Category{}, nil
+		return []catalog.Category{}, nil
 	}
 
 	cacheKey := fmt.Sprintf("searchCategories|%s", q)
@@ -700,7 +701,7 @@ func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]Categ
 }
 
 // ChannelsByIDs implements catalog.Resolver by resolving channels by login identifiers.
-func (s *GQLSource) ChannelsByIDs(ctx context.Context, ids []string) ([]Channel, error) {
+func (s *GQLSource) ChannelsByIDs(ctx context.Context, ids []string) ([]catalog.Channel, error) {
 	return s.ChannelsByLogins(ctx, ids)
 }
 
@@ -708,8 +709,8 @@ func (s *GQLSource) ChannelsByIDs(ctx context.Context, ids []string) ([]Channel,
 // GraphQL request. An empty or all-blank logins slice returns nil without
 // contacting the network. Duplicate logins (case-insensitive) are collapsed.
 // Users absent from the response are omitted so the caller keeps
-// AvailabilityUnknown for them. A failed batch fails the whole lookup.
-func (s *GQLSource) ChannelsByLogins(ctx context.Context, logins []string) ([]Channel, error) {
+// catalog.AvailabilityUnknown for them. A failed batch fails the whole lookup.
+func (s *GQLSource) ChannelsByLogins(ctx context.Context, logins []string) ([]catalog.Channel, error) {
 	const op = "channelsByLogins"
 
 	if err := ctx.Err(); err != nil {
@@ -725,7 +726,7 @@ func (s *GQLSource) ChannelsByLogins(ctx context.Context, logins []string) ([]Ch
 		return nil, nil
 	}
 
-	var out []Channel
+	var out []catalog.Channel
 	for batch := range slices.Chunk(unique, maxUsersByLogins) {
 		payload, err := json.Marshal(gqlRequest{
 			Query: usersByLoginsQuery,
@@ -773,11 +774,11 @@ func executeWithRetry[T any](
 	ctx context.Context,
 	op string,
 	payload []byte,
-	parse func(body []byte) (Page[T], *Error),
-) (Page[T], *Error) {
+	parse func(body []byte) (catalog.Page[T], *Error),
+) (catalog.Page[T], *Error) {
 	var lastErr *Error
 	for attempt := 0; attempt < 2; attempt++ {
-		res, reqErr := doAttempt(s, ctx, op, payload, func(body []byte) (Page[T], *Error) {
+		res, reqErr := doAttempt(s, ctx, op, payload, func(body []byte) (catalog.Page[T], *Error) {
 			// Retry resolver timeouts once even when the response also has data.
 			// The final attempt uses the parser's partial-data handling.
 			if attempt == 0 {
@@ -786,7 +787,7 @@ func executeWithRetry[T any](
 				}
 				if json.Unmarshal(body, &envelope) == nil && len(envelope.Errors) > 0 {
 					if err := gqlErrorsFailure(op, envelope.Errors); err.Kind == Servidor {
-						return Page[T]{}, err
+						return catalog.Page[T]{}, err
 					}
 				}
 			}
@@ -799,7 +800,7 @@ func executeWithRetry[T any](
 
 		// Never retry if the caller's context was canceled or expired.
 		if ctx.Err() != nil {
-			return Page[T]{}, lastErr
+			return catalog.Page[T]{}, lastErr
 		}
 
 		// Only attempt a single retry on attempt 0.
@@ -810,7 +811,7 @@ func executeWithRetry[T any](
 		switch lastErr.Kind {
 		case Rede, Servidor:
 			if sleepErr := s.sleep(ctx, s.retryBackoff); sleepErr != nil {
-				return Page[T]{}, &Error{
+				return catalog.Page[T]{}, &Error{
 					Kind: Rede,
 					Op:   op,
 					Err:  fmt.Errorf("retry backoff interrupted: %w", sleepErr),
@@ -819,10 +820,10 @@ func executeWithRetry[T any](
 		case RateLimit:
 			// Respect Ratelimit-Reset when present on HTTP 429.
 			if lastErr.ResetAfter <= 0 && lastErr.ResetAt.IsZero() {
-				return Page[T]{}, lastErr
+				return catalog.Page[T]{}, lastErr
 			}
 			if sleepErr := s.sleep(ctx, lastErr.ResetAfter); sleepErr != nil {
-				return Page[T]{}, &Error{
+				return catalog.Page[T]{}, &Error{
 					Kind:       RateLimit,
 					Op:         op,
 					StatusCode: lastErr.StatusCode,
@@ -833,11 +834,11 @@ func executeWithRetry[T any](
 			}
 		default:
 			// Contrato errors are never retried.
-			return Page[T]{}, lastErr
+			return catalog.Page[T]{}, lastErr
 		}
 	}
 
-	return Page[T]{}, lastErr
+	return catalog.Page[T]{}, lastErr
 }
 
 func doAttempt[T any](
@@ -845,14 +846,14 @@ func doAttempt[T any](
 	ctx context.Context,
 	op string,
 	payload []byte,
-	parse func(body []byte) (Page[T], *Error),
-) (Page[T], *Error) {
+	parse func(body []byte) (catalog.Page[T], *Error),
+) (catalog.Page[T], *Error) {
 	reqCtx, cancel := context.WithTimeout(ctx, s.requestTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, s.endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return Page[T]{}, &Error{
+		return catalog.Page[T]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("build http request: %w", err),
@@ -863,7 +864,7 @@ func doAttempt[T any](
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return Page[T]{}, &Error{
+		return catalog.Page[T]{}, &Error{
 			Kind: Rede,
 			Op:   op,
 			Err:  fmt.Errorf("execute http request: %w", err),
@@ -880,7 +881,7 @@ func doAttempt[T any](
 		if hasReset {
 			msg = fmt.Sprintf("rate limit exceeded (HTTP 429, reset in %s)", resetAfter.Round(time.Second))
 		}
-		return Page[T]{}, &Error{
+		return catalog.Page[T]{}, &Error{
 			Kind:       RateLimit,
 			Op:         op,
 			StatusCode: resp.StatusCode,
@@ -891,7 +892,7 @@ func doAttempt[T any](
 	}
 
 	if resp.StatusCode >= 500 {
-		return Page[T]{}, &Error{
+		return catalog.Page[T]{}, &Error{
 			Kind:       Servidor,
 			Op:         op,
 			StatusCode: resp.StatusCode,
@@ -900,7 +901,7 @@ func doAttempt[T any](
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return Page[T]{}, &Error{
+		return catalog.Page[T]{}, &Error{
 			Kind:       Contrato,
 			Op:         op,
 			StatusCode: resp.StatusCode,
@@ -910,7 +911,7 @@ func doAttempt[T any](
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return Page[T]{}, &Error{
+		return catalog.Page[T]{}, &Error{
 			Kind: Rede,
 			Op:   op,
 			Err:  fmt.Errorf("read response body: %w", err),
@@ -920,12 +921,12 @@ func doAttempt[T any](
 	return parse(body)
 }
 
-func (s *GQLSource) parseCategoriesResponse(body []byte) (Page[Category], *Error) {
+func (s *GQLSource) parseCategoriesResponse(body []byte) (catalog.Page[catalog.Category], *Error) {
 	const op = "categories"
 
 	var gqlResp gqlCategoriesResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
-		return Page[Category]{}, &Error{
+		return catalog.Page[catalog.Category]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("decode graphql json: %w", err),
@@ -933,11 +934,11 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (Page[Category], *Error
 	}
 
 	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.Games == nil) {
-		return Page[Category]{}, gqlErrorsFailure(op, gqlResp.Errors)
+		return catalog.Page[catalog.Category]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.Games == nil {
-		return Page[Category]{}, &Error{
+		return catalog.Page[catalog.Category]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  errors.New("missing data.games in graphql response"),
@@ -946,16 +947,16 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (Page[Category], *Error
 
 	edges := gqlResp.Data.Games.Edges
 	if _, pathErr := erroredItems(op, gqlResp.Errors, len(edges), "games", "edges"); pathErr != nil {
-		return Page[Category]{}, pathErr
+		return catalog.Page[catalog.Category]{}, pathErr
 	}
-	items := make([]Category, 0, len(edges))
+	items := make([]catalog.Category, 0, len(edges))
 	var lastCursor string
 	for i, edge := range edges {
 		if edge.Cursor != "" {
 			lastCursor = edge.Cursor
 		}
 		if edge.Node == nil {
-			return Page[Category]{}, &Error{
+			return catalog.Page[catalog.Category]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d has null node", i),
@@ -964,7 +965,7 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (Page[Category], *Error
 		id := strings.TrimSpace(edge.Node.ID)
 		name := strings.TrimSpace(edge.Node.Name)
 		if id == "" || name == "" {
-			return Page[Category]{}, &Error{
+			return catalog.Page[catalog.Category]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d missing required category identity (id=%q, name=%q)", i, id, name),
@@ -975,7 +976,7 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (Page[Category], *Error
 			v := *edge.Node.ViewersCount
 			viewers = &v
 		}
-		items = append(items, Category{
+		items = append(items, catalog.Category{
 			ID:      id,
 			Name:    name,
 			Viewers: viewers,
@@ -999,19 +1000,19 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (Page[Category], *Error
 	})
 
 	hasMore := gqlResp.Data.Games.PageInfo.HasNextPage && len(items) > 0
-	return Page[Category]{
+	return catalog.Page[catalog.Category]{
 		Items:   items,
 		Cursor:  lastCursor,
 		HasMore: hasMore,
 	}, nil
 }
 
-func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string) (Page[Channel], *Error) {
+func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string) (catalog.Page[catalog.Channel], *Error) {
 	const op = "channels"
 
 	var gqlResp gqlChannelsResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("decode graphql json: %w", err),
@@ -1019,11 +1020,11 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 	}
 
 	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.Game == nil || gqlResp.Data.Game.Streams == nil) {
-		return Page[Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
+		return catalog.Page[catalog.Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.Game == nil || gqlResp.Data.Game.Streams == nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  errors.New("missing data.game.streams in graphql response"),
@@ -1041,16 +1042,16 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 
 	edges := gqlResp.Data.Game.Streams.Edges
 	if _, pathErr := erroredItems(op, gqlResp.Errors, len(edges), "game", "streams", "edges"); pathErr != nil {
-		return Page[Channel]{}, pathErr
+		return catalog.Page[catalog.Channel]{}, pathErr
 	}
-	items := make([]Channel, 0, len(edges))
+	items := make([]catalog.Channel, 0, len(edges))
 	var lastCursor string
 	for i, edge := range edges {
 		if edge.Cursor != "" {
 			lastCursor = edge.Cursor
 		}
 		if edge.Node == nil || edge.Node.Broadcaster == nil {
-			return Page[Channel]{}, &Error{
+			return catalog.Page[catalog.Channel]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d has null stream node or broadcaster", i),
@@ -1059,7 +1060,7 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 		login := strings.TrimSpace(edge.Node.Broadcaster.Login)
 		displayName := strings.TrimSpace(edge.Node.Broadcaster.DisplayName)
 		if login == "" || displayName == "" {
-			return Page[Channel]{}, &Error{
+			return catalog.Page[catalog.Channel]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d missing required channel identity (login=%q, displayName=%q)", i, login, displayName),
@@ -1096,9 +1097,9 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 		}
 		var language *string
 		if edge.Node.Language != nil {
-			language = LanguagePtr(*edge.Node.Language)
+			language = catalog.LanguagePtr(*edge.Node.Language)
 		}
-		items = append(items, Channel{
+		items = append(items, catalog.Channel{
 			ID:           id,
 			Login:        login,
 			DisplayName:  displayName,
@@ -1108,24 +1109,24 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 			CategoryName: catNamePtr,
 			Language:     language,
 			// Game streams list only active broadcasts.
-			Availability: AvailabilityLive,
+			Availability: catalog.AvailabilityLive,
 		})
 	}
 
 	hasMore := gqlResp.Data.Game.Streams.PageInfo.HasNextPage && len(items) > 0
-	return Page[Channel]{
+	return catalog.Page[catalog.Channel]{
 		Items:   items,
 		Cursor:  lastCursor,
 		HasMore: hasMore,
 	}, nil
 }
 
-func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
+func (s *GQLSource) parseSearchResponse(body []byte) (catalog.Page[catalog.Channel], *Error) {
 	const op = "search"
 
 	var gqlResp gqlSearchResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("decode graphql json: %w", err),
@@ -1133,11 +1134,11 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 	}
 
 	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Channels == nil) {
-		return Page[Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
+		return catalog.Page[catalog.Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Channels == nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  errors.New("missing data.searchFor.channels in graphql response"),
@@ -1147,9 +1148,9 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 	edges := gqlResp.Data.SearchFor.Channels.Edges
 	errored, pathErr := erroredItems(op, gqlResp.Errors, len(edges), "searchFor", "channels", "edges")
 	if pathErr != nil {
-		return Page[Channel]{}, pathErr
+		return catalog.Page[catalog.Channel]{}, pathErr
 	}
-	items := make([]Channel, 0, len(edges))
+	items := make([]catalog.Channel, 0, len(edges))
 	for i, edge := range edges {
 		if errored[i] {
 			// A partial error drops only its own item; a null stream there is no offline evidence.
@@ -1159,7 +1160,7 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 			dropFailedStream(&edge.Item.Stream)
 		}
 		if edge.Item == nil {
-			return Page[Channel]{}, &Error{
+			return catalog.Page[catalog.Channel]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d has null item", i),
@@ -1168,7 +1169,7 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 		login := strings.TrimSpace(edge.Item.Login)
 		displayName := strings.TrimSpace(edge.Item.DisplayName)
 		if login == "" || displayName == "" {
-			return Page[Channel]{}, &Error{
+			return catalog.Page[catalog.Channel]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d missing required channel identity (login=%q, displayName=%q)", i, login, displayName),
@@ -1178,13 +1179,13 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 		if id == "" {
 			id = login
 		}
-		ch := Channel{
+		ch := catalog.Channel{
 			ID:          id,
 			Login:       login,
 			DisplayName: displayName,
 		}
 		if err := applySearchStream(&ch, edge.Item.Stream); err != nil {
-			return Page[Channel]{}, &Error{
+			return catalog.Page[catalog.Channel]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d stream: %w", i, err),
@@ -1193,19 +1194,19 @@ func (s *GQLSource) parseSearchResponse(body []byte) (Page[Channel], *Error) {
 		items = append(items, ch)
 	}
 
-	return Page[Channel]{
+	return catalog.Page[catalog.Channel]{
 		Items:   items,
 		Cursor:  "",
 		HasMore: false,
 	}, nil
 }
 
-func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], *Error) {
+func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (catalog.Page[catalog.Category], *Error) {
 	const op = "searchCategories"
 
 	var gqlResp gqlSearchResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
-		return Page[Category]{}, &Error{
+		return catalog.Page[catalog.Category]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("decode graphql json: %w", err),
@@ -1213,11 +1214,11 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], 
 	}
 
 	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Games == nil) {
-		return Page[Category]{}, gqlErrorsFailure(op, gqlResp.Errors)
+		return catalog.Page[catalog.Category]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Games == nil {
-		return Page[Category]{}, &Error{
+		return catalog.Page[catalog.Category]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  errors.New("missing data.searchFor.games in graphql response"),
@@ -1227,15 +1228,15 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], 
 	edges := gqlResp.Data.SearchFor.Games.Edges
 	errored, pathErr := erroredItems(op, gqlResp.Errors, len(edges), "searchFor", "games", "edges")
 	if pathErr != nil {
-		return Page[Category]{}, pathErr
+		return catalog.Page[catalog.Category]{}, pathErr
 	}
-	items := make([]Category, 0, len(edges))
+	items := make([]catalog.Category, 0, len(edges))
 	for i, edge := range edges {
 		if edge.Item == nil && errored[i] {
 			continue
 		}
 		if edge.Item == nil {
-			return Page[Category]{}, &Error{
+			return catalog.Page[catalog.Category]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d has null item", i),
@@ -1243,7 +1244,7 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], 
 		}
 		name := strings.TrimSpace(edge.Item.Name)
 		if name == "" {
-			return Page[Category]{}, &Error{
+			return catalog.Page[catalog.Category]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("edge %d missing required category name", i),
@@ -1253,7 +1254,7 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], 
 		if id == "" {
 			id = name
 		}
-		cat := Category{
+		cat := catalog.Category{
 			ID:   id,
 			Name: name,
 		}
@@ -1264,19 +1265,19 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (Page[Category], 
 		items = append(items, cat)
 	}
 
-	return Page[Category]{
+	return catalog.Page[catalog.Category]{
 		Items:   items,
 		Cursor:  "",
 		HasMore: false,
 	}, nil
 }
 
-func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Error) {
+func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (catalog.Page[catalog.Channel], *Error) {
 	const op = "channelsByLogins"
 
 	var gqlResp gqlUsersByLoginsResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  fmt.Errorf("decode graphql json: %w", err),
@@ -1284,11 +1285,11 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Err
 	}
 
 	if len(gqlResp.Errors) > 0 && (gqlResp.Data == nil || gqlResp.Data.Users == nil) {
-		return Page[Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
+		return catalog.Page[catalog.Channel]{}, gqlErrorsFailure(op, gqlResp.Errors)
 	}
 
 	if gqlResp.Data == nil {
-		return Page[Channel]{}, &Error{
+		return catalog.Page[catalog.Channel]{}, &Error{
 			Kind: Contrato,
 			Op:   op,
 			Err:  errors.New("missing data.users in graphql response"),
@@ -1297,9 +1298,9 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Err
 
 	errored, pathErr := erroredItems(op, gqlResp.Errors, len(gqlResp.Data.Users), "users")
 	if pathErr != nil {
-		return Page[Channel]{}, pathErr
+		return catalog.Page[catalog.Channel]{}, pathErr
 	}
-	items := make([]Channel, 0, len(gqlResp.Data.Users))
+	items := make([]catalog.Channel, 0, len(gqlResp.Data.Users))
 	for i, user := range gqlResp.Data.Users {
 		if user == nil {
 			// Login did not resolve; omit so the caller keeps unknown.
@@ -1311,7 +1312,7 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Err
 		login := strings.TrimSpace(user.Login)
 		displayName := strings.TrimSpace(user.DisplayName)
 		if login == "" || displayName == "" {
-			return Page[Channel]{}, &Error{
+			return catalog.Page[catalog.Channel]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("user %d missing required identity (login=%q, displayName=%q)", i, login, displayName),
@@ -1321,13 +1322,13 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Err
 		if id == "" {
 			id = login
 		}
-		ch := Channel{
+		ch := catalog.Channel{
 			ID:          id,
 			Login:       login,
 			DisplayName: displayName,
 		}
 		if err := applySearchStream(&ch, user.Stream); err != nil {
-			return Page[Channel]{}, &Error{
+			return catalog.Page[catalog.Channel]{}, &Error{
 				Kind: Contrato,
 				Op:   op,
 				Err:  fmt.Errorf("user %d stream: %w", i, err),
@@ -1336,7 +1337,7 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (Page[Channel], *Err
 		items = append(items, ch)
 	}
 
-	return Page[Channel]{
+	return catalog.Page[catalog.Channel]{
 		Items:   items,
 		Cursor:  "",
 		HasMore: false,
@@ -1355,7 +1356,7 @@ func isNumericID(s string) bool {
 	return true
 }
 
-func (s *GQLSource) rememberCategories(cats []Category) {
+func (s *GQLSource) rememberCategories(cats []catalog.Category) {
 	if len(cats) == 0 {
 		return
 	}
@@ -1409,21 +1410,21 @@ func (s *GQLSource) parseRateLimitReset(h http.Header) (time.Duration, time.Time
 	return 0, time.Time{}, false
 }
 
-func (s *GQLSource) getCachedCategories(key string) (Page[Category], bool) {
+func (s *GQLSource) getCachedCategories(key string) (catalog.Page[catalog.Category], bool) {
 	if s.cacheTTL <= 0 {
-		return Page[Category]{}, false
+		return catalog.Page[catalog.Category]{}, false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, ok := s.cache[key]
 	if !ok || !s.now().Before(entry.expiresAt) {
 		delete(s.cache, key)
-		return Page[Category]{}, false
+		return catalog.Page[catalog.Category]{}, false
 	}
 	return cloneCategoryPage(entry.page), true
 }
 
-func (s *GQLSource) setCachedCategories(key string, page Page[Category]) {
+func (s *GQLSource) setCachedCategories(key string, page catalog.Page[catalog.Category]) {
 	if s.cacheTTL <= 0 {
 		return
 	}
@@ -1435,10 +1436,10 @@ func (s *GQLSource) setCachedCategories(key string, page Page[Category]) {
 	}
 }
 
-func cloneCategoryPage(p Page[Category]) Page[Category] {
-	items := make([]Category, len(p.Items))
+func cloneCategoryPage(p catalog.Page[catalog.Category]) catalog.Page[catalog.Category] {
+	items := make([]catalog.Category, len(p.Items))
 	for i, c := range p.Items {
-		items[i] = Category{
+		items[i] = catalog.Category{
 			ID:   c.ID,
 			Name: c.Name,
 		}
@@ -1447,28 +1448,28 @@ func cloneCategoryPage(p Page[Category]) Page[Category] {
 			items[i].Viewers = &v
 		}
 	}
-	return Page[Category]{
+	return catalog.Page[catalog.Category]{
 		Items:   items,
 		Cursor:  p.Cursor,
 		HasMore: p.HasMore,
 	}
 }
 
-func (s *GQLSource) getCachedChannels(key string) (Page[Channel], bool) {
+func (s *GQLSource) getCachedChannels(key string) (catalog.Page[catalog.Channel], bool) {
 	if s.cacheTTL <= 0 {
-		return Page[Channel]{}, false
+		return catalog.Page[catalog.Channel]{}, false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, ok := s.channelsCache[key]
 	if !ok || !s.now().Before(entry.expiresAt) {
 		delete(s.channelsCache, key)
-		return Page[Channel]{}, false
+		return catalog.Page[catalog.Channel]{}, false
 	}
 	return cloneChannelPage(entry.page), true
 }
 
-func (s *GQLSource) setCachedChannels(key string, page Page[Channel]) {
+func (s *GQLSource) setCachedChannels(key string, page catalog.Page[catalog.Channel]) {
 	if s.cacheTTL <= 0 {
 		return
 	}
@@ -1480,10 +1481,10 @@ func (s *GQLSource) setCachedChannels(key string, page Page[Channel]) {
 	}
 }
 
-func cloneChannelPage(p Page[Channel]) Page[Channel] {
-	items := make([]Channel, len(p.Items))
+func cloneChannelPage(p catalog.Page[catalog.Channel]) catalog.Page[catalog.Channel] {
+	items := make([]catalog.Channel, len(p.Items))
 	for i, ch := range p.Items {
-		items[i] = Channel{
+		items[i] = catalog.Channel{
 			ID:           ch.ID,
 			Login:        ch.Login,
 			DisplayName:  ch.DisplayName,
@@ -1510,7 +1511,7 @@ func cloneChannelPage(p Page[Channel]) Page[Channel] {
 			items[i].Language = &l
 		}
 	}
-	return Page[Channel]{
+	return catalog.Page[catalog.Channel]{
 		Items:   items,
 		Cursor:  p.Cursor,
 		HasMore: p.HasMore,
@@ -1527,22 +1528,22 @@ func dropFailedStream(raw *json.RawMessage) {
 
 // applySearchStream fills availability from a search item's stream field:
 // absent leaves it unknown, null is explicit offline evidence, an object is live.
-func applySearchStream(ch *Channel, raw json.RawMessage) error {
+func applySearchStream(ch *catalog.Channel, raw json.RawMessage) error {
 	trimmed := strings.TrimSpace(string(raw))
 	switch trimmed {
 	case "":
 		return nil
 	case "null":
-		ch.Availability = AvailabilityOffline
+		ch.Availability = catalog.AvailabilityOffline
 		return nil
 	}
 	var st gqlSearchStream
 	if err := json.Unmarshal(raw, &st); err != nil {
 		return fmt.Errorf("decode stream: %w", err)
 	}
-	ch.Availability = AvailabilityLive
+	ch.Availability = catalog.AvailabilityLive
 	if st.Language != nil {
-		ch.Language = LanguagePtr(*st.Language)
+		ch.Language = catalog.LanguagePtr(*st.Language)
 	}
 	if st.ViewersCount != nil {
 		v := *st.ViewersCount

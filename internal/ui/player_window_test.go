@@ -2,13 +2,13 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func playingModel(t *testing.T, lang string, pb *fakePlayback) Model {
@@ -20,7 +20,7 @@ func playingModel(t *testing.T, lang string, pb *fakePlayback) Model {
 	m := New(cat, WithPlayback(pb))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = updated.(Model)
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	return updated.(Model)
@@ -59,13 +59,13 @@ func TestReopeningAChannelKeepsTheVolumeOnTheBar(t *testing.T) {
 	updated, _ := m.Update(PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 40})
 	m = updated.(Model)
 
-	updated, _ = m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules"}})
+	updated, _ = m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
 	if m.PlayerVolume() != 40 {
 		t.Fatalf("same channel again: volume %d", m.PlayerVolume())
 	}
 
-	updated, _ = m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "alanzoka"}})
+	updated, _ = m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "alanzoka"}})
 	m = updated.(Model)
 	if m.PlayerVolume() != 100 {
 		t.Fatalf("another channel: volume %d", m.PlayerVolume())

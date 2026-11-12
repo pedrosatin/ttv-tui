@@ -1,30 +1,30 @@
 package ui
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // TestMultiplatformIdentity_IsPlayingAndOffline verifies that channels sharing
 // the same login across different platforms (e.g. Twitch xqc vs Kick xqc) do not
 // confuse playback state or offline marking.
 func TestMultiplatformIdentity_IsPlayingAndOffline(t *testing.T) {
-	twitchXQC := twitch.Channel{
+	twitchXQC := catalog.Channel{
 		Platform:     platform.Twitch,
 		Login:        "xqc",
 		DisplayName:  "xQc",
-		Availability: twitch.AvailabilityLive,
+		Availability: catalog.AvailabilityLive,
 	}
-	kickXQC := twitch.Channel{
+	kickXQC := catalog.Channel{
 		Platform:     platform.Kick,
 		Login:        "xqc",
 		DisplayName:  "xQc",
-		Availability: twitch.AvailabilityLive,
+		Availability: catalog.AvailabilityLive,
 	}
 
 	// 1. isPlaying check:
@@ -53,42 +53,42 @@ func TestMultiplatformIdentity_IsPlayingAndOffline(t *testing.T) {
 	kickXQC.Viewers = &viewersKick
 
 	m := New(mustCatalog(t, i18n.LangEN))
-	m.list.channels = []twitch.Channel{twitchXQC, kickXQC}
-	m.list.favorites = []twitch.Channel{twitchXQC, kickXQC}
-	m.list.recents = []twitch.Channel{twitchXQC, kickXQC}
+	m.list.channels = []catalog.Channel{twitchXQC, kickXQC}
+	m.list.favorites = []catalog.Channel{twitchXQC, kickXQC}
+	m.list.recents = []catalog.Channel{twitchXQC, kickXQC}
 
 	// Marking Twitch xqc offline by its PlayerLabel ("xqc")
 	m.markChannelOffline("xqc")
 
 	for _, ch := range m.list.channels {
 		if platform.IsTwitch(ch.Platform) {
-			if ch.Availability != twitch.AvailabilityOffline || ch.Viewers != nil {
+			if ch.Availability != catalog.AvailabilityOffline || ch.Viewers != nil {
 				t.Errorf("Twitch xqc should be offline with nil viewers, got avail=%v viewers=%v", ch.Availability, ch.Viewers)
 			}
 		} else {
-			if ch.Availability != twitch.AvailabilityLive || ch.Viewers == nil || *ch.Viewers != viewersKick {
+			if ch.Availability != catalog.AvailabilityLive || ch.Viewers == nil || *ch.Viewers != viewersKick {
 				t.Errorf("Kick xqc should remain live with %d viewers, got avail=%v viewers=%v", viewersKick, ch.Availability, ch.Viewers)
 			}
 		}
 	}
 
 	// Reset channels
-	twitchXQC.Availability = twitch.AvailabilityLive
+	twitchXQC.Availability = catalog.AvailabilityLive
 	twitchXQC.Viewers = &viewersTwitch
-	kickXQC.Availability = twitch.AvailabilityLive
+	kickXQC.Availability = catalog.AvailabilityLive
 	kickXQC.Viewers = &viewersKick
-	m.list.channels = []twitch.Channel{twitchXQC, kickXQC}
+	m.list.channels = []catalog.Channel{twitchXQC, kickXQC}
 
 	// Marking Kick xqc offline by its PlayerLabel ("kick:xqc")
 	m.markChannelOffline("kick:xqc")
 
 	for _, ch := range m.list.channels {
 		if platform.IsTwitch(ch.Platform) {
-			if ch.Availability != twitch.AvailabilityLive || ch.Viewers == nil || *ch.Viewers != viewersTwitch {
+			if ch.Availability != catalog.AvailabilityLive || ch.Viewers == nil || *ch.Viewers != viewersTwitch {
 				t.Errorf("Twitch xqc should remain live with %d viewers, got avail=%v viewers=%v", viewersTwitch, ch.Availability, ch.Viewers)
 			}
 		} else {
-			if ch.Availability != twitch.AvailabilityOffline || ch.Viewers != nil {
+			if ch.Availability != catalog.AvailabilityOffline || ch.Viewers != nil {
 				t.Errorf("Kick xqc should be offline with nil viewers, got avail=%v viewers=%v", ch.Availability, ch.Viewers)
 			}
 		}
@@ -147,9 +147,9 @@ func TestLateChatEventDoesNotOverwriteUnsupportedPanel(t *testing.T) {
 // TestChannelMatches_StableIDComparison verifies matching by stable ID rather than raw URL.
 func TestChannelMatches_StableIDComparison(t *testing.T) {
 	// Kick kick.com vs www.kick.com match
-	kick1 := twitch.Channel{Platform: platform.Kick, Login: "xqc", URL: "https://kick.com/xqc"}
-	kick2 := twitch.Channel{Platform: platform.Kick, Login: "xqc", URL: "https://www.kick.com/xqc"}
-	kickOther := twitch.Channel{Platform: platform.Kick, Login: "other", URL: "https://kick.com/other"}
+	kick1 := catalog.Channel{Platform: platform.Kick, Login: "xqc", URL: "https://kick.com/xqc"}
+	kick2 := catalog.Channel{Platform: platform.Kick, Login: "xqc", URL: "https://www.kick.com/xqc"}
+	kickOther := catalog.Channel{Platform: platform.Kick, Login: "other", URL: "https://kick.com/other"}
 	if !channelMatches(kick1, kick2) {
 		t.Errorf("channelMatches(kick1, kick2) = false, want true for same Kick channel")
 	}
@@ -158,9 +158,9 @@ func TestChannelMatches_StableIDComparison(t *testing.T) {
 	}
 
 	// YouTube case sensitivity
-	ytUpper := twitch.Channel{Platform: platform.YouTube, Login: "AbC", URL: "https://youtu.be/AbC"}
-	ytLower := twitch.Channel{Platform: platform.YouTube, Login: "abc", URL: "https://youtu.be/abc"}
-	ytWatch := twitch.Channel{Platform: platform.YouTube, Login: "AbC", URL: "https://www.youtube.com/watch?v=AbC"}
+	ytUpper := catalog.Channel{Platform: platform.YouTube, Login: "AbC", URL: "https://youtu.be/AbC"}
+	ytLower := catalog.Channel{Platform: platform.YouTube, Login: "abc", URL: "https://youtu.be/abc"}
+	ytWatch := catalog.Channel{Platform: platform.YouTube, Login: "AbC", URL: "https://www.youtube.com/watch?v=AbC"}
 	if channelMatches(ytUpper, ytLower) {
 		t.Errorf("channelMatches(ytUpper, ytLower) = true, want false (YouTube video IDs are case-sensitive)")
 	}
@@ -169,7 +169,7 @@ func TestChannelMatches_StableIDComparison(t *testing.T) {
 	}
 
 	// Different platforms with same login do not match
-	twitchCh := twitch.Channel{Platform: platform.Twitch, Login: "xqc"}
+	twitchCh := catalog.Channel{Platform: platform.Twitch, Login: "xqc"}
 	if channelMatches(twitchCh, kick1) {
 		t.Errorf("channelMatches(twitch, kick) = true, want false across platforms")
 	}
@@ -184,7 +184,7 @@ func TestNonTwitchChannel_EmptyURL_ShowsWarning(t *testing.T) {
 			pb := &fakePlayback{}
 			m := New(cat, WithPlayback(pb))
 
-			ch := twitch.Channel{
+			ch := catalog.Channel{
 				Platform:    platform.Kick,
 				Login:       "xqc",
 				DisplayName: "xQc",
@@ -213,7 +213,7 @@ func TestNonTwitchChannel_EmptyURL_ShowsWarning(t *testing.T) {
 // the status bar matches the active channel and does not repeat the login.
 func TestStatusBar_KickChannelDoesNotDuplicateName(t *testing.T) {
 	m := New(mustCatalog(t, i18n.LangEN))
-	ch := twitch.Channel{
+	ch := catalog.Channel{
 		Platform:    platform.Kick,
 		Login:       "xqc",
 		DisplayName: "xqc",

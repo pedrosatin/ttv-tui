@@ -5,45 +5,45 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/store"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // filterClearSource offers two live channels so a local filter can hide one,
 // then opening the other must restore the full list (ticket 02).
 type filterClearSource struct{}
 
-func (filterClearSource) Categories(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-	return twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "cat-filter", Name: "FilterCat"}}}, nil
+func (filterClearSource) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat-filter", Name: "FilterCat"}}}, nil
 }
 
-func (filterClearSource) Channels(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-		{ID: "ch-alpha", Login: "alphachan", DisplayName: "AlphaChan", Viewers: twitch.IntPtr(10)},
-		{ID: "ch-peere", Login: "peere", DisplayName: "Peere", Viewers: twitch.IntPtr(20)},
+func (filterClearSource) Channels(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+		{ID: "ch-alpha", Login: "alphachan", DisplayName: "AlphaChan", Viewers: catalog.IntPtr(10)},
+		{ID: "ch-peere", Login: "peere", DisplayName: "Peere", Viewers: catalog.IntPtr(20)},
 	}}, nil
 }
 
-func (filterClearSource) Search(context.Context, string) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+func (filterClearSource) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
 		{ID: "ch-peere", Login: "peere", DisplayName: "Peere"},
 	}}, nil
 }
 
-func (filterClearSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+func (filterClearSource) SearchCategories(context.Context, string) ([]catalog.Category, error) {
 	return nil, nil
 }
 
-func (filterClearSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+func (filterClearSource) ChannelsByLogins(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 
-func (filterClearSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+func (filterClearSource) ChannelsByIDs(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 

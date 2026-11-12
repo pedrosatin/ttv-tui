@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 	"time"
@@ -120,17 +121,17 @@ func TestRetryBurstKeepsNewestRequest(t *testing.T) {
 	firstStarted := make(chan struct{})
 	calls := 0
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, _ twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+		categoriesFn: func(ctx context.Context, _ catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 			calls++
 			if calls == 1 {
 				close(firstStarted)
 				<-ctx.Done()
-				return twitch.Page[twitch.Category]{}, ctx.Err()
+				return catalog.Page[catalog.Category]{}, ctx.Err()
 			}
 			if err := ctx.Err(); err != nil {
-				return twitch.Page[twitch.Category]{}, err
+				return catalog.Page[catalog.Category]{}, err
 			}
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "cat-new", Name: "New"}}}, nil
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat-new", Name: "New"}}}, nil
 		},
 	}
 	m := New(mustCatalog(t, i18n.LangEN), WithSource(src))

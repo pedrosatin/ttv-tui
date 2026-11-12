@@ -2,11 +2,11 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // assertHighlightActs checks that the highlight sits on a visible row for
@@ -55,7 +55,7 @@ func TestHighlightLeavesFavoriteHiddenByHydration(t *testing.T) {
 	}
 	m := New(cat,
 		WithChannelFilters([]string{"pt"}, 0, nil),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "f-en", Login: "gringo", DisplayName: "Gringo"},
 			{ID: "f-pt", Login: "brasileiro", DisplayName: "Brasileiro"},
 		}),
@@ -65,7 +65,7 @@ func TestHighlightLeavesFavoriteHiddenByHydration(t *testing.T) {
 
 	updated, _ = m.Update(CategoriesLoadedMsg{
 		Generation: m.list.generation,
-		Page:       twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "jc", Name: "Just Chatting"}}},
+		Page:       catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "jc", Name: "Just Chatting"}}},
 	})
 	m = updated.(Model)
 	if it, ok := m.HighlightedItem(); !ok || it.Login() != "gringo" {
@@ -74,11 +74,11 @@ func TestHighlightLeavesFavoriteHiddenByHydration(t *testing.T) {
 
 	updated, _ = m.Update(SavedAvailabilityMsg{
 		Generation: m.list.hydrateGen,
-		Channels: []twitch.Channel{
-			{ID: "1", Login: "gringo", DisplayName: "Gringo", Language: twitch.StringPtr("en"),
-				Viewers: twitch.IntPtr(900), Availability: twitch.AvailabilityLive},
-			{ID: "2", Login: "brasileiro", DisplayName: "Brasileiro", Language: twitch.StringPtr("pt"),
-				Viewers: twitch.IntPtr(400), Availability: twitch.AvailabilityLive},
+		Channels: []catalog.Channel{
+			{ID: "1", Login: "gringo", DisplayName: "Gringo", Language: catalog.StringPtr("en"),
+				Viewers: catalog.IntPtr(900), Availability: catalog.AvailabilityLive},
+			{ID: "2", Login: "brasileiro", DisplayName: "Brasileiro", Language: catalog.StringPtr("pt"),
+				Viewers: catalog.IntPtr(400), Availability: catalog.AvailabilityLive},
 		},
 	})
 	m = updated.(Model)
@@ -100,7 +100,7 @@ func TestHighlightMovesToNeighborWhenOfflineChannelLeavesAudienceFilter(t *testi
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
+	m.list.channels = []catalog.Channel{
 		liveChannel("a-id", "alpha", "Alpha", 20000),
 		liveChannel("xqc-id", "xqc", "xQc", 13000),
 		liveChannel("b-id", "beta", "Beta", 5000),
@@ -128,10 +128,10 @@ func TestHighlightMovesToNeighborWhenRetryDropsHighlightedRecent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	recents := make([]twitch.Channel, defaultMaxRecents)
+	recents := make([]catalog.Channel, defaultMaxRecents)
 	for i := 0; i < defaultMaxRecents; i++ {
 		id := fmt.Sprintf("rec-%02d", i)
-		recents[i] = twitch.Channel{ID: id, Login: id, DisplayName: id}
+		recents[i] = catalog.Channel{ID: id, Login: id, DisplayName: id}
 	}
 	m := New(cat, WithRecents(recents), WithSource(&fakeSource{}))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
@@ -143,7 +143,7 @@ func TestHighlightMovesToNeighborWhenRetryDropsHighlightedRecent(t *testing.T) {
 		t.Fatalf("setup: highlighted %q, want rec-49", got)
 	}
 
-	m.queueRecent(twitch.Channel{ID: "rec-new", Login: "rec-new", DisplayName: "New"})
+	m.queueRecent(catalog.Channel{ID: "rec-new", Login: "rec-new", DisplayName: "New"})
 
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
 	m = updated.(Model)

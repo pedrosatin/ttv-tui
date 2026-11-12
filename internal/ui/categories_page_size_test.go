@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
@@ -31,10 +32,10 @@ func TestDefaultCategoryPageSizeIsAPIMax(t *testing.T) {
 func TestCategoriesLoadRequestsLimit100(t *testing.T) {
 	var gotLimit int
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 			gotLimit = page.Limit
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "1", Name: "Just Chatting", Viewers: twitch.IntPtr(1)},
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "1", Name: "Just Chatting", Viewers: catalog.IntPtr(1)},
 			}}, nil
 		},
 	}
@@ -58,41 +59,41 @@ func TestCategoriesLoadRequestsLimit100(t *testing.T) {
 }
 
 func TestSlashTeamFindsTeamfightTacticsInTop100(t *testing.T) {
-	items := make([]twitch.Category, 0, twitch.MaxGamesFirst)
+	items := make([]catalog.Category, 0, twitch.MaxGamesFirst)
 	for i := 0; i < 70; i++ {
-		items = append(items, twitch.Category{
+		items = append(items, catalog.Category{
 			ID:      fmt.Sprintf("pad-%d", i),
 			Name:    fmt.Sprintf("Pad Category %d", i),
-			Viewers: twitch.IntPtr(200000 - i*1000),
+			Viewers: catalog.IntPtr(200000 - i*1000),
 		})
 	}
 	// Past the historical ~60 cut: TFT must load with first:100.
-	items = append(items, twitch.Category{
+	items = append(items, catalog.Category{
 		ID:      "513143",
 		Name:    "Teamfight Tactics",
-		Viewers: twitch.IntPtr(5000),
+		Viewers: catalog.IntPtr(5000),
 	})
 	for i := len(items); i < twitch.MaxGamesFirst; i++ {
-		items = append(items, twitch.Category{
+		items = append(items, catalog.Category{
 			ID:      fmt.Sprintf("tail-%d", i),
 			Name:    fmt.Sprintf("Tail Category %d", i),
-			Viewers: twitch.IntPtr(1000 - (i - 70)),
+			Viewers: catalog.IntPtr(1000 - (i - 70)),
 		})
 	}
 
 	var searched int
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 			if page.Limit != twitch.MaxGamesFirst {
 				t.Fatalf("Limit = %d, want %d", page.Limit, twitch.MaxGamesFirst)
 			}
-			return twitch.Page[twitch.Category]{Items: items}, nil
+			return catalog.Page[catalog.Category]{Items: items}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			searched++
-			return twitch.Page[twitch.Channel]{}, nil
+			return catalog.Page[catalog.Channel]{}, nil
 		},
-		searchCategoriesFn: func(ctx context.Context, query string) ([]twitch.Category, error) {
+		searchCategoriesFn: func(ctx context.Context, query string) ([]catalog.Category, error) {
 			searched++
 			return nil, nil
 		},
@@ -135,22 +136,22 @@ func TestEnterWithoutFilterMatchStartsGlobalSearch(t *testing.T) {
 	var searched []string
 	var searchedCats []string
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "cat-cs", Name: "Counter-Strike", Viewers: twitch.IntPtr(250000)},
-				{ID: "cat-jc", Name: "Just Chatting", Viewers: twitch.IntPtr(410000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "cat-cs", Name: "Counter-Strike", Viewers: catalog.IntPtr(250000)},
+				{ID: "cat-jc", Name: "Just Chatting", Viewers: catalog.IntPtr(410000)},
 			}}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			searched = append(searched, query)
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
 				{ID: "ch-tf2", Login: "tf2live", DisplayName: "TF2Live"},
 			}}, nil
 		},
-		searchCategoriesFn: func(ctx context.Context, query string) ([]twitch.Category, error) {
+		searchCategoriesFn: func(ctx context.Context, query string) ([]catalog.Category, error) {
 			searchedCats = append(searchedCats, query)
-			return []twitch.Category{
-				{ID: "tf2", Name: "Team Fortress 2", Viewers: twitch.IntPtr(187)},
+			return []catalog.Category{
+				{ID: "tf2", Name: "Team Fortress 2", Viewers: catalog.IntPtr(187)},
 			}, nil
 		},
 	}
@@ -190,21 +191,21 @@ func TestEnterWithFilterMatchOpensHighlightedItem(t *testing.T) {
 	var opened string
 	var searched int
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "513143", Name: "Teamfight Tactics", Viewers: twitch.IntPtr(5000)},
-				{ID: "cat-jc", Name: "Just Chatting", Viewers: twitch.IntPtr(410000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "513143", Name: "Teamfight Tactics", Viewers: catalog.IntPtr(5000)},
+				{ID: "cat-jc", Name: "Just Chatting", Viewers: catalog.IntPtr(410000)},
 			}}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			opened = categoryID
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-				{ID: "c1", Login: "tftpro", DisplayName: "TFTPro", Viewers: twitch.IntPtr(100)},
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+				{ID: "c1", Login: "tftpro", DisplayName: "TFTPro", Viewers: catalog.IntPtr(100)},
 			}}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			searched++
-			return twitch.Page[twitch.Channel]{}, nil
+			return catalog.Page[catalog.Channel]{}, nil
 		},
 	}
 

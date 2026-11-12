@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 var orientationLangs = []string{i18n.LangPTBR, i18n.LangEN}
@@ -29,20 +29,20 @@ func mustCatalog(t *testing.T, lang string) *i18n.Catalog {
 func newCategoriesModel(t *testing.T, lang string, width int, searched *[]string) Model {
 	t.Helper()
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "cat-cs", Name: "Counter-Strike", Viewers: twitch.IntPtr(250000)},
-				{ID: "cat-jc", Name: "Just Chatting", Viewers: twitch.IntPtr(410000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "cat-cs", Name: "Counter-Strike", Viewers: catalog.IntPtr(250000)},
+				{ID: "cat-jc", Name: "Just Chatting", Viewers: catalog.IntPtr(410000)},
 			}}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-				{ID: "ch-alan", Login: "alanzoka", DisplayName: "alanzoka", Viewers: twitch.IntPtr(42000)},
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+				{ID: "ch-alan", Login: "alanzoka", DisplayName: "alanzoka", Viewers: catalog.IntPtr(42000)},
 			}}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			*searched = append(*searched, query)
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
 				{ID: "ch-gaules", Login: "gaules", DisplayName: "Gaules"},
 			}}, nil
 		},
@@ -324,7 +324,7 @@ func TestSeparateWindowNoticeOnlyOnFirstPlayback(t *testing.T) {
 			}
 
 			// Second channel in the same session: no notice.
-			m, cmd := pressKeyMsg(m, ChannelSelectedMsg{Channel: twitch.Channel{Login: "alanzoka", DisplayName: "alanzoka"}})
+			m, cmd := pressKeyMsg(m, ChannelSelectedMsg{Channel: catalog.Channel{Login: "alanzoka", DisplayName: "alanzoka"}})
 			m = drainCmd(t, m, cmd)
 			m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 2, State: PlayerStatePlaying, Login: "alanzoka", Volume: 100})
 			if m.PlayerWindowNotice() || strings.Contains(ansi.Strip(m.StatusBar()), notice) {
@@ -345,7 +345,7 @@ func TestStatusBarAt80KeepsMainActionAndQuit(t *testing.T) {
 		{"starting", func(m Model) Model {
 			// The setup chose gaules with Enter; this selection comes from the next Enter.
 			m.list.enters++
-			m, cmd := pressKeyMsg(m, ChannelSelectedMsg{Channel: twitch.Channel{Login: login, DisplayName: login, Viewers: twitch.IntPtr(12900)},
+			m, cmd := pressKeyMsg(m, ChannelSelectedMsg{Channel: catalog.Channel{Login: login, DisplayName: login, Viewers: catalog.IntPtr(12900)},
 				Enter: m.list.enters})
 			return drainCmd(t, m, cmd)
 		}, func(m Model) string { return fmt.Sprintf(m.t("player.starting_channel"), login) }},

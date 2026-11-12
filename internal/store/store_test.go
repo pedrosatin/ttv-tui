@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,8 +12,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func TestStore_NonExistentFileReturnsEmptyWithoutError(t *testing.T) {
@@ -269,9 +268,9 @@ func TestStore_StoreObjectDelegation(t *testing.T) {
 
 func TestChannelWithoutViewersIsNotOffline(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	live := twitch.Channel{
+	live := catalog.Channel{
 		ID: "1", Login: "eslcs", DisplayName: "ESLCS",
-		Viewers: twitch.IntPtr(12900), Availability: twitch.AvailabilityLive,
+		Viewers: catalog.IntPtr(12900), Availability: catalog.AvailabilityLive,
 	}
 	st := State{Favorites: []Channel{FromChannel(live)}, Recents: []Channel{FromChannel(live)}}
 	if err := SaveTo(path, st); err != nil {
@@ -286,7 +285,7 @@ func TestChannelWithoutViewersIsNotOffline(t *testing.T) {
 		if tw.Viewers != nil {
 			t.Fatalf("store must keep identity only, got viewers %v", *tw.Viewers)
 		}
-		if tw.Availability != twitch.AvailabilityUnknown {
+		if tw.Availability != catalog.AvailabilityUnknown {
 			t.Fatalf("channel loaded from store without viewers = %v, want unknown (never offline)", tw.Availability)
 		}
 	}
@@ -1238,7 +1237,7 @@ func TestStore_ChannelWithURLRoundTripAndLegacyCompat(t *testing.T) {
 		t.Fatalf("recent[1] Twitch URL = %q, want empty", loaded.Recents[1].URL)
 	}
 
-	// 2. Conversion to and from twitch.Channel and catalog.Channel preserves URL and Platform.
+	// 2. Conversion to and from catalog.Channel and catalog.Channel preserves URL and Platform.
 	tCh := loaded.Favorites[0].ToChannel()
 	if tCh.Platform != PlatformKick || tCh.URL != "https://kick.com/xqc" {
 		t.Fatalf("ToChannel did not preserve platform or URL: %+v", tCh)

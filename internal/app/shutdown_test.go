@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"net"
 	"os"
 	"os/exec"
@@ -22,7 +23,6 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"golang.org/x/sys/unix"
 )
 
@@ -50,27 +50,27 @@ func TestMain(m *testing.M) {
 
 type emptySource struct{}
 
-func (emptySource) Categories(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-	return twitch.Page[twitch.Category]{}, nil
+func (emptySource) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{}, nil
 }
 
-func (emptySource) Channels(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{}, nil
+func (emptySource) Channels(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{}, nil
 }
 
-func (emptySource) Search(context.Context, string) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{}, nil
+func (emptySource) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{}, nil
 }
 
-func (emptySource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+func (emptySource) SearchCategories(context.Context, string) ([]catalog.Category, error) {
 	return nil, nil
 }
 
-func (emptySource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+func (emptySource) ChannelsByLogins(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 
-func (emptySource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+func (emptySource) ChannelsByIDs(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 

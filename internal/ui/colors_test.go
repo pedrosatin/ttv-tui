@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"regexp"
 	"strings"
 	"testing"
@@ -83,11 +84,11 @@ func TestOrientationColorsAvailabilityAndFocus(t *testing.T) {
 	defer forceOrientationColorsForTest(false)
 
 	m := New(mustCatalog(t, i18n.LangPTBR),
-		WithFavorites([]twitch.Channel{
-			{ID: "f1", Login: "favlive", DisplayName: "FavLive", Viewers: twitch.IntPtr(10), Availability: twitch.AvailabilityLive},
-			{ID: "f2", Login: "favoff", DisplayName: "FavOff", Availability: twitch.AvailabilityOffline},
+		WithFavorites([]catalog.Channel{
+			{ID: "f1", Login: "favlive", DisplayName: "FavLive", Viewers: catalog.IntPtr(10), Availability: catalog.AvailabilityLive},
+			{ID: "f2", Login: "favoff", DisplayName: "FavOff", Availability: catalog.AvailabilityOffline},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "r1", Login: "unknown", DisplayName: "Unknown"},
 		}),
 	)
@@ -218,9 +219,9 @@ func TestOrientationColorsDisabledNoForegroundSGR(t *testing.T) {
 	defer forceOrientationColorsForTest(true)
 
 	m := New(mustCatalog(t, i18n.LangEN),
-		WithFavorites([]twitch.Channel{
-			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(12), Availability: twitch.AvailabilityLive},
-			{ID: "f2", Login: "offline_guy", DisplayName: "Offline", Availability: twitch.AvailabilityOffline},
+		WithFavorites([]catalog.Channel{
+			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(12), Availability: catalog.AvailabilityLive},
+			{ID: "f2", Login: "offline_guy", DisplayName: "Offline", Availability: catalog.AvailabilityOffline},
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
@@ -273,8 +274,8 @@ func TestOrientationColorsCLICOLORZeroDisablesEvenWithForce(t *testing.T) {
 	}
 
 	m := New(mustCatalog(t, i18n.LangEN),
-		WithFavorites([]twitch.Channel{
-			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(12), Availability: twitch.AvailabilityLive},
+		WithFavorites([]catalog.Channel{
+			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(12), Availability: catalog.AvailabilityLive},
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
@@ -362,12 +363,12 @@ func TestAvailabilityTagsNeverTruncatedAt80(t *testing.T) {
 	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
 		cat := mustCatalog(t, lang)
 		m := New(cat,
-			WithFavorites([]twitch.Channel{
-				{ID: "f-1", Login: "gaules", DisplayName: "GaulesNomeBemLongoParaForcar", Availability: twitch.AvailabilityUnknown},
+			WithFavorites([]catalog.Channel{
+				{ID: "f-1", Login: "gaules", DisplayName: "GaulesNomeBemLongoParaForcar", Availability: catalog.AvailabilityUnknown},
 			}),
-			WithRecents([]twitch.Channel{
-				{ID: "r-1", Login: "offline_guy", DisplayName: "OfflineNomeBemLongoParaForcar", Availability: twitch.AvailabilityOffline},
-				{ID: "r-2", Login: "liveguy", DisplayName: "LiveNomeBemLongo", Viewers: nil, Availability: twitch.AvailabilityLive},
+			WithRecents([]catalog.Channel{
+				{ID: "r-1", Login: "offline_guy", DisplayName: "OfflineNomeBemLongoParaForcar", Availability: catalog.AvailabilityOffline},
+				{ID: "r-2", Login: "liveguy", DisplayName: "LiveNomeBemLongo", Viewers: nil, Availability: catalog.AvailabilityLive},
 			}),
 		)
 		m.player.login = "liveguy"
@@ -420,9 +421,9 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 	defer forceOrientationColorsForTest(false)
 
 	m := New(mustCatalog(t, i18n.LangPTBR),
-		WithFavorites([]twitch.Channel{
-			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(1200), Availability: twitch.AvailabilityLive},
-			{ID: "f2", Login: "off", DisplayName: "Off", Availability: twitch.AvailabilityOffline},
+		WithFavorites([]catalog.Channel{
+			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(1200), Availability: catalog.AvailabilityLive},
+			{ID: "f2", Login: "off", DisplayName: "Off", Availability: catalog.AvailabilityOffline},
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
@@ -448,8 +449,8 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	configureOrientationColors()
 	m2 := New(mustCatalog(t, i18n.LangPTBR),
-		WithFavorites([]twitch.Channel{
-			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(1200), Availability: twitch.AvailabilityLive},
+		WithFavorites([]catalog.Channel{
+			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(1200), Availability: catalog.AvailabilityLive},
 		}),
 	)
 	m2, _ = pressKeyMsg(m2, tea.WindowSizeMsg{Width: 100, Height: 24})

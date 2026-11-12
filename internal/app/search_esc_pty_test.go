@@ -4,45 +4,44 @@ package app
 
 import (
 	"context"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // searchEscSource backs the ticket 03 PTY: one category with a live channel,
 // plus a distinct search hit, so Esc can return to either surface.
 type searchEscSource struct{}
 
-func (searchEscSource) Categories(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-	return twitch.Page[twitch.Category]{Items: []twitch.Category{
+func (searchEscSource) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{Items: []catalog.Category{
 		{ID: "cat-esc", Name: "EscCategory"},
 		{ID: "cat-other", Name: "OtherCategory"},
 	}}, nil
 }
 
-func (searchEscSource) Channels(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-		{ID: "ch-alpha", Login: "alphachan", DisplayName: "AlphaChan", Viewers: twitch.IntPtr(10)},
+func (searchEscSource) Channels(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+		{ID: "ch-alpha", Login: "alphachan", DisplayName: "AlphaChan", Viewers: catalog.IntPtr(10)},
 	}}, nil
 }
 
-func (searchEscSource) Search(context.Context, string) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+func (searchEscSource) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
 		{ID: "ch-search", Login: "searchhit", DisplayName: "SearchHit"},
 	}}, nil
 }
 
-func (searchEscSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+func (searchEscSource) SearchCategories(context.Context, string) ([]catalog.Category, error) {
 	return nil, nil
 }
 
-func (searchEscSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+func (searchEscSource) ChannelsByLogins(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 
-func (searchEscSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+func (searchEscSource) ChannelsByIDs(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 

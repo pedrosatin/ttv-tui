@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/store"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // blockingStore holds each save until the test releases it.
@@ -62,7 +62,7 @@ func oneChannelModel(t *testing.T, opts ...Option) Model {
 	t.Helper()
 	m := New(testCatalog(t, i18n.LangEN), opts...)
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{{ID: "ch-1", Login: "streamer", DisplayName: "Streamer", Viewers: twitch.IntPtr(500)}}
+	m.list.channels = []catalog.Channel{{ID: "ch-1", Login: "streamer", DisplayName: "Streamer", Viewers: catalog.IntPtr(500)}}
 	m.reconcileHighlight()
 	return m
 }

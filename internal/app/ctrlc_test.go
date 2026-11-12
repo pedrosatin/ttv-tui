@@ -4,40 +4,39 @@ package app
 
 import (
 	"context"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // oneChannelSource offers a single category with a single live channel.
 type oneChannelSource struct{}
 
-func (oneChannelSource) Categories(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-	return twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "cat-pty", Name: "PtyCategory"}}}, nil
+func (oneChannelSource) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat-pty", Name: "PtyCategory"}}}, nil
 }
 
-func (oneChannelSource) Channels(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{{ID: "ch-pty", Login: "ptychan", DisplayName: "PtyChan"}}}, nil
+func (oneChannelSource) Channels(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{{ID: "ch-pty", Login: "ptychan", DisplayName: "PtyChan"}}}, nil
 }
 
-func (oneChannelSource) Search(context.Context, string) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{{ID: "ch-pty", Login: "ptychan", DisplayName: "PtyChan"}}}, nil
+func (oneChannelSource) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{{ID: "ch-pty", Login: "ptychan", DisplayName: "PtyChan"}}}, nil
 }
 
-func (oneChannelSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+func (oneChannelSource) SearchCategories(context.Context, string) ([]catalog.Category, error) {
 	return nil, nil
 }
 
-func (oneChannelSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+func (oneChannelSource) ChannelsByLogins(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 
-func (oneChannelSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+func (oneChannelSource) ChannelsByIDs(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 

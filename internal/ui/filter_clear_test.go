@@ -2,13 +2,13 @@ package ui
 
 import (
 	"context"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func filterClearFixture(t *testing.T) Model {
@@ -18,23 +18,23 @@ func filterClearFixture(t *testing.T) Model {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{
-				Items: []twitch.Channel{
-					{ID: "ch-peere", Login: "peere", DisplayName: "Peere", Viewers: twitch.IntPtr(100)},
-					{ID: "ch-alan", Login: "alanzoka", DisplayName: "alanzoka", Viewers: twitch.IntPtr(200)},
-					{ID: "ch-gaules", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(300)},
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{
+				Items: []catalog.Channel{
+					{ID: "ch-peere", Login: "peere", DisplayName: "Peere", Viewers: catalog.IntPtr(100)},
+					{ID: "ch-alan", Login: "alanzoka", DisplayName: "alanzoka", Viewers: catalog.IntPtr(200)},
+					{ID: "ch-gaules", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(300)},
 				},
 			}, nil
 		},
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{{ID: "cat-1", Name: "Just Chatting"}},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{{ID: "cat-1", Name: "Just Chatting"}},
 			}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{
-				Items: []twitch.Channel{
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{
+				Items: []catalog.Channel{
 					{ID: "ch-peere", Login: "peere", DisplayName: "Peere"},
 				},
 			}, nil
@@ -42,12 +42,12 @@ func filterClearFixture(t *testing.T) Model {
 	}
 	m := New(cat,
 		WithSource(src),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "favorite_one", DisplayName: "Favorite One"},
 		}),
 	)
 	m.list.mode = ModeChannels
-	m.list.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
+	m.list.selectedCategory = &catalog.Category{ID: "cat-1", Name: "Just Chatting"}
 	m.list.loading = true
 	m.list.generation++
 	loadCmd := m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, "", false)

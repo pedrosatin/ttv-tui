@@ -1,13 +1,13 @@
 package ui
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // TestExternalTextNeverReachesTerminalRaw feeds ESC sequences and line breaks
@@ -21,13 +21,13 @@ func TestExternalTextNeverReachesTerminalRaw(t *testing.T) {
 		title = "Ti\x1b[2Jtle\r\nnext"
 		cat   = "Cat\x1b[2J\negory\t\u009b2J"
 	)
-	ch := twitch.Channel{
-		ID: "1", Login: login, DisplayName: name, Title: twitch.StringPtr(title),
-		CategoryName: twitch.StringPtr(cat), Viewers: twitch.IntPtr(10),
-		Language:     twitch.StringPtr("pt\x1b[2J\nfoo"),
-		Availability: twitch.AvailabilityLive,
+	ch := catalog.Channel{
+		ID: "1", Login: login, DisplayName: name, Title: catalog.StringPtr(title),
+		CategoryName: catalog.StringPtr(cat), Viewers: catalog.IntPtr(10),
+		Language:     catalog.StringPtr("pt\x1b[2J\nfoo"),
+		Availability: catalog.AvailabilityLive,
 	}
-	category := twitch.Category{ID: "c", Name: cat, Viewers: twitch.IntPtr(10)}
+	category := catalog.Category{ID: "c", Name: cat, Viewers: catalog.IntPtr(10)}
 	cases := []struct {
 		name  string
 		setup func(m *Model)
@@ -37,7 +37,7 @@ func TestExternalTextNeverReachesTerminalRaw(t *testing.T) {
 		}},
 		{"selected category", func(m *Model) {
 			m.list.mode = ModeCategories
-			m.list.categories = []twitch.Category{category}
+			m.list.categories = []catalog.Category{category}
 			m.list.selectedChannel = nil
 			m.list.selectedCategory = &category
 		}},
@@ -62,7 +62,7 @@ func TestExternalTextNeverReachesTerminalRaw(t *testing.T) {
 			m := New(mustCatalog(t, i18n.LangEN))
 			m.list.mode = ModeChannels
 			m.list.selectedCategory = &category
-			m.list.channels = []twitch.Channel{ch}
+			m.list.channels = []catalog.Channel{ch}
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: w, Height: h})
 			tc.setup(&m)
 			rows := strings.Split(m.View(), "\n")

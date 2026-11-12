@@ -3,48 +3,48 @@ package ui
 import (
 	"context"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func TestStatusBarShowsChannelCategoryNotLastVisitedList(t *testing.T) {
 	cat := mustCatalog(t, i18n.LangPTBR)
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{
-					{ID: "cat-lol", Name: "League of Legends", Viewers: twitch.IntPtr(200000)},
-					{ID: "cat-fn", Name: "Fortnite", Viewers: twitch.IntPtr(150000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{
+					{ID: "cat-lol", Name: "League of Legends", Viewers: catalog.IntPtr(200000)},
+					{ID: "cat-fn", Name: "Fortnite", Viewers: catalog.IntPtr(150000)},
 				},
 			}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			switch categoryID {
 			case "cat-lol":
-				return twitch.Page[twitch.Channel]{
-					Items: []twitch.Channel{{
+				return catalog.Page[catalog.Channel]{
+					Items: []catalog.Channel{{
 						ID: "ch-cae", Login: "caedrel", DisplayName: "Caedrel",
-						Viewers: twitch.IntPtr(50000), CategoryID: twitch.StringPtr("cat-lol"),
-						CategoryName: twitch.StringPtr("League of Legends"),
-						Availability: twitch.AvailabilityLive,
+						Viewers: catalog.IntPtr(50000), CategoryID: catalog.StringPtr("cat-lol"),
+						CategoryName: catalog.StringPtr("League of Legends"),
+						Availability: catalog.AvailabilityLive,
 					}},
 				}, nil
 			case "cat-fn":
-				return twitch.Page[twitch.Channel]{
-					Items: []twitch.Channel{{
+				return catalog.Page[catalog.Channel]{
+					Items: []catalog.Channel{{
 						ID: "ch-fn", Login: "fnstreamer", DisplayName: "FNStreamer",
-						Viewers: twitch.IntPtr(1000), CategoryID: twitch.StringPtr("cat-fn"),
-						CategoryName: twitch.StringPtr("Fortnite"),
-						Availability: twitch.AvailabilityLive,
+						Viewers: catalog.IntPtr(1000), CategoryID: catalog.StringPtr("cat-fn"),
+						CategoryName: catalog.StringPtr("Fortnite"),
+						Availability: catalog.AvailabilityLive,
 					}},
 				}, nil
 			default:
-				return twitch.Page[twitch.Channel]{}, nil
+				return catalog.Page[catalog.Channel]{}, nil
 			}
 		},
 	}
@@ -96,15 +96,15 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 
 	t.Run("favorite", func(t *testing.T) {
 		m := New(cat,
-			WithFavorites([]twitch.Channel{{
+			WithFavorites([]catalog.Channel{{
 				ID: "f1", Login: "favchan", DisplayName: "FavChan",
-				CategoryName: twitch.StringPtr("Valorant"),
-				Availability: twitch.AvailabilityLive,
+				CategoryName: catalog.StringPtr("Valorant"),
+				Availability: catalog.AvailabilityLive,
 			}}),
 			WithPlayback(&fakePlayback{}),
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-		m.list.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
+		m.list.selectedCategory = &catalog.Category{ID: "cat-fn", Name: "Fortnite"}
 		m.list.mode = ModeChannels
 		m.list.highlightedID = "f1"
 		m = openChannel(t, m)
@@ -122,15 +122,15 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 
 	t.Run("recent", func(t *testing.T) {
 		m := New(cat,
-			WithRecents([]twitch.Channel{{
+			WithRecents([]catalog.Channel{{
 				ID: "r1", Login: "recchan", DisplayName: "RecChan",
-				CategoryName: twitch.StringPtr("Dota 2"),
-				Availability: twitch.AvailabilityLive,
+				CategoryName: catalog.StringPtr("Dota 2"),
+				Availability: catalog.AvailabilityLive,
 			}}),
 			WithPlayback(&fakePlayback{}),
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-		m.list.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
+		m.list.selectedCategory = &catalog.Category{ID: "cat-fn", Name: "Fortnite"}
 		m.list.mode = ModeChannels
 		m.list.highlightedID = "r1"
 		m = openChannel(t, m)
@@ -148,25 +148,25 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 
 	t.Run("search", func(t *testing.T) {
 		src := &fakeSource{
-			searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
-				return twitch.Page[twitch.Channel]{
-					Items: []twitch.Channel{{
+			searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
+				return catalog.Page[catalog.Channel]{
+					Items: []catalog.Channel{{
 						ID: "s1", Login: "searchchan", DisplayName: "SearchChan",
-						CategoryName: twitch.StringPtr("Minecraft"),
-						Availability: twitch.AvailabilityLive,
+						CategoryName: catalog.StringPtr("Minecraft"),
+						Availability: catalog.AvailabilityLive,
 					}},
 				}, nil
 			},
 		}
 		m := New(cat, WithSource(src), WithPlayback(&fakePlayback{}))
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-		m.list.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
+		m.list.selectedCategory = &catalog.Category{ID: "cat-fn", Name: "Fortnite"}
 		m.list.mode = ModeSearch
 		m.list.search.query = "search"
-		m.list.channels = []twitch.Channel{{
+		m.list.channels = []catalog.Channel{{
 			ID: "s1", Login: "searchchan", DisplayName: "SearchChan",
-			CategoryName: twitch.StringPtr("Minecraft"),
-			Availability: twitch.AvailabilityLive,
+			CategoryName: catalog.StringPtr("Minecraft"),
+			Availability: catalog.AvailabilityLive,
 		}}
 		m.list.highlightedID = "s1"
 		m = openChannel(t, m)
@@ -184,13 +184,13 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 
 	t.Run("unknown_omitted", func(t *testing.T) {
 		m := New(cat,
-			WithFavorites([]twitch.Channel{{
+			WithFavorites([]catalog.Channel{{
 				ID: "f2", Login: "mystery", DisplayName: "Mystery",
 			}}),
 			WithPlayback(&fakePlayback{}),
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-		m.list.selectedCategory = &twitch.Category{ID: "cat-fn", Name: "Fortnite"}
+		m.list.selectedCategory = &catalog.Category{ID: "cat-fn", Name: "Fortnite"}
 		m.list.mode = ModeChannels
 		m.list.highlightedID = "f2"
 		m = openChannel(t, m)
@@ -208,9 +208,9 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 func TestStatusBarCategoryUpdatesOnChannelSwitch(t *testing.T) {
 	cat := mustCatalog(t, i18n.LangEN)
 	m := New(cat, WithPlayback(&fakePlayback{}),
-		WithFavorites([]twitch.Channel{
-			{ID: "a", Login: "alpha", DisplayName: "Alpha", CategoryName: twitch.StringPtr("Chess")},
-			{ID: "b", Login: "bravo", DisplayName: "Bravo", CategoryName: twitch.StringPtr("Poker")},
+		WithFavorites([]catalog.Channel{
+			{ID: "a", Login: "alpha", DisplayName: "Alpha", CategoryName: catalog.StringPtr("Chess")},
+			{ID: "b", Login: "bravo", DisplayName: "Bravo", CategoryName: catalog.StringPtr("Poker")},
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})

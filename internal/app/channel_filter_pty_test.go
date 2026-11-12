@@ -4,42 +4,41 @@ package app
 
 import (
 	"context"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // channelFilterSource feeds bilingual channels so the filter menu can list PT/EN
 // and a 500+ audience cut leaves only the Portuguese mid-size stream.
 type channelFilterSource struct{}
 
-func (channelFilterSource) Categories(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-	return twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "cat-cf", Name: "FilterLangCat"}}}, nil
+func (channelFilterSource) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat-cf", Name: "FilterLangCat"}}}, nil
 }
 
-func (channelFilterSource) Channels(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-		{ID: "ch-pt", Login: "ptlive", DisplayName: "PtLive", Language: twitch.LanguagePtr("PT"), Viewers: twitch.IntPtr(750), Availability: twitch.AvailabilityLive},
-		{ID: "ch-en", Login: "enlive", DisplayName: "EnLive", Language: twitch.LanguagePtr("EN"), Viewers: twitch.IntPtr(2000), Availability: twitch.AvailabilityLive},
-		{ID: "ch-small", Login: "smallpt", DisplayName: "SmallPt", Language: twitch.LanguagePtr("PT"), Viewers: twitch.IntPtr(20), Availability: twitch.AvailabilityLive},
+func (channelFilterSource) Channels(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+		{ID: "ch-pt", Login: "ptlive", DisplayName: "PtLive", Language: catalog.LanguagePtr("PT"), Viewers: catalog.IntPtr(750), Availability: catalog.AvailabilityLive},
+		{ID: "ch-en", Login: "enlive", DisplayName: "EnLive", Language: catalog.LanguagePtr("EN"), Viewers: catalog.IntPtr(2000), Availability: catalog.AvailabilityLive},
+		{ID: "ch-small", Login: "smallpt", DisplayName: "SmallPt", Language: catalog.LanguagePtr("PT"), Viewers: catalog.IntPtr(20), Availability: catalog.AvailabilityLive},
 	}}, nil
 }
 
-func (channelFilterSource) Search(context.Context, string) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{}, nil
+func (channelFilterSource) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{}, nil
 }
 
-func (channelFilterSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+func (channelFilterSource) SearchCategories(context.Context, string) ([]catalog.Category, error) {
 	return nil, nil
 }
 
-func (channelFilterSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+func (channelFilterSource) ChannelsByLogins(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 
-func (channelFilterSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+func (channelFilterSource) ChannelsByIDs(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 

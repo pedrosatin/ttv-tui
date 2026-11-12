@@ -2,11 +2,11 @@ package ui
 
 import (
 	"context"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // openChannel drives Enter on the highlighted row through ChannelSelectedMsg,
@@ -37,18 +37,18 @@ func TestOpenChannelDoesNotReorderVisibleList(t *testing.T) {
 
 	m := New(catEN,
 		WithStore(fs),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "fav_one", DisplayName: "Fav One"},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "rec-a", Login: "alice", DisplayName: "Alice"},
 			{ID: "rec-b", Login: "bob", DisplayName: "Bob"},
 			{ID: "rec-c", Login: "carol", DisplayName: "Carol"},
 		}),
 	)
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
-		{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: twitch.IntPtr(100)},
+	m.list.channels = []catalog.Channel{
+		{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: catalog.IntPtr(100)},
 	}
 	m.list.highlightedID = "rec-c"
 	m.reconcileHighlight()
@@ -83,14 +83,14 @@ func TestEnterRightAfterOpenDoesNotReopenSameChannelByShift(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
 	m := New(catEN,
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "rec-a", Login: "alice", DisplayName: "Alice"},
 			{ID: "rec-b", Login: "bob", DisplayName: "Bob"},
 			{ID: "rec-c", Login: "carol", DisplayName: "Carol"},
 		}),
 	)
 	m.list.mode = ModeCategories
-	m.list.categories = []twitch.Category{{ID: "cat-1", Name: "Just Chatting"}}
+	m.list.categories = []catalog.Category{{ID: "cat-1", Name: "Just Chatting"}}
 	m.list.highlightedID = "rec-b"
 	m.reconcileHighlight()
 
@@ -120,12 +120,12 @@ func TestEnterRightAfterOpenDoesNotReopenSameChannelByShift(t *testing.T) {
 func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	src := &fakeSource{
-		categoriesFn: func(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "cat-1", Name: "Just Chatting"}}}, nil
+		categoriesFn: func(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat-1", Name: "Just Chatting"}}}, nil
 		},
-		channelsFn: func(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-				{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: twitch.IntPtr(10)},
+		channelsFn: func(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+				{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: catalog.IntPtr(10)},
 			}}, nil
 		},
 	}
@@ -134,18 +134,18 @@ func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 	m := New(catEN,
 		WithSource(src),
 		WithStore(fs),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "fav_one", DisplayName: "Fav One"},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "rec-a", Login: "alice", DisplayName: "Alice"},
 			{ID: "rec-b", Login: "bob", DisplayName: "Bob"},
 		}),
 	)
 	m.list.mode = ModeChannels
-	m.list.selectedCategory = &twitch.Category{ID: "cat-1", Name: "Just Chatting"}
-	m.list.channels = []twitch.Channel{
-		{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: twitch.IntPtr(10)},
+	m.list.selectedCategory = &catalog.Category{ID: "cat-1", Name: "Just Chatting"}
+	m.list.channels = []catalog.Channel{
+		{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: catalog.IntPtr(10)},
 	}
 	m.list.highlightedID = "rec-b"
 	m.reconcileHighlight()
@@ -206,18 +206,18 @@ func TestOpenChannelKeepsFavoritePositionAndDedup(t *testing.T) {
 
 	m := New(catEN,
 		WithStore(fs),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "fav-shared", Login: "shared", DisplayName: "Shared"},
 			{ID: "fav-two", Login: "second_fav", DisplayName: "Second Fav"},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "rec-1", Login: "recent_one", DisplayName: "Recent One"},
 		}),
 	)
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
-		{ID: "fav-shared", Login: "shared", DisplayName: "Shared", Viewers: twitch.IntPtr(1)},
-		{ID: "ch-new", Login: "brand_new", DisplayName: "Brand New", Viewers: twitch.IntPtr(2)},
+	m.list.channels = []catalog.Channel{
+		{ID: "fav-shared", Login: "shared", DisplayName: "Shared", Viewers: catalog.IntPtr(1)},
+		{ID: "ch-new", Login: "brand_new", DisplayName: "Brand New", Viewers: catalog.IntPtr(2)},
 	}
 	m.list.highlightedID = "ch-new"
 	m.reconcileHighlight()

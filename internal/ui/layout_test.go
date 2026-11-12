@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
@@ -23,19 +24,19 @@ func setupTwoPanelModel(t *testing.T) (Model, *fakePlayback, *fakeChat) {
 	title1 := "Major CS2 Final — Playoff Stage"
 	title2 := "Speedrunning Resident Evil 4 Remake"
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{
-					{ID: "cat-cs", Name: "Counter-Strike", Viewers: twitch.IntPtr(250000)},
-					{ID: "cat-jc", Name: "Just Chatting", Viewers: twitch.IntPtr(410000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{
+					{ID: "cat-cs", Name: "Counter-Strike", Viewers: catalog.IntPtr(250000)},
+					{ID: "cat-jc", Name: "Just Chatting", Viewers: catalog.IntPtr(410000)},
 				},
 			}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{
-				Items: []twitch.Channel{
-					{ID: "ch-gau", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(98500), Title: &title1},
-					{ID: "ch-alan", Login: "alanzoka", DisplayName: "alanzoka", Viewers: twitch.IntPtr(42000), Title: &title2},
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{
+				Items: []catalog.Channel{
+					{ID: "ch-gau", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(98500), Title: &title1},
+					{ID: "ch-alan", Login: "alanzoka", DisplayName: "alanzoka", Viewers: catalog.IntPtr(42000), Title: &title2},
 				},
 			}, nil
 		},
@@ -340,10 +341,10 @@ func TestCJKChannelNameDoesNotInsertBlankListRow(t *testing.T) {
 	title := "配信タイトル — とても長いタイトルで折り返しを誘発する"
 	m := New(catEN)
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
-		{ID: "cjk-1", Login: "nihongo", DisplayName: "日本語配信者", Viewers: twitch.IntPtr(1234), Title: &title, Availability: twitch.AvailabilityLive},
-		{ID: "cjk-2", Login: "nextchan", DisplayName: "次のチャンネル", Viewers: twitch.IntPtr(56), Title: twitch.StringPtr("short"), Availability: twitch.AvailabilityLive},
-		{ID: "lat-3", Login: "latin", DisplayName: "LatinOnly", Viewers: twitch.IntPtr(99), Title: twitch.StringPtr("ascii title"), Availability: twitch.AvailabilityLive},
+	m.list.channels = []catalog.Channel{
+		{ID: "cjk-1", Login: "nihongo", DisplayName: "日本語配信者", Viewers: catalog.IntPtr(1234), Title: &title, Availability: catalog.AvailabilityLive},
+		{ID: "cjk-2", Login: "nextchan", DisplayName: "次のチャンネル", Viewers: catalog.IntPtr(56), Title: catalog.StringPtr("short"), Availability: catalog.AvailabilityLive},
+		{ID: "lat-3", Login: "latin", DisplayName: "LatinOnly", Viewers: catalog.IntPtr(99), Title: catalog.StringPtr("ascii title"), Availability: catalog.AvailabilityLive},
 	}
 	m.list.highlightedID = "cjk-1"
 

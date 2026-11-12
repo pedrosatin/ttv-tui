@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,38 +15,37 @@ import (
 	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/store"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // recentOrderSource backs the ticket 08 PTY: a category plus one live channel
 // so refresh has something to reload while recents dominate the list order.
 type recentOrderSource struct{}
 
-func (recentOrderSource) Categories(context.Context, twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-	return twitch.Page[twitch.Category]{Items: []twitch.Category{{ID: "cat-order", Name: "OrderCat"}}}, nil
+func (recentOrderSource) Categories(context.Context, catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat-order", Name: "OrderCat"}}}, nil
 }
 
-func (recentOrderSource) Channels(context.Context, string, twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-		{ID: "ch-live", Login: "livechan", DisplayName: "LiveChan", Viewers: twitch.IntPtr(42)},
+func (recentOrderSource) Channels(context.Context, string, catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+		{ID: "ch-live", Login: "livechan", DisplayName: "LiveChan", Viewers: catalog.IntPtr(42)},
 	}}, nil
 }
 
-func (recentOrderSource) Search(context.Context, string) (twitch.Page[twitch.Channel], error) {
-	return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+func (recentOrderSource) Search(context.Context, string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
 		{ID: "ch-live", Login: "livechan", DisplayName: "LiveChan"},
 	}}, nil
 }
 
-func (recentOrderSource) SearchCategories(context.Context, string) ([]twitch.Category, error) {
+func (recentOrderSource) SearchCategories(context.Context, string) ([]catalog.Category, error) {
 	return nil, nil
 }
 
-func (recentOrderSource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel, error) {
+func (recentOrderSource) ChannelsByLogins(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 
-func (recentOrderSource) ChannelsByIDs(context.Context, []string) ([]twitch.Channel, error) {
+func (recentOrderSource) ChannelsByIDs(context.Context, []string) ([]catalog.Channel, error) {
 	return nil, nil
 }
 

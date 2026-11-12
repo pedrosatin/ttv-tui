@@ -2,13 +2,13 @@ package ui
 
 import (
 	"context"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func newSearchCategoriesModel(t *testing.T, src *fakeSource) Model {
@@ -40,28 +40,28 @@ func TestCtrlSSearchShowsCategoriesBeforeChannels(t *testing.T) {
 	var searchedQ string
 	var searchedCatsQ string
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "top1", Name: "Just Chatting", Viewers: twitch.IntPtr(100000)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "top1", Name: "Just Chatting", Viewers: catalog.IntPtr(100000)},
 			}}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			searchedQ = query
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-				{ID: "ch1", Login: "tft_streamer", DisplayName: "TFTStreamer", Availability: twitch.AvailabilityLive, Viewers: twitch.IntPtr(50)},
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+				{ID: "ch1", Login: "tft_streamer", DisplayName: "TFTStreamer", Availability: catalog.AvailabilityLive, Viewers: catalog.IntPtr(50)},
 			}}, nil
 		},
-		searchCategoriesFn: func(ctx context.Context, query string) ([]twitch.Category, error) {
+		searchCategoriesFn: func(ctx context.Context, query string) ([]catalog.Category, error) {
 			searchedCatsQ = query
-			return []twitch.Category{
-				{ID: "528672376", Name: "Teamfight Manager 2", Viewers: twitch.IntPtr(3)},
-				{ID: "513143", Name: "Teamfight Tactics", Viewers: twitch.IntPtr(4063)},
+			return []catalog.Category{
+				{ID: "528672376", Name: "Teamfight Manager 2", Viewers: catalog.IntPtr(3)},
+				{ID: "513143", Name: "Teamfight Tactics", Viewers: catalog.IntPtr(4063)},
 				{ID: "1049329847", Name: "Teamfight Manager", Viewers: nil},
 			}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-				{ID: "open1", Login: "opened", DisplayName: "Opened", Viewers: twitch.IntPtr(9)},
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+				{ID: "open1", Login: "opened", DisplayName: "Opened", Viewers: catalog.IntPtr(9)},
 			}}, nil
 		},
 	}
@@ -110,23 +110,23 @@ func TestCtrlSSearchShowsCategoriesBeforeChannels(t *testing.T) {
 func TestEnterOnSearchCategoryOpensItsChannels(t *testing.T) {
 	var openedCat string
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "top1", Name: "Just Chatting", Viewers: twitch.IntPtr(1)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "top1", Name: "Just Chatting", Viewers: catalog.IntPtr(1)},
 			}}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{}, nil
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{}, nil
 		},
-		searchCategoriesFn: func(ctx context.Context, query string) ([]twitch.Category, error) {
-			return []twitch.Category{
-				{ID: "513143", Name: "Teamfight Tactics", Viewers: twitch.IntPtr(4063)},
+		searchCategoriesFn: func(ctx context.Context, query string) ([]catalog.Category, error) {
+			return []catalog.Category{
+				{ID: "513143", Name: "Teamfight Tactics", Viewers: catalog.IntPtr(4063)},
 			}, nil
 		},
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			openedCat = categoryID
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-				{ID: "c1", Login: "tftpro", DisplayName: "TFTPro", Viewers: twitch.IntPtr(100)},
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+				{ID: "c1", Login: "tftpro", DisplayName: "TFTPro", Viewers: catalog.IntPtr(100)},
 			}}, nil
 		},
 	}
@@ -162,18 +162,18 @@ func TestEnterOnSearchCategoryOpensItsChannels(t *testing.T) {
 
 func TestSearchWithNoCategoriesStillShowsChannels(t *testing.T) {
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "top1", Name: "Just Chatting", Viewers: twitch.IntPtr(1)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "top1", Name: "Just Chatting", Viewers: catalog.IntPtr(1)},
 			}}, nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
-			return twitch.Page[twitch.Channel]{Items: []twitch.Channel{
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
 				{ID: "ch1", Login: "onlychan", DisplayName: "OnlyChan"},
 			}}, nil
 		},
-		searchCategoriesFn: func(ctx context.Context, query string) ([]twitch.Category, error) {
-			return []twitch.Category{}, nil
+		searchCategoriesFn: func(ctx context.Context, query string) ([]catalog.Category, error) {
+			return []catalog.Category{}, nil
 		},
 	}
 
@@ -194,10 +194,10 @@ func TestSearchWithNoCategoriesStillShowsChannels(t *testing.T) {
 
 func TestLocalFilterWithoutMatchSuggestsCtrlF(t *testing.T) {
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{Items: []twitch.Category{
-				{ID: "top1", Name: "Just Chatting", Viewers: twitch.IntPtr(1)},
-				{ID: "top2", Name: "Counter-Strike", Viewers: twitch.IntPtr(2)},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{Items: []catalog.Category{
+				{ID: "top1", Name: "Just Chatting", Viewers: catalog.IntPtr(1)},
+				{ID: "top2", Name: "Counter-Strike", Viewers: catalog.IntPtr(2)},
 			}}, nil
 		},
 	}

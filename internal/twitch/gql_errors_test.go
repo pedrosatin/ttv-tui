@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -109,14 +110,14 @@ func TestGraphQLPartialErrorKeepsTheRest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Search with a nested error: %v", err)
 		}
-		got := map[string]Availability{}
+		got := map[string]catalog.Availability{}
 		for _, ch := range page.Items {
 			got[ch.Login] = ch.Availability
 		}
-		want := map[string]Availability{
-			"gaules":      AvailabilityLive,
-			"gaulesclone": AvailabilityUnknown, // stream falhou: null não é offline
-			"gaules_off":  AvailabilityOffline,
+		want := map[string]catalog.Availability{
+			"gaules":      catalog.AvailabilityLive,
+			"gaulesclone": catalog.AvailabilityUnknown, // stream falhou: null não é offline
+			"gaules_off":  catalog.AvailabilityOffline,
 		}
 		if len(got) != len(want) {
 			t.Fatalf("items = %+v, want %v", page.Items, want)
@@ -154,10 +155,10 @@ func TestGraphQLPartialErrorKeepsTheRest(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("got = %+v, want 2 channels", got)
 		}
-		if got[0].Availability != AvailabilityUnknown {
+		if got[0].Availability != catalog.AvailabilityUnknown {
 			t.Fatalf("um availability = %v, want unknown when its stream failed", got[0].Availability)
 		}
-		if got[1].Availability != AvailabilityOffline {
+		if got[1].Availability != catalog.AvailabilityOffline {
 			t.Fatalf("dois availability = %v, want offline", got[1].Availability)
 		}
 		if got := atomic.LoadInt32(calls); got != 2 {
@@ -173,11 +174,11 @@ func TestIntegrityCheckFailedOnFirstPageIsAnError(t *testing.T) {
 		call func(*GQLSource) error
 	}{
 		{"categories", categoriesIntegrityFixture, func(s *GQLSource) error {
-			_, err := s.Categories(context.Background(), PageRequest{Limit: 20})
+			_, err := s.Categories(context.Background(), catalog.PageRequest{Limit: 20})
 			return err
 		}},
 		{"channels", channelsIntegrityFixture, func(s *GQLSource) error {
-			_, err := s.Channels(context.Background(), "509658", PageRequest{Limit: 20})
+			_, err := s.Channels(context.Background(), "509658", catalog.PageRequest{Limit: 20})
 			return err
 		}},
 		{"search", searchIntegrityFixture, func(s *GQLSource) error {
@@ -246,7 +247,7 @@ func TestChannelsByLoginsSplitsIntoBatchesOf100(t *testing.T) {
 		t.Fatalf("len(got) = %d, want 150", len(got))
 	}
 	for i, ch := range got {
-		if ch.Login != logins[i] || ch.Availability != AvailabilityOffline {
+		if ch.Login != logins[i] || ch.Availability != catalog.AvailabilityOffline {
 			t.Fatalf("got[%d] = %+v, want %s offline", i, ch, logins[i])
 		}
 	}
@@ -291,7 +292,7 @@ func TestGraphQLPartialErrorPathIndex(t *testing.T) {
 			if KindOf(err) != tc.want {
 				t.Fatalf("error = %v, want %s", err, tc.want)
 			}
-			if tc.want == "" && (len(items) != 2 || items[0].Availability != AvailabilityUnknown) {
+			if tc.want == "" && (len(items) != 2 || items[0].Availability != catalog.AvailabilityUnknown) {
 				t.Fatalf("items = %+v, want first unknown", items)
 			}
 			if tc.want != "" && len(items) != 0 {
@@ -310,11 +311,11 @@ func TestGraphQLPartialTimeoutRetriesAllLists(t *testing.T) {
 		call       func(*GQLSource) error
 	}{
 		{"categories", `{"errors":[{"message":"SERVICE TIMEOUT","path":["games","edges",0,"node","viewersCount"]}],"data":{"games":{"edges":[{"node":{"id":"1","name":"Game"}}],"pageInfo":{}}}}`, func(s *GQLSource) error {
-			_, err := s.Categories(context.Background(), PageRequest{Limit: 20})
+			_, err := s.Categories(context.Background(), catalog.PageRequest{Limit: 20})
 			return err
 		}},
 		{"channels", `{"errors":[{"message":"service timeout","path":["game","streams","edges",0,"node","viewersCount"]}],"data":{"game":{"id":"1","name":"Game","streams":{"edges":[{"node":{"id":"s1","broadcaster":{"id":"1","login":"um","displayName":"Um"}}}],"pageInfo":{}}}}}`, func(s *GQLSource) error {
-			_, err := s.Channels(context.Background(), "1", PageRequest{Limit: 20})
+			_, err := s.Channels(context.Background(), "1", catalog.PageRequest{Limit: 20})
 			return err
 		}},
 	} {

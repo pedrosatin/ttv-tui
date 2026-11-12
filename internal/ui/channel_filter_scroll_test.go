@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"regexp"
 	"strings"
 	"testing"
@@ -9,7 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 var menuPosition = regexp.MustCompile(`^\s*(\d+)/(\d+)$`)
@@ -21,13 +21,13 @@ func menuWithLanguages(t *testing.T, lang string, n, width, height int) Model {
 	m.list.mode = ModeChannels
 	for i := range n {
 		code := fmt.Sprintf("%c%c", 'a'+i/26, 'a'+i%26)
-		m.list.channels = append(m.list.channels, twitch.Channel{
+		m.list.channels = append(m.list.channels, catalog.Channel{
 			ID:           fmt.Sprintf("id-%d", i),
 			Login:        fmt.Sprintf("chan%d", i),
 			DisplayName:  fmt.Sprintf("Chan%d", i),
-			Language:     twitch.LanguagePtr(code),
-			Viewers:      twitch.IntPtr(100 + i),
-			Availability: twitch.AvailabilityLive,
+			Language:     catalog.LanguagePtr(code),
+			Viewers:      catalog.IntPtr(100 + i),
+			Availability: catalog.AvailabilityLive,
 		})
 	}
 	m.reconcileHighlight()

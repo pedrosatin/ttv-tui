@@ -14,6 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/auth"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
@@ -31,7 +32,7 @@ type Options struct {
 	Terminal   bool
 	ConfigPath string
 	StatePath  string
-	Source     twitch.Source
+	Source     catalog.Source
 	Validate   func(ctx context.Context, token string) (auth.Validation, error)
 	Player     *player.Manager
 	Chat       *chat.Manager

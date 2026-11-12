@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 	"time"
@@ -9,7 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func TestStatusBarKeepsLongChannelNameAt80And120(t *testing.T) {
@@ -54,8 +54,8 @@ func TestStatusBarKeepsLongChannelNameAt80And120(t *testing.T) {
 					m.player.state = PlayerStatePlaying
 					m.player.login = ch
 					m.player.volume = 100
-					m.list.selectedChannel = &twitch.Channel{Login: ch, DisplayName: ch, Viewers: twitch.IntPtr(1234)}
-					m.list.selectedCategory = &twitch.Category{Name: "Counter-Strike", Viewers: twitch.IntPtr(250000)}
+					m.list.selectedChannel = &catalog.Channel{Login: ch, DisplayName: ch, Viewers: catalog.IntPtr(1234)}
+					m.list.selectedCategory = &catalog.Category{Name: "Counter-Strike", Viewers: catalog.IntPtr(250000)}
 					m.chat.panel.channel = ch
 					m.chat.panel.state = ChatStateConnected
 					m.layout.focus = FocusList
@@ -129,7 +129,7 @@ func TestStatusBarPlayerPhasesWithLongChatChannel(t *testing.T) {
 				m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 				m.chat.panel.channel = ch
 				m.chat.panel.state = ChatStateConnected
-				m.list.selectedChannel = &twitch.Channel{Login: ch, DisplayName: ch, Viewers: twitch.IntPtr(1234)}
+				m.list.selectedChannel = &catalog.Channel{Login: ch, DisplayName: ch, Viewers: catalog.IntPtr(1234)}
 				m.layout.focus = FocusChat
 				m = p.apply(t, m)
 

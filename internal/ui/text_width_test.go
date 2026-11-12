@@ -2,13 +2,13 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func TestComposedEmojiListAlignment(t *testing.T) {
@@ -18,9 +18,9 @@ func TestComposedEmojiListAlignment(t *testing.T) {
 			m.width, m.height, m.list.mode, m.list.loading = width, 24, ModeChannels, false
 			m.layout.showList, m.layout.showChat = true, false
 			title := "🫶🏻 " + strings.Repeat("live ", 30)
-			m.list.channels = []twitch.Channel{
-				{ID: "1", Login: "first", DisplayName: "First", Title: &title, Viewers: twitch.IntPtr(12)},
-				{ID: "2", Login: "second", DisplayName: "Second", Viewers: twitch.IntPtr(8)},
+			m.list.channels = []catalog.Channel{
+				{ID: "1", Login: "first", DisplayName: "First", Title: &title, Viewers: catalog.IntPtr(12)},
+				{ID: "2", Login: "second", DisplayName: "Second", Viewers: catalog.IntPtr(8)},
 			}
 			view := ansi.Strip(m.View())
 			rows := strings.Split(view, "\n")
@@ -102,7 +102,7 @@ func TestWideScreenLineHasSpareCell(t *testing.T) {
 func TestScreenInputsNormalizeWithoutMutatingSource(t *testing.T) {
 	m := New(nil)
 	m.width, m.height, m.list.loading = 80, 24, false
-	m.list.categories = []twitch.Category{{ID: "cat", Name: "Categoria👨‍👩‍👧‍👦"}}
+	m.list.categories = []catalog.Category{{ID: "cat", Name: "Categoria👨‍👩‍👧‍👦"}}
 	if !strings.Contains(ansi.Strip(m.View()), "Categoria👨") || strings.Contains(m.View(), "\u200d") {
 		t.Fatal("category not normalized")
 	}
@@ -117,7 +117,7 @@ func TestScreenInputsNormalizeWithoutMutatingSource(t *testing.T) {
 		t.Fatal("search not normalized")
 	}
 	m.list.prefs.menuOpen = true
-	m.list.channels = []twitch.Channel{{ID: "1", Login: "user", Language: twitch.StringPtr("pt👍🏽")}}
+	m.list.channels = []catalog.Channel{{ID: "1", Login: "user", Language: catalog.StringPtr("pt👍🏽")}}
 	if strings.Contains(m.View(), "🏽") {
 		t.Fatal("language menu not normalized")
 	}
@@ -131,8 +131,8 @@ func TestEmojiInListDoesNotTruncateChatURL(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
 	m = resize(m, 80, 24)
 	title := "🔥 " + strings.Repeat("x", 20)
-	m.list.channels = []twitch.Channel{
-		{ID: "1", Login: "streamer", DisplayName: "streamer", Title: &title, Viewers: twitch.IntPtr(10)},
+	m.list.channels = []catalog.Channel{
+		{ID: "1", Login: "streamer", DisplayName: "streamer", Title: &title, Viewers: catalog.IntPtr(10)},
 	}
 	// With chatW = 34, lead "  " (2 cells) and nick "u: " (3 cells), a 29-cell URL fills the chat column.
 	url := "https://example.com/123456789"
@@ -164,10 +164,10 @@ func TestPanelSeparatorColumnAlignedWithWideRunesInList(t *testing.T) {
 			m = resize(m, width, 24)
 			title1 := "🔥 " + strings.Repeat("x", 20)
 			title2 := "日本語 " + strings.Repeat("x", 20)
-			m.list.channels = []twitch.Channel{
-				{ID: "1", Login: "streamer1", DisplayName: "streamer1", Title: &title1, Viewers: twitch.IntPtr(10)},
-				{ID: "2", Login: "streamer2", DisplayName: "streamer2", Title: &title2, Viewers: twitch.IntPtr(20)},
-				{ID: "3", Login: "streamer3", DisplayName: "streamer3", Viewers: twitch.IntPtr(5)},
+			m.list.channels = []catalog.Channel{
+				{ID: "1", Login: "streamer1", DisplayName: "streamer1", Title: &title1, Viewers: catalog.IntPtr(10)},
+				{ID: "2", Login: "streamer2", DisplayName: "streamer2", Title: &title2, Viewers: catalog.IntPtr(20)},
+				{ID: "3", Login: "streamer3", DisplayName: "streamer3", Viewers: catalog.IntPtr(5)},
 			}
 			url := "https://example.com/123456789"
 			m = withChatMessages(t, m, ChatMessage{

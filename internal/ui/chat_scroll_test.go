@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func scrollFixture(t *testing.T, lang string, n int) Model {
@@ -21,7 +21,7 @@ func scrollFixture(t *testing.T, lang string, n int) Model {
 	fc := &fakeChat{hasToken: true, username: "tester"}
 	m := New(cat, WithChat(fc))
 	updated, cmd := m.Update(ChannelSelectedMsg{
-		Channel: twitch.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"},
+		Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"},
 	})
 	m = updated.(Model)
 	if cmd != nil {

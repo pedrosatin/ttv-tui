@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -13,7 +14,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/store"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 type fakeStore struct {
@@ -33,15 +33,15 @@ func TestFavoritesToggling_ReflectedInListAndStore(t *testing.T) {
 
 	m := New(catEN,
 		WithStore(fs),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "streamer_fav", DisplayName: "Favorite Streamer"},
 		}),
 	)
 
 	// Add channels in ModeChannels
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
-		{ID: "ch-1", Login: "streamer_normal", DisplayName: "Normal Streamer", Viewers: twitch.IntPtr(500)},
+	m.list.channels = []catalog.Channel{
+		{ID: "ch-1", Login: "streamer_normal", DisplayName: "Normal Streamer", Viewers: catalog.IntPtr(500)},
 	}
 	m.reconcileHighlight()
 
@@ -104,18 +104,18 @@ func TestListOrder_FavoritesRecentsContent(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
 	m := New(catEN,
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "streamer_fav1"},
 			{ID: "fav-2", Login: "streamer_fav2"},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "rec-1", Login: "streamer_rec1"},
 			{ID: "rec-2", Login: "streamer_rec2"},
 		}),
 	)
 
 	m.list.mode = ModeCategories
-	m.list.categories = []twitch.Category{
+	m.list.categories = []catalog.Category{
 		{ID: "cat-1", Name: "Category 1"},
 		{ID: "cat-2", Name: "Category 2"},
 	}
@@ -159,20 +159,20 @@ func TestNoDuplicatesAcrossSections(t *testing.T) {
 	// "shared_streamer" is in Favorites AND in Recents AND in loaded category channels
 	// "recent_shared" is in Recents AND in loaded category channels
 	m := New(catEN,
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer"},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer"},
 			{ID: "ch-recent", Login: "recent_shared", DisplayName: "Recent Shared"},
 		}),
 	)
 
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
-		{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer", Viewers: twitch.IntPtr(1000)},
-		{ID: "ch-recent", Login: "recent_shared", DisplayName: "Recent Shared", Viewers: twitch.IntPtr(500)},
-		{ID: "ch-unique", Login: "unique_streamer", DisplayName: "Unique Streamer", Viewers: twitch.IntPtr(200)},
+	m.list.channels = []catalog.Channel{
+		{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer", Viewers: catalog.IntPtr(1000)},
+		{ID: "ch-recent", Login: "recent_shared", DisplayName: "Recent Shared", Viewers: catalog.IntPtr(500)},
+		{ID: "ch-unique", Login: "unique_streamer", DisplayName: "Unique Streamer", Viewers: catalog.IntPtr(200)},
 	}
 
 	items := m.VisibleItems()
@@ -201,10 +201,10 @@ func TestRenamedRecentIsSeenByID(t *testing.T) {
 	// The store kept the favorite under its old login; the recent has the same
 	// ID with the new one. No listing is loaded to resolve either.
 	m := New(catEN,
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "ch-1", Login: "old_login", DisplayName: "Old Login"},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "ch-1", Login: "new_login", DisplayName: "New Login"},
 		}),
 	)
@@ -222,7 +222,7 @@ func TestFilteredRecentDoesNotHideListedChannel(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
 	m := New(catEN,
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "ch-1", Login: "quiet", DisplayName: "Quiet"},
 		}),
 	)
@@ -231,7 +231,7 @@ func TestFilteredRecentDoesNotHideListedChannel(t *testing.T) {
 	// recent, so the text filter sees the recent without a title.
 	title := "Speedrun any%"
 	m.list.mode = ModeSearch
-	m.list.channels = []twitch.Channel{
+	m.list.channels = []catalog.Channel{
 		{ID: "ch-1", Login: "quiet", DisplayName: "Quiet", Title: &title},
 	}
 	m.list.filter = "speedrun"
@@ -256,15 +256,15 @@ func TestEnterSemanticsByItemType(t *testing.T) {
 
 	m := New(catEN,
 		WithStore(fs),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "streamer_fav", DisplayName: "Fav"},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "rec-1", Login: "streamer_rec1", DisplayName: "Rec1"},
 			{ID: "rec-2", Login: "streamer_rec2", DisplayName: "Rec2"},
 		}),
 	)
-	m.list.categories = []twitch.Category{
+	m.list.categories = []catalog.Category{
 		{ID: "cat-1", Name: "Category 1"},
 	}
 	m.reconcileHighlight()
@@ -319,15 +319,15 @@ func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
 	// fav-off has no viewers and is not in the loaded listing: no evidence.
 	// fav-on is in the loaded category listing with viewers: live.
 	m := New(catEN,
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "fav-off", Login: "offline_guy", DisplayName: "Offline Guy", Viewers: nil},
 			{ID: "fav-on", Login: "online_guy", DisplayName: "Online Guy", Viewers: nil},
 		}),
 	)
 
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
-		{ID: "fav-on", Login: "online_guy", DisplayName: "Online Guy", Viewers: twitch.IntPtr(1500), Title: twitch.StringPtr("Playing Game")},
+	m.list.channels = []catalog.Channel{
+		{ID: "fav-on", Login: "online_guy", DisplayName: "Online Guy", Viewers: catalog.IntPtr(1500), Title: catalog.StringPtr("Playing Game")},
 	}
 
 	items := m.VisibleItems()
@@ -335,10 +335,10 @@ func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
 		t.Fatalf("expected 2 visible items, got %d", len(items))
 	}
 
-	if items[0].Availability != twitch.AvailabilityUnknown || items[0].Offline() {
+	if items[0].Availability != catalog.AvailabilityUnknown || items[0].Offline() {
 		t.Errorf("items[0] (no evidence) availability = %v, want unknown", items[0].Availability)
 	}
-	if items[1].Availability != twitch.AvailabilityLive {
+	if items[1].Availability != catalog.AvailabilityLive {
 		t.Errorf("items[1] (in listing) availability = %v, want live", items[1].Availability)
 	}
 
@@ -357,7 +357,7 @@ func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
 func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	m := New(catEN,
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "r-off", Login: "gaulestv", DisplayName: "gaulestv"},
 			{ID: "r-unk", Login: "xqc", DisplayName: "xQc"},
 		}),
@@ -373,8 +373,8 @@ func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
 	m.list.search.query = "gaules"
 	updated, _ := m.Update(SearchLoadedMsg{
 		Generation: m.list.generation,
-		Page: twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-			{ID: "r-off", Login: "gaulestv", DisplayName: "gaulestv", Availability: twitch.AvailabilityOffline},
+		Page: catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+			{ID: "r-off", Login: "gaulestv", DisplayName: "gaulestv", Availability: catalog.AvailabilityOffline},
 		}},
 	})
 	m = updated.(Model)
@@ -386,7 +386,7 @@ func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
 	if !byLogin["gaulestv"].Offline() {
 		t.Fatalf("gaulestv with explicit evidence should be offline, got %v", byLogin["gaulestv"].Availability)
 	}
-	if byLogin["xqc"].Availability != twitch.AvailabilityUnknown {
+	if byLogin["xqc"].Availability != catalog.AvailabilityUnknown {
 		t.Fatalf("xqc without evidence should stay unknown, got %v", byLogin["xqc"].Availability)
 	}
 
@@ -402,9 +402,9 @@ func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
 func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 	catPT, _ := i18n.New(i18n.LangPTBR)
 	m := New(catPT,
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			// Store only carries identity; worst case it even says offline.
-			{ID: "r-1", Login: "eslcs", DisplayName: "ESLCS", Availability: twitch.AvailabilityOffline},
+			{ID: "r-1", Login: "eslcs", DisplayName: "ESLCS", Availability: catalog.AvailabilityOffline},
 		}),
 	)
 	m.player.login = "ESLCS"
@@ -412,7 +412,7 @@ func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 	for _, st := range []PlayerState{PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak} {
 		m.player.state = st
 		items := m.VisibleItems()
-		if len(items) != 1 || items[0].Availability != twitch.AvailabilityLive {
+		if len(items) != 1 || items[0].Availability != catalog.AvailabilityLive {
 			t.Fatalf("state %q: playing channel availability = %+v, want live", st, items)
 		}
 		plain := ansi.Strip(m.View())
@@ -434,35 +434,35 @@ func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	m := New(catEN,
-		WithFavorites([]twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
-		WithRecents([]twitch.Channel{
+		WithFavorites([]catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
+		WithRecents([]catalog.Channel{
 			{ID: "r-1", Login: "strogo", DisplayName: "StRoGo"},
 			{ID: "r-2", Login: "elsewhere", DisplayName: "Elsewhere"},
 		}),
 	)
-	cat := twitch.Category{ID: "cs", Name: "Counter-Strike"}
+	cat := catalog.Category{ID: "cs", Name: "Counter-Strike"}
 	m.list.mode = ModeChannels
 	m.list.selectedCategory = &cat
 
 	updated, _ := m.Update(ChannelsLoadedMsg{
 		Generation: m.list.generation,
 		Category:   cat,
-		Page: twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-			{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(12900), Title: twitch.StringPtr("Major"), Availability: twitch.AvailabilityLive},
-			{ID: "r-1", Login: "strogo", DisplayName: "StRoGo", Viewers: twitch.IntPtr(30400), Availability: twitch.AvailabilityLive},
+		Page: catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+			{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(12900), Title: catalog.StringPtr("Major"), Availability: catalog.AvailabilityLive},
+			{ID: "r-1", Login: "strogo", DisplayName: "StRoGo", Viewers: catalog.IntPtr(30400), Availability: catalog.AvailabilityLive},
 		}},
 	})
 	m = updated.(Model)
 
 	favs := m.Favorites()
-	if favs[0].Availability != twitch.AvailabilityLive || favs[0].Viewers == nil || *favs[0].Viewers != 12900 {
+	if favs[0].Availability != catalog.AvailabilityLive || favs[0].Viewers == nil || *favs[0].Viewers != 12900 {
 		t.Fatalf("favorite not refreshed from listing: %+v", favs[0])
 	}
 	recs := m.Recents()
-	if recs[0].Availability != twitch.AvailabilityLive {
+	if recs[0].Availability != catalog.AvailabilityLive {
 		t.Fatalf("recent strogo not refreshed: %+v", recs[0])
 	}
-	if recs[1].Availability != twitch.AvailabilityUnknown {
+	if recs[1].Availability != catalog.AvailabilityUnknown {
 		t.Fatalf("channel absent from listing must stay unknown, got %v", recs[1].Availability)
 	}
 
@@ -482,7 +482,7 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 
 	// Persistence keeps identity only: no stale availability on disk.
 	st := m.list.toStoreState()
-	if got := st.Favorites[0].ToChannel().Availability; got != twitch.AvailabilityUnknown {
+	if got := st.Favorites[0].ToChannel().Availability; got != catalog.AvailabilityUnknown {
 		t.Fatalf("store must not persist availability, got %v", got)
 	}
 }
@@ -490,17 +490,17 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 func TestReturnToCategoriesDropsListing(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	m := New(catEN,
-		WithFavorites([]twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Language: twitch.StringPtr("pt")}}),
+		WithFavorites([]catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Language: catalog.StringPtr("pt")}}),
 	)
-	cat := twitch.Category{ID: "cs", Name: "Counter-Strike"}
+	cat := catalog.Category{ID: "cs", Name: "Counter-Strike"}
 	m.list.mode = ModeChannels
 	m.list.selectedCategory = &cat
 	updated, _ := m.Update(ChannelsLoadedMsg{
 		Generation: m.list.generation,
 		Category:   cat,
-		Page: twitch.Page[twitch.Channel]{Items: []twitch.Channel{
-			{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Language: twitch.StringPtr("pt"), Viewers: twitch.IntPtr(12900), Availability: twitch.AvailabilityLive},
-			{ID: "c-2", Login: "eslcs", DisplayName: "ESLCS", Language: twitch.StringPtr("en"), Viewers: twitch.IntPtr(30400), Availability: twitch.AvailabilityLive},
+		Page: catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+			{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Language: catalog.StringPtr("pt"), Viewers: catalog.IntPtr(12900), Availability: catalog.AvailabilityLive},
+			{ID: "c-2", Login: "eslcs", DisplayName: "ESLCS", Language: catalog.StringPtr("en"), Viewers: catalog.IntPtr(30400), Availability: catalog.AvailabilityLive},
 		}},
 	})
 	m = updated.(Model)
@@ -514,7 +514,7 @@ func TestReturnToCategoriesDropsListing(t *testing.T) {
 	// The hydration after Esc says the favorite went offline.
 	updated, _ = m.Update(SavedAvailabilityMsg{
 		Generation: m.list.hydrateGen,
-		Channels:   []twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Availability: twitch.AvailabilityOffline}},
+		Channels:   []catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Availability: catalog.AvailabilityOffline}},
 	})
 	m = updated.(Model)
 	items := m.VisibleItems()
@@ -533,7 +533,7 @@ func TestRetryFallingToCategoriesDropsListing(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	m := New(catEN, WithSource(&fakeSource{}))
 	m.list.mode = ModeSearch
-	m.list.channels = []twitch.Channel{{ID: "c-1", Login: "eslcs", Availability: twitch.AvailabilityLive}}
+	m.list.channels = []catalog.Channel{{ID: "c-1", Login: "eslcs", Availability: catalog.AvailabilityLive}}
 
 	updated, _ := m.retryCurrentMode()
 	m = updated.(Model)
@@ -549,10 +549,10 @@ func TestAvailabilityLabelsFitIn120And80Columns(t *testing.T) {
 	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
 		cat, _ := i18n.New(lang)
 		m := New(cat,
-			WithFavorites([]twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
-			WithRecents([]twitch.Channel{
+			WithFavorites([]catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
+			WithRecents([]catalog.Channel{
 				{ID: "r-1", Login: "eslcs", DisplayName: "ESLCS"},
-				{ID: "r-2", Login: "gaulestv", DisplayName: "gaulestv", Availability: twitch.AvailabilityOffline},
+				{ID: "r-2", Login: "gaulestv", DisplayName: "gaulestv", Availability: catalog.AvailabilityOffline},
 			}),
 		)
 		m.chat.panel.channel = "eslcs"
@@ -592,15 +592,15 @@ func TestSectionsRenderIn120And79Columns(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
 	m := New(catEN,
-		WithFavorites([]twitch.Channel{
-			{ID: "fav-1", Login: "gaules", DisplayName: "Gaules", Viewers: twitch.IntPtr(12000)},
+		WithFavorites([]catalog.Channel{
+			{ID: "fav-1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(12000)},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "rec-1", Login: "alanzoka", DisplayName: "alanzoka", Viewers: nil},
 		}),
 	)
-	m.list.categories = []twitch.Category{
-		{ID: "cat-1", Name: "Counter-Strike", Viewers: twitch.IntPtr(50000)},
+	m.list.categories = []catalog.Category{
+		{ID: "cat-1", Name: "Counter-Strike", Viewers: catalog.IntPtr(50000)},
 	}
 
 	// 1. Render in 120 columns
@@ -676,26 +676,26 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 		if err != nil {
 			t.Fatalf("i18n.New: %v", err)
 		}
-		favCh := twitch.Channel{ID: "f-1", Login: "favchannel", DisplayName: "FavChannel"}
-		recCh := twitch.Channel{ID: "r-1", Login: "recchannel", DisplayName: "RecChannel"}
-		liveCh := twitch.Channel{
+		favCh := catalog.Channel{ID: "f-1", Login: "favchannel", DisplayName: "FavChannel"}
+		recCh := catalog.Channel{ID: "r-1", Login: "recchannel", DisplayName: "RecChannel"}
+		liveCh := catalog.Channel{
 			ID:           "s-1",
 			Login:        "livechannel",
 			DisplayName:  "LiveChannel",
-			Viewers:      twitch.IntPtr(1500),
-			Title:        twitch.StringPtr("Live Title"),
-			Availability: twitch.AvailabilityLive,
+			Viewers:      catalog.IntPtr(1500),
+			Title:        catalog.StringPtr("Live Title"),
+			Availability: catalog.AvailabilityLive,
 		}
 
 		m := New(cat,
-			WithFavorites([]twitch.Channel{favCh}),
-			WithRecents([]twitch.Channel{recCh}),
+			WithFavorites([]catalog.Channel{favCh}),
+			WithRecents([]catalog.Channel{recCh}),
 		)
 
 		// 1. In Search Mode:
 		m.list.mode = ModeSearch
 		m.list.search.query = "channel"
-		m.list.channels = []twitch.Channel{liveCh}
+		m.list.channels = []catalog.Channel{liveCh}
 		m.reconcileHighlight()
 
 		plainSearch := ansi.Strip(m.View())
@@ -742,11 +742,11 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 
 		// 2. The same channel has the same line (except highlight marker) in search and category modes
 		mCat := New(cat,
-			WithFavorites([]twitch.Channel{favCh}),
-			WithRecents([]twitch.Channel{recCh}),
+			WithFavorites([]catalog.Channel{favCh}),
+			WithRecents([]catalog.Channel{recCh}),
 		)
 		mCat.list.mode = ModeCategories
-		mCat.list.categories = []twitch.Category{{ID: "c-1", Name: "Games"}}
+		mCat.list.categories = []catalog.Category{{ID: "c-1", Name: "Games"}}
 		mCat.list.highlightedID = "c-1"
 
 		plainCat := ansi.Strip(mCat.View())
@@ -770,18 +770,18 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 		}
 
 		// Also check an offline channel and a live channel with viewers
-		offCh := twitch.Channel{ID: "off-1", Login: "offchannel", DisplayName: "OffChannel", Availability: twitch.AvailabilityOffline}
-		liveFav := twitch.Channel{ID: "favlive-1", Login: "favlive", DisplayName: "FavLive", Viewers: twitch.IntPtr(5200), Title: twitch.StringPtr("Playing Game"), Availability: twitch.AvailabilityLive}
+		offCh := catalog.Channel{ID: "off-1", Login: "offchannel", DisplayName: "OffChannel", Availability: catalog.AvailabilityOffline}
+		liveFav := catalog.Channel{ID: "favlive-1", Login: "favlive", DisplayName: "FavLive", Viewers: catalog.IntPtr(5200), Title: catalog.StringPtr("Playing Game"), Availability: catalog.AvailabilityLive}
 
-		mDualCat := New(cat, WithFavorites([]twitch.Channel{liveFav}), WithRecents([]twitch.Channel{offCh}))
+		mDualCat := New(cat, WithFavorites([]catalog.Channel{liveFav}), WithRecents([]catalog.Channel{offCh}))
 		mDualCat.list.mode = ModeCategories
-		mDualCat.list.categories = []twitch.Category{{ID: "c-1", Name: "Games"}}
+		mDualCat.list.categories = []catalog.Category{{ID: "c-1", Name: "Games"}}
 		mDualCat.list.highlightedID = "c-1"
 
-		mDualSearch := New(cat, WithFavorites([]twitch.Channel{liveFav}), WithRecents([]twitch.Channel{offCh}))
+		mDualSearch := New(cat, WithFavorites([]catalog.Channel{liveFav}), WithRecents([]catalog.Channel{offCh}))
 		mDualSearch.list.mode = ModeSearch
 		mDualSearch.list.search.query = "channel"
-		mDualSearch.list.channels = []twitch.Channel{liveCh}
+		mDualSearch.list.channels = []catalog.Channel{liveCh}
 		mDualSearch.list.highlightedID = "s-1"
 
 		plainDualCat := ansi.Strip(mDualCat.View())
@@ -817,28 +817,28 @@ func TestHydrateSavedAvailabilityOnInit(t *testing.T) {
 	var calls int32
 	var gotLogins []string
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{{ID: "jc", Name: "Just Chatting"}},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{{ID: "jc", Name: "Just Chatting"}},
 			}, nil
 		},
-		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]twitch.Channel, error) {
+		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]catalog.Channel, error) {
 			atomic.AddInt32(&calls, 1)
 			gotLogins = append([]string(nil), logins...)
-			return []twitch.Channel{
+			return []catalog.Channel{
 				{
 					ID:           "1",
 					Login:        "gaules",
 					DisplayName:  "Gaules",
-					Viewers:      twitch.IntPtr(12900),
-					Title:        twitch.StringPtr("Major"),
-					Availability: twitch.AvailabilityLive,
+					Viewers:      catalog.IntPtr(12900),
+					Title:        catalog.StringPtr("Major"),
+					Availability: catalog.AvailabilityLive,
 				},
 				{
 					ID:           "2",
 					Login:        "xqc",
 					DisplayName:  "xQc",
-					Availability: twitch.AvailabilityOffline,
+					Availability: catalog.AvailabilityOffline,
 				},
 			}, nil
 		},
@@ -846,11 +846,11 @@ func TestHydrateSavedAvailabilityOnInit(t *testing.T) {
 
 	m := New(cat,
 		WithSource(src),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "f-1", Login: "gaules", DisplayName: "Gaules"},
 			{ID: "f-2", Login: "elsewhere", DisplayName: "Elsewhere"},
 		}),
-		WithRecents([]twitch.Channel{
+		WithRecents([]catalog.Channel{
 			{ID: "r-1", Login: "xqc", DisplayName: "xQc"},
 			{ID: "r-2", Login: "gaules", DisplayName: "Gaules"},
 		}),
@@ -871,21 +871,21 @@ func TestHydrateSavedAvailabilityOnInit(t *testing.T) {
 	}
 
 	favs := m.Favorites()
-	if favs[0].Availability != twitch.AvailabilityLive || favs[0].Viewers == nil || *favs[0].Viewers != 12900 {
+	if favs[0].Availability != catalog.AvailabilityLive || favs[0].Viewers == nil || *favs[0].Viewers != 12900 {
 		t.Fatalf("favorite gaules not hydrated: %+v", favs[0])
 	}
 	if favs[0].Title == nil || *favs[0].Title != "Major" {
 		t.Fatalf("favorite gaules title not hydrated: %+v", favs[0])
 	}
-	if favs[1].Availability != twitch.AvailabilityUnknown {
+	if favs[1].Availability != catalog.AvailabilityUnknown {
 		t.Fatalf("elsewhere absent from batch must stay unknown, got %v", favs[1].Availability)
 	}
 
 	recs := m.Recents()
-	if recs[0].Availability != twitch.AvailabilityOffline || recs[0].Viewers != nil {
+	if recs[0].Availability != catalog.AvailabilityOffline || recs[0].Viewers != nil {
 		t.Fatalf("recent xqc not hydrated offline: %+v", recs[0])
 	}
-	if recs[1].Availability != twitch.AvailabilityLive {
+	if recs[1].Availability != catalog.AvailabilityLive {
 		t.Fatalf("recent gaules not hydrated live: %+v", recs[1])
 	}
 
@@ -909,12 +909,12 @@ func TestHydrateEmptySavedDoesNotRequest(t *testing.T) {
 
 	var calls int32
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{{ID: "jc", Name: "Just Chatting"}},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{{ID: "jc", Name: "Just Chatting"}},
 			}, nil
 		},
-		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]twitch.Channel, error) {
+		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]catalog.Channel, error) {
 			atomic.AddInt32(&calls, 1)
 			return nil, nil
 		},
@@ -938,20 +938,20 @@ func TestHydrateFailureKeepsUnverified(t *testing.T) {
 	}
 
 	src := &fakeSource{
-		categoriesFn: func(ctx context.Context, page twitch.PageRequest) (twitch.Page[twitch.Category], error) {
-			return twitch.Page[twitch.Category]{
-				Items: []twitch.Category{{ID: "jc", Name: "Just Chatting"}},
+		categoriesFn: func(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+			return catalog.Page[catalog.Category]{
+				Items: []catalog.Category{{ID: "jc", Name: "Just Chatting"}},
 			}, nil
 		},
-		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]twitch.Channel, error) {
+		channelsByLoginsFn: func(ctx context.Context, logins []string) ([]catalog.Channel, error) {
 			return nil, errors.New("upstream down")
 		},
 	}
 
 	m := New(cat,
 		WithSource(src),
-		WithFavorites([]twitch.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
-		WithRecents([]twitch.Channel{{ID: "r-1", Login: "xqc", DisplayName: "xQc"}}),
+		WithFavorites([]catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
+		WithRecents([]catalog.Channel{{ID: "r-1", Login: "xqc", DisplayName: "xQc"}}),
 	)
 
 	updated, follow := m.Update(m.Init()())
@@ -964,10 +964,10 @@ func TestHydrateFailureKeepsUnverified(t *testing.T) {
 	if m.Err() != nil {
 		t.Fatalf("hydrate failure must not set model err, got %v", m.Err())
 	}
-	if m.Favorites()[0].Availability != twitch.AvailabilityUnknown {
+	if m.Favorites()[0].Availability != catalog.AvailabilityUnknown {
 		t.Fatalf("favorite changed on failure: %+v", m.Favorites()[0])
 	}
-	if m.Recents()[0].Availability != twitch.AvailabilityUnknown {
+	if m.Recents()[0].Availability != catalog.AvailabilityUnknown {
 		t.Fatalf("recent changed on failure: %+v", m.Recents()[0])
 	}
 	plain := ansi.Strip(m.View())
@@ -984,25 +984,25 @@ func TestCaptureSearchScreenPTY(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	favCh := twitch.Channel{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}
-	recCh := twitch.Channel{ID: "r-1", Login: "alanzoka", DisplayName: "alanzoka"}
-	liveCh := twitch.Channel{
+	favCh := catalog.Channel{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}
+	recCh := catalog.Channel{ID: "r-1", Login: "alanzoka", DisplayName: "alanzoka"}
+	liveCh := catalog.Channel{
 		ID:           "s-1",
 		Login:        "cellbit",
 		DisplayName:  "Cellbit",
-		Viewers:      twitch.IntPtr(15420),
-		Title:        twitch.StringPtr("Enigmas e RPG ao vivo"),
-		Availability: twitch.AvailabilityLive,
+		Viewers:      catalog.IntPtr(15420),
+		Title:        catalog.StringPtr("Enigmas e RPG ao vivo"),
+		Availability: catalog.AvailabilityLive,
 	}
 
 	m := New(cat,
-		WithFavorites([]twitch.Channel{favCh}),
-		WithRecents([]twitch.Channel{recCh}),
+		WithFavorites([]catalog.Channel{favCh}),
+		WithRecents([]catalog.Channel{recCh}),
 	)
 
 	m.list.mode = ModeSearch
 	m.list.search.query = "cellbit"
-	m.list.channels = []twitch.Channel{liveCh}
+	m.list.channels = []catalog.Channel{liveCh}
 	m.reconcileHighlight()
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = updated.(Model)
@@ -1017,7 +1017,7 @@ func TestRemovingFavoriteKeepsEarlierModelSlice(t *testing.T) {
 	fs := &fakeStore{}
 	m := New(catEN,
 		WithStore(fs),
-		WithFavorites([]twitch.Channel{
+		WithFavorites([]catalog.Channel{
 			{ID: "1", Login: "alpha"},
 			{ID: "2", Login: "bravo"},
 			{ID: "3", Login: "charlie"},
@@ -1026,11 +1026,11 @@ func TestRemovingFavoriteKeepsEarlierModelSlice(t *testing.T) {
 	earlier := m
 	kept := m.list.favorites
 
-	if m.ToggleFavorite(twitch.Channel{ID: "2", Login: "bravo"}) {
+	if m.ToggleFavorite(catalog.Channel{ID: "2", Login: "bravo"}) {
 		t.Fatal("ToggleFavorite added bravo instead of removing it")
 	}
 
-	logins := func(chs []twitch.Channel) string {
+	logins := func(chs []catalog.Channel) string {
 		out := make([]string, len(chs))
 		for i, ch := range chs {
 			out[i] = ch.Login

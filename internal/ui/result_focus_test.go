@@ -3,12 +3,12 @@ package ui
 import (
 	"context"
 	"errors"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // focusFixture builds a model with a favorite and a recent that do not belong
@@ -21,11 +21,11 @@ func focusFixture(t *testing.T, src *fakeSource) Model {
 	}
 	m := New(cat,
 		WithSource(src),
-		WithFavorites([]twitch.Channel{{ID: "fav-1", Login: "xqc", DisplayName: "xQc"}}),
-		WithRecents([]twitch.Channel{{ID: "rec-1", Login: "eslcs", DisplayName: "ESLCS"}}),
+		WithFavorites([]catalog.Channel{{ID: "fav-1", Login: "xqc", DisplayName: "xQc"}}),
+		WithRecents([]catalog.Channel{{ID: "rec-1", Login: "eslcs", DisplayName: "ESLCS"}}),
 	)
 	m.list.loading = false
-	m.list.categories = []twitch.Category{
+	m.list.categories = []catalog.Category{
 		{ID: "jc", Name: "Just Chatting"},
 		{ID: "cs", Name: "Counter-Strike"},
 	}
@@ -33,12 +33,12 @@ func focusFixture(t *testing.T, src *fakeSource) Model {
 	return m
 }
 
-func channelsPage(items ...twitch.Channel) twitch.Page[twitch.Channel] {
-	return twitch.Page[twitch.Channel]{Items: items}
+func channelsPage(items ...catalog.Channel) catalog.Page[catalog.Channel] {
+	return catalog.Page[catalog.Channel]{Items: items}
 }
 
-func live(id, login string) twitch.Channel {
-	return twitch.Channel{ID: id, Login: login, DisplayName: login, Viewers: twitch.IntPtr(100), Availability: twitch.AvailabilityLive}
+func live(id, login string) catalog.Channel {
+	return catalog.Channel{ID: id, Login: login, DisplayName: login, Viewers: catalog.IntPtr(100), Availability: catalog.AvailabilityLive}
 }
 
 // run applies cmd's message to m, as the Bubble Tea runtime would.
@@ -59,7 +59,7 @@ func pressEnter(t *testing.T, m Model) (Model, tea.Cmd) {
 
 func TestOpenCategoryHighlightsFirstCategoryChannel(t *testing.T) {
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(live("c-1", "strogo"), live("c-2", "gaules")), nil
 		},
 	}
@@ -94,7 +94,7 @@ func TestOpenCategorySkipsChannelsAlreadyShownAsFavorite(t *testing.T) {
 	// The category's top channel is a favorite: it renders in Favorites and the
 	// highlight goes to the first row of the category section.
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(live("fav-1", "xqc"), live("c-2", "gaules")), nil
 		},
 	}
@@ -108,7 +108,7 @@ func TestOpenCategorySkipsChannelsAlreadyShownAsFavorite(t *testing.T) {
 
 func TestOpenCategoryWhoseChannelsAreAllSavedHighlightsFirstLoaded(t *testing.T) {
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(live("rec-1", "eslcs"), live("fav-1", "xqc")), nil
 		},
 	}
@@ -122,10 +122,10 @@ func TestOpenCategoryWhoseChannelsAreAllSavedHighlightsFirstLoaded(t *testing.T)
 
 func TestSearchHighlightsFirstResult(t *testing.T) {
 	src := &fakeSource{
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(
-				twitch.Channel{ID: "s-1", Login: "gaules", DisplayName: "Gaules", Availability: twitch.AvailabilityOffline},
-				twitch.Channel{ID: "s-2", Login: "gaulesbr", DisplayName: "GaulesBR"},
+				catalog.Channel{ID: "s-1", Login: "gaules", DisplayName: "Gaules", Availability: catalog.AvailabilityOffline},
+				catalog.Channel{ID: "s-2", Login: "gaulesbr", DisplayName: "GaulesBR"},
 			), nil
 		},
 	}
@@ -151,11 +151,11 @@ func TestSearchPrefersExactLoginOverOfflineClones(t *testing.T) {
 	// Twitch relevance returns the clone first; PreferSearchChannels must put
 	// the exact login first so Enter opens landonorris, not landonorris0481.
 	src := &fakeSource{
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(
-				twitch.Channel{ID: "clone-0481", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: twitch.AvailabilityOffline},
-				twitch.Channel{ID: "exact", Login: "landonorris", DisplayName: "LandoNorris", Availability: twitch.AvailabilityOffline},
-				twitch.Channel{ID: "clone-16", Login: "landonorris16", DisplayName: "landonorris16", Availability: twitch.AvailabilityOffline},
+				catalog.Channel{ID: "clone-0481", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: catalog.AvailabilityOffline},
+				catalog.Channel{ID: "exact", Login: "landonorris", DisplayName: "LandoNorris", Availability: catalog.AvailabilityOffline},
+				catalog.Channel{ID: "clone-16", Login: "landonorris16", DisplayName: "landonorris16", Availability: catalog.AvailabilityOffline},
 			), nil
 		},
 	}
@@ -183,10 +183,10 @@ func TestSearchPrefersExactLoginOverOfflineClones(t *testing.T) {
 func TestSearchExactOfflineStillFirstWhenCloneIsLive(t *testing.T) {
 	// Chosen rule: exact login stays first even if offline while a clone is live.
 	src := &fakeSource{
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(
-				twitch.Channel{ID: "clone-live", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: twitch.AvailabilityLive, Viewers: twitch.IntPtr(12)},
-				twitch.Channel{ID: "exact-off", Login: "landonorris", DisplayName: "LandoNorris", Availability: twitch.AvailabilityOffline},
+				catalog.Channel{ID: "clone-live", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: catalog.AvailabilityLive, Viewers: catalog.IntPtr(12)},
+				catalog.Channel{ID: "exact-off", Login: "landonorris", DisplayName: "LandoNorris", Availability: catalog.AvailabilityOffline},
 			), nil
 		},
 	}
@@ -212,11 +212,11 @@ func TestSearchHighlightsExactEvenWhenFoldedIntoRecents(t *testing.T) {
 	// Real failure mode: landonorris is already a recent, so VisibleItems omits it
 	// from the search section and would otherwise highlight the first clone.
 	src := &fakeSource{
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(
-				twitch.Channel{ID: "clone-0481", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: twitch.AvailabilityOffline},
-				twitch.Channel{ID: "twitch-exact", Login: "landonorris", DisplayName: "LandoNorris", Availability: twitch.AvailabilityOffline},
-				twitch.Channel{ID: "clone-16", Login: "landonorris16", DisplayName: "landonorris16", Availability: twitch.AvailabilityOffline},
+				catalog.Channel{ID: "clone-0481", Login: "landonorris0481", DisplayName: "landonorris0481", Availability: catalog.AvailabilityOffline},
+				catalog.Channel{ID: "twitch-exact", Login: "landonorris", DisplayName: "LandoNorris", Availability: catalog.AvailabilityOffline},
+				catalog.Channel{ID: "clone-16", Login: "landonorris16", DisplayName: "landonorris16", Availability: catalog.AvailabilityOffline},
 			), nil
 		},
 	}
@@ -226,7 +226,7 @@ func TestSearchHighlightsExactEvenWhenFoldedIntoRecents(t *testing.T) {
 	}
 	m := New(cat,
 		WithSource(src),
-		WithRecents([]twitch.Channel{{ID: "recent-exact", Login: "landonorris", DisplayName: "LandoNorris"}}),
+		WithRecents([]catalog.Channel{{ID: "recent-exact", Login: "landonorris", DisplayName: "LandoNorris"}}),
 	)
 	m.list.loading = false
 
@@ -255,7 +255,7 @@ func TestSearchHighlightsExactEvenWhenFoldedIntoRecents(t *testing.T) {
 func TestRefreshAndNextPageKeepHighlightByIdentity(t *testing.T) {
 	calls := 0
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			calls++
 			if calls == 1 {
 				return channelsPage(live("c-1", "strogo"), live("c-2", "gaules")), nil
@@ -307,7 +307,7 @@ func TestRefreshRemovedItemFallsToNearestNeighborNotTop(t *testing.T) {
 	// favorite/recent at the top of VisibleItems.
 	calls := 0
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			calls++
 			if calls == 1 {
 				return channelsPage(
@@ -369,7 +369,7 @@ func TestRefreshDuringSearchKeepsOpenHighlightRules(t *testing.T) {
 	// refresh of that search is not an opening: identity wins.
 	calls := 0
 	src := &fakeSource{
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			calls++
 			if calls == 1 {
 				return channelsPage(live("s-1", "alpha"), live("s-2", "beta"), live("s-3", "gamma")), nil
@@ -406,7 +406,7 @@ func TestRefreshPreservesHighlightByLoginWhenIDChurns(t *testing.T) {
 	// Identity must still hold so Enter opens the same channel.
 	calls := 0
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			calls++
 			if calls == 1 {
 				return channelsPage(live("id-old", "shadowkekw"), live("id-other", "zubarefff")), nil
@@ -446,7 +446,7 @@ func TestRefreshPreservesHighlightByLoginWhenIDChurns(t *testing.T) {
 func TestRefreshPTYEvidence(t *testing.T) {
 	calls := 0
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			calls++
 			if calls == 1 {
 				return channelsPage(live("c-1", "strogo"), live("c-shadow", "shadowkekw"), live("c-zub", "zubarefff")), nil
@@ -491,7 +491,7 @@ func markerLine(view string) string {
 
 func TestManualMoveDuringLoadWins(t *testing.T) {
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(live("c-1", "strogo")), nil
 		},
 	}
@@ -509,10 +509,10 @@ func TestManualMoveDuringLoadWins(t *testing.T) {
 func TestFailedLoadThenRetryStillFocusesFirstResult(t *testing.T) {
 	calls := 0
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			calls++
 			if calls == 1 {
-				return twitch.Page[twitch.Channel]{}, errors.New("rede caiu")
+				return catalog.Page[catalog.Channel]{}, errors.New("rede caiu")
 			}
 			return channelsPage(live("c-1", "strogo")), nil
 		},
@@ -532,10 +532,10 @@ func TestFailedLoadThenRetryStillFocusesFirstResult(t *testing.T) {
 
 func TestEmptyCategoryAndEmptySearchKeepAValidHighlight(t *testing.T) {
 	src := &fakeSource{
-		channelsFn: func(ctx context.Context, categoryID string, page twitch.PageRequest) (twitch.Page[twitch.Channel], error) {
+		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(), nil
 		},
-		searchFn: func(ctx context.Context, query string) (twitch.Page[twitch.Channel], error) {
+		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(), nil
 		},
 	}
