@@ -18,6 +18,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
+	"github.com/pedrosatin/ttv-tui/internal/provider"
 	"github.com/pedrosatin/ttv-tui/internal/store"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
@@ -31,6 +32,7 @@ type Options struct {
 	ConfigPath string
 	StatePath  string
 	Source     twitch.Source
+	Provider   provider.Provider
 	Validate   func(ctx context.Context, token string) (auth.Validation, error)
 	Player     *player.Manager
 	Chat       *chat.Manager
@@ -92,9 +94,21 @@ func Run(opts Options) error {
 	}
 
 	source := opts.Source
+	if source == nil && opts.Provider != nil {
+		if cat, ok := opts.Provider.Catalog(); ok && cat != nil {
+			source = cat
+		}
+	}
 	if source == nil {
 		source = twitch.NewGQLSource(twitch.GQLConfig{})
 	}
+
+	twitchProvider := opts.Provider
+	if twitchProvider == nil {
+		twitchProvider = twitch.NewProvider(source)
+	}
+	urlProvider := provider.NewURLProvider()
+	providerRegistry := provider.NewRegistry(twitchProvider, urlProvider)
 
 	statePath, err := resolveStatePath(opts.StatePath)
 	if err != nil {
@@ -132,10 +146,17 @@ func Run(opts Options) error {
 
 	dataDir, _ := config.DataDir()
 	playback := newPlaybackBridge(playerMgr, cfg.StreamlinkPath, dataDir)
+	playback.setRegistry(providerRegistry)
 	playback.setContext(ctx)
+
+	catSource := source
+	if cat, ok := twitchProvider.Catalog(); ok && cat != nil {
+		catSource = cat
+	}
+
 	uiOpts := []ui.Option{
 		hostOption,
-		ui.WithSource(source),
+		ui.WithSource(catSource),
 		ui.WithPlayback(playback),
 		ui.WithChat(newChatBridge(chatMgr)),
 		ui.WithStore(appStore),

@@ -9,10 +9,13 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/components"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
+	"github.com/pedrosatin/ttv-tui/internal/provider"
+	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
 
@@ -20,6 +23,7 @@ import (
 // Events are forwarded with tea.Program.Send from a single goroutine started in Run.
 type playbackBridge struct {
 	mgr           *player.Manager
+	registry      *provider.Registry
 	cfgStreamlink string
 	dataDir       string
 	sender        func(tea.Msg)
@@ -32,7 +36,10 @@ type playbackBridge struct {
 }
 
 func newPlaybackBridge(mgr *player.Manager, opts ...string) *playbackBridge {
-	b := &playbackBridge{mgr: mgr}
+	b := &playbackBridge{
+		mgr:      mgr,
+		registry: provider.NewRegistry(twitch.NewProvider(nil), provider.NewURLProvider()),
+	}
 	if len(opts) > 0 {
 		b.cfgStreamlink = opts[0]
 	}
@@ -40,6 +47,12 @@ func newPlaybackBridge(mgr *player.Manager, opts ...string) *playbackBridge {
 		b.dataDir = opts[1]
 	}
 	return b
+}
+
+func (b *playbackBridge) setRegistry(reg *provider.Registry) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.registry = reg
 }
 
 func (b *playbackBridge) setContext(ctx context.Context) {
@@ -134,17 +147,11 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 	return nil
 }
 
-// twitchTarget builds the playback Target for a Twitch channel login. An empty
-// login yields an empty Target, which the player refuses: the bare Twitch home
-// page is not a channel.
+// twitchTarget delegates to the Twitch provider for backward compatibility with tests.
 func twitchTarget(login string) player.Target {
-	if login == "" {
-		return player.Target{}
-	}
-	return player.Target{
-		URL:   fmt.Sprintf("https://www.twitch.tv/%s", login),
-		Label: login,
-	}
+	prov := twitch.NewProvider(nil)
+	target, _ := prov.StreamTarget(catalog.Channel{Login: login, Platform: platform.Twitch})
+	return target
 }
 
 func (b *playbackBridge) Start(login string, selection uint64) tea.Cmd {
@@ -153,27 +160,28 @@ func (b *playbackBridge) Start(login string, selection uint64) tea.Cmd {
 
 func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea.Cmd {
 	mgr := b.mgr
-	var pTarget player.Target
-	if target.URL != "" {
-		label := target.Label
-		if label == "" {
-			label = target.URL
-		}
-		pTarget = player.Target{
-			URL:   target.URL,
-			Label: label,
-		}
-	} else if platform.IsNonTwitch(target.Platform) {
+	b.mu.Lock()
+	reg := b.registry
+	b.mu.Unlock()
+	if reg == nil {
+		reg = provider.NewRegistry(twitch.NewProvider(nil), provider.NewURLProvider())
+	}
+
+	ch := catalog.Channel{
+		Platform: target.Platform,
+		Login:    target.Label,
+		URL:      target.URL,
+	}
+	pTarget, err := reg.StreamTarget(ch)
+	if err != nil {
 		return func() tea.Msg {
 			return ui.PlayerStatusMsg{
 				State:    ui.PlayerStateError,
 				Login:    target.Label,
-				LastLine: "missing URL for non-Twitch channel",
+				LastLine: err.Error(),
 				Failure:  ui.PlayerFailureUnknown,
 			}
 		}
-	} else {
-		pTarget = twitchTarget(target.Label)
 	}
 	identity := pTarget.Identity()
 	return func() tea.Msg {

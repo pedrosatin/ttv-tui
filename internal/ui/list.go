@@ -147,29 +147,7 @@ func (m Model) Recents() []twitch.Channel {
 }
 
 func channelMatches(a, b twitch.Channel) bool {
-	platA := platform.Normalize(a.Platform)
-	platB := platform.Normalize(b.Platform)
-	if platA != platB {
-		return false
-	}
-	if platA != platform.Twitch {
-		idA := a.StableID()
-		idB := b.StableID()
-		if idA == "" || idB == "" {
-			return false
-		}
-		if platA == platform.YouTube {
-			return idA == idB
-		}
-		return strings.EqualFold(idA, idB)
-	}
-	if a.ID != "" && b.ID != "" && a.ID == b.ID {
-		return true
-	}
-	if a.Login != "" && b.Login != "" && strings.EqualFold(a.Login, b.Login) {
-		return true
-	}
-	return false
+	return a.Matches(b)
 }
 
 // VisibleItems returns the deduplicated list of items in strict order:

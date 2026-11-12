@@ -13,10 +13,9 @@ arquitetura.
    [ADR 0012](docs/adr/0012-janela-unica-multiplataforma.md)); fora dela, a janela
    do mpv.
 
-2. **Acesso a dados fica atrás de uma interface `Source`.** O v1 fala o GraphQL
-   público do site; quando existir um app registrado na Twitch, o adapter Helix
-   entra atrás da mesma interface sem a UI saber. Nenhum pacote de UI importa
-   `net/http` nem conhece nomes de campo do GraphQL.
+2. **Acesso a dados de cada plataforma fica atrás de um `Provider`.** O catálogo opcional
+   usa `catalog.Source` (na Twitch, o GraphQL público do site; Helix futuro). Nenhum pacote de UI
+   importa `net/http` nem conhece nomes de campo de APIs de plataformas.
 
 3. **Login é do app, não emprestado.** Token em
    `~/.config/ttv-tui/config.toml` (0600), colhido por `ttv-tui login` do cookie

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
@@ -46,39 +47,10 @@ func (c Channel) CanonicalPlatform() string {
 	return platform.Normalize(c.Platform)
 }
 
-func (c Channel) stableID() string {
-	if c.Login != "" {
-		return c.Login
-	}
-	plat := c.CanonicalPlatform()
-	if strings.HasPrefix(strings.ToLower(c.ID), plat+":") {
-		return c.ID[len(plat)+1:]
-	}
-	return c.ID
-}
-
 // Matches reports whether two channels represent the same channel on the same platform.
 // For non-Twitch channels, it compares platform and stable identifier rather than raw URL.
 func (c Channel) Matches(other Channel) bool {
-	plat := c.CanonicalPlatform()
-	if plat != other.CanonicalPlatform() {
-		return false
-	}
-	if plat != PlatformTwitch {
-		idA := c.stableID()
-		idB := other.stableID()
-		if idA == "" || idB == "" {
-			return false
-		}
-		if plat == PlatformYouTube {
-			return idA == idB
-		}
-		return strings.EqualFold(idA, idB)
-	}
-	if c.ID != "" && other.ID != "" && c.ID == other.ID {
-		return true
-	}
-	return c.Login != "" && strings.EqualFold(c.Login, other.Login)
+	return catalog.SameChannel(c.ToTwitch(), other.ToTwitch())
 }
 
 // ToTwitch converts store.Channel to twitch.Channel.
