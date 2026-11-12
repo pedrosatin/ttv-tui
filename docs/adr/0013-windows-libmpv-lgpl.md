@@ -24,9 +24,9 @@ oficial compilada em modo LGPL pelo projeto mpv.
    individuais de codecs e utilitários. O zip empacotava 134 arquivos (191 MiB descompactados,
    74 MiB compactados). A `libmpv-2.dll` LGPL oficial é estática com relação ao FFmpeg e demais
    codecs, dependendo em runtime apenas de DLLs padrão do sistema Windows, do UCRT e do `libiconv-2.dll`
-   (trazido pelo SDL3). O zip antes da inclusão dos textos de licença media 58.805.770 bytes (~56 MiB)
-   e contém apenas: `ttv-tui-window.exe`, `libmpv-2.dll`, `SDL3.dll`, `libiconv-2.dll`, `LICENSE.LGPL`,
-   `COPYING.LGPLv3`, `COPYING.GPLv3`, `COPYING.LIB` e `THIRD-PARTY.txt`.
+   (trazido pelo SDL3). O zip mede 58.900.088 bytes (~56 MiB; 58.805.770 bytes antes da inclusão das
+   licenças) e contém apenas 9 arquivos: `ttv-tui-window.exe`, `libmpv-2.dll`, `SDL3.dll`,
+   `libiconv-2.dll`, `LICENSE.LGPL`, `COPYING.LGPLv3`, `COPYING.GPLv3`, `COPYING.LIB` e `THIRD-PARTY.txt`.
 
 3. **Garantia de código-fonte**: Pela GPL e LGPL, o distribuidor precisa fornecer ou apontar com
    segurança o código-fonte correspondente exato. Os espelhos do MSYS2 removem versões antigas
