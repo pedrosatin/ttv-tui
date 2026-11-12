@@ -23,6 +23,7 @@ if ($DryRun) {
     if ($versionNumber -eq 'latest') { Write-Host 'Resolve the latest version on GitHub before downloading.' }
     else { Write-Host "Download $base/$archive and $base/checksums.txt" }
     Write-Host 'Verify SHA-256, extract the binary, and add the directory to the user PATH if needed.'
+    Write-Host "When the release has it, install the single window from ttv-tui-window_${versionNumber}_windows_amd64.zip into $binDir\ttv-tui-window"
     return
 }
 if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { throw 'This installer requires Windows x64.' }
@@ -71,6 +72,25 @@ try {
         Write-Host "Added to user PATH: $binDir"
     } else { Write-Host "Already in user PATH: $binDir" }
     Write-Host "ttv-tui v$versionNumber installed in $binDir."
+    # The single window ships as a folder with its DLLs, kept off the user PATH;
+    # without it the app stays in the terminal.
+    $windowArchive = "ttv-tui-window_${versionNumber}_windows_amd64.zip"
+    $windowPattern = '^([a-fA-F0-9]{64})\s+\*?' + [regex]::Escape($windowArchive) + '$'
+    $windowLine = @(Get-Content -LiteralPath $checksumsPath | Where-Object { $_ -match $windowPattern })
+    if ($windowLine.Count -eq 1) {
+        $windowZip = Join-Path $tempDir $windowArchive
+        Invoke-DownloadWithRetry -Uri "$base/$windowArchive" -OutFile $windowZip
+        $windowExpected = ([regex]::Match($windowLine[0], $windowPattern)).Groups[1].Value
+        if ((Get-FileHash -LiteralPath $windowZip -Algorithm SHA256).Hash -ne $windowExpected) { throw "Invalid SHA-256 for $windowArchive." }
+        $windowExtract = Join-Path $tempDir 'window'
+        Expand-Archive -LiteralPath $windowZip -DestinationPath $windowExtract
+        $windowDir = Join-Path $binDir 'ttv-tui-window'
+        try {
+            if (Test-Path -LiteralPath $windowDir) { Remove-Item -LiteralPath $windowDir -Recurse -Force }
+            Copy-Item -LiteralPath (Join-Path $windowExtract 'ttv-tui-window') -Destination $windowDir -Recurse
+        } catch { throw "Could not replace $windowDir. Close ttv-tui and run the installer again." }
+        Write-Host "Single window installed in $windowDir."
+    } else { Write-Host 'This release has no single window; ttv-tui stays in the terminal.' }
     foreach ($dependency in @(@('mpv', 'shinchiro.mpv'), @('streamlink', 'streamlink.streamlink'))) {
         if (-not (Get-Command $dependency[0] -ErrorAction SilentlyContinue)) {
             Write-Host "$($dependency[0]) not found. Install with: winget install --id $($dependency[1]) -e"

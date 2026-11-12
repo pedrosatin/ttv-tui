@@ -95,6 +95,8 @@ jobs:
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-sdl3
             mingw-w64-ucrt-x86_64-mpv
+            mingw-w64-ucrt-x86_64-ntldd
+            zip
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -123,6 +125,31 @@ jobs:
           go build -buildvcs=false -o ttv-tui-window.exe .
           go vet ./...
           go test -buildvcs=false ./...
+
+      - name: Package the Windows zip
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          mkdir -p dist-window
+          packaging/window-windows.sh dist-window/ttv-tui-window.zip
+
+      # Without MSYS2 on PATH, a DLL missing from the zip stops the process before
+      # main. Any other probe result is fine: the runner may lack a usable GPU.
+      - name: Check the zip loads without MSYS2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'window-zip'
+          Expand-Archive -LiteralPath dist-window/ttv-tui-window.zip -DestinationPath $dir
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $exe = Join-Path $dir 'ttv-tui-window\ttv-tui-window.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--probe' -Wait -PassThru -NoNewWindow
+          Write-Host "probe exit code: $($p.ExitCode)"
+          if ($p.ExitCode -eq -1073741515) { throw 'A DLL is missing from the zip (STATUS_DLL_NOT_FOUND).' }
+          if ($p.ExitCode -eq -1073741511) { throw 'A DLL in the zip lacks an entry point (STATUS_ENTRYPOINT_NOT_FOUND).' }
 
   # Proves on every push that the app and its tests compile on each OS, and that
   # the suite runs there. The suite needs neither mpv nor streamlink; only the

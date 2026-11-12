@@ -271,7 +271,7 @@ O `streamlink` descarta os trechos de anúncio da transmissão. Durante o interv
 
 O app não decodifica vídeo. O `mpv` toca numa janela própria, e o app o controla por IPC. A janela do `mpv` não tem controles. Use as teclas do app e feche o vídeo com `Ctrl+X` ou fechando a janela.
 
-Quando o `ttv-tui-window` está ao lado do `ttv-tui` e consegue abrir uma janela, o app abre uma janela única, com a lista, o vídeo e o chat lado a lado. Ela precisa do SDL3 e do libmpv. No Linux amd64, o script de instalação já instala o `ttv-tui-window`; ele foi testado à mão no Wayland, não no X11. No Windows e no macOS, por enquanto, ele é compilado a partir do código: uma prova de conceito funcionou no Windows 11, e o macOS não foi testado. Para ficar no terminal, rode `ttv-tui --terminal`. Por enquanto, emoji colorido aparece como quadrado vazio nessa janela. Veja os ADRs [0011](adr/0011-janela-unica.md) e [0012](adr/0012-janela-unica-multiplataforma.md).
+Quando o `ttv-tui-window` está ao lado do `ttv-tui` e consegue abrir uma janela, o app abre uma janela única, com a lista, o vídeo e o chat lado a lado. Ela precisa do SDL3 e do libmpv. No Linux amd64, o script de instalação já instala o `ttv-tui-window`; ele foi testado à mão no Wayland, não no X11. No Windows x64, o `install.ps1` o instala numa pasta `ttv-tui-window`, com as DLLs; uma prova de conceito funcionou no Windows 11. No macOS ele é compilado a partir do código, e ninguém o testou lá. Para ficar no terminal, rode `ttv-tui --terminal`. Por enquanto, emoji colorido aparece como quadrado vazio nessa janela. Veja os ADRs [0011](adr/0011-janela-unica.md) e [0012](adr/0012-janela-unica-multiplataforma.md).
 
 </details>
 

@@ -38,18 +38,22 @@ o IPC JSON e o filtro de anúncio do streamlink (regra 1). O que muda é o trans
   ou `mpv.COM`. Por isso o shim existe com as duas extensões e o nome é comparado em minúsculas.
 - As cópias do shim ficam numa pasta temporária, sem as DLLs do SDL3 e do libmpv. O `PATH` da TUI
   inclui a pasta do `ttv-tui-window.exe` logo depois da do shim.
+- O Windows não tem SDL3 nem libmpv do sistema. A release leva um zip com a pasta
+  `ttv-tui-window`: o executável, as DLLs que ele carrega do MSYS2 UCRT64 (`packaging/window-windows.sh`,
+  pelo `ntldd -R`) e o `THIRD-PARTY.txt` com os pacotes de origem, cujo código e licenças estão
+  em packages.msys2.org. O `install.ps1` põe essa pasta dentro da `bin` do `ttv-tui`, fora do `PATH`
+  do usuário, e o `ttv-tui` procura a janela ali também. Ele passa o próprio caminho em
+  `TTV_WINDOW_TUI`, e a janela roda essa mesma TUI. O CI confere que o zip carrega sem o MSYS2 no `PATH`.
 - O shim cria o named pipe, manda o nome à janela pelo socket de controle e copia o stdin do
   streamlink para o pipe quando o libmpv conecta. Se a janela fechar o controle antes disso, o
   shim desiste e sai, e o streamlink vê o player encerrar.
 
 ## Limites
 
-- Validado à mão: Linux com Wayland (ADR 0011) e a prova de conceito no Windows 11 amd64. A versão
-  revisada deste ADR, o X11 e o macOS ainda não foram testados numa máquina real.
-- A release só publica o `ttv-tui-window` para Linux amd64. No Windows e no macOS ele é compilado
-  a partir do código: no Windows com MSYS2 UCRT64 (`gcc`, `pkgconf`, `sdl3`, `mpv`) e as DLLs ao
-  lado do executável; no macOS com `brew install sdl3 mpv`. Publicar esses binários exige decidir
-  como distribuir as DLLs do mpv e do FFmpeg e as licenças delas.
+- Validado à mão: Linux com Wayland (ADR 0011) e a prova de conceito no Windows 11 amd64. O código
+  ajustado depois dela, o zip da release, o X11 e o macOS ainda não rodaram numa máquina real.
+- A release publica o `ttv-tui-window` para Linux amd64 e Windows amd64. No macOS ele é compilado
+  a partir do código, com `brew install sdl3 mpv`.
 - No Windows, a janela continua presa ao console que abriu o `ttv-tui`: fechar esse terminal fecha
   a janela. No Unix, o `setsid` a separa.
 - No macOS, o SDL cria um contexto OpenGL legado, que é o que o desenho de pipeline fixa do painel

@@ -41,6 +41,7 @@ checksum:
   name_template: "checksums.txt"
   extra_files:
     - glob: ./dist-window/*.tar.gz
+    - glob: ./dist-window/*.zip
 
 changelog:
   sort: asc
@@ -59,3 +60,4 @@ release:
   prerelease: auto
   extra_files:
     - glob: ./dist-window/*.tar.gz
+    - glob: ./dist-window/*.zip

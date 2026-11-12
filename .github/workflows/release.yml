@@ -43,9 +43,51 @@ jobs:
           name: window
           path: dist-window/
 
+  # Windows has no system SDL3 or libmpv, so the zip carries the MSYS2 DLLs.
+  window-windows:
+    name: Window binary (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-sdl3
+            mingw-w64-ucrt-x86_64-mpv
+            mingw-w64-ucrt-x86_64-ntldd
+            zip
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: window/go.mod
+          cache: false
+
+      - name: Build and package
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist-window
+          packaging/window-windows.sh "dist-window/ttv-tui-window_${VERSION}_windows_amd64.zip"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: window-windows
+          path: dist-window/
+
   goreleaser:
     name: Release
-    needs: window
+    needs: [window, window-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -59,10 +101,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Download window binary
+      - name: Download window binaries
         uses: actions/download-artifact@v4
         with:
-          name: window
+          pattern: window*
+          merge-multiple: true
           path: dist-window
 
       - name: Run GoReleaser
