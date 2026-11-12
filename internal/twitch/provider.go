@@ -1,16 +1,15 @@
 package twitch
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
-	"github.com/pedrosatin/ttv-tui/internal/player"
-	"github.com/pedrosatin/ttv-tui/internal/provider"
 	"github.com/pedrosatin/ttv-tui/internal/streamurl"
 )
 
-// Provider implements provider.Provider for the Twitch platform.
+// Provider implements provider.Provider for the Twitch platform without importing provider.
 type Provider struct {
 	source catalog.Source
 }
@@ -25,13 +24,32 @@ func (p *Provider) ID() string {
 	return platform.Twitch
 }
 
-// Catalog returns the optional catalog Source for browsing Twitch categories and channels.
-func (p *Provider) Catalog() (catalog.Source, bool) {
-	return p.source, p.source != nil
+// Browser returns the browsing capability for Twitch categories and channels.
+func (p *Provider) Browser() (catalog.Browser, bool) {
+	if p.source != nil {
+		return p.source, true
+	}
+	return nil, false
+}
+
+// Searcher returns the channel search capability for Twitch.
+func (p *Provider) Searcher() (catalog.Searcher, bool) {
+	if p.source != nil {
+		return p.source, true
+	}
+	return nil, false
+}
+
+// Resolver returns the channel availability resolver capability for Twitch.
+func (p *Provider) Resolver() (catalog.Resolver, bool) {
+	if p.source != nil {
+		return p.source, true
+	}
+	return nil, false
 }
 
 // StreamTarget builds the playback Target for a Twitch channel.
-func (p *Provider) StreamTarget(ch catalog.Channel) (player.Target, error) {
+func (p *Provider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	login := ch.Login
 	if login == "" && ch.URL != "" {
 		if info, ok := streamurl.Parse(ch.URL); ok && info.Login != "" {
@@ -40,7 +58,7 @@ func (p *Provider) StreamTarget(ch catalog.Channel) (player.Target, error) {
 	}
 
 	if login == "" && ch.URL == "" {
-		return player.Target{}, nil
+		return catalog.Stream{}, errors.New("empty channel")
 	}
 
 	url := ch.URL
@@ -53,13 +71,13 @@ func (p *Provider) StreamTarget(ch catalog.Channel) (player.Target, error) {
 		label = ch.PlayerLabel()
 	}
 
-	return player.Target{
+	return catalog.Stream{
 		URL:   url,
 		Label: label,
 	}, nil
 }
 
-// Chat returns the chat interface for Twitch (placeholder for ticket 09).
-func (p *Provider) Chat() (provider.Chat, bool) {
+// Chat returns the chat interface for Twitch (placeholder until the chat moves behind the provider).
+func (p *Provider) Chat() (catalog.Chat, bool) {
 	return nil, false
 }

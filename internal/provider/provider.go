@@ -1,29 +1,36 @@
 package provider
 
 import (
+	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
-	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/streamurl"
 )
+
+// Target is an alias for catalog.Stream.
+type Target = catalog.Stream
+
+// Chat is an alias for catalog.Chat.
+type Chat = catalog.Chat
 
 // Provider defines the interface implemented by streaming platforms.
 type Provider interface {
 	// ID returns the canonical platform identifier (e.g. "twitch", "kick", "youtube", "url").
 	ID() string
-	// Catalog returns the optional catalog Source for browsing categories and channels.
-	// Platforms without a catalog return nil, false.
-	Catalog() (catalog.Source, bool)
+	// Browser returns the optional capability for browsing categories and channels.
+	Browser() (catalog.Browser, bool)
+	// Searcher returns the optional capability for searching live channels.
+	Searcher() (catalog.Searcher, bool)
+	// Resolver returns the optional capability for resolving stream state of saved channels.
+	Resolver() (catalog.Resolver, bool)
 	// StreamTarget builds the playback Target for channel (URL, extra streamlink args, and qualified label).
-	StreamTarget(channel catalog.Channel) (player.Target, error)
-	// Chat returns the optional platform chat interface (minimal placeholder for ticket 09).
-	Chat() (Chat, bool)
+	StreamTarget(channel catalog.Channel) (catalog.Stream, error)
+	// Chat returns the optional platform chat interface (minimal placeholder until the chat moves behind the provider).
+	Chat() (catalog.Chat, bool)
 }
-
-// Chat is a minimal placeholder interface for platform chat, to be expanded in ticket 09.
-type Chat interface{}
 
 // Registry manages registered Providers by platform ID.
 type Registry struct {
@@ -59,8 +66,40 @@ func (r *Registry) Register(p Provider) {
 	}
 }
 
+// Get returns the registered provider for the given platform ID, if any.
+func (r *Registry) Get(id string) (Provider, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	norm := platform.Normalize(id)
+	if norm == "url" {
+		if r.url != nil {
+			return r.url, true
+		}
+		return nil, false
+	}
+	p, ok := r.providers[norm]
+	return p, ok
+}
+
+// IDs returns a deterministic, sorted slice of all registered platform IDs.
+func (r *Registry) IDs() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	ids := make([]string, 0, len(r.providers)+1)
+	for id := range r.providers {
+		ids = append(ids, id)
+	}
+	if r.url != nil {
+		ids = append(ids, "url")
+	}
+	sort.Strings(ids)
+	return ids
+}
+
 // ProviderFor returns the appropriate provider for the given channel.
-func (r *Registry) ProviderFor(ch catalog.Channel) Provider {
+// When the channel's platform is not registered, it returns an explicit error
+// unless the channel has a stream URL that can be handled by the generic URL provider.
+func (r *Registry) ProviderFor(ch catalog.Channel) (Provider, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -72,13 +111,21 @@ func (r *Registry) ProviderFor(ch catalog.Channel) Provider {
 	}
 
 	if p, ok := r.providers[plat]; ok {
-		return p
+		return p, nil
 	}
-	return r.url
+
+	if ch.URL != "" && r.url != nil {
+		return r.url, nil
+	}
+
+	return nil, fmt.Errorf("no provider registered for platform %q", plat)
 }
 
 // StreamTarget builds the playback Target by selecting the appropriate provider for ch.
-func (r *Registry) StreamTarget(ch catalog.Channel) (player.Target, error) {
-	p := r.ProviderFor(ch)
+func (r *Registry) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
+	p, err := r.ProviderFor(ch)
+	if err != nil {
+		return catalog.Stream{}, err
+	}
 	return p.StreamTarget(ch)
 }

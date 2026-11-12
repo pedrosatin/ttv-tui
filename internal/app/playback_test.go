@@ -11,8 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
+	"github.com/pedrosatin/ttv-tui/internal/provider"
+	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
 
@@ -162,5 +166,110 @@ func TestEnsureStreamlinkSkipsCustomPlayerCommand(t *testing.T) {
 	bridge := newPlaybackBridge(mgr, missing, t.TempDir())
 	if err := bridge.ensureStreamlink(context.Background()); err != nil {
 		t.Fatalf("ensureStreamlink with a custom player command = %v, want nil (no lookup, no download)", err)
+	}
+}
+
+// twitchTarget delegates to the Twitch provider for backward compatibility with tests.
+func twitchTarget(login string) player.Target {
+	prov := twitch.NewProvider(nil)
+	st, _ := prov.StreamTarget(catalog.Channel{Login: login, Platform: platform.Twitch})
+	return player.Target{
+		URL:       st.URL,
+		ExtraArgs: st.ExtraArgs,
+		Label:     st.Label,
+	}
+}
+
+func TestPlaybackBridgeStartTargetTable(t *testing.T) {
+	tests := []struct {
+		name      string
+		target    ui.PlayTarget
+		wantURL   string
+		wantLabel string
+		wantErr   bool
+	}{
+		{
+			name:      "Twitch por login",
+			target:    ui.PlayTarget{Label: "gaules"},
+			wantURL:   "https://www.twitch.tv/gaules",
+			wantLabel: "gaules",
+		},
+		{
+			name:      "Twitch com URL",
+			target:    ui.PlayTarget{URL: "https://www.twitch.tv/gaules", Label: "gaules", Platform: platform.Twitch},
+			wantURL:   "https://www.twitch.tv/gaules",
+			wantLabel: "gaules",
+		},
+		{
+			name:      "Kick colado (rotulo qualificado)",
+			target:    ui.PlayTarget{URL: "https://kick.com/xqc", Label: "kick:xqc", Platform: platform.Kick},
+			wantURL:   "https://kick.com/xqc",
+			wantLabel: "kick:xqc",
+		},
+		{
+			name:      "YouTube colado (rotulo qualificado)",
+			target:    ui.PlayTarget{URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", Label: "youtube:dQw4w9WgXcQ", Platform: platform.YouTube},
+			wantURL:   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			wantLabel: "youtube:dQw4w9WgXcQ",
+		},
+		{
+			name:      "host generico (facebook.com:<id>)",
+			target:    ui.PlayTarget{URL: "https://facebook.com/watch/live/?v=123", Label: "facebook.com:123", Platform: "facebook.com"},
+			wantURL:   "https://facebook.com/watch/live/?v=123",
+			wantLabel: "facebook.com:123",
+		},
+		{
+			name:    "canal fora da Twitch sem URL (erro)",
+			target:  ui.PlayTarget{Label: "kick:xqc", Platform: platform.Kick},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var startedTarget player.Target
+			mgr := player.New(player.Options{
+				RuntimeDir: t.TempDir(),
+				StopWait:   100 * time.Millisecond,
+				Command: func(target player.Target, socket string) *exec.Cmd {
+					startedTarget = target
+					return exec.Command(os.Args[0], "-test.run=^$")
+				},
+			})
+			defer mgr.Close()
+
+			bridge := newPlaybackBridge(mgr)
+			bridge.setRegistry(provider.NewRegistry(twitch.NewProvider(nil), provider.NewURLProvider()))
+
+			cmd := bridge.StartTarget(tt.target, 1)
+			if cmd == nil {
+				t.Fatal("StartTarget returned nil cmd")
+			}
+			rawMsg := cmd()
+			msg, ok := rawMsg.(ui.PlayerStatusMsg)
+			if !ok {
+				t.Fatalf("msg is %T, want ui.PlayerStatusMsg", rawMsg)
+			}
+
+			if tt.wantErr {
+				if msg.State != ui.PlayerStateError {
+					t.Fatalf("msg.State = %v, want PlayerStateError", msg.State)
+				}
+				if msg.LastLine == "" {
+					t.Fatal("msg.LastLine is empty, want error description")
+				}
+				return
+			}
+
+			if msg.State == ui.PlayerStateError {
+				t.Fatalf("unexpected error: %s", msg.LastLine)
+			}
+			if startedTarget.URL != tt.wantURL {
+				t.Errorf("startedTarget.URL = %q, want %q", startedTarget.URL, tt.wantURL)
+			}
+			if startedTarget.Label != tt.wantLabel {
+				t.Errorf("startedTarget.Label = %q, want %q", startedTarget.Label, tt.wantLabel)
+			}
+		})
 	}
 }

@@ -1,13 +1,34 @@
 package twitch
 
 import (
-	"reflect"
+	"context"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
-	"github.com/pedrosatin/ttv-tui/internal/player"
 )
+
+type dummySource struct{}
+
+func (d *dummySource) Categories(ctx context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
+	return catalog.Page[catalog.Category]{}, nil
+}
+
+func (d *dummySource) Channels(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{}, nil
+}
+
+func (d *dummySource) Search(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
+	return catalog.Page[catalog.Channel]{}, nil
+}
+
+func (d *dummySource) SearchCategories(ctx context.Context, query string) ([]catalog.Category, error) {
+	return nil, nil
+}
+
+func (d *dummySource) ChannelsByLogins(ctx context.Context, logins []string) ([]catalog.Channel, error) {
+	return nil, nil
+}
 
 func TestTwitchProviderMetadata(t *testing.T) {
 	p := NewProvider(nil)
@@ -16,25 +37,40 @@ func TestTwitchProviderMetadata(t *testing.T) {
 		t.Fatalf("ID() = %q, want %q", id, platform.Twitch)
 	}
 
-	if src, ok := p.Catalog(); ok || src != nil {
-		t.Fatalf("Catalog() with nil source = (%v, %v), want (nil, false)", src, ok)
+	if b, ok := p.Browser(); ok || b != nil {
+		t.Fatalf("Browser() with nil source = (%v, %v), want (nil, false)", b, ok)
+	}
+	if s, ok := p.Searcher(); ok || s != nil {
+		t.Fatalf("Searcher() with nil source = (%v, %v), want (nil, false)", s, ok)
+	}
+	if r, ok := p.Resolver(); ok || r != nil {
+		t.Fatalf("Resolver() with nil source = (%v, %v), want (nil, false)", r, ok)
 	}
 
 	if chat, ok := p.Chat(); ok || chat != nil {
 		t.Fatalf("Chat() = (%v, %v), want (nil, false)", chat, ok)
+	}
+
+	src := &dummySource{}
+	withSrc := NewProvider(src)
+	if b, ok := withSrc.Browser(); !ok || b == nil {
+		t.Fatalf("Browser() with source = (%v, %v), want non-nil, true", b, ok)
+	}
+	if s, ok := withSrc.Searcher(); !ok || s == nil {
+		t.Fatalf("Searcher() with source = (%v, %v), want non-nil, true", s, ok)
+	}
+	if r, ok := withSrc.Resolver(); !ok || r == nil {
+		t.Fatalf("Resolver() with source = (%v, %v), want non-nil, true", r, ok)
 	}
 }
 
 func TestTwitchProviderStreamTarget(t *testing.T) {
 	p := NewProvider(nil)
 
-	t.Run("empty channel gives empty target and no error", func(t *testing.T) {
-		target, err := p.StreamTarget(catalog.Channel{})
-		if err != nil {
-			t.Fatalf("StreamTarget error = %v, want nil", err)
-		}
-		if target.URL != "" || target.Label != "" {
-			t.Fatalf("target = %+v, want empty", target)
+	t.Run("empty channel returns error", func(t *testing.T) {
+		_, err := p.StreamTarget(catalog.Channel{})
+		if err == nil {
+			t.Fatal("StreamTarget on empty channel must return error")
 		}
 	})
 
@@ -49,23 +85,6 @@ func TestTwitchProviderStreamTarget(t *testing.T) {
 		}
 		if target.Label != "gaules" {
 			t.Fatalf("target.Label = %q, want %q", target.Label, "gaules")
-		}
-
-		// Ensure streamlink command argv matches standard baseline
-		cmd := player.DefaultCommand(target, "/run/user/1000/ttv-tui/1/i", "/run/user/1000/ttv-tui/1/mpv-input.conf")
-		wantArgs := []string{
-			"streamlink",
-			"--no-config",
-			"--loglevel", "info",
-			"https://www.twitch.tv/gaules",
-			"best",
-			"--player", "mpv",
-			"--player-args", "--no-config --no-input-default-bindings --no-osc --osd-level=1 --osd-bar=no " +
-				"--volume-max=100 --input-ipc-server=/run/user/1000/ttv-tui/1/i --force-window=immediate " +
-				"--hwdec=auto-safe --input-conf=/run/user/1000/ttv-tui/1/mpv-input.conf",
-		}
-		if !reflect.DeepEqual(cmd.Args, wantArgs) {
-			t.Fatalf("streamlink argv mismatch:\ngot:  %v\nwant: %v", cmd.Args, wantArgs)
 		}
 	})
 

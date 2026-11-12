@@ -50,6 +50,20 @@ func TestStableID(t *testing.T) {
 			want:     "new_slug",
 		},
 		{
+			name:     "Kick with prefix in login",
+			platform: platform.Kick,
+			id:       "123",
+			login:    "kick:xqc",
+			want:     "xqc",
+		},
+		{
+			name:     "Kick with uppercase prefix in login",
+			platform: platform.Kick,
+			id:       "123",
+			login:    "KICK:xqc",
+			want:     "xqc",
+		},
+		{
 			name:     "YouTube with prefix",
 			platform: platform.YouTube,
 			id:       "youtube:@ChannelName",

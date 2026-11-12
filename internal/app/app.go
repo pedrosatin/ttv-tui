@@ -32,7 +32,6 @@ type Options struct {
 	ConfigPath string
 	StatePath  string
 	Source     twitch.Source
-	Provider   provider.Provider
 	Validate   func(ctx context.Context, token string) (auth.Validation, error)
 	Player     *player.Manager
 	Chat       *chat.Manager
@@ -77,7 +76,7 @@ func Run(opts Options) error {
 	}
 
 	resolvedLang := i18n.Resolve(opts.Lang, cfg.Language, i18n.EnvLocale())
-	catalog, err := i18n.New(resolvedLang)
+	appCat, err := i18n.New(resolvedLang)
 	if err != nil {
 		// No catalog exists to localize this one: the embedded files failed to load.
 		return fmt.Errorf("initialize i18n catalog: %w", err)
@@ -85,40 +84,32 @@ func Run(opts Options) error {
 
 	input, output, logw := streams(opts)
 	if !isTerminal(input) || !isTerminal(output) {
-		return errors.New(catalog.T("app.err_tty_required"))
+		return errors.New(appCat.T("app.err_tty_required"))
 	}
 
 	// Only after the terminal check: a run that cannot start must not write.
 	if err := persistLang(opts.Lang, &cfg, cfgPath); err != nil {
-		return fmt.Errorf(catalog.T("app.err_persist_lang"), err)
+		return fmt.Errorf(appCat.T("app.err_persist_lang"), err)
 	}
 
 	source := opts.Source
-	if source == nil && opts.Provider != nil {
-		if cat, ok := opts.Provider.Catalog(); ok && cat != nil {
-			source = cat
-		}
-	}
 	if source == nil {
 		source = twitch.NewGQLSource(twitch.GQLConfig{})
 	}
 
-	twitchProvider := opts.Provider
-	if twitchProvider == nil {
-		twitchProvider = twitch.NewProvider(source)
-	}
+	twitchProvider := twitch.NewProvider(source)
 	urlProvider := provider.NewURLProvider()
 	providerRegistry := provider.NewRegistry(twitchProvider, urlProvider)
 
 	statePath, err := resolveStatePath(opts.StatePath)
 	if err != nil {
-		return fmt.Errorf(catalog.T("app.err_resolve_state_path"), err)
+		return fmt.Errorf(appCat.T("app.err_resolve_state_path"), err)
 	}
 	registryDir := playerRegistryDir(statePath)
 
 	// A player left by a run that died without cleanup would play alongside
 	// the next one; deal with it before anything can start playback.
-	handleOrphans(registryDir, input, output, logw, isInteractive(input), catalog)
+	handleOrphans(registryDir, input, output, logw, isInteractive(input), appCat)
 
 	// From here on a player may exist. Catch the termination signals ourselves
 	// (Bubble Tea's handler ignores SIGHUP, whose default action would kill us
@@ -136,27 +127,22 @@ func Run(opts Options) error {
 	defer func() {
 		// After the last Stop: it can note a group that outlived SIGKILL.
 		stopPlayer()
-		logPlayerNotes(logw, playerMgr.Notes(), catalog)
+		logPlayerNotes(logw, playerMgr.Notes(), appCat)
 	}()
 	chatMgr, stopChat := chatManager(opts.Chat, cfg)
 	defer stopChat()
 
 	appStore := store.New(statePath)
-	st, corruptNotice := loadState(appStore, catalog)
+	st, corruptNotice := loadState(appStore, appCat)
 
 	dataDir, _ := config.DataDir()
 	playback := newPlaybackBridge(playerMgr, cfg.StreamlinkPath, dataDir)
 	playback.setRegistry(providerRegistry)
 	playback.setContext(ctx)
 
-	catSource := source
-	if cat, ok := twitchProvider.Catalog(); ok && cat != nil {
-		catSource = cat
-	}
-
 	uiOpts := []ui.Option{
 		hostOption,
-		ui.WithSource(catSource),
+		ui.WithSource(source),
 		ui.WithPlayback(playback),
 		ui.WithChat(newChatBridge(chatMgr)),
 		ui.WithStore(appStore),
@@ -171,7 +157,7 @@ func Run(opts Options) error {
 		uiOpts = append(uiOpts, ui.WithTokenCheck(tokenCheck(opts.Validate, cfg.AccessToken)))
 	}
 
-	model := ui.New(catalog, uiOpts...)
+	model := ui.New(appCat, uiOpts...)
 	p := tea.NewProgram(model,
 		tea.WithAltScreen(),
 		tea.WithInput(input),
@@ -185,17 +171,17 @@ func Run(opts Options) error {
 	final, runErr := p.Run()
 	if m, ok := final.(ui.Model); ok {
 		if err := m.FlushSaves(saveFlushTimeout); err != nil {
-			_, _ = fmt.Fprintf(logw, catalog.T("app.warn_save_on_exit")+"\n", err)
+			_, _ = fmt.Fprintf(logw, appCat.T("app.warn_save_on_exit")+"\n", err)
 		}
 	}
 	// Stop the forwarders before the deferred player/chat shutdown.
 	cancel()
-	logInputConfErr(logw, playerMgr, catalog)
+	logInputConfErr(logw, playerMgr, appCat)
 	if sig, ok := caught.Load().(os.Signal); ok {
 		return &SignalError{Signal: sig}
 	}
 	if runErr != nil {
-		return fmt.Errorf(catalog.T("app.err_run_tui"), runErr)
+		return fmt.Errorf(appCat.T("app.err_run_tui"), runErr)
 	}
 	return nil
 }
@@ -335,15 +321,15 @@ func chatManager(injected *chat.Manager, cfg config.Config) (*chat.Manager, func
 // empty in silence; one that is corrupt or cannot be read starts empty with a
 // notice. The store refuses to save over a file it cannot read, so the
 // favorites in it are not lost.
-func loadState(s *store.Store, catalog *i18n.Catalog) (store.State, string) {
+func loadState(s *store.Store, appCat *i18n.Catalog) (store.State, string) {
 	st, err := s.Load()
 	switch {
 	case err == nil:
 		return st, ""
 	case errors.Is(err, store.ErrCorrupt):
-		return st, catalog.T("store.corrupt_notice")
+		return st, appCat.T("store.corrupt_notice")
 	default:
-		return st, catalog.T("store.load_failed_notice")
+		return st, appCat.T("store.load_failed_notice")
 	}
 }
 

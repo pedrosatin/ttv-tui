@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
-	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/streamurl"
 )
 
@@ -22,19 +21,26 @@ func (p *URLProvider) ID() string {
 	return "url"
 }
 
-// Catalog returns nil, false because generic stream URLs have no catalog.
-func (p *URLProvider) Catalog() (catalog.Source, bool) {
+// Browser returns nil, false because generic stream URLs have no browsing capability.
+func (p *URLProvider) Browser() (catalog.Browser, bool) {
+	return nil, false
+}
+
+// Searcher returns nil, false because generic stream URLs have no search capability.
+func (p *URLProvider) Searcher() (catalog.Searcher, bool) {
+	return nil, false
+}
+
+// Resolver returns nil, false because generic stream URLs have no resolver capability.
+func (p *URLProvider) Resolver() (catalog.Resolver, bool) {
 	return nil, false
 }
 
 // StreamTarget resolves a playback target for a stream URL.
-func (p *URLProvider) StreamTarget(ch catalog.Channel) (player.Target, error) {
+func (p *URLProvider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	rawURL := strings.TrimSpace(ch.URL)
 	if rawURL == "" {
-		if ch.Login != "" {
-			return player.Target{}, errors.New("missing URL for non-Twitch channel")
-		}
-		return player.Target{}, errors.New("missing URL")
+		return catalog.Stream{}, errors.New("missing URL")
 	}
 
 	info, ok := streamurl.Parse(rawURL)
@@ -43,7 +49,7 @@ func (p *URLProvider) StreamTarget(ch catalog.Channel) (player.Target, error) {
 		if label == "" {
 			label = rawURL
 		}
-		return player.Target{
+		return catalog.Stream{
 			URL:   rawURL,
 			Label: label,
 		}, nil
@@ -57,13 +63,13 @@ func (p *URLProvider) StreamTarget(ch catalog.Channel) (player.Target, error) {
 		label = info.URL
 	}
 
-	return player.Target{
+	return catalog.Stream{
 		URL:   info.URL,
 		Label: label,
 	}, nil
 }
 
 // Chat returns nil, false because generic stream URLs have no chat support.
-func (p *URLProvider) Chat() (Chat, bool) {
+func (p *URLProvider) Chat() (catalog.Chat, bool) {
 	return nil, false
 }

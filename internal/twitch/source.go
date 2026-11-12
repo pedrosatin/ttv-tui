@@ -31,6 +31,21 @@ type Page[T any] = catalog.Page[T]
 // Source is an alias for catalog.Source.
 type Source = catalog.Source
 
+// Browser is an alias for catalog.Browser.
+type Browser = catalog.Browser
+
+// Searcher is an alias for catalog.Searcher.
+type Searcher = catalog.Searcher
+
+// Resolver is an alias for catalog.Resolver.
+type Resolver = catalog.Resolver
+
+// Stream is an alias for catalog.Stream.
+type Stream = catalog.Stream
+
+// Chat is an alias for catalog.Chat.
+type Chat = catalog.Chat
+
 // NormalizeLanguage trims and lowercases a Twitch stream language code
 // (API returns "PT", "EN", "ES"). Empty input yields "".
 func NormalizeLanguage(raw string) string {

@@ -149,21 +149,46 @@ type Page[T any] struct {
 	HasMore bool
 }
 
-// Source defines the data contract consumed by the UI for browsing categories,
-// channels, and search results without exposing transport or wire details.
-//
-// ChannelsByLogins is a batch availability lookup for saved channels
-// (favorites/recents). It does not replace Search, Channels, or Categories.
-type Source interface {
+// Stream represents a neutral playback target: the stream URL, optional streamlink CLI
+// arguments, and an optional human-readable label/identity for the session.
+type Stream struct {
+	URL       string
+	ExtraArgs []string
+	Label     string
+}
+
+// Identity returns the session identity: Label when non-empty, otherwise URL.
+func (s Stream) Identity() string {
+	if s.Label != "" {
+		return s.Label
+	}
+	return s.URL
+}
+
+// Chat is a minimal placeholder interface for platform chat, to be expanded when the chat moves behind the provider.
+type Chat interface{}
+
+// Browser supports browsing categories and channels within a category, as well as searching categories.
+type Browser interface {
 	Categories(ctx context.Context, page PageRequest) (Page[Category], error)
 	Channels(ctx context.Context, categoryID string, page PageRequest) (Page[Channel], error)
-	Search(ctx context.Context, query string) (Page[Channel], error)
 	// SearchCategories finds categories by name via the global search API.
 	// Unlike Categories (top live page), it reaches games outside the top N.
 	// Empty query yields an empty slice with no network call. Results are not
 	// paginated: Twitch returns one relevance window. PreferSearchCategories
 	// reorders hits (exact name, then viewers) before return.
 	SearchCategories(ctx context.Context, query string) ([]Category, error)
+}
+
+// Searcher supports searching live channels.
+type Searcher interface {
+	Search(ctx context.Context, query string) (Page[Channel], error)
+}
+
+// Resolver resolves the current stream status/metadata for saved channels.
+// Note: ChannelsByLogins keeps its legacy name until the list migration, where a neutral
+// name will be introduced.
+type Resolver interface {
 	// ChannelsByLogins returns identity and Availability for the given logins,
 	// in as many upstream batches as needed. Empty logins yields an empty result with
 	// no network call. Logins that do not resolve are omitted so callers keep
@@ -172,6 +197,14 @@ type Source interface {
 	// it is not evidence of offline. A stream object is AvailabilityLive with
 	// viewers/title when present.
 	ChannelsByLogins(ctx context.Context, logins []string) ([]Channel, error)
+}
+
+// Source defines the complete catalog data contract consumed by the UI,
+// combining Browser, Searcher, and Resolver capabilities.
+type Source interface {
+	Browser
+	Searcher
+	Resolver
 }
 
 // IntPtr returns a pointer to v.

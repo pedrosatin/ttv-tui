@@ -12,7 +12,6 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/components"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/provider"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
@@ -147,13 +146,6 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 	return nil
 }
 
-// twitchTarget delegates to the Twitch provider for backward compatibility with tests.
-func twitchTarget(login string) player.Target {
-	prov := twitch.NewProvider(nil)
-	target, _ := prov.StreamTarget(catalog.Channel{Login: login, Platform: platform.Twitch})
-	return target
-}
-
 func (b *playbackBridge) Start(login string, selection uint64) tea.Cmd {
 	return b.StartTarget(ui.PlayTarget{Label: login}, selection)
 }
@@ -183,7 +175,12 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 			}
 		}
 	}
-	identity := pTarget.Identity()
+	playTarget := player.Target{
+		URL:       pTarget.URL,
+		ExtraArgs: pTarget.ExtraArgs,
+		Label:     pTarget.Label,
+	}
+	identity := playTarget.Identity()
 	return func() tea.Msg {
 		b.mu.Lock()
 		appCtx := b.ctx
@@ -212,7 +209,7 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 		}
 
 		// Cmds run in goroutines that may not keep the order of the selections.
-		gen, err := mgr.StartInOrder(pTarget, selection)
+		gen, err := mgr.StartInOrder(playTarget, selection)
 		if err != nil {
 			return ui.PlayerStatusMsg{
 				Generation: gen,
