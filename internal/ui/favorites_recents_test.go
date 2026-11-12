@@ -482,7 +482,7 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 
 	// Persistence keeps identity only: no stale availability on disk.
 	st := m.list.toStoreState()
-	if got := st.Favorites[0].ToTwitch().Availability; got != twitch.AvailabilityUnknown {
+	if got := st.Favorites[0].ToChannel().Availability; got != twitch.AvailabilityUnknown {
 		t.Fatalf("store must not persist availability, got %v", got)
 	}
 }

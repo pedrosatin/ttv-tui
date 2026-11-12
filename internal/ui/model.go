@@ -69,7 +69,7 @@ type SavedAvailabilityMsg struct {
 }
 
 // CategorySelectedMsg is emitted when the user presses Enter on a highlighted category
-// when no Source is attached.
+// when no Browser is attached.
 type CategorySelectedMsg struct {
 	Category catalog.Category
 }
@@ -129,7 +129,6 @@ type Option func(*Model)
 // WithSource configures the Model to load data from src.
 func WithSource(src catalog.Source) Option {
 	return func(m *Model) {
-		m.source = src
 		if src != nil {
 			m.browser = src
 			m.searcher = src
@@ -215,7 +214,6 @@ func WithCorruptNotice(notice string) Option {
 // pointers: Bubble Tea copies Model by value and a copy must not share state.
 type Model struct {
 	catalog    *i18n.Catalog
-	source     catalog.Source
 	browser    catalog.Browser
 	searcher   catalog.Searcher
 	resolver   catalog.Resolver

@@ -273,7 +273,7 @@ func TestChannelWithoutViewersIsNotOffline(t *testing.T) {
 		ID: "1", Login: "eslcs", DisplayName: "ESLCS",
 		Viewers: twitch.IntPtr(12900), Availability: twitch.AvailabilityLive,
 	}
-	st := State{Favorites: []Channel{FromTwitch(live)}, Recents: []Channel{FromTwitch(live)}}
+	st := State{Favorites: []Channel{FromChannel(live)}, Recents: []Channel{FromChannel(live)}}
 	if err := SaveTo(path, st); err != nil {
 		t.Fatalf("SaveTo: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestChannelWithoutViewersIsNotOffline(t *testing.T) {
 		t.Fatalf("LoadFrom: %v", err)
 	}
 	for _, ch := range append(loaded.Favorites, loaded.Recents...) {
-		tw := ch.ToTwitch()
+		tw := ch.ToChannel()
 		if tw.Viewers != nil {
 			t.Fatalf("store must keep identity only, got viewers %v", *tw.Viewers)
 		}
@@ -1239,13 +1239,13 @@ func TestStore_ChannelWithURLRoundTripAndLegacyCompat(t *testing.T) {
 	}
 
 	// 2. Conversion to and from twitch.Channel and catalog.Channel preserves URL and Platform.
-	tCh := loaded.Favorites[0].ToTwitch()
+	tCh := loaded.Favorites[0].ToChannel()
 	if tCh.Platform != PlatformKick || tCh.URL != "https://kick.com/xqc" {
-		t.Fatalf("ToTwitch did not preserve platform or URL: %+v", tCh)
+		t.Fatalf("ToChannel did not preserve platform or URL: %+v", tCh)
 	}
-	backCh := FromTwitch(tCh)
+	backCh := FromChannel(tCh)
 	if backCh.Platform != PlatformKick || backCh.URL != "https://kick.com/xqc" {
-		t.Fatalf("FromTwitch did not preserve platform or URL: %+v", backCh)
+		t.Fatalf("FromChannel did not preserve platform or URL: %+v", backCh)
 	}
 
 	catCh := loaded.Favorites[0].ToChannel()

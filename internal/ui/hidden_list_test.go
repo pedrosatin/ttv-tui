@@ -188,7 +188,7 @@ func TestHiddenListPTY(t *testing.T) {
 	}
 	m := hiddenListModel(t, false)
 	m.catalog = testCatalog(t, i18n.LangPTBR)
-	m.source, m.playback, m.chat.session = nil, nil, nil
+	m.browser, m.searcher, m.resolver, m.playback, m.chat.session = nil, nil, nil, nil, nil
 	program := tea.NewProgram(hiddenListPTYModel{m}, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout), tea.WithAltScreen(), tea.WithoutSignalHandler())
 	final, err := program.Run()
 	if err != nil {

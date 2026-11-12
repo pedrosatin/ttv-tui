@@ -148,7 +148,7 @@ func TestReopeningNonTwitchChannelFromRecentsPlaysURL(t *testing.T) {
 			URL:         "https://kick.com/xqc",
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToTwitchChannels(initialRecents)))
+	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
 
 	// Highlight the recent item and press Enter
 	items := m.VisibleItems()
@@ -193,7 +193,7 @@ func TestFavoritingNonTwitchChannelWorks(t *testing.T) {
 			URL:         "https://kick.com/xqc",
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToTwitchChannels(initialRecents)))
+	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
 
 	// Highlight the recent item and press 'f' to favorite
 	items := m.VisibleItems()

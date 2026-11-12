@@ -530,7 +530,9 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.reconcileHighlight()
 	if m.browser == nil {
 		m.list.loading = false
-		return m, nil
+		// No Browser to reload, but the hydrate generation moved: ask again so
+		// saved channels do not stay unverified.
+		return m, m.withHydrate(nil)
 	}
 	m.list.loading = true
 	return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
@@ -572,7 +574,9 @@ func (m Model) returnToChannels() (tea.Model, tea.Cmd) {
 	m.list.focusResults = true
 	if m.browser == nil {
 		m.list.loading = false
-		return m, nil
+		// No Browser to reload, but the hydrate generation moved: ask again so
+		// saved channels do not stay unverified.
+		return m, m.withHydrate(nil)
 	}
 	m.list.loading = true
 	return m, m.withHydrate(m.fetchChannelsCmd(m.list.generation, cat, "", false))
@@ -597,7 +601,7 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 		if m.list.selectedCategory != nil {
 			if m.browser == nil {
 				m.list.loading = false
-				return m, nil
+				return m, m.withHydrate(nil)
 			}
 			return m, m.withHydrate(m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, "", false))
 		}
@@ -605,14 +609,14 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 		m.list.channels = nil
 		if m.browser == nil {
 			m.list.loading = false
-			return m, nil
+			return m, m.withHydrate(nil)
 		}
 		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 	case ModeSearch:
 		if strings.TrimSpace(m.list.search.query) != "" {
 			if m.searcher == nil && m.browser == nil {
 				m.list.loading = false
-				return m, nil
+				return m, m.withHydrate(nil)
 			}
 			return m, m.withHydrate(m.fetchSearchCmd(m.list.generation, m.list.search.query))
 		}
@@ -620,13 +624,13 @@ func (m Model) retryCurrentMode() (tea.Model, tea.Cmd) {
 		m.list.channels = nil
 		if m.browser == nil {
 			m.list.loading = false
-			return m, nil
+			return m, m.withHydrate(nil)
 		}
 		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 	default:
 		if m.browser == nil {
 			m.list.loading = false
-			return m, nil
+			return m, m.withHydrate(nil)
 		}
 		return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
 	}

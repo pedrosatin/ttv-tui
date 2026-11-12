@@ -146,8 +146,8 @@ func Run(opts Options) error {
 		ui.WithPlayback(playback),
 		ui.WithChat(newChatBridge(chatMgr)),
 		ui.WithStore(appStore),
-		ui.WithFavorites(store.ToTwitchChannels(st.Favorites)),
-		ui.WithRecents(store.ToTwitchChannels(st.Recents)),
+		ui.WithFavorites(store.ToChannels(st.Favorites)),
+		ui.WithRecents(store.ToChannels(st.Recents)),
 	}
 	uiOpts = append(uiOpts, configOptions(cfg, cfgPath)...)
 	if corruptNotice != "" {

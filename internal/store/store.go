@@ -12,7 +12,6 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 // DefaultMaxRecents is the default maximum number of recent channels saved.
@@ -111,26 +110,6 @@ func FromChannels(channels []catalog.Channel) []Channel {
 		out[i] = FromChannel(c)
 	}
 	return out
-}
-
-// ToTwitch converts store.Channel to twitch.Channel (alias for ToChannel).
-func (c Channel) ToTwitch() twitch.Channel {
-	return c.ToChannel()
-}
-
-// FromTwitch converts twitch.Channel to store.Channel (alias for FromChannel).
-func FromTwitch(ch twitch.Channel) Channel {
-	return FromChannel(ch)
-}
-
-// ToTwitchChannels converts a slice of store.Channel to []twitch.Channel.
-func ToTwitchChannels(channels []Channel) []twitch.Channel {
-	return ToChannels(channels)
-}
-
-// FromTwitchChannels converts a slice of twitch.Channel to []store.Channel.
-func FromTwitchChannels(channels []twitch.Channel) []Channel {
-	return FromChannels(channels)
 }
 
 // State represents the persistent application state containing favorites and recents.

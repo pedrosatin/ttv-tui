@@ -167,7 +167,7 @@ func TestFeedbackReadOnlyState(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := feedbackModel(t, store.New(filepath.Join(s.Path(), "state.json")))
-	m.list.favorites = []twitch.Channel{ch.ToTwitch()}
+	m.list.favorites = []twitch.Channel{ch.ToChannel()}
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 	if m.StatusNotice() != "" {
 		t.Fatal("success before save")
