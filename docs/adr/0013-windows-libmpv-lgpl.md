@@ -17,8 +17,8 @@ oficial compilada em modo LGPL pelo projeto mpv.
    FFmpeg embutido LGPL-3.0 ou posterior (LGPL-3.0+), cuja licença incorpora a GNU GPL-3 por
    referência. A ligação dinâmica do `ttv-tui-window.exe` à `libmpv-2.dll` permite a distribuição
    conforme a seção 6 da LGPL-2.1 e termos da LGPL-3 sem contaminar o restante do executável com
-   termos GPL-3, desde que fornecidos os textos de licença, oferta escrita de código-fonte e
-   garantia de substituição da DLL pelo usuário.
+   termos GPL-3, desde que fornecidos os textos de licença, o acesso ao código-fonte correspondente
+   e a possibilidade de o usuário substituir a DLL.
 
 2. **Tamanho e isolamento**: A biblioteca MSYS2 ligava dinamicamente dezenas de dependências
    individuais de codecs e utilitários. O zip empacotava 134 arquivos (191 MiB descompactados,
@@ -53,8 +53,10 @@ oficial compilada em modo LGPL pelo projeto mpv.
   `COPYING.GPLv3` (FFmpeg embutido, LGPL-3), bem como o texto de licença LGPL do `libiconv` do MSYS2.
 - O arquivo `THIRD-PARTY.txt` traz o aviso de uso da libmpv sob LGPL-2.1+, do FFmpeg sob LGPL-3.0+,
   links para o código-fonte do mpv na tag correspondente e do commit exato do FFmpeg, a nota sobre
-  a limitação das bibliotecas estáticas da imagem BtbN, oferta escrita do código-fonte válida por
-  três anos, a autorização expressa para substituição da `libmpv-2.dll` por versão compatível
-  (LGPL-2.1 §6), e a relação dos pacotes MSYS2 que fornecem as demais DLLs.
+  a limitação das bibliotecas estáticas da imagem BtbN, a autorização expressa para substituição da
+  `libmpv-2.dll` por versão compatível (LGPL-2.1 §6) e a relação dos pacotes MSYS2 que fornecem as
+  demais DLLs. Publicar o código-fonte junto da release, em vez de só apontar para ele, fica para
+  uma decisão própria.
 - O CI do Windows testa o `--probe` com o zip descompactado e sem o MSYS2 no `PATH`, garantindo
-  que o carregador resolveu as DLLs empacotadas e todos os imports de símbolos sem erros de runtime.
+  que o carregador resolve as DLLs empacotadas e os símbolos que elas importam. Símbolos obtidos em
+  tempo de execução (as funções de OpenGL) e a inicialização do mpv ficam fora dessa prova.

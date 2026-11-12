@@ -68,8 +68,8 @@ EOF
 
 # Ensure pkg-config uses the generated mpv.pc from the official archive.
 export PKG_CONFIG_PATH="$mpv_work/pkgconfig:${PKG_CONFIG_PATH:-}"
-echo "mpv pkg-config:"
-pkg-config --modversion --cflags --libs mpv
+echo "mpv pkg-config: version $(pkg-config --modversion mpv)"
+echo "mpv pkg-config: $(pkg-config --cflags --libs mpv)"
 
 actual_pc_dir="$(cygpath -u "$(pkg-config --variable=pcfiledir mpv)" 2>/dev/null || pkg-config --variable=pcfiledir mpv)"
 expected_pc_dir="$(cygpath -u "$mpv_work/pkgconfig" 2>/dev/null || echo "$mpv_work/pkgconfig")"
@@ -153,13 +153,9 @@ done
   echo "consequently, other static libraries embedded within the DLL (such as libass, libplacebo,"
   echo "and dependencies) do not have individually identified exact commit versions."
   echo
-  echo "== Written Offer & Library Replacement (LGPL-2.1 §6) =="
-  echo "In accordance with Section 6 of the GNU Lesser General Public License (LGPL-2.1), you may"
-  echo "replace libmpv-2.dll with a compatible modified version of the library."
-  echo
-  echo "Written Offer: We offer to provide the complete machine-readable source code for the libraries"
-  echo "covered by the LGPL and distributed in this package, valid for at least three (3) years from the"
-  echo "date of distribution, upon request."
+  echo "== Library Replacement (LGPL-2.1 §6) =="
+  echo "ttv-tui-window.exe loads libmpv-2.dll as a shared library: you may replace it with a"
+  echo "compatible modified version of the library."
   echo
   echo "== MSYS2 UCRT64 Packages =="
   echo "The other DLLs in this folder (SDL3.dll and libiconv-2.dll) come unchanged from"

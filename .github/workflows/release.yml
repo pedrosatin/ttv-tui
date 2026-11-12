@@ -44,6 +44,8 @@ jobs:
           path: dist-window/
 
   # Windows has no system SDL3 or libmpv. The zip carries the official LGPL libmpv-2.dll and MSYS2 runtime DLLs.
+  # The MSYS2 mpv package stays installed so this job matches the CI job that tests the script; the script
+  # makes pkg-config resolve the official mpv.pc and fails otherwise.
   window-windows:
     name: Window binary (Windows)
     runs-on: windows-latest
@@ -60,6 +62,7 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-sdl3
+            mingw-w64-ucrt-x86_64-mpv
             mingw-w64-ucrt-x86_64-ntldd
             unzip
             zip
