@@ -454,7 +454,10 @@ func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int
 	return lines
 }
 
-func (m Model) headerLine() string {
+// headerLine is the list header within maxWidth cells. With the list focused
+// the title is cut before the focus tag is added, so a long category name never
+// pushes the tag out of the line.
+func (m Model) headerLine(maxWidth int) string {
 	var title string
 	switch m.Mode() {
 	case ModeChannels:
@@ -479,7 +482,12 @@ func (m Model) headerLine() string {
 
 	if m.chatColumnVisible() && m.listVisible() {
 		if m.Focus() == FocusList {
-			return "▸ " + title + " " + m.t("focus.active_tag")
+			tag := " " + m.t("focus.active_tag")
+			room := maxWidth - ansi.StringWidth("▸ ") - ansi.StringWidth(tag)
+			if maxWidth > 0 && room > 0 {
+				title = fitListRow(title, room)
+			}
+			return "▸ " + title + tag
 		}
 		return "  " + title
 	}
@@ -498,7 +506,7 @@ func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
 }
 
 func (m Model) renderBodyLines(maxWidth int) []string {
-	header := fitListRow(m.headerLine(), maxWidth)
+	header := fitListRow(m.headerLine(maxWidth), maxWidth)
 	if m.chatColumnVisible() && m.listVisible() && m.Focus() == FocusList {
 		header = styleFocus(header)
 	}

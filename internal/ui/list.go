@@ -1008,6 +1008,12 @@ func (m Model) shouldLoadNextPage() bool {
 	if m.Mode() == ModeSearch {
 		return false
 	}
+	if m.list.softErr() {
+		// The site refused the last page. Scrolling must not ask it again on
+		// every key (a held key would hammer the wall that blocked the app);
+		// "r" is the way to try again, as the notice says.
+		return false
+	}
 	ids := m.visibleItemIDs()
 	if len(ids) == 0 {
 		return false

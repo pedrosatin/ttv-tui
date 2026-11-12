@@ -564,9 +564,13 @@ func TestBlockedCatalog_ThePlayerKeepsTheBar(t *testing.T) {
 func TestBlockedCatalog_ARefusedNextPageKeepsTheLoadedRows(t *testing.T) {
 	var mu sync.Mutex
 	blocked := false
+	nextPageAsks := 0
 	kick := &fakeSource{categoriesFn: func(_ context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 		mu.Lock()
 		defer mu.Unlock()
+		if page.Cursor != "" {
+			nextPageAsks++
+		}
 		if page.Cursor != "" && blocked {
 			return catalog.Page[catalog.Category]{}, kickBlocked()
 		}
@@ -598,12 +602,32 @@ func TestBlockedCatalog_ARefusedNextPageKeepsTheLoadedRows(t *testing.T) {
 		t.Fatalf("highlight = %+v (ok=%v), want Second", it, ok)
 	}
 
-	// The same key asks again once the site answers.
+	// Scrolling at the last row does not ask the site again: a held key would
+	// send one request per refusal to the wall that blocked the app.
+	for range 10 {
+		m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyDown})
+		m = drainAll(t, m, cmd)
+	}
+	mu.Lock()
+	asks := nextPageAsks
+	mu.Unlock()
+	if asks != 1 {
+		t.Fatalf("next page asked %d times after 10 more keys, want only the refused one", asks)
+	}
+
+	// "r", as the notice says, tries again once the site answers.
 	mu.Lock()
 	blocked = false
 	mu.Unlock()
-	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyDown})
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	m = drainAll(t, m, cmd)
+	if view = ansi.Strip(m.View()); strings.Contains(view, "unavailable") {
+		t.Fatalf("after r:\n%s", view)
+	}
+	for range 3 {
+		m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyDown})
+		m = drainAll(t, m, cmd)
+	}
 	if view = ansi.Strip(m.View()); !strings.Contains(view, "Third") || strings.Contains(view, "unavailable") {
 		t.Fatalf("after the page came:\n%s", view)
 	}
@@ -716,5 +740,36 @@ func TestListHeader_NamesThePlatformAt80Columns(t *testing.T) {
 		}
 		bar := ansi.Strip(m.StatusBar())
 		assertStatusWidth(t, bar, 80)
+	}
+}
+
+// At 80 columns the "Kick · " prefix and a long category name used to push the
+// focus tag out of the list header. The title is cut first; the tag stays.
+func TestListHeader_KeepsTheFocusTagWithALongTitle(t *testing.T) {
+	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+		tw, kick := twitchCatalog(), kickCatalog()
+		kick.category = append(kick.category, catalog.Category{ID: "8", Name: "原神 Genshin Impact: Version 9 Special Program Watch Party", Viewers: catalog.IntPtr(153523)})
+		m := twoPlatforms(t, lang, tw, kick, WithChat(&fakeChat{}))
+		m = openFirst(t, resize(m, 80, 24))
+		m = pressP(t, m)
+		for range 3 {
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyDown})
+		}
+		m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+		m = drainAll(t, m, cmd)
+		if cat := m.SelectedCategory(); m.Mode() != ModeChannels || cat == nil || cat.ID != "8" {
+			t.Fatalf("%s: mode %q category %+v", lang, m.Mode(), cat)
+		}
+		if m.Focus() != FocusList || !m.chatColumnVisible() || !m.listVisible() {
+			t.Fatalf("%s: focus %v, chat %v, list %v; want the list focused next to the chat", lang, m.Focus(), m.chatColumnVisible(), m.listVisible())
+		}
+		listW, _ := m.panelWidths()
+		tag := m.t("focus.active_tag")
+		for _, width := range []int{listW, 30} {
+			header := m.headerLine(width)
+			if !strings.HasSuffix(header, tag) || ansi.StringWidth(header) > width {
+				t.Errorf("%s: headerLine(%d) = %q (%d cells), want it to end in %q within the width", lang, width, header, ansi.StringWidth(header), tag)
+			}
+		}
 	}
 }
