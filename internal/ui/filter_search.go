@@ -112,7 +112,7 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// A pasted stream URL opens immediately; otherwise with no local match,
 		// Enter runs the same global search as Ctrl+F. With matches, Enter still opens
 		// the highlighted item.
-		if streamurl.IsStreamURL(m.list.filter) || m.filterHasNoMatches() {
+		if streamurl.IsStreamURL(strings.TrimSpace(m.list.filter)) || m.filterHasNoMatches() {
 			return m.startSearch(m.list.filter)
 		}
 		m.list.filtering = false

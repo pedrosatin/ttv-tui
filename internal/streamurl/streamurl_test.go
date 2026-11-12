@@ -163,6 +163,38 @@ func TestParse(t *testing.T) {
 			wantTwitch: false,
 		},
 		{
+			name:       "Kick VOD keeps the whole path apart from the live channel",
+			input:      "https://kick.com/xqc/videos/AbC-123",
+			wantOK:     true,
+			wantPlat:   platform.Kick,
+			wantLogin:  "xqc/videos/abc-123",
+			wantLabel:  "kick:xqc/videos/abc-123",
+			wantTwitch: false,
+		},
+		{
+			name:       "Kick clip query is part of the identity",
+			input:      "https://kick.com/xqc?clip=CLIP_1",
+			wantOK:     true,
+			wantPlat:   platform.Kick,
+			wantLogin:  "xqc/clip/clip_1",
+			wantLabel:  "kick:xqc/clip/clip_1",
+			wantTwitch: false,
+		},
+		{
+			name:       "Facebook live link is identified by its v parameter",
+			input:      "https://www.facebook.com/watch/live/?v=111",
+			wantOK:     true,
+			wantPlat:   "facebook.com",
+			wantLogin:  "111",
+			wantLabel:  "facebook.com:111",
+			wantTwitch: false,
+		},
+		{
+			name:   "Twitch reserved dashboard",
+			input:  "https://www.twitch.tv/dashboard",
+			wantOK: false,
+		},
+		{
 			name:   "Kick bare domain without slug is rejected",
 			input:  "https://kick.com/",
 			wantOK: false,
@@ -233,8 +265,8 @@ func TestParse(t *testing.T) {
 			input:      "https://www.facebook.com/gaming/streamer",
 			wantOK:     true,
 			wantPlat:   "facebook.com",
-			wantLogin:  "streamer",
-			wantLabel:  "facebook.com:streamer",
+			wantLogin:  "gaming/streamer",
+			wantLabel:  "facebook.com:gaming/streamer",
 			wantTwitch: false,
 		},
 		{
@@ -242,8 +274,8 @@ func TestParse(t *testing.T) {
 			input:      "http://example.com/live/feed.m3u8",
 			wantOK:     true,
 			wantPlat:   "example.com",
-			wantLogin:  "feed.m3u8",
-			wantLabel:  "example.com:feed.m3u8",
+			wantLogin:  "live/feed.m3u8",
+			wantLabel:  "example.com:live/feed.m3u8",
 			wantTwitch: false,
 		},
 		{
@@ -345,5 +377,23 @@ func TestIsStreamURL(t *testing.T) {
 	}
 	if IsStreamURL("just chatting") {
 		t.Error("expected false for plain query")
+	}
+}
+
+func TestParseDistinctStreamsDoNotShareIdentity(t *testing.T) {
+	pairs := [][2]string{
+		{"https://www.facebook.com/watch/live/?v=111", "https://www.facebook.com/watch/live/?v=222"},
+		{"https://kick.com/foo/clips", "https://kick.com/bar/clips"},
+		{"https://kick.com/xqc", "https://kick.com/xqc/videos/abc"},
+	}
+	for _, p := range pairs {
+		a, okA := Parse(p[0])
+		b, okB := Parse(p[1])
+		if !okA || !okB {
+			t.Fatalf("Parse(%q)=%v, Parse(%q)=%v, want both ok", p[0], okA, p[1], okB)
+		}
+		if a.Label == b.Label || a.Login == b.Login {
+			t.Errorf("%q and %q share identity %q/%q", p[0], p[1], a.Label, a.Login)
+		}
 	}
 }

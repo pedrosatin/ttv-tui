@@ -43,6 +43,9 @@ var twitchReservedPaths = map[string]bool{
 	"manager":       true,
 	"friends":       true,
 	"messages":      true,
+	"dashboard":     true,
+	"bits":          true,
+	"following":     true,
 }
 
 func isTwitchReserved(segment string) bool {
@@ -102,17 +105,24 @@ func Parse(raw string) (Info, bool) {
 		}, true
 
 	case "kick.com", "www.kick.com", "m.kick.com":
-		slug := cleanSlug(u.Path)
-		if slug == "" {
+		// The whole path is the identity: kick.com/xqc is the live channel, while
+		// kick.com/xqc/videos/<id> and kick.com/xqc/clips/<id> are other streams
+		// that must not share its recents entry or player session.
+		segs := pathSegments(u.Path)
+		if len(segs) == 0 {
 			return Info{}, false
 		}
-		slug = strings.ToLower(slug)
+		id := strings.ToLower(strings.Join(segs, "/"))
+		if clip := u.Query().Get("clip"); clip != "" {
+			id += "/clip/" + strings.ToLower(clip)
+		}
+		channel := strings.ToLower(segs[0])
 		return Info{
 			URL:         raw,
 			Platform:    platform.Kick,
-			Login:       slug,
-			DisplayName: slug,
-			Label:       fmt.Sprintf("%s:%s", platform.Kick, slug),
+			Login:       id,
+			DisplayName: channel,
+			Label:       fmt.Sprintf("%s:%s", platform.Kick, id),
 			IsTwitch:    false,
 		}, true
 
@@ -148,17 +158,28 @@ func Parse(raw string) (Info, bool) {
 		}, true
 
 	default:
+		// An unknown site gives no channel concept, so the identity is the "v"
+		// query parameter when present (facebook.com/watch/live/?v=<id>) or else
+		// the whole path. Using only the last segment made different streams
+		// such as two ".../watch/live/?v=" links collide.
 		genericPlat := strings.TrimPrefix(host, "www.")
-		slug := cleanSlug(u.Path)
-		if slug == "" {
-			slug = genericPlat
+		id := u.Query().Get("v")
+		if id == "" {
+			id = strings.Join(pathSegments(u.Path), "/")
+		}
+		if id == "" {
+			id = genericPlat
+		}
+		display := cleanSlug(u.Path)
+		if display == "" {
+			display = id
 		}
 		return Info{
 			URL:         raw,
 			Platform:    genericPlat,
-			Login:       slug,
-			DisplayName: slug,
-			Label:       fmt.Sprintf("%s:%s", genericPlat, slug),
+			Login:       id,
+			DisplayName: display,
+			Label:       fmt.Sprintf("%s:%s", genericPlat, id),
 			IsTwitch:    false,
 		}, true
 	}
@@ -168,6 +189,17 @@ func Parse(raw string) (Info, bool) {
 func IsStreamURL(raw string) bool {
 	_, ok := Parse(raw)
 	return ok
+}
+
+// pathSegments returns the non-empty segments of a URL path.
+func pathSegments(path string) []string {
+	var out []string
+	for _, p := range strings.Split(path, "/") {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // cleanSlug extracts a single identifier from a URL path.
