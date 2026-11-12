@@ -151,6 +151,16 @@ jobs:
           if ($p.ExitCode -eq -1073741515) { throw 'A DLL is missing from the zip (STATUS_DLL_NOT_FOUND).' }
           if ($p.ExitCode -eq -1073741511) { throw 'A DLL in the zip lacks an entry point (STATUS_ENTRYPOINT_NOT_FOUND).' }
 
+      # Lets a branch be tried on a real Windows before a release has the zip.
+      - name: Upload the Windows zip
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ttv-tui-window-windows
+          path: dist-window/ttv-tui-window.zip
+          if-no-files-found: error
+          retention-days: 7
+
   # Proves on every push that the app and its tests compile on each OS, and that
   # the suite runs there. The suite needs neither mpv nor streamlink; only the
   # Windows handshake step below uses a real mpv.
