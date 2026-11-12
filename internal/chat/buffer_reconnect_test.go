@@ -96,18 +96,3 @@ func TestBuffer_ReplayOfEvictedMessagesDoesNotRotateHistory(t *testing.T) {
 		}
 	}
 }
-
-func TestBuffer_RememberedIDsStayBounded(t *testing.T) {
-	const limit = 3
-	b := NewBuffer(limit, 4096)
-	b.SetGeneration(1)
-	for i := range 100 {
-		b.Append(bufferMsg(1, fmt.Sprintf("m%d", i)))
-	}
-	if b.SeenLen() != 2*limit || b.SeenRingLen() != 2*limit {
-		t.Fatalf("seen=%d ring=%d, want %d", b.SeenLen(), b.SeenRingLen(), 2*limit)
-	}
-	if !b.Append(bufferMsg(1, "m0")) {
-		t.Fatal("an ID past the memory must be accepted")
-	}
-}

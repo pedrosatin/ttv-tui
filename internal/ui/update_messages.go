@@ -169,8 +169,7 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 	m.list.selectedChannel = &selected
 	m.clearStaleStatusErrors()
 
-	isNonTwitch := platform.IsNonTwitch(selected.Platform)
-	if isNonTwitch && strings.TrimSpace(selected.URL) == "" {
+	if platform.IsNonTwitch(selected.Platform) && strings.TrimSpace(selected.URL) == "" {
 		m.warnStatus(m.t("player.warn.missing_url"))
 		return m, nil
 	}
@@ -203,13 +202,17 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		m.player.stopAfterStart = false
 		cmds = append(cmds, m.playback.StartTarget(target, m.player.selection))
 	}
-	if isNonTwitch {
-		if m.chat.session != nil {
-			cmds = append(cmds, m.chat.session.Stop())
-		}
-		m.setChatUnsupported(selected.Login)
+	// Only a platform without a chat gets the "unsupported" panel; one with a
+	// read-only chat still joins it and its capabilities hide the input.
+	hasChat := true
+	if m.chat.session != nil {
+		_, hasChat = m.chat.session.Capabilities(selected)
+	}
+	if !hasChat {
+		cmds = append(cmds, m.chat.session.Stop())
+		m.setChatUnsupported(selected)
 	} else if m.chat.session != nil || m.chat.panel.channel != "" {
-		if chatCmd := m.startChatChannel(selected.Login); chatCmd != nil {
+		if chatCmd := m.startChatChannel(selected); chatCmd != nil {
 			cmds = append(cmds, chatCmd)
 		}
 	}

@@ -209,7 +209,7 @@ func (r *rateLimiter) Record(channel string) {
 // FormatPrivMsg builds the wire-formatted IRCv3 PRIVMSG command including client-nonce.
 func FormatPrivMsg(channel, nonce, body string) string {
 	ch := normalizeChannel(channel)
-	clean := sanitizeOutboundBody(body)
+	clean := catalog.SanitizeOutboundBody(body)
 	if nonce != "" {
 		return fmt.Sprintf("@client-nonce=%s PRIVMSG #%s :%s\r\n", sanitizeTagToken(nonce), ch, clean)
 	}
@@ -222,19 +222,6 @@ func FormatPrivMsg(channel, nonce, body string) string {
 // Only the start of the message counts, judged on the text that goes on the wire.
 func IsBlockedCommand(body string) bool {
 	return catalog.IsBlockedCommand(body)
-}
-
-func sanitizeOutboundBody(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		if r == '\r' || r == '\n' || r == 0 {
-			b.WriteByte(' ')
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return strings.TrimSpace(b.String())
 }
 
 func sanitizeTagToken(s string) string {

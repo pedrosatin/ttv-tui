@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 )
@@ -89,10 +90,10 @@ func TestChatJoinsKeepSelectionOrder(t *testing.T) {
 		},
 	})
 	t.Cleanup(mgr.Close)
-	b := newChatBridge(mgr)
+	b := newTwitchChatBridge(t, mgr)
 
-	joinX := b.Join("xqc")
-	joinY := b.Join("gaules")
+	joinX := b.Join(catalog.Channel{Login: "xqc"})
+	joinY := b.Join(catalog.Channel{Login: "gaules"})
 	joinY()
 	joinX()
 

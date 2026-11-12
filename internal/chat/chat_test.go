@@ -908,7 +908,7 @@ func TestManager_AnonymousHandshakeAndExactPong(t *testing.T) {
 	})
 	defer mgr.Close()
 
-	gen, err := mgr.Join("Gaules")
+	gen, err := mgr.JoinLogin("Gaules")
 	if err != nil {
 		t.Fatalf("Join: %v", err)
 	}
@@ -982,7 +982,7 @@ func TestManager_AuthenticatedHandshake(t *testing.T) {
 	})
 	defer mgr.Close()
 
-	if _, err := mgr.Join("#alanzoka"); err != nil {
+	if _, err := mgr.JoinLogin("#alanzoka"); err != nil {
 		t.Fatalf("Join: %v", err)
 	}
 
@@ -1053,7 +1053,7 @@ func TestManager_ReconnectOnDisconnectAndServerReconnectAndCancelOnSwitch(t *tes
 	})
 	defer mgr.Close()
 
-	gen1, err := mgr.Join("chanA")
+	gen1, err := mgr.JoinLogin("chanA")
 	if err != nil || gen1 != 1 {
 		t.Fatalf("Join(chanA) = %d, %v", gen1, err)
 	}
@@ -1096,7 +1096,7 @@ func TestManager_ReconnectOnDisconnectAndServerReconnectAndCancelOnSwitch(t *tes
 
 switchChannel:
 	// Switch to chanB while chanA is waiting in backoff: cancels chanA immediately and connects chanB.
-	gen2, err := mgr.Join("chanB")
+	gen2, err := mgr.JoinLogin("chanB")
 	if err != nil || gen2 != 2 {
 		t.Fatalf("Join(chanB) = %d, %v", gen2, err)
 	}
@@ -1276,7 +1276,7 @@ func TestManager_SendRateLimitQueueAndExcessDiscardWithFakeIRC(t *testing.T) {
 	})
 	defer mgr.Close()
 
-	gen, err := mgr.Join("gaules")
+	gen, err := mgr.JoinLogin("gaules")
 	if err != nil {
 		t.Fatalf("Join: %v", err)
 	}
@@ -1405,7 +1405,7 @@ func TestManager_ChannelSwitchDiscardsPendingAndNeverSendsToNewChannel(t *testin
 	})
 	defer mgr.Close()
 
-	gen1, err := mgr.Join("gaules")
+	gen1, err := mgr.JoinLogin("gaules")
 	if err != nil {
 		t.Fatalf("Join(gaules): %v", err)
 	}
@@ -1435,7 +1435,7 @@ func TestManager_ChannelSwitchDiscardsPendingAndNeverSendsToNewChannel(t *testin
 	waitForTimerRegistration(t, clk)
 
 	// Switch to #alanzoka before the 1s timer fires!
-	gen2, err := mgr.Join("alanzoka")
+	gen2, err := mgr.JoinLogin("alanzoka")
 	if err != nil {
 		t.Fatalf("Join(alanzoka): %v", err)
 	}
@@ -1521,7 +1521,7 @@ func TestManager_ConfirmAndNoticeRejectReasons(t *testing.T) {
 	})
 	defer mgr.Close()
 
-	gen, err := mgr.Join("gaules")
+	gen, err := mgr.JoinLogin("gaules")
 	if err != nil {
 		t.Fatalf("Join: %v", err)
 	}
@@ -1670,7 +1670,7 @@ func TestManager_RoomStateInitialAndIncrementalMerge(t *testing.T) {
 	})
 	defer mgr.Close()
 
-	gen, err := mgr.Join("gaules")
+	gen, err := mgr.JoinLogin("gaules")
 	if err != nil {
 		t.Fatalf("Join: %v", err)
 	}
@@ -1742,7 +1742,7 @@ func TestManager_UserNoticeResubWithAndWithoutText(t *testing.T) {
 	})
 	defer mgr.Close()
 
-	gen, err := mgr.Join("gaules")
+	gen, err := mgr.JoinLogin("gaules")
 	if err != nil {
 		t.Fatalf("Join: %v", err)
 	}

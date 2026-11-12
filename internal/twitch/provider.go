@@ -15,11 +15,20 @@ type Provider struct {
 	chat   catalog.Chat
 }
 
-// NewProvider returns a Twitch provider backed by the given catalog source and optional chat.
-func NewProvider(source catalog.Source, chat ...catalog.Chat) *Provider {
+// ProviderOption configures a Provider.
+type ProviderOption func(*Provider)
+
+// WithChat attaches the chat implementation the provider returns from Chat.
+func WithChat(c catalog.Chat) ProviderOption {
+	return func(p *Provider) { p.chat = c }
+}
+
+// NewProvider returns a Twitch provider backed by the given catalog source.
+// Without WithChat the provider has no chat.
+func NewProvider(source catalog.Source, opts ...ProviderOption) *Provider {
 	p := &Provider{source: source}
-	if len(chat) > 0 {
-		p.chat = chat[0]
+	for _, opt := range opts {
+		opt(p)
 	}
 	return p
 }

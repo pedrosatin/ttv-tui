@@ -18,7 +18,7 @@ import (
 )
 
 // ErrAuthentication marks a refused chat login or incomplete credentials.
-var ErrAuthentication = errors.New("chat: authentication failed")
+var ErrAuthentication = catalog.ErrChatAuthentication
 
 // DefaultAddr is the production Twitch IRC over TLS endpoint.
 const DefaultAddr = "irc.chat.twitch.tv:6697"
@@ -66,7 +66,7 @@ type DialFunc func(ctx context.Context, addr string) (net.Conn, error)
 // Options configures a chat Manager. Zero values select production defaults.
 //
 // Channel Switching Strategy:
-// Calling Join(login) increments the session generation, cancels the previous
+// Calling JoinLogin(login) increments the session generation, cancels the previous
 // session's context and closes its underlying connection immediately, and spawns
 // a fresh isolated session for the new channel. This guarantees that buffered
 // lines or late events from the old channel cannot leak into the new channel.
@@ -91,6 +91,8 @@ type Options struct {
 	Now            func() time.Time
 	After          func(d time.Duration) <-chan time.Time
 }
+
+var _ catalog.Chat = (*Manager)(nil)
 
 // Manager supervises at most one active channel chat session at a time.
 type Manager struct {
@@ -238,7 +240,7 @@ func (m *Manager) NextNonce() string {
 //  4. If the 20 msgs / 30s window or queue capacity is exceeded, the excess message
 //     is discarded with RejectRateLimited rather than queued unboundedly.
 func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
-	body := sanitizeOutboundBody(req.Body)
+	body := catalog.SanitizeOutboundBody(req.Body)
 	if body == "" {
 		return SendStatusUpdate{}, ErrEmptyMessage
 	}
@@ -364,10 +366,23 @@ func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
 	}, nil
 }
 
-// Join cancels any previous session (including any pending reconnect backoff),
-// increments the generation counter, discards any unsent messages from the old
-// channel, and starts a new session for channelLogin.
-func (m *Manager) Join(channelLogin string) (uint64, error) {
+// Join starts the session for the Twitch channel ch. IRC wants the login in
+// lower case without "#", so that normalization lives here and not in callers.
+func (m *Manager) Join(ctx context.Context, ch catalog.Channel) (uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("chat: join canceled: %w", err)
+	}
+	login := ch.Login
+	if login == "" {
+		login = ch.StableID()
+	}
+	return m.JoinLogin(login)
+}
+
+// JoinLogin cancels any previous session (including any pending reconnect
+// backoff), increments the generation counter, discards any unsent messages
+// from the old channel, and starts a new session for channelLogin.
+func (m *Manager) JoinLogin(channelLogin string) (uint64, error) {
 	ch := normalizeChannel(channelLogin)
 	if ch == "" {
 		return 0, fmt.Errorf("chat: empty channel login")
@@ -472,7 +487,7 @@ func (m *Manager) Reconnect() (uint64, error) {
 	if ch == "" {
 		return 0, fmt.Errorf("chat: no active channel to reconnect")
 	}
-	return m.Join(ch)
+	return m.JoinLogin(ch)
 }
 
 // Stop cancels the active session and waits for its goroutine to exit.

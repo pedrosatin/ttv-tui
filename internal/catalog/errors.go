@@ -3,6 +3,7 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 )
 
@@ -64,4 +65,19 @@ func KindOf(err error) ErrorKind {
 		return ce.Kind
 	}
 	return ""
+}
+
+// HTTPStatusKind classifies the HTTP status of a response the caller already
+// treats as a failure: 429 is RateLimit, 5xx is Servidor, and any other status
+// is Contrato (the platform answered something the adapter did not expect).
+// Network failures with no response are Rede and never reach this function.
+func HTTPStatusKind(status int) ErrorKind {
+	switch {
+	case status == http.StatusTooManyRequests:
+		return RateLimit
+	case status >= http.StatusInternalServerError:
+		return Servidor
+	default:
+		return Contrato
+	}
 }

@@ -8,10 +8,16 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 type fakeChat struct {
-	joined      []string
+	joined []string
+	// joinedChannels holds the channels exactly as Join received them.
+	joinedChannels []catalog.Channel
+	// platforms declares the chats served besides Twitch, by platform id. A
+	// platform that is neither Twitch nor listed has no chat.
+	platforms   map[string]catalog.ChatCapabilities
 	reconnected int
 	stopped     int
 	hasToken    bool
@@ -20,11 +26,18 @@ type fakeChat struct {
 	sent        []ChatSendRequest
 }
 
-func (f *fakeChat) Capabilities() catalog.ChatCapabilities {
-	if f.caps != nil {
-		return *f.caps
+func (f *fakeChat) Capabilities(ch catalog.Channel) (catalog.ChatCapabilities, bool) {
+	plat := platform.Normalize(ch.Platform)
+	if caps, ok := f.platforms[plat]; ok {
+		return caps, true
 	}
-	return catalog.TwitchChatCapabilities
+	if plat != platform.Twitch {
+		return catalog.ChatCapabilities{}, false
+	}
+	if f.caps != nil {
+		return *f.caps, true
+	}
+	return catalog.TwitchChatCapabilities, true
 }
 
 func (f *fakeChat) HasToken() bool {
@@ -35,12 +48,16 @@ func (f *fakeChat) Username() string {
 	return f.username
 }
 
-func (f *fakeChat) Join(login string) tea.Cmd {
+func (f *fakeChat) Join(ch catalog.Channel) tea.Cmd {
+	login := chatChannelName(ch)
 	f.joined = append(f.joined, login)
+	f.joinedChannels = append(f.joinedChannels, ch)
 	gen := uint64(len(f.joined))
+	plat := platform.Normalize(ch.Platform)
 	return func() tea.Msg {
 		return ChatEventMsg{
 			Generation: gen,
+			Platform:   plat,
 			Channel:    login,
 			State:      ChatStateConnecting,
 			Anonymous:  !f.hasToken,

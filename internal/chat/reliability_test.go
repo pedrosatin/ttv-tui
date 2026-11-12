@@ -27,7 +27,7 @@ func TestReliabilitySilentServer(t *testing.T) {
 	srv.handlers <- func(conn net.Conn) { defer func() { _ = conn.Close() }(); _, _ = io.Copy(io.Discard, conn) }
 	mgr := New(reliabilityOptions(srv))
 	defer mgr.Close()
-	gen, err := mgr.Join("test")
+	gen, err := mgr.JoinLogin("test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestReliabilityHealthyServer(t *testing.T) {
 			}
 			mgr := New(reliabilityOptions(srv))
 			defer mgr.Close()
-			gen, err := mgr.Join("test")
+			gen, err := mgr.JoinLogin("test")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,7 +105,7 @@ func TestReliabilitySendWithoutEcho(t *testing.T) {
 	opts.Username = "tester"
 	mgr := New(opts)
 	defer mgr.Close()
-	gen, err := mgr.Join("test")
+	gen, err := mgr.JoinLogin("test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestReliabilityHealthySimulatedDay(t *testing.T) {
 			}()
 			return client, nil
 		}})
-		gen, err := mgr.Join("test")
+		gen, err := mgr.JoinLogin("test")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -214,7 +214,7 @@ func TestReliabilityBlockedWriteAndNoReplay(t *testing.T) {
 				}()
 				return client, nil
 			}})
-		gen, err := mgr.Join("test")
+		gen, err := mgr.JoinLogin("test")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"context"
 	"testing"
 )
 
@@ -56,8 +57,8 @@ func (m *readOnlyMockChat) Capabilities() ChatCapabilities {
 	return ReadOnlyChatCapabilities
 }
 
-func (m *readOnlyMockChat) Join(channel string) (uint64, error) {
-	m.channel = channel
+func (m *readOnlyMockChat) Join(_ context.Context, ch Channel) (uint64, error) {
+	m.channel = ch.ID
 	m.gen++
 	m.stopped = false
 	return m.gen, nil
@@ -106,7 +107,7 @@ func TestReadOnlyMockChat_Contract(t *testing.T) {
 		t.Fatal("read-only chat must declare CanSend = false")
 	}
 
-	gen, err := chat.Join("streamer")
+	gen, err := chat.Join(context.Background(), Channel{ID: "streamer", Platform: "kick"})
 	if err != nil || gen != 1 {
 		t.Fatalf("Join failed: gen=%d err=%v", gen, err)
 	}
@@ -121,4 +122,21 @@ func TestReadOnlyMockChat_Contract(t *testing.T) {
 
 	chat.Stop()
 	chat.Close()
+}
+
+func TestHTTPStatusKind(t *testing.T) {
+	for status, want := range map[int]ErrorKind{
+		429: RateLimit,
+		500: Servidor,
+		503: Servidor,
+		599: Servidor,
+		400: Contrato,
+		401: Contrato,
+		404: Contrato,
+		302: Contrato,
+	} {
+		if got := HTTPStatusKind(status); got != want {
+			t.Errorf("HTTPStatusKind(%d) = %q, want %q", status, got, want)
+		}
+	}
 }

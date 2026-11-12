@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -277,10 +278,14 @@ func (c chatState) draftRuneCount() int {
 }
 
 func (c chatState) draftOverLimit() bool {
-	return utf8.RuneCountInString(strings.TrimSpace(c.composeDraft)) > c.maxRuneLength()
+	limit := c.maxRuneLength()
+	return limit > 0 && utf8.RuneCountInString(strings.TrimSpace(c.composeDraft)) > limit
 }
 
 func (m Model) composeCounterLabel() string {
+	if m.chat.maxRuneLength() == 0 {
+		return strconv.Itoa(m.chat.draftRuneCount())
+	}
 	return fmt.Sprintf(m.t("chat.input.counter"), m.chat.draftRuneCount(), m.chat.maxRuneLength())
 }
 

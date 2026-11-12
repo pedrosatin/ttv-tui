@@ -79,7 +79,7 @@ func startUserNoticeSession(t *testing.T, lines ...string) (*Manager, uint64) {
 
 	mgr := New(Options{Addr: srv.Addr(), Dial: srv.Dial, CoalesceInterval: 10 * time.Millisecond})
 	t.Cleanup(mgr.Close)
-	gen, err := mgr.Join("gaules")
+	gen, err := mgr.JoinLogin("gaules")
 	if err != nil {
 		t.Fatalf("Join: %v", err)
 	}

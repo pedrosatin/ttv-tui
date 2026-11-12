@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 // ChatState describes the UI-facing state of the active chat session.
@@ -38,7 +39,13 @@ type ChatSendStatusUpdate = catalog.ChatSendStatusUpdate
 // session changes state, updates ROOMSTATE, updates outbound message status,
 // or flushes a batch of messages.
 type ChatEventMsg struct {
-	Generation  uint64
+	// Generation numbers the sessions across every platform: the bridge hands
+	// out one monotonic sequence, so a larger value is always a newer session.
+	Generation uint64
+	// Platform is the platform whose chat produced the event. Empty means the
+	// default platform; an event from a platform other than the panel's is
+	// stale and dropped.
+	Platform    string
 	Channel     string
 	State       ChatState
 	Anonymous   bool
@@ -56,16 +63,22 @@ type ChatEventMsg struct {
 	FromJoin    bool
 }
 
-// Chat is the UI->app bridge for managing the active channel chat session.
+// Chat is the UI->app bridge for managing the active channel chat session. It
+// fronts the chats of every platform: each call goes to the chat of the
+// platform of the channel, and the events of all of them arrive as ChatEventMsg.
 type Chat interface {
-	Capabilities() catalog.ChatCapabilities
-	Join(login string) tea.Cmd
+	// Capabilities reports what the chat of ch's platform can do. The bool is
+	// false when the platform has no chat at all.
+	Capabilities(ch catalog.Channel) (catalog.ChatCapabilities, bool)
+	// Join opens the chat of ch, stopping the one that was active.
+	Join(ch catalog.Channel) tea.Cmd
 	Reconnect() tea.Cmd
 	Stop() tea.Cmd
 }
 
-// ChatSender is an optional extension of Chat that supports sending PRIVMSG
-// with rate limiting and authentication status inspection.
+// ChatSender is an optional extension of Chat that supports sending messages
+// with rate limiting and authentication status inspection. HasToken and
+// Username describe the chat of the channel joined last.
 type ChatSender interface {
 	Send(req ChatSendRequest) tea.Cmd
 	HasToken() bool
@@ -76,9 +89,6 @@ type ChatSender interface {
 func WithChat(c Chat) Option {
 	return func(m *Model) {
 		m.chat.session = c
-		if c != nil {
-			m.chat.panel.caps = c.Capabilities()
-		}
 		if sender, ok := c.(ChatSender); ok {
 			m.chat.panel.anonymous = !sender.HasToken()
 			m.chat.panel.username = sender.Username()
@@ -87,10 +97,13 @@ func WithChat(c Chat) Option {
 }
 
 type chatPanel struct {
-	buf         *catalog.ChatBuffer
-	gen         uint64
-	switching   bool
-	state       ChatState
+	buf       *catalog.ChatBuffer
+	gen       uint64
+	switching bool
+	state     ChatState
+	// platform and channel name the room: channel alone is ambiguous, since
+	// twitch:foo and kick:foo are different rooms.
+	platform    string
 	channel     string
 	anonymous   bool
 	username    string
@@ -126,12 +139,15 @@ func newChatPanel() chatPanel {
 	}
 }
 
-func (m *Model) setChatUnsupported(channel string) {
+// setChatUnsupported shows the panel of a platform that has no chat.
+func (m *Model) setChatUnsupported(ch catalog.Channel) {
 	if m.chat.panel.buf == nil {
 		m.chat.panel = newChatPanel()
 	}
+	plat := platform.Normalize(ch.Platform)
 	m.chat.panel.buf.Clear()
-	m.chat.panel.channel = channel
+	m.chat.panel.platform = plat
+	m.chat.panel.channel = normalizeChatChannel(plat, chatChannelName(ch))
 	m.chat.panel.unsupported = true
 	m.chat.panel.hasChat = false
 	m.chat.panel.caps = catalog.ChatCapabilities{}
@@ -142,11 +158,9 @@ func (m *Model) setChatUnsupported(channel string) {
 	m.chat.composing = false
 }
 
+// maxRuneLength is the message limit of the active chat; 0 means no limit.
 func (c chatState) maxRuneLength() int {
-	if c.panel.caps.MaxMessageLength > 0 {
-		return c.panel.caps.MaxMessageLength
-	}
-	return 500
+	return max(c.panel.caps.MaxMessageLength, 0)
 }
 
 func (c chatState) hasToken() bool {
@@ -171,25 +185,98 @@ func (c chatState) hasPendingOutgoing() bool {
 	return false
 }
 
-func (m *Model) startChatChannel(login string) tea.Cmd {
-	norm := normalizeChatChannel(login)
+// chatChannelName is the name the panel shows for ch: its login, or the
+// identifier it is known by on its platform when it has no login.
+func chatChannelName(ch catalog.Channel) string {
+	if ch.Login != "" {
+		return ch.Login
+	}
+	return ch.StableID()
+}
+
+// normalizeChatChannel brings a chat room name to the form the panel compares.
+// Only Twitch folds case and drops the IRC "#": on the other platforms the name
+// is an identifier (a YouTube video id is case-sensitive).
+func normalizeChatChannel(plat, name string) string {
+	name = strings.TrimSpace(name)
+	if platform.IsTwitch(plat) {
+		return strings.ToLower(strings.TrimPrefix(name, "#"))
+	}
+	return name
+}
+
+// sameChatChannel reports whether a and b name the same room on plat.
+func sameChatChannel(plat, a, b string) bool {
+	a, b = normalizeChatChannel(plat, a), normalizeChatChannel(plat, b)
+	if platform.Normalize(plat) == platform.YouTube {
+		return a == b
+	}
+	return strings.EqualFold(a, b)
+}
+
+// chatRoomKey names a chat room across platforms: twitch/foo and kick/foo are
+// different rooms. It is a map key, never shown.
+type chatRoomKey struct {
+	platform string
+	channel  string
+}
+
+// chatKey builds the key of a room. The name folds case except on YouTube, where
+// an identifier differing in case is another one.
+func chatKey(plat, channel string) chatRoomKey {
+	plat = platform.Normalize(plat)
+	channel = normalizeChatChannel(plat, channel)
+	if plat != platform.YouTube {
+		channel = strings.ToLower(channel)
+	}
+	return chatRoomKey{platform: plat, channel: channel}
+}
+
+// panelKey is the chatKey of the room the panel shows; ok is false when it
+// shows none.
+func (c chatState) panelKey() (key chatRoomKey, ok bool) {
+	if c.panel.channel == "" {
+		return chatRoomKey{}, false
+	}
+	return chatKey(c.panel.platform, c.panel.channel), true
+}
+
+// panelPlatform reports whether msg comes from the platform the panel shows.
+// An event with no platform is taken as the panel's.
+func (c chatState) panelPlatform(msg ChatEventMsg) bool {
+	return msg.Platform == "" || c.panel.platform == "" || platform.Normalize(msg.Platform) == platform.Normalize(c.panel.platform)
+}
+
+// panelRoom reports whether the room of msg is the one the panel shows.
+func (c chatState) panelRoom(msg ChatEventMsg) bool {
+	return c.panelPlatform(msg) && sameChatChannel(c.panel.platform, msg.Channel, c.panel.channel)
+}
+
+func (m *Model) startChatChannel(ch catalog.Channel) tea.Cmd {
+	plat := platform.Normalize(ch.Platform)
+	name := normalizeChatChannel(plat, chatChannelName(ch))
+	key := chatKey(plat, name)
 	if m.chat.panel.buf == nil {
 		m.chat.panel = newChatPanel()
 	}
-	hadPending := m.chat.hasPendingOutgoing() && m.chat.panel.channel != "" && m.chat.panel.channel != norm
+	prevKey, hadRoom := m.chat.panelKey()
+	hadPending := m.chat.hasPendingOutgoing() && hadRoom && prevKey != key
 	if m.chat.drafts == nil {
-		m.chat.drafts = make(map[string]string)
+		m.chat.drafts = make(map[chatRoomKey]string)
 	}
-	if m.chat.panel.channel != "" {
-		m.chat.drafts[m.chat.panel.channel] = m.chat.composeDraft
+	if hadRoom {
+		m.chat.drafts[prevKey] = m.chat.composeDraft
 	}
-	m.chat.composeDraft = m.chat.drafts[norm]
+	m.chat.composeDraft = m.chat.drafts[key]
 	m.chat.panel.buf.Clear()
-	m.chat.panel.channel = norm
+	m.chat.panel.platform = plat
+	m.chat.panel.channel = name
 	m.chat.panel.unsupported = false
 	m.chat.panel.hasChat = true
 	if m.chat.session != nil {
-		m.chat.panel.caps = m.chat.session.Capabilities()
+		if caps, ok := m.chat.session.Capabilities(ch); ok {
+			m.chat.panel.caps = caps
+		}
 	}
 	m.chat.panel.state = ChatStateConnecting
 	m.chat.panel.errText = ""
@@ -202,14 +289,16 @@ func (m *Model) startChatChannel(login string) tea.Cmd {
 	m.chat.panel.switching = true
 	m.chat.panel.gapPending = false
 	m.resetChatScroll()
+	if m.chat.session == nil {
+		return nil
+	}
+	// Join first: the sender answers for the chat of the channel joined last.
+	cmd := m.chat.session.Join(ch)
 	if sender, ok := m.chat.session.(ChatSender); ok {
 		m.chat.panel.anonymous = !sender.HasToken()
 		m.chat.panel.username = sender.Username()
 	}
-	if m.chat.session == nil {
-		return nil
-	}
-	return m.chat.session.Join(norm)
+	return cmd
 }
 
 func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
@@ -233,7 +322,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if utf8.RuneCountInString(body) > m.chat.maxRuneLength() {
+	if limit := m.chat.maxRuneLength(); limit > 0 && utf8.RuneCountInString(body) > limit {
 		// Keep the draft and stay in compose mode; never truncate on send.
 		m.chat.panel.sendWarning = m.t("chat.warn.too_long")
 		return m, nil
@@ -287,9 +376,15 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		m.chat.panel = newChatPanel()
 	}
 
+	// Generations are global across platforms, but a late event of another
+	// platform's chat must never reach this panel, whatever its number.
+	if !m.chat.panelPlatform(msg) {
+		return m, nil
+	}
+
 	if m.chat.panel.unsupported {
 		// Ignore events from the previous session while the panel is unsupported.
-		if msg.Generation <= m.chat.panel.gen || (msg.Channel != "" && normalizeChatChannel(msg.Channel) != m.chat.panel.channel) {
+		if msg.Generation <= m.chat.panel.gen || (msg.Channel != "" && !m.chat.panelRoom(msg)) {
 			return m, nil
 		}
 	}
@@ -315,7 +410,7 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if msg.Channel != "" {
-		m.chat.panel.channel = normalizeChatChannel(msg.Channel)
+		m.chat.panel.channel = normalizeChatChannel(m.chat.panel.platform, msg.Channel)
 	}
 	if msg.State != ChatStateNone {
 		m.chat.panel.state = msg.State
@@ -379,16 +474,12 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func normalizeChatChannel(login string) string {
-	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(login), "#"))
-}
-
 // adoptChatGeneration moves the panel to the session of msg. Every reconnect
 // gets a new generation, so only a different channel empties the panel; opening
 // a channel clears the buffer earlier, in startChatChannel.
 func (m *Model) adoptChatGeneration(msg ChatEventMsg) {
 	m.chat.panel.gen = msg.Generation
-	if normalizeChatChannel(msg.Channel) == m.chat.panel.channel {
+	if m.chat.panelRoom(msg) {
 		m.chat.panel.buf.AdoptGeneration(msg.Generation)
 		m.chat.panel.gapPending = m.chat.panel.buf.Len() > 0
 		return
@@ -565,7 +656,7 @@ func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {
 	case catalog.ChatDeliveryDiscarded:
 		switch upd.Reason {
 		case catalog.ChatRejectTimeout, catalog.ChatRejectConnectionLost:
-			if m.chat.composeDraft == "" && normalizeChatChannel(upd.Channel) == m.chat.panel.channel {
+			if m.chat.composeDraft == "" && sameChatChannel(m.chat.panel.platform, upd.Channel, m.chat.panel.channel) {
 				m.chat.composeDraft = upd.Body
 			}
 		case catalog.ChatRejectRateLimited:

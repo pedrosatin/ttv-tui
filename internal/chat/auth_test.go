@@ -31,7 +31,7 @@ func authTestManager(t *testing.T, reply string, username string) (*Manager, *at
 	mgr := New(Options{Token: "fixture", Username: username, Dial: srv.Dial,
 		Addr: srv.Addr(), InitialBackoff: time.Millisecond, MaxBackoff: 8 * time.Millisecond})
 	t.Cleanup(mgr.Close)
-	if _, err := mgr.Join("test"); err != nil {
+	if _, err := mgr.JoinLogin("test"); err != nil {
 		t.Fatal(err)
 	}
 	return mgr, &attempts
@@ -116,7 +116,7 @@ func TestAuthTokenWithoutUsernameNeverDials(t *testing.T) {
 		return nil, io.EOF
 	}})
 	defer mgr.Close()
-	if _, err := mgr.Join("test"); err != nil {
+	if _, err := mgr.JoinLogin("test"); err != nil {
 		t.Fatal(err)
 	}
 	ev := authEvent(t, mgr)
@@ -142,7 +142,7 @@ func TestAuthRefusalsResetAfterConfirmedSession(t *testing.T) {
 	mgr := New(Options{Token: "fixture", Username: "tester", Dial: srv.Dial,
 		Addr: srv.Addr(), InitialBackoff: time.Millisecond, MaxBackoff: 8 * time.Millisecond})
 	t.Cleanup(mgr.Close)
-	if _, err := mgr.Join("test"); err != nil {
+	if _, err := mgr.JoinLogin("test"); err != nil {
 		t.Fatal(err)
 	}
 	for i := 1; i <= 5; i++ {

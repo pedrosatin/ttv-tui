@@ -333,7 +333,7 @@ type chatState struct {
 	panel        chatPanel
 	composing    bool
 	composeDraft string
-	drafts       map[string]string
+	drafts       map[chatRoomKey]string
 	// copyNotice is the transient copy status after yanking a chat message with
 	// y (success names the clipboard path; failure is an explicit error).
 	// copyNoticeGen invalidates stale clear ticks; copyNoticeUntil records when

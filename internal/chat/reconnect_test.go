@@ -29,7 +29,7 @@ func TestManager_ReconnectDiscardsPendingAsReconnected(t *testing.T) {
 	})
 	defer mgr.Close()
 
-	gen1, err := mgr.Join("gaules")
+	gen1, err := mgr.JoinLogin("gaules")
 	if err != nil {
 		t.Fatalf("Join: %v", err)
 	}

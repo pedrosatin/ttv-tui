@@ -9,7 +9,7 @@ import (
 
 func TestDeliveryComposeBeforeJoin(t *testing.T) {
 	m, _ := rcLive(t, i18n.LangEN, &fakeChat{hasToken: true, username: "tester"}, 1)
-	_ = m.startChatChannel("newchannel")
+	_ = m.startChatChannel(catalog.Channel{Login: "newchannel"})
 	m.chat.composeDraft = "hello"
 	updated, cmd := m.submitComposeMessage()
 	m = updated.(Model)

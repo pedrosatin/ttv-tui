@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
 
@@ -48,7 +49,7 @@ func TestChatAuthFailureRemainsVisible(t *testing.T) {
 			update := func(msg tea.Msg) { next, _ := m.Update(msg); m = next.(ui.Model) }
 			update(tea.WindowSizeMsg{Width: 160, Height: 30})
 			update(ui.ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "test"}})
-			if _, err := mgr.Join("test"); err != nil {
+			if _, err := mgr.JoinLogin("test"); err != nil {
 				t.Fatal(err)
 			}
 			deadline := time.After(time.Second)
@@ -56,7 +57,7 @@ func TestChatAuthFailureRemainsVisible(t *testing.T) {
 			for {
 				select {
 				case ev := <-mgr.Events():
-					update(mapChatEvent(ev))
+					update(mapChatEvent(platform.Twitch, ev))
 					if ev.State == chat.StateError {
 						break events
 					}

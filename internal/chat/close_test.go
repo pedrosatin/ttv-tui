@@ -82,7 +82,7 @@ func TestSendRefusalDuringClose(t *testing.T) {
 	}
 	mgr := New(Options{Token: "fixture", Username: "tester", Dial: srv.Dial, Addr: srv.Addr()})
 	t.Cleanup(mgr.Close)
-	gen, err := mgr.Join("test")
+	gen, err := mgr.JoinLogin("test")
 	if err != nil {
 		t.Fatal(err)
 	}

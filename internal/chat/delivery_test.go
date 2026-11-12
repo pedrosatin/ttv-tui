@@ -31,7 +31,7 @@ func deliverySession(t *testing.T) (*Manager, net.Conn, <-chan string, *fakeCloc
 	clk := newFakeClock(time.Now())
 	m := New(Options{Addr: srv.Addr(), Dial: srv.Dial, Token: "fixture", Username: "tester", Now: clk.Now, After: clk.After, CoalesceInterval: time.Millisecond, SendTimeout: 200 * time.Millisecond})
 	t.Cleanup(m.Close)
-	gen, err := m.Join("test")
+	gen, err := m.JoinLogin("test")
 	if err != nil {
 		t.Fatal(err)
 	}

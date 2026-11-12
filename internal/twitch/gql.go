@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"io"
 	"math"
 	"net/http"
@@ -16,6 +15,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 const (
@@ -284,7 +286,7 @@ func isIntegrityCheckFailed(errs []gqlErrorItem) bool {
 // parser needs. A resolver timeout is transient and is retried like a 5xx.
 func gqlErrorsFailure(op string, errs []gqlErrorItem) *Error {
 	if isIntegrityCheckFailed(errs) {
-		return &Error{Kind: Contrato, Op: op, Err: errIntegrityCheck}
+		return &Error{Platform: platform.Twitch, Kind: Contrato, Op: op, Err: errIntegrityCheck}
 	}
 	kind := Contrato
 	for _, e := range errs {
@@ -296,7 +298,7 @@ func gqlErrorsFailure(op string, errs []gqlErrorItem) *Error {
 	if msg == "" {
 		msg = "graphql error"
 	}
-	return &Error{Kind: kind, Op: op, Err: fmt.Errorf("graphql error: %s", msg)}
+	return &Error{Platform: platform.Twitch, Kind: kind, Op: op, Err: fmt.Errorf("graphql error: %s", msg)}
 }
 
 // erroredItems returns the list positions an error path points into: under
@@ -322,19 +324,19 @@ func erroredItems(op string, errs []gqlErrorItem, size int, prefix ...string) (m
 		case float64:
 			index = int(n)
 			if float64(index) != n {
-				return nil, &Error{Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %v", n)}
+				return nil, &Error{Platform: platform.Twitch, Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %v", n)}
 			}
 		case string:
 			var err error
 			index, err = strconv.Atoi(n)
 			if err != nil {
-				return nil, &Error{Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %q: %w", n, err)}
+				return nil, &Error{Platform: platform.Twitch, Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %q: %w", n, err)}
 			}
 		default:
-			return nil, &Error{Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %v", n)}
+			return nil, &Error{Platform: platform.Twitch, Kind: Contrato, Op: op, Err: fmt.Errorf("invalid error path index %v", n)}
 		}
 		if index < 0 || index >= size {
-			return nil, &Error{Kind: Contrato, Op: op, Err: fmt.Errorf("error path index %d outside list of size %d", index, size)}
+			return nil, &Error{Platform: platform.Twitch, Kind: Contrato, Op: op, Err: fmt.Errorf("error path index %d outside list of size %d", index, size)}
 		}
 		out[index] = true
 	}
@@ -479,9 +481,10 @@ func (s *GQLSource) Categories(ctx context.Context, page catalog.PageRequest) (c
 
 	if err := ctx.Err(); err != nil {
 		return catalog.Page[catalog.Category]{}, &Error{
-			Kind: Rede,
-			Op:   op,
-			Err:  fmt.Errorf("context canceled before request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Rede,
+			Op:       op,
+			Err:      fmt.Errorf("context canceled before request: %w", err),
 		}
 	}
 
@@ -511,9 +514,10 @@ func (s *GQLSource) Categories(ctx context.Context, page catalog.PageRequest) (c
 	})
 	if err != nil {
 		return catalog.Page[catalog.Category]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("encode graphql request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("encode graphql request: %w", err),
 		}
 	}
 
@@ -536,18 +540,20 @@ func (s *GQLSource) Channels(ctx context.Context, categoryID string, page catalo
 
 	if err := ctx.Err(); err != nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Rede,
-			Op:   op,
-			Err:  fmt.Errorf("context canceled before request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Rede,
+			Op:       op,
+			Err:      fmt.Errorf("context canceled before request: %w", err),
 		}
 	}
 
 	catKey := strings.TrimSpace(categoryID)
 	if catKey == "" {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  errors.New("categoryID is required"),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      errors.New("categoryID is required"),
 		}
 	}
 
@@ -582,9 +588,10 @@ func (s *GQLSource) Channels(ctx context.Context, categoryID string, page catalo
 	})
 	if err != nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("encode graphql request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("encode graphql request: %w", err),
 		}
 	}
 
@@ -608,9 +615,10 @@ func (s *GQLSource) Search(ctx context.Context, query string) (catalog.Page[cata
 
 	if err := ctx.Err(); err != nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Rede,
-			Op:   op,
-			Err:  fmt.Errorf("context canceled before request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Rede,
+			Op:       op,
+			Err:      fmt.Errorf("context canceled before request: %w", err),
 		}
 	}
 
@@ -638,9 +646,10 @@ func (s *GQLSource) Search(ctx context.Context, query string) (catalog.Page[cata
 	})
 	if err != nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("encode graphql request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("encode graphql request: %w", err),
 		}
 	}
 
@@ -660,9 +669,10 @@ func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]catal
 
 	if err := ctx.Err(); err != nil {
 		return nil, &Error{
-			Kind: Rede,
-			Op:   op,
-			Err:  fmt.Errorf("context canceled before request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Rede,
+			Op:       op,
+			Err:      fmt.Errorf("context canceled before request: %w", err),
 		}
 	}
 
@@ -684,9 +694,10 @@ func (s *GQLSource) SearchCategories(ctx context.Context, query string) ([]catal
 	})
 	if err != nil {
 		return nil, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("encode graphql request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("encode graphql request: %w", err),
 		}
 	}
 
@@ -715,9 +726,10 @@ func (s *GQLSource) ChannelsByLogins(ctx context.Context, logins []string) ([]ca
 
 	if err := ctx.Err(); err != nil {
 		return nil, &Error{
-			Kind: Rede,
-			Op:   op,
-			Err:  fmt.Errorf("context canceled before request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Rede,
+			Op:       op,
+			Err:      fmt.Errorf("context canceled before request: %w", err),
 		}
 	}
 
@@ -736,9 +748,10 @@ func (s *GQLSource) ChannelsByLogins(ctx context.Context, logins []string) ([]ca
 		})
 		if err != nil {
 			return nil, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("encode graphql request: %w", err),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("encode graphql request: %w", err),
 			}
 		}
 
@@ -812,9 +825,10 @@ func executeWithRetry[T any](
 		case Rede, Servidor:
 			if sleepErr := s.sleep(ctx, s.retryBackoff); sleepErr != nil {
 				return catalog.Page[T]{}, &Error{
-					Kind: Rede,
-					Op:   op,
-					Err:  fmt.Errorf("retry backoff interrupted: %w", sleepErr),
+					Platform: platform.Twitch,
+					Kind:     Rede,
+					Op:       op,
+					Err:      fmt.Errorf("retry backoff interrupted: %w", sleepErr),
 				}
 			}
 		case RateLimit:
@@ -824,6 +838,7 @@ func executeWithRetry[T any](
 			}
 			if sleepErr := s.sleep(ctx, lastErr.ResetAfter); sleepErr != nil {
 				return catalog.Page[T]{}, &Error{
+					Platform:   platform.Twitch,
 					Kind:       RateLimit,
 					Op:         op,
 					StatusCode: lastErr.StatusCode,
@@ -854,9 +869,10 @@ func doAttempt[T any](
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, s.endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return catalog.Page[T]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("build http request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("build http request: %w", err),
 		}
 	}
 	req.Header.Set("Client-Id", s.clientID)
@@ -865,9 +881,10 @@ func doAttempt[T any](
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return catalog.Page[T]{}, &Error{
-			Kind: Rede,
-			Op:   op,
-			Err:  fmt.Errorf("execute http request: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Rede,
+			Op:       op,
+			Err:      fmt.Errorf("execute http request: %w", err),
 		}
 	}
 	defer func() {
@@ -875,46 +892,49 @@ func doAttempt[T any](
 		_ = resp.Body.Close()
 	}()
 
-	if resp.StatusCode == http.StatusTooManyRequests {
-		resetAfter, resetAt, hasReset := s.parseRateLimitReset(resp.Header)
-		msg := "rate limit exceeded (HTTP 429)"
-		if hasReset {
-			msg = fmt.Sprintf("rate limit exceeded (HTTP 429, reset in %s)", resetAfter.Round(time.Second))
-		}
-		return catalog.Page[T]{}, &Error{
-			Kind:       RateLimit,
-			Op:         op,
-			StatusCode: resp.StatusCode,
-			ResetAfter: resetAfter,
-			ResetAt:    resetAt,
-			Err:        errors.New(msg),
-		}
-	}
-
-	if resp.StatusCode >= 500 {
-		return catalog.Page[T]{}, &Error{
-			Kind:       Servidor,
-			Op:         op,
-			StatusCode: resp.StatusCode,
-			Err:        fmt.Errorf("upstream server error: status %d", resp.StatusCode),
-		}
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		return catalog.Page[T]{}, &Error{
-			Kind:       Contrato,
-			Op:         op,
-			StatusCode: resp.StatusCode,
-			Err:        fmt.Errorf("unexpected status %d", resp.StatusCode),
+		switch kind := catalog.HTTPStatusKind(resp.StatusCode); kind {
+		case RateLimit:
+			resetAfter, resetAt, hasReset := s.parseRateLimitReset(resp.Header)
+			msg := "rate limit exceeded (HTTP 429)"
+			if hasReset {
+				msg = fmt.Sprintf("rate limit exceeded (HTTP 429, reset in %s)", resetAfter.Round(time.Second))
+			}
+			return catalog.Page[T]{}, &Error{
+				Platform:   platform.Twitch,
+				Kind:       kind,
+				Op:         op,
+				StatusCode: resp.StatusCode,
+				ResetAfter: resetAfter,
+				ResetAt:    resetAt,
+				Err:        errors.New(msg),
+			}
+		case Servidor:
+			return catalog.Page[T]{}, &Error{
+				Platform:   platform.Twitch,
+				Kind:       kind,
+				Op:         op,
+				StatusCode: resp.StatusCode,
+				Err:        fmt.Errorf("upstream server error: status %d", resp.StatusCode),
+			}
+		default:
+			return catalog.Page[T]{}, &Error{
+				Platform:   platform.Twitch,
+				Kind:       kind,
+				Op:         op,
+				StatusCode: resp.StatusCode,
+				Err:        fmt.Errorf("unexpected status %d", resp.StatusCode),
+			}
 		}
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return catalog.Page[T]{}, &Error{
-			Kind: Rede,
-			Op:   op,
-			Err:  fmt.Errorf("read response body: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Rede,
+			Op:       op,
+			Err:      fmt.Errorf("read response body: %w", err),
 		}
 	}
 
@@ -927,9 +947,10 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (catalog.Page[catalog.C
 	var gqlResp gqlCategoriesResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
 		return catalog.Page[catalog.Category]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("decode graphql json: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("decode graphql json: %w", err),
 		}
 	}
 
@@ -939,9 +960,10 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (catalog.Page[catalog.C
 
 	if gqlResp.Data == nil || gqlResp.Data.Games == nil {
 		return catalog.Page[catalog.Category]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  errors.New("missing data.games in graphql response"),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      errors.New("missing data.games in graphql response"),
 		}
 	}
 
@@ -957,18 +979,20 @@ func (s *GQLSource) parseCategoriesResponse(body []byte) (catalog.Page[catalog.C
 		}
 		if edge.Node == nil {
 			return catalog.Page[catalog.Category]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d has null node", i),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d has null node", i),
 			}
 		}
 		id := strings.TrimSpace(edge.Node.ID)
 		name := strings.TrimSpace(edge.Node.Name)
 		if id == "" || name == "" {
 			return catalog.Page[catalog.Category]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d missing required category identity (id=%q, name=%q)", i, id, name),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d missing required category identity (id=%q, name=%q)", i, id, name),
 			}
 		}
 		var viewers *int
@@ -1013,9 +1037,10 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 	var gqlResp gqlChannelsResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("decode graphql json: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("decode graphql json: %w", err),
 		}
 	}
 
@@ -1025,9 +1050,10 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 
 	if gqlResp.Data == nil || gqlResp.Data.Game == nil || gqlResp.Data.Game.Streams == nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  errors.New("missing data.game.streams in graphql response"),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      errors.New("missing data.game.streams in graphql response"),
 		}
 	}
 
@@ -1052,18 +1078,20 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 		}
 		if edge.Node == nil || edge.Node.Broadcaster == nil {
 			return catalog.Page[catalog.Channel]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d has null stream node or broadcaster", i),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d has null stream node or broadcaster", i),
 			}
 		}
 		login := strings.TrimSpace(edge.Node.Broadcaster.Login)
 		displayName := strings.TrimSpace(edge.Node.Broadcaster.DisplayName)
 		if login == "" || displayName == "" {
 			return catalog.Page[catalog.Channel]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d missing required channel identity (login=%q, displayName=%q)", i, login, displayName),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d missing required channel identity (login=%q, displayName=%q)", i, login, displayName),
 			}
 		}
 		id := strings.TrimSpace(edge.Node.Broadcaster.ID)
@@ -1127,9 +1155,10 @@ func (s *GQLSource) parseSearchResponse(body []byte) (catalog.Page[catalog.Chann
 	var gqlResp gqlSearchResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("decode graphql json: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("decode graphql json: %w", err),
 		}
 	}
 
@@ -1139,9 +1168,10 @@ func (s *GQLSource) parseSearchResponse(body []byte) (catalog.Page[catalog.Chann
 
 	if gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Channels == nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  errors.New("missing data.searchFor.channels in graphql response"),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      errors.New("missing data.searchFor.channels in graphql response"),
 		}
 	}
 
@@ -1161,18 +1191,20 @@ func (s *GQLSource) parseSearchResponse(body []byte) (catalog.Page[catalog.Chann
 		}
 		if edge.Item == nil {
 			return catalog.Page[catalog.Channel]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d has null item", i),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d has null item", i),
 			}
 		}
 		login := strings.TrimSpace(edge.Item.Login)
 		displayName := strings.TrimSpace(edge.Item.DisplayName)
 		if login == "" || displayName == "" {
 			return catalog.Page[catalog.Channel]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d missing required channel identity (login=%q, displayName=%q)", i, login, displayName),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d missing required channel identity (login=%q, displayName=%q)", i, login, displayName),
 			}
 		}
 		id := strings.TrimSpace(edge.Item.ID)
@@ -1186,9 +1218,10 @@ func (s *GQLSource) parseSearchResponse(body []byte) (catalog.Page[catalog.Chann
 		}
 		if err := applySearchStream(&ch, edge.Item.Stream); err != nil {
 			return catalog.Page[catalog.Channel]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d stream: %w", i, err),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d stream: %w", i, err),
 			}
 		}
 		items = append(items, ch)
@@ -1207,9 +1240,10 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (catalog.Page[cat
 	var gqlResp gqlSearchResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
 		return catalog.Page[catalog.Category]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("decode graphql json: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("decode graphql json: %w", err),
 		}
 	}
 
@@ -1219,9 +1253,10 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (catalog.Page[cat
 
 	if gqlResp.Data == nil || gqlResp.Data.SearchFor == nil || gqlResp.Data.SearchFor.Games == nil {
 		return catalog.Page[catalog.Category]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  errors.New("missing data.searchFor.games in graphql response"),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      errors.New("missing data.searchFor.games in graphql response"),
 		}
 	}
 
@@ -1237,17 +1272,19 @@ func (s *GQLSource) parseSearchCategoriesResponse(body []byte) (catalog.Page[cat
 		}
 		if edge.Item == nil {
 			return catalog.Page[catalog.Category]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d has null item", i),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d has null item", i),
 			}
 		}
 		name := strings.TrimSpace(edge.Item.Name)
 		if name == "" {
 			return catalog.Page[catalog.Category]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("edge %d missing required category name", i),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("edge %d missing required category name", i),
 			}
 		}
 		id := strings.TrimSpace(edge.Item.ID)
@@ -1278,9 +1315,10 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (catalog.Page[catalo
 	var gqlResp gqlUsersByLoginsResponse
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  fmt.Errorf("decode graphql json: %w", err),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("decode graphql json: %w", err),
 		}
 	}
 
@@ -1290,9 +1328,10 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (catalog.Page[catalo
 
 	if gqlResp.Data == nil {
 		return catalog.Page[catalog.Channel]{}, &Error{
-			Kind: Contrato,
-			Op:   op,
-			Err:  errors.New("missing data.users in graphql response"),
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      errors.New("missing data.users in graphql response"),
 		}
 	}
 
@@ -1313,9 +1352,10 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (catalog.Page[catalo
 		displayName := strings.TrimSpace(user.DisplayName)
 		if login == "" || displayName == "" {
 			return catalog.Page[catalog.Channel]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("user %d missing required identity (login=%q, displayName=%q)", i, login, displayName),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("user %d missing required identity (login=%q, displayName=%q)", i, login, displayName),
 			}
 		}
 		id := strings.TrimSpace(user.ID)
@@ -1329,9 +1369,10 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (catalog.Page[catalo
 		}
 		if err := applySearchStream(&ch, user.Stream); err != nil {
 			return catalog.Page[catalog.Channel]{}, &Error{
-				Kind: Contrato,
-				Op:   op,
-				Err:  fmt.Errorf("user %d stream: %w", i, err),
+				Platform: platform.Twitch,
+				Kind:     Contrato,
+				Op:       op,
+				Err:      fmt.Errorf("user %d stream: %w", i, err),
 			}
 		}
 		items = append(items, ch)

@@ -1,9 +1,16 @@
 package catalog
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"time"
 )
+
+// ErrChatAuthentication marks a refused chat login or incomplete credentials.
+// A chat implementation wraps it in the error of the event that reports the
+// failure, so the UI can tell it from a network error.
+var ErrChatAuthentication = errors.New("chat: authentication failed")
 
 // ChatCapabilities describes the features supported by a platform's chat implementation.
 type ChatCapabilities struct {
@@ -186,6 +193,7 @@ type ChatSendStatusUpdate struct {
 }
 
 // UserNoticeKind groups USERNOTICE msg-id values by how the chat presents them.
+// USERNOTICE is a Twitch IRC concept: the other platforms never produce it.
 type UserNoticeKind string
 
 const (
@@ -197,7 +205,8 @@ const (
 	UserNoticeAnnouncement UserNoticeKind = "announcement"
 )
 
-// ClassifyUserNotice maps a USERNOTICE msg-id onto a UserNoticeKind.
+// ClassifyUserNotice maps a USERNOTICE msg-id onto a UserNoticeKind. "unraid"
+// stays Other on purpose: a cancelled raid must not read as an incoming one.
 func ClassifyUserNotice(msgID string) UserNoticeKind {
 	switch strings.ToLower(strings.TrimSpace(msgID)) {
 	case "sub":
@@ -237,13 +246,19 @@ type ChatEvent struct {
 	NextBackoff time.Duration
 }
 
-// Chat is the neutral platform chat interface.
+// Chat is the neutral chat interface of one platform. It serves one channel at
+// a time and numbers its own sessions; the app merges the chats of every
+// platform behind one bridge that renumbers the generations, so an
+// implementation never sees the generation the UI holds.
 type Chat interface {
 	// Capabilities returns the declared chat features before connecting.
 	Capabilities() ChatCapabilities
-	// Join connects to a channel's chat and returns the active session generation.
-	Join(channel string) (uint64, error)
-	// Reconnect reconnects the active chat session.
+	// Join connects to the chat of ch and returns the new session generation.
+	// ch is the resolved channel: an implementation reads whatever identifies
+	// the chat room on its platform (ID, URL, Login) and must not assume the
+	// text is case-insensitive.
+	Join(ctx context.Context, ch Channel) (uint64, error)
+	// Reconnect reconnects the active chat session under a new generation.
 	Reconnect() (uint64, error)
 	// Stop disconnects and clears the active chat session.
 	Stop()
@@ -260,16 +275,21 @@ type Chat interface {
 }
 
 // IsBlockedCommand reports whether body would be published as plain text instead
-// of running as a command. Commands starting with / other than /me are blocked.
+// of running as a command. Twitch dropped chat commands over IRC: only /me still
+// works, so /ban and friends reach the whole channel as an ordinary message.
+// Only the start of the message counts, judged on the text that goes on the wire.
+// Commands are a Twitch concept; other platforms do not call this.
 func IsBlockedCommand(body string) bool {
-	clean := sanitizeOutboundBody(body)
+	clean := SanitizeOutboundBody(body)
 	if !strings.HasPrefix(clean, "/") {
 		return false
 	}
 	return strings.Fields(clean)[0] != "/me"
 }
 
-func sanitizeOutboundBody(s string) string {
+// SanitizeOutboundBody turns line breaks and NUL into spaces and trims the
+// result: the text a chat implementation puts on the wire.
+func SanitizeOutboundBody(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	for _, r := range s {

@@ -102,12 +102,12 @@ func TestLateChatEventDoesNotOverwriteUnsupportedPanel(t *testing.T) {
 	m := New(mustCatalog(t, i18n.LangEN), WithChat(fc))
 
 	// Start Twitch chat on gaules
-	m.startChatChannel("gaules")
+	m.startChatChannel(catalog.Channel{Login: "gaules"})
 	m.chat.panel.gen = 1
 	m.chat.panel.state = ChatStateConnected
 
 	// Switch to Kick channel xqc (unsupported chat)
-	m.setChatUnsupported("xqc")
+	m.setChatUnsupported(catalog.Channel{Platform: platform.Kick, Login: "xqc"})
 	if !m.chat.panel.unsupported || m.chat.panel.channel != "xqc" {
 		t.Fatalf("expected unsupported panel for xqc, got: %+v", m.chat.panel)
 	}

@@ -101,7 +101,7 @@ func Run(opts Options) error {
 		source = twitch.NewGQLSource(twitch.GQLConfig{})
 	}
 
-	twitchProvider := twitch.NewProvider(source, chatMgr)
+	twitchProvider := twitch.NewProvider(source, twitch.WithChat(chatMgr))
 	urlProvider := provider.NewURLProvider()
 	providerRegistry := provider.NewRegistry(twitchProvider, urlProvider)
 
@@ -148,11 +148,12 @@ func Run(opts Options) error {
 		logStreamlinkRollbacks(logw, playback.Rollbacks(), appCat)
 	}()
 
+	chats := newChatBridge(ctx, providerRegistry)
 	uiOpts := []ui.Option{
 		hostOption,
 		ui.WithSource(source),
 		ui.WithPlayback(playback),
-		ui.WithChat(newChatBridge(chatMgr)),
+		ui.WithChat(chats),
 		ui.WithStore(appStore),
 		ui.WithFavorites(store.ToChannels(st.Favorites)),
 		ui.WithRecents(store.ToChannels(st.Recents)),
@@ -176,7 +177,7 @@ func Run(opts Options) error {
 	playback.setSender(p.Send)
 	go forwardPlayerEvents(ctx, p, playerMgr, playback.observePlayer)
 	playback.startUpdateCheck()
-	go forwardChatEvents(ctx, p, chatMgr)
+	go chats.forward(ctx, p.Send)
 	final, runErr := p.Run()
 	if m, ok := final.(ui.Model); ok {
 		if err := m.FlushSaves(saveFlushTimeout); err != nil {
