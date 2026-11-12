@@ -1183,3 +1183,79 @@ func TestStore_PlatformIsStoredCanonical(t *testing.T) {
 		}
 	}
 }
+
+func TestStore_ChannelWithURLRoundTripAndLegacyCompat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+
+	// 1. Channel with URL in Favorites and Recents saves and loads accurately.
+	orig := State{
+		Favorites: []Channel{
+			{
+				Platform:    PlatformKick,
+				ID:          "kick:xqc",
+				Login:       "xqc",
+				DisplayName: "xqc",
+				URL:         "https://kick.com/xqc",
+			},
+		},
+		Recents: []Channel{
+			{
+				Platform:    PlatformYouTube,
+				ID:          "youtube:dQw4w9WgXcQ",
+				Login:       "dQw4w9WgXcQ",
+				DisplayName: "Rick Astley",
+				URL:         "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			},
+			{
+				Platform:    PlatformTwitch,
+				ID:          "123",
+				Login:       "gaules",
+				DisplayName: "Gaules",
+			},
+		},
+	}
+
+	if err := SaveTo(path, orig); err != nil {
+		t.Fatalf("SaveTo with URLs: %v", err)
+	}
+
+	loaded, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom with URLs: %v", err)
+	}
+
+	if len(loaded.Favorites) != 1 || loaded.Favorites[0].URL != "https://kick.com/xqc" {
+		t.Fatalf("loaded favorites URL: %+v", loaded.Favorites)
+	}
+	if len(loaded.Recents) != 2 {
+		t.Fatalf("loaded recents count: %d", len(loaded.Recents))
+	}
+	if loaded.Recents[0].URL != "https://www.youtube.com/watch?v=dQw4w9WgXcQ" {
+		t.Fatalf("recent[0] URL = %q, want YouTube URL", loaded.Recents[0].URL)
+	}
+	if loaded.Recents[1].URL != "" {
+		t.Fatalf("recent[1] Twitch URL = %q, want empty", loaded.Recents[1].URL)
+	}
+
+	// 2. Conversion to and from twitch.Channel preserves URL and Platform.
+	tCh := loaded.Favorites[0].ToTwitch()
+	if tCh.Platform != PlatformKick || tCh.URL != "https://kick.com/xqc" {
+		t.Fatalf("ToTwitch did not preserve platform or URL: %+v", tCh)
+	}
+	backCh := FromTwitch(tCh)
+	if backCh.Platform != PlatformKick || backCh.URL != "https://kick.com/xqc" {
+		t.Fatalf("FromTwitch did not preserve platform or URL: %+v", backCh)
+	}
+
+	// 3. Matches compares URL when present.
+	chA := Channel{Platform: PlatformKick, Login: "xqc", URL: "https://kick.com/xqc"}
+	chB := Channel{Platform: PlatformKick, Login: "xqc", URL: "https://kick.com/xqc"}
+	chC := Channel{Platform: PlatformKick, Login: "xqc", URL: "https://kick.com/other"}
+	if !chA.Matches(chB) {
+		t.Fatalf("expected chA to match chB")
+	}
+	if chA.Matches(chC) {
+		t.Fatalf("expected chA not to match chC with different URL")
+	}
+}

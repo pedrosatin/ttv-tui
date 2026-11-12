@@ -44,6 +44,21 @@ type Channel struct {
 	CategoryName *string
 	Language     *string
 	Availability Availability
+	Platform     string
+	URL          string
+}
+
+// PlayerLabel returns the qualified session label for playback: platform:login
+// when platform is not Twitch and non-empty, otherwise login.
+func (c Channel) PlayerLabel() string {
+	plat := strings.ToLower(strings.TrimSpace(c.Platform))
+	if plat != "" && plat != "twitch" {
+		if c.Login != "" {
+			return plat + ":" + c.Login
+		}
+		return plat
+	}
+	return c.Login
 }
 
 // NormalizeLanguage trims and lowercases a Twitch stream language code

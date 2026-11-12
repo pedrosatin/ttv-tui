@@ -36,6 +36,7 @@ type Channel struct {
 	ID          string `json:"id,omitempty"`
 	Login       string `json:"login"`
 	DisplayName string `json:"display_name,omitempty"`
+	URL         string `json:"url,omitempty"`
 }
 
 // CanonicalPlatform returns the trimmed, lowercase platform name for c, or
@@ -52,6 +53,9 @@ func (c Channel) CanonicalPlatform() string {
 func (c Channel) Matches(other Channel) bool {
 	if c.CanonicalPlatform() != other.CanonicalPlatform() {
 		return false
+	}
+	if c.URL != "" && other.URL != "" {
+		return strings.EqualFold(c.URL, other.URL)
 	}
 	if c.ID != "" && other.ID != "" && c.ID == other.ID {
 		return true
@@ -70,9 +74,11 @@ func (c Channel) ToTwitch() twitch.Channel {
 		id = c.Login
 	}
 	return twitch.Channel{
+		Platform:    c.CanonicalPlatform(),
 		ID:          id,
 		Login:       c.Login,
 		DisplayName: disp,
+		URL:         c.URL,
 	}
 }
 
@@ -86,11 +92,16 @@ func FromTwitch(ch twitch.Channel) Channel {
 	if id == "" {
 		id = ch.Login
 	}
+	platform := ch.Platform
+	if platform == "" {
+		platform = PlatformTwitch
+	}
 	return Channel{
-		Platform:    PlatformTwitch,
+		Platform:    platform,
 		ID:          id,
 		Login:       ch.Login,
 		DisplayName: disp,
+		URL:         ch.URL,
 	}
 }
 
