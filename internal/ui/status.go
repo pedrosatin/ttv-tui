@@ -131,6 +131,8 @@ type statusContent struct {
 	extra []string
 	// detail is the technical line after the message, the first thing to drop.
 	detail string
+	// hint follows the detail: how to fix the problem, dropped before the detail.
+	hint string
 }
 
 // softStatusPrimary reports states whose lead message may yield to a connected
@@ -316,22 +318,12 @@ func (m Model) StatusBar() string {
 		}
 	}
 
-	var rest []string
-	if len(c.extra) > 0 {
-		if m.chat.statusHasChannel() && strings.Contains(c.extra[0], "#") {
-			rest = append(rest, c.extra[0])
-			if c.detail != "" {
-				rest = append(rest, c.detail)
-			}
-			rest = append(rest, c.extra[1:]...)
-		} else {
-			if c.detail != "" {
-				rest = append(rest, c.detail)
-			}
-			rest = append(rest, c.extra...)
-		}
-	} else if c.detail != "" {
+	rest := slices.Clone(c.extra)
+	if c.detail != "" {
 		rest = append(rest, c.detail)
+	}
+	if c.hint != "" {
+		rest = append(rest, sanitizeScreenText(c.hint))
 	}
 	primary := c.primary
 	var shown []string

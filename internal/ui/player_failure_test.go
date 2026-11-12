@@ -534,12 +534,17 @@ func TestPlayerFailureStreamlinkMissing_ShowsManualInstallHint(t *testing.T) {
 			if !ok {
 				t.Fatal("expected blockingStatusLead to be active on player error")
 			}
-			if len(lead.context) == 0 {
-				t.Fatal("expected lead.context to contain manual install hint when streamlink is missing")
-			}
-			hint := lead.context[0]
+			hint := lead.hint
 			if hint == "" {
-				t.Fatal("manual install hint must not be empty")
+				t.Fatal("expected a manual install hint when streamlink is missing")
+			}
+			// The hint follows the technical detail: with room for both, both show,
+			// and the detail comes first so a narrow bar drops the hint before it.
+			bar := m.StatusBar()
+			detailAt := strings.Index(bar, "streamlink: command not found")
+			hintAt := strings.Index(bar, string([]rune(hint)[:20]))
+			if detailAt < 0 || hintAt < 0 || hintAt < detailAt {
+				t.Fatalf("status bar should show the detail, then the hint:\n%s", bar)
 			}
 
 			// Verify macOS specific hint

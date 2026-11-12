@@ -12,6 +12,8 @@ type statusLead struct {
 	detail  string
 	// context goes to the extras, in the order found.
 	context []string
+	// hint says how to fix the problem; it follows the detail and drops first.
+	hint string
 }
 
 // statusParts decides what the bar says for the current state. The main message
@@ -23,7 +25,7 @@ type statusLead struct {
 // otherwise chat outranks context so the name is not cut behind category/viewers.
 func (m Model) statusParts() statusContent {
 	lead := m.statusLead()
-	c := statusContent{tone: lead.tone, detail: lead.detail}
+	c := statusContent{tone: lead.tone, detail: lead.detail, hint: lead.hint}
 	primary := lead.primary
 	c.keep = m.statusKeep(primary, c.tone)
 
@@ -66,9 +68,7 @@ func (m Model) blockingStatusLead() (statusLead, bool) {
 	case m.player.state == PlayerStateError:
 		lead := statusLead{primary: m.playerFailureText(), tone: toneError, detail: m.playerErrorDetail()}
 		if m.player.failure == PlayerFailureStreamlinkMissing || m.player.downloadFailed {
-			if hint := m.manualInstallHint(); hint != "" {
-				lead.context = append(lead.context, hint)
-			}
+			lead.hint = m.manualInstallHint()
 		}
 		return lead, true
 	case m.notices.ctrlC != "":
