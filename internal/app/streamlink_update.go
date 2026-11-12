@@ -130,7 +130,11 @@ func (b *playbackBridge) observePlayer(ev player.Event) {
 		b.background(func(ctx context.Context) {
 			_ = b.downloader().ConfirmStreamlink(ctx, res.Version)
 		})
-	case ev.State == player.StateError && ev.Failure.BlamesStreamlink():
+	case ev.State == player.StateError && ev.Failure.BlamesStreamlink() && !confirmed:
+		// confirmed is set in memory as soon as the version plays, before the
+		// background ConfirmStreamlink reaches the disk: checking it here keeps
+		// a failure right after the first playback from marking a good
+		// version bad.
 		b.rollbackAsync(res.Version)
 	}
 }

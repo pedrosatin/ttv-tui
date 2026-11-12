@@ -316,6 +316,20 @@ func TestObservePlayerFirstPlaybackEndsTrial(t *testing.T) {
 	}
 }
 
+func TestObservePlayerErrorRightAfterFirstPlaybackKeepsTheVersion(t *testing.T) {
+	b, dataDir := onTrialBridge(t)
+
+	// No wait between the two events: the failure arrives while the
+	// confirmation of the first playback may still be on its way to disk.
+	b.observePlayer(player.Event{State: player.StatePlaying})
+	b.observePlayer(player.Event{State: player.StateError, Failure: player.FailureStreamlinkBroken})
+	b.bg.Wait()
+
+	if components.LoadUpdateState(dataDir).IsBad("8.7.0") || len(b.Rollbacks()) != 0 {
+		t.Fatal("a version that already played was marked bad by a failure right after it")
+	}
+}
+
 func TestObservePlayerIgnoresUnmanagedStreamlink(t *testing.T) {
 	dataDir := t.TempDir()
 	own := filepath.Join(t.TempDir(), "my-streamlink")
