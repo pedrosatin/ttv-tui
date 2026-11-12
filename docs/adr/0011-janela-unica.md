@@ -39,6 +39,9 @@ amd64 por enquanto.
 
 ## Limites
 
+O [ADR 0012](0012-janela-unica-multiplataforma.md) levou a janela ao Windows, ao macOS e ao X11. Os
+dois primeiros itens abaixo valem até ele.
+
 - Windows e macOS não têm janela: o `SCM_RIGHTS` e o OpenGL de pipeline fixa não se aplicam lá.
 - X11 fica no terminal.
 - Na janela a largura do texto é exata, então as proteções para terminais que desenham glifos

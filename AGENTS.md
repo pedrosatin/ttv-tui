@@ -8,8 +8,9 @@ arquitetura.
 
 1. **O vídeo não é reimplementado.** A TUI orquestra `streamlink` (token, HLS,
    filtro de anúncio) e `mpv` (decode/GPU), controlando o player por IPC JSON.
-   Nada de HLS próprio. No Linux com Wayland o padrão é a janela única, com o
-   libmpv embutido ([ADR 0011](docs/adr/0011-janela-unica.md)); fora dela, a janela
+   Nada de HLS próprio. Com o `ttv-tui-window` ao lado e o `--probe` passando, o
+   padrão é a janela única, com o libmpv embutido ([ADR 0011](docs/adr/0011-janela-unica.md),
+   [ADR 0012](docs/adr/0012-janela-unica-multiplataforma.md)); fora dela, a janela
    do mpv.
 
 2. **Acesso a dados fica atrás de uma interface `Source`.** O v1 fala o GraphQL

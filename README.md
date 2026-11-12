@@ -154,7 +154,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 </details>
 
 <details>
-<summary>Single window only (Linux, Wayland)</summary>
+<summary>Single window only</summary>
 
 | Key | Action |
 | --- | --- |
@@ -271,7 +271,7 @@ Deleting the local file does not end the session on Twitch. Do both:
 
 The app does not decode video. `mpv` plays it in its own window, and the app controls it over IPC. The `mpv` window has no controls. Use the app's keys, and close the video with `Ctrl+X` or by closing the window.
 
-On Linux amd64 with Wayland, the app opens a single window instead, with the list, the video and the chat side by side. It needs `ttv-tui-window`, SDL3 and libmpv. The install script adds `ttv-tui-window` for you. To stay in the terminal, run `ttv-tui --terminal`. Color emoji show as empty boxes in that window for now. See [ADR 0011](docs/adr/0011-janela-unica.md).
+When `ttv-tui-window` sits next to `ttv-tui` and can open a window, the app opens a single window instead, with the list, the video and the chat side by side. It needs SDL3 and libmpv. On Linux amd64 the install script adds `ttv-tui-window` for you; it was tested by hand on Wayland, not on X11. On Windows and macOS you build it from source for now: a proof of concept worked on Windows 11, and macOS was not tried. To stay in the terminal, run `ttv-tui --terminal`. Color emoji show as empty boxes in that window for now. See [ADR 0011](docs/adr/0011-janela-unica.md) and [ADR 0012](docs/adr/0012-janela-unica-multiplataforma.md).
 
 </details>
 
