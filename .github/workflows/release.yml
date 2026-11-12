@@ -43,7 +43,7 @@ jobs:
           name: window
           path: dist-window/
 
-  # Windows has no system SDL3 or libmpv, so the zip carries the MSYS2 DLLs.
+  # Windows has no system SDL3 or libmpv. The zip carries the official LGPL libmpv-2.dll and MSYS2 runtime DLLs.
   window-windows:
     name: Window binary (Windows)
     runs-on: windows-latest
@@ -60,7 +60,6 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-sdl3
-            mingw-w64-ucrt-x86_64-mpv
             mingw-w64-ucrt-x86_64-ntldd
             unzip
             zip

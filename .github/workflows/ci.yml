@@ -145,10 +145,15 @@ jobs:
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'window-zip'
           Expand-Archive -LiteralPath dist-window/ttv-tui-window.zip -DestinationPath $dir
-          $forbidden = Get-ChildItem -Path (Join-Path $dir 'ttv-tui-window') -Filter '*.dll' |
-            Where-Object { $_.Name -match '^(avcodec|avformat|avutil|swscale|swresample)' }
-          if ($forbidden) {
-            throw "MSYS2 FFmpeg DLLs found in zip: $($forbidden.Name -join ', ')"
+          $allowedDlls = @('libmpv-2.dll', 'SDL3.dll', 'libiconv-2.dll')
+          $packagedDlls = Get-ChildItem -Path (Join-Path $dir 'ttv-tui-window') -Filter '*.dll' | Select-Object -ExpandProperty Name
+          $unexpected = $packagedDlls | Where-Object { $_ -notin $allowedDlls }
+          if ($unexpected) {
+            throw "Unexpected DLLs found in zip: $($unexpected -join ', ') (allowed: $($allowedDlls -join ', '))"
+          }
+          $missing = $allowedDlls | Where-Object { $_ -notin $packagedDlls }
+          if ($missing) {
+            throw "Missing required DLLs in zip: $($missing -join ', ')"
           }
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           $exe = Join-Path $dir 'ttv-tui-window\ttv-tui-window.exe'
