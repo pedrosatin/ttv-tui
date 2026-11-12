@@ -20,10 +20,10 @@ func TestProvider_Capabilities(t *testing.T) {
 		t.Errorf("ID = %q", bare.ID())
 	}
 	if _, ok := bare.Browser(); ok {
-		t.Error("Browser: Kick has no catalog here")
+		t.Error("Browser without WithBrowser")
 	}
 	if _, ok := bare.Searcher(); ok {
-		t.Error("Searcher: Kick has no search here")
+		t.Error("Searcher without WithSearcher")
 	}
 	if _, ok := bare.Resolver(); ok {
 		t.Error("Resolver without WithResolver")
@@ -34,7 +34,14 @@ func TestProvider_Capabilities(t *testing.T) {
 
 	chat := NewChat(ChatOptions{Rooms: &fakeRooms{}})
 	defer chat.Close()
-	full := NewProvider(WithResolver(stubResolver{}), WithChat(chat))
+	client := NewClient(ClientConfig{})
+	full := NewProvider(WithBrowser(client), WithSearcher(client), WithResolver(stubResolver{}), WithChat(chat))
+	if b, ok := full.Browser(); !ok || b != catalog.Browser(client) {
+		t.Error("Browser missing")
+	}
+	if s, ok := full.Searcher(); !ok || s != catalog.Searcher(client) {
+		t.Error("Searcher missing")
+	}
 	if r, ok := full.Resolver(); !ok || r == nil {
 		t.Error("Resolver missing")
 	}

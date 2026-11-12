@@ -1,0 +1,36 @@
+{
+  "current_page": 1,
+  "data": [
+    {
+      "id": 15,
+      "name": "Just Chatting",
+      "viewers": 477276
+    },
+    {
+      "id": 8,
+      "name": "Grand Theft Auto V (GTA)",
+      "viewers": 153523
+    },
+    {
+      "id": 28,
+      "name": "Slots & Casino",
+      "viewers": 73321
+    },
+    {
+      "id": 8549,
+      "name": "IRL",
+      "viewers": 70882
+    },
+    {
+      "id": 194,
+      "name": "Knight Online",
+      "viewers": 68787
+    },
+    {
+      "id": 14353,
+      "name": "EA Sports FC 27",
+      "viewers": 47798
+    }
+  ],
+  "next_page_url": "https://kick.com/api/v1/subcategories?page=2"
+}

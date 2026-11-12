@@ -64,6 +64,71 @@ func TestLive_Contract(t *testing.T) {
 	}
 }
 
+// TestLive_Catalog talks to the real Kick. It is skipped unless
+// TTV_KICK_LIVE_CATALOG is set: the routes of the catalog have no contract, and
+// this is how to check the four of them by hand.
+//
+//	TTV_KICK_LIVE_CATALOG=1 go test ./internal/kick -run TestLive_Catalog -v
+func TestLive_Catalog(t *testing.T) {
+	if os.Getenv("TTV_KICK_LIVE_CATALOG") == "" {
+		t.Skip("TTV_KICK_LIVE_CATALOG not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	client := NewClient(ClientConfig{})
+
+	cats, err := client.Categories(ctx, catalog.PageRequest{})
+	if err != nil {
+		t.Fatalf("Categories: %v", err)
+	}
+	if len(cats.Items) == 0 || !cats.HasMore || cats.Cursor != "2" {
+		t.Fatalf("Categories: %d items, HasMore=%v Cursor=%q", len(cats.Items), cats.HasMore, cats.Cursor)
+	}
+	top := cats.Items[0]
+	t.Logf("categories: %d on the first page; the top one has %d viewers", len(cats.Items), derefInt(top.Viewers))
+	next, err := client.Categories(ctx, catalog.PageRequest{Cursor: cats.Cursor})
+	if err != nil || len(next.Items) == 0 {
+		t.Fatalf("Categories(page 2): %d items, err %v", len(next.Items), err)
+	}
+	past, err := client.Categories(ctx, catalog.PageRequest{Cursor: "21"})
+	if err != nil || len(past.Items) != 0 || past.HasMore {
+		t.Fatalf("Categories(page 21): %d items, HasMore=%v, err %v; want the end of the listing", len(past.Items), past.HasMore, err)
+	}
+
+	chans, err := client.Channels(ctx, top.ID, catalog.PageRequest{Limit: 30})
+	if err != nil {
+		t.Fatalf("Channels(%s): %v", top.ID, err)
+	}
+	if len(chans.Items) != 30 || !chans.HasMore {
+		t.Fatalf("Channels(%s): %d items, HasMore=%v; want a full page of the top category", top.ID, len(chans.Items), chans.HasMore)
+	}
+	first := chans.Items[0]
+	if first.Login == "" || first.Availability != catalog.AvailabilityLive || first.Platform != platform.Kick {
+		t.Fatalf("first channel = %+v", first)
+	}
+	more, err := client.Channels(ctx, top.ID, catalog.PageRequest{Limit: 30, Cursor: chans.Cursor})
+	if err != nil || len(more.Items) == 0 || more.Items[0].Login == first.Login {
+		t.Fatalf("Channels(next page): %d items, err %v", len(more.Items), err)
+	}
+	t.Logf("channels: 30 + %d; the first has %d viewers, language %q", len(more.Items), derefInt(first.Viewers), deref(first.Language))
+
+	hits, err := client.Search(ctx, first.Login)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(hits.Items) == 0 || hits.Items[0].Login != first.Login || hits.Items[0].Availability != catalog.AvailabilityLive {
+		t.Fatalf("Search for a live channel of the listing: %d hits, first %+v", len(hits.Items), hits.Items)
+	}
+	found, err := client.SearchCategories(ctx, top.Name)
+	if err != nil {
+		t.Fatalf("SearchCategories: %v", err)
+	}
+	if len(found) == 0 || found[0].ID != top.ID {
+		t.Fatalf("SearchCategories for the top category: %d hits, first %+v", len(found), found)
+	}
+	t.Logf("search: %d channels, %d categories", len(hits.Items), len(found))
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return ""

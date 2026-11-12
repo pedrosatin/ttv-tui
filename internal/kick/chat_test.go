@@ -371,8 +371,8 @@ func TestChat_RetriesLookupOnNetworkError(t *testing.T) {
 }
 
 func TestChat_FinalErrors(t *testing.T) {
-	blocked := statusError("channel", http.StatusForbidden)
-	missing := statusError("channel", http.StatusNotFound)
+	blocked := statusError("channel", http.StatusForbidden, ErrChannelNotFound)
+	missing := statusError("channel", http.StatusNotFound, ErrChannelNotFound)
 	garbled := contractError("channel", errors.New("decode response"))
 	tests := []struct {
 		name   string

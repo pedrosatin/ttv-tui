@@ -1,0 +1,80 @@
+{
+  "data": {
+    "livestreams": [
+      {
+        "title": "$350k START - ROOBET TRIP DAY 2 #RoobetPartner",
+        "viewer_count": 5846,
+        "show_view_count": true,
+        "channel": {
+          "slug": "timthetatman",
+          "username": "TimTheTatman"
+        },
+        "category": {
+          "id": 28,
+          "name": "Slots & Casino"
+        },
+        "language": "en"
+      },
+      {
+        "title": "🍀 Юбилей нам 9 лет! Соседи я Фартовый!",
+        "viewer_count": 4932,
+        "show_view_count": true,
+        "channel": {
+          "slug": "danludan-88",
+          "username": "danludan_88"
+        },
+        "category": {
+          "id": 28,
+          "name": "Slots & Casino"
+        },
+        "language": "ru"
+      },
+      {
+        "title": "!last WAYLANDERS MAX WIN !stake !stakeus !stakeeu USE CODE DIMES",
+        "viewer_count": 4621,
+        "show_view_count": true,
+        "channel": {
+          "slug": "frankdimes",
+          "username": "FrankDimes"
+        },
+        "category": {
+          "id": 28,
+          "name": "Slots & Casino"
+        },
+        "language": "en"
+      },
+      {
+        "title": "🫩 Nie spałem od wczoraj. xD 🫩 !Strona 🫩 KASYNKO na ROZBUDZENIE, a potem... WOW: FOREVER oczywiście! 🫩 LEVEL 46/60! 🫩 !Instant !Holy 🫩",
+        "viewer_count": 2051,
+        "show_view_count": false,
+        "channel": {
+          "slug": "dobrodziej",
+          "username": "Dobrodziej"
+        },
+        "category": {
+          "id": 28,
+          "name": "Slots & Casino"
+        },
+        "language": "pl"
+      },
+      {
+        "title": "🚨 ТЕБЕ ПОДАРОК ОТ АРКАДЫ 100 FS",
+        "viewer_count": 170,
+        "show_view_count": true,
+        "channel": {
+          "slug": "malina-tv",
+          "username": "MALINA_TV"
+        },
+        "category": {
+          "id": 28,
+          "name": "Slots & Casino"
+        },
+        "language": "ru"
+      }
+    ],
+    "pagination": {
+      "next_cursor": "eyJvIjoxMDB9"
+    }
+  },
+  "message": "Success"
+}

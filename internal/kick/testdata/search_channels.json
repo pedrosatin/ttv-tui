@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "slug": "gaules",
+      "username": "Gaules",
+      "is_live": true
+    },
+    {
+      "slug": "gaulestv",
+      "username": "gaulestv",
+      "is_live": false
+    },
+    {
+      "slug": "gaulestv2",
+      "username": "gaulestv2",
+      "is_live": false
+    },
+    {
+      "slug": "gaules2",
+      "username": "gaules2",
+      "is_live": false
+    },
+    {
+      "slug": "gaules1",
+      "username": "Gaules1",
+      "is_live": false
+    },
+    {
+      "slug": "gauless",
+      "username": "gauless",
+      "is_live": false
+    }
+  ],
+  "message": "success"
+}

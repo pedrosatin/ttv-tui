@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "id": 14755,
+      "name": "Call of Duty",
+      "viewer_count": 33
+    },
+    {
+      "id": 754,
+      "name": "Call of Duty: Warzone",
+      "viewer_count": 4298
+    },
+    {
+      "id": 524,
+      "name": "Call of Duty: Mobile",
+      "viewer_count": 660
+    },
+    {
+      "id": 2077,
+      "name": "Call of Duty: DMZ",
+      "viewer_count": 30
+    },
+    {
+      "id": 2579,
+      "name": "Call of Duty 3",
+      "viewer_count": 0
+    },
+    {
+      "id": 1802,
+      "name": "Call of Duty: Ghosts",
+      "viewer_count": 0
+    }
+  ],
+  "message": "success"
+}

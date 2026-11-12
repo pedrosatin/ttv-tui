@@ -1,0 +1,21 @@
+{
+  "current_page": 20,
+  "data": [
+    {
+      "id": 1418,
+      "name": "Fallout 3",
+      "viewers": 3
+    },
+    {
+      "id": 290,
+      "name": "The Legend of Zelda: Twilight Princess",
+      "viewers": 3
+    },
+    {
+      "id": 266,
+      "name": "The Legend of Zelda: Breath of the Wild",
+      "viewers": 3
+    }
+  ],
+  "next_page_url": "https://kick.com/api/v1/subcategories?page=21"
+}

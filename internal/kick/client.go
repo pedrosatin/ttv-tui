@@ -26,7 +26,7 @@ const (
 	// DefaultRequestTimeout bounds one request.
 	DefaultRequestTimeout = 10 * time.Second
 	// maxResponseBytes bounds a response body. The channel JSON of a large
-	// channel is about 15 KB.
+	// channel is about 15 KB and a page of 100 live streams about 110 KB.
 	maxResponseBytes = 1 << 20
 	// resolveConcurrency is how many saved channels are looked up at once.
 	resolveConcurrency = 4
@@ -39,27 +39,42 @@ var ErrChannelNotFound = errors.New("kick: channel not found")
 
 // ClientConfig configures a Client. Zero values select production defaults.
 type ClientConfig struct {
-	BaseURL    string
-	HTTPClient *http.Client
+	// BaseURL is the site: channel state, chat room and categories.
+	BaseURL string
+	// WebBaseURL is the host of the live streams of a category.
+	WebBaseURL string
+	// SearchBaseURL is the host of the search.
+	SearchBaseURL string
+	HTTPClient    *http.Client
 }
 
 // Client reads the site JSON of Kick.
 type Client struct {
-	baseURL string
-	http    *http.Client
+	baseURL       string
+	webBaseURL    string
+	searchBaseURL string
+	http          *http.Client
 }
 
 // NewClient returns a Client for cfg.
 func NewClient(cfg ClientConfig) *Client {
-	base := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
-	if base == "" {
-		base = DefaultBaseURL
-	}
 	hc := cfg.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: DefaultRequestTimeout}
 	}
-	return &Client{baseURL: base, http: hc}
+	return &Client{
+		baseURL:       baseURL(cfg.BaseURL, DefaultBaseURL),
+		webBaseURL:    baseURL(cfg.WebBaseURL, DefaultWebBaseURL),
+		searchBaseURL: baseURL(cfg.SearchBaseURL, DefaultSearchBaseURL),
+		http:          hc,
+	}
+}
+
+func baseURL(configured, fallback string) string {
+	if base := strings.TrimRight(strings.TrimSpace(configured), "/"); base != "" {
+		return base
+	}
+	return fallback
 }
 
 // Room identifies the chat room of a channel.
@@ -262,8 +277,15 @@ func channelURL(slug string) string {
 	return DefaultBaseURL + "/" + slug
 }
 
+// get reads a channel route of the site, where a 404 means no such channel.
 func (c *Client) get(ctx context.Context, op, path string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	return c.getURL(ctx, op, c.baseURL+path, ErrChannelNotFound)
+}
+
+// getURL reads rawURL. notFound is what a 404 means on that route; nil leaves
+// it as an answer the client did not expect.
+func (c *Client) getURL(ctx context.Context, op, rawURL string, notFound error) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, contractError(op, fmt.Errorf("build request: %w", err))
 	}
@@ -277,7 +299,7 @@ func (c *Client) get(ctx context.Context, op, path string) ([]byte, error) {
 	body, readErr := io.ReadAll(io.LimitReader(res.Body, maxResponseBytes))
 
 	if res.StatusCode != http.StatusOK {
-		return nil, statusError(op, res.StatusCode)
+		return nil, statusError(op, res.StatusCode, notFound)
 	}
 	if readErr != nil {
 		return nil, &catalog.Error{Platform: platform.Kick, Kind: catalog.Rede, Op: op, Err: fmt.Errorf("read response: %w", readErr)}
@@ -286,15 +308,16 @@ func (c *Client) get(ctx context.Context, op, path string) ([]byte, error) {
 }
 
 // statusError classifies an answer that is not 200. A 403 is the anti-bot wall
-// in front of the site, not an answer of the site: it carries no channel data.
-func statusError(op string, status int) error {
+// in front of the site, not an answer of the site: it carries no data of the
+// site. notFound is the meaning of a 404 on the route, when it has one.
+func statusError(op string, status int, notFound error) error {
 	e := &catalog.Error{Platform: platform.Kick, Op: op, StatusCode: status, Kind: catalog.HTTPStatusKind(status)}
 	switch status {
 	case http.StatusForbidden:
 		e.Kind = catalog.Bloqueio
 		e.Err = errors.New("request refused by the site")
 	case http.StatusNotFound:
-		e.Err = ErrChannelNotFound
+		e.Err = notFound
 	}
 	return e
 }

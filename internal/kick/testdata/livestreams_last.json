@@ -1,0 +1,50 @@
+{
+  "data": {
+    "livestreams": [
+      {
+        "title": "Magnus, Alireza, Hans & Vaishali Playing Today in Total World Champs Day 2 of Groups Coverage!! | !tipranks !sub #ad",
+        "viewer_count": 4268,
+        "show_view_count": true,
+        "channel": {
+          "slug": "gmhikaru",
+          "username": "GMHikaru"
+        },
+        "category": {
+          "id": 68,
+          "name": "Chess"
+        },
+        "language": "en"
+      },
+      {
+        "title": "banning match sir | !extra !course",
+        "viewer_count": 407,
+        "show_view_count": true,
+        "channel": {
+          "slug": "chessbrah",
+          "username": "chessbrah"
+        },
+        "category": {
+          "id": 68,
+          "name": "Chess"
+        },
+        "language": "en"
+      },
+      {
+        "title": "Wygrałem 100$ Czy nie wygrałem? !klub !dc !donate",
+        "viewer_count": 138,
+        "show_view_count": true,
+        "channel": {
+          "slug": "nf_krolpaweltv",
+          "username": "NF_KrolPawelTV"
+        },
+        "category": {
+          "id": 68,
+          "name": "Chess"
+        },
+        "language": "pl"
+      }
+    ],
+    "pagination": {}
+  },
+  "message": "Success"
+}

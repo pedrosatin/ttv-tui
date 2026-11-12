@@ -9,15 +9,25 @@ import (
 )
 
 // Provider implements provider.Provider for Kick without importing provider.
-// It has no catalog to browse or search: a channel arrives by URL, from the
-// favorites or from the recents.
 type Provider struct {
+	browser  catalog.Browser
+	searcher catalog.Searcher
 	resolver catalog.Resolver
 	chat     catalog.Chat
 }
 
 // ProviderOption configures a Provider.
 type ProviderOption func(*Provider)
+
+// WithBrowser attaches what lists the live categories and their channels.
+func WithBrowser(b catalog.Browser) ProviderOption {
+	return func(p *Provider) { p.browser = b }
+}
+
+// WithSearcher attaches what finds channels by name.
+func WithSearcher(s catalog.Searcher) ProviderOption {
+	return func(p *Provider) { p.searcher = s }
+}
 
 // WithResolver attaches what resolves the live state of saved channels.
 func WithResolver(r catalog.Resolver) ProviderOption {
@@ -30,7 +40,7 @@ func WithChat(c catalog.Chat) ProviderOption {
 }
 
 // NewProvider returns a Kick provider. Without options it only builds playback
-// targets.
+// targets: a channel then arrives by URL, from the favorites or from the recents.
 func NewProvider(opts ...ProviderOption) *Provider {
 	p := &Provider{}
 	for _, opt := range opts {
@@ -42,11 +52,21 @@ func NewProvider(opts ...ProviderOption) *Provider {
 // ID returns the canonical platform identifier for Kick ("kick").
 func (p *Provider) ID() string { return platform.Kick }
 
-// Browser reports no browsing capability.
-func (p *Provider) Browser() (catalog.Browser, bool) { return nil, false }
+// Browser returns the listing of live categories and their channels.
+func (p *Provider) Browser() (catalog.Browser, bool) {
+	if p.browser != nil {
+		return p.browser, true
+	}
+	return nil, false
+}
 
-// Searcher reports no search capability.
-func (p *Provider) Searcher() (catalog.Searcher, bool) { return nil, false }
+// Searcher returns the search of channels by name.
+func (p *Provider) Searcher() (catalog.Searcher, bool) {
+	if p.searcher != nil {
+		return p.searcher, true
+	}
+	return nil, false
+}
 
 // Resolver returns the live-state lookup for saved channels.
 func (p *Provider) Resolver() (catalog.Resolver, bool) {
