@@ -9,18 +9,17 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func (m Model) errorMessage(err error) string {
-	switch twitch.KindOf(err) {
-	case twitch.Rede:
+	switch catalog.KindOf(err) {
+	case catalog.Rede:
 		return m.t("error.network")
-	case twitch.RateLimit:
+	case catalog.RateLimit:
 		return m.t("error.rate_limit")
-	case twitch.Servidor:
+	case catalog.Servidor:
 		return m.t("error.server")
-	case twitch.Contrato:
+	case catalog.Contrato:
 		return m.t("error.contract")
 	default:
 		return m.t("error.network")
@@ -41,14 +40,14 @@ func (m *Model) clearStaleStatusErrors() {
 }
 
 func (m Model) listErrorAction() string {
-	switch twitch.KindOf(m.list.err) {
-	case twitch.Rede:
+	switch catalog.KindOf(m.list.err) {
+	case catalog.Rede:
 		return m.t("error.list.network")
-	case twitch.Contrato:
+	case catalog.Contrato:
 		return m.t("error.list.contract")
-	case twitch.RateLimit:
+	case catalog.RateLimit:
 		return m.t("error.list.rate_limit")
-	case twitch.Servidor:
+	case catalog.Servidor:
 		return m.t("error.list.server")
 	default:
 		return m.t("error.list.unknown")
@@ -59,7 +58,7 @@ func (m Model) listErrorDetail() string {
 	if m.list.err == nil {
 		return ""
 	}
-	var te *twitch.Error
+	var te *catalog.Error
 	if errors.As(m.list.err, &te) && te != nil && te.Err != nil {
 		return fmt.Sprintf(m.t("error.fail.detail"), sanitizeScreenText(te.Err.Error()))
 	}

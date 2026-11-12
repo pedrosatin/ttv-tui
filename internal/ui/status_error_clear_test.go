@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
-	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
 func TestPlayerOfflineErrorClearsOnNavigation(t *testing.T) {
@@ -66,7 +66,7 @@ func TestPlayerOfflineErrorRemainsOnSameScreen(t *testing.T) {
 	offline := "Erro: Canal offline · r repetir · ? detalhes"
 	m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
 	m.list.mode = ModeChannels
-	m.list.channels = []twitch.Channel{
+	m.list.channels = []catalog.Channel{
 		{ID: "1", Login: "xqc", DisplayName: "xQc"},
 		{ID: "2", Login: "gaules", DisplayName: "Gaules"},
 	}
@@ -105,7 +105,7 @@ func TestListErrorClearsOnNavigation(t *testing.T) {
 	}
 	m := New(cat)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 20})
-	m.list.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: errors.New("timeout")}
+	m.list.err = &catalog.Error{Kind: catalog.Rede, Op: "categories", Err: errors.New("timeout")}
 	if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, m.t("error.list.network")) {
 		t.Fatalf("precondition: list error missing from status:\n%s", bar)
 	}
@@ -127,7 +127,7 @@ func TestClearStaleStatusErrorsKeepsTransientNotice(t *testing.T) {
 	}
 	m := New(cat)
 	m.notices.status = m.t("favorites.added")
-	m.list.err = &twitch.Error{Kind: twitch.Rede, Op: "categories", Err: errors.New("x")}
+	m.list.err = &catalog.Error{Kind: catalog.Rede, Op: "categories", Err: errors.New("x")}
 	m.player.state = PlayerStateError
 	m.player.failure = PlayerFailureOffline
 	m.player.lastLine = offlineLine
@@ -151,9 +151,9 @@ func TestSuccessfulChannelSwitchClearsOfflineStatus(t *testing.T) {
 	offline := "Erro: Canal offline · r repetir · ? detalhes"
 	m, _ := newFailureModel(t, i18n.LangPTBR, 120, "xqc")
 	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)
-	m.list.err = &twitch.Error{Kind: twitch.Rede, Op: "channels", Err: errors.New("stale")}
+	m.list.err = &catalog.Error{Kind: catalog.Rede, Op: "channels", Err: errors.New("stale")}
 
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: twitch.Channel{Login: "gaules", DisplayName: "Gaules"}})
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
 	m = drainCmd(t, m, cmd)
 	if m.Err() != nil {
