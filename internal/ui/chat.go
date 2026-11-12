@@ -149,9 +149,6 @@ func (m *Model) startChatChannel(login string) tea.Cmd {
 		m.chat.drafts[m.chat.panel.channel] = m.chat.composeDraft
 	}
 	m.chat.composeDraft = m.chat.drafts[norm]
-	if norm != m.chat.panel.channel {
-		m.chat.composing = false
-	}
 	m.chat.panel.buf.Clear()
 	m.chat.panel.channel = norm
 	m.chat.panel.state = ChatStateConnecting
