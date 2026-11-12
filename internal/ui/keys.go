@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/pedrosatin/ttv-tui/internal/chat"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
 type keyMap struct {
@@ -313,7 +313,7 @@ func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {
-	if m.chat.panel.unsupported {
+	if m.chat.panel.unsupported || !m.chat.panel.caps.CanSend {
 		return m, nil
 	}
 	if m.warnChatHiddenByWidth() || !m.layout.showChat || m.chatHiddenByWidth() {
@@ -401,7 +401,7 @@ func (m *Model) clearResolvedComposeWarning() {
 			m.chat.panel.sendWarning = ""
 		}
 	case m.t("chat.warn.command_blocked"):
-		if !chat.IsBlockedCommand(m.chat.composeDraft) {
+		if !catalog.IsBlockedCommand(m.chat.composeDraft) {
 			m.chat.panel.sendWarning = ""
 		}
 	}

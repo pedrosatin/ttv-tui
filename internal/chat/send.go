@@ -221,11 +221,7 @@ func FormatPrivMsg(channel, nonce, body string) string {
 // works, so /ban and friends reach the whole channel as an ordinary message.
 // Only the start of the message counts, judged on the text that goes on the wire.
 func IsBlockedCommand(body string) bool {
-	clean := sanitizeOutboundBody(body)
-	if !strings.HasPrefix(clean, "/") {
-		return false
-	}
-	return strings.Fields(clean)[0] != "/me"
+	return catalog.IsBlockedCommand(body)
 }
 
 func sanitizeOutboundBody(s string) string {

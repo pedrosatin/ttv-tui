@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
@@ -16,7 +17,15 @@ type fakeChat struct {
 	stopped     int
 	hasToken    bool
 	username    string
+	caps        *catalog.ChatCapabilities
 	sent        []ChatSendRequest
+}
+
+func (f *fakeChat) Capabilities() catalog.ChatCapabilities {
+	if f.caps != nil {
+		return *f.caps
+	}
+	return catalog.TwitchChatCapabilities
 }
 
 func (f *fakeChat) HasToken() bool {

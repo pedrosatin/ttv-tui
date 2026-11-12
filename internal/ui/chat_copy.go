@@ -13,7 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
-	"github.com/pedrosatin/ttv-tui/internal/chat"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
 const (
@@ -76,7 +76,7 @@ type copyResultMsg struct {
 func formatChatCopyText(msg ChatMessage) string {
 	body := strings.TrimSpace(sanitizeChatText(msg.Body))
 	switch msg.Kind {
-	case chat.MessageSystem, chat.MessageNotice:
+	case catalog.ChatMessageSystem, catalog.ChatMessageNotice:
 		return truncateUTF8Bytes(body, osc52MaxBytes)
 	}
 	name := strings.TrimSpace(sanitizeChatText(msg.DisplayName))
@@ -253,7 +253,7 @@ func (m Model) formatCopyNotice(msg ChatMessage, plaintext, method string) strin
 		name = strings.TrimSpace(sanitizeChatText(msg.User))
 	}
 	switch msg.Kind {
-	case chat.MessageSystem, chat.MessageNotice:
+	case catalog.ChatMessageSystem, catalog.ChatMessageNotice:
 		return fmt.Sprintf(m.t("chat.copy.done_text_via"), method, preview)
 	}
 	if name == "" {

@@ -7,13 +7,11 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/pedrosatin/ttv-tui/internal/chat"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
 const (
 	defaultChatPreviewLines = 10
-	// twitchMessageRuneLimit is Twitch's PRIVMSG body limit in Unicode code points.
-	twitchMessageRuneLimit = 500
 )
 
 func (c chatState) hasPanel() bool {
@@ -58,7 +56,7 @@ func (c chatState) connectionReason(state string) string {
 func (m Model) chatRoomModesSummary() string {
 	rs := m.chat.panel.roomState
 	var tags []string
-	if rs.Slow > 0 {
+	if m.chat.panel.caps.SupportsSlowMode && rs.Slow > 0 {
 		tags = append(tags, fmt.Sprintf(m.t("chat.room.slow"), rs.Slow))
 	}
 	if rs.FollowersOnly >= 0 {
@@ -279,14 +277,14 @@ func (c chatState) draftRuneCount() int {
 }
 
 func (c chatState) draftOverLimit() bool {
-	return utf8.RuneCountInString(strings.TrimSpace(c.composeDraft)) > twitchMessageRuneLimit
+	return utf8.RuneCountInString(strings.TrimSpace(c.composeDraft)) > c.maxRuneLength()
 }
 
 func (m Model) composeCounterLabel() string {
-	return fmt.Sprintf(m.t("chat.input.counter"), m.chat.draftRuneCount(), twitchMessageRuneLimit)
+	return fmt.Sprintf(m.t("chat.input.counter"), m.chat.draftRuneCount(), m.chat.maxRuneLength())
 }
 
-// renderComposeHintLine shows the compose hint and the live N/500 counter on one
+// renderComposeHintLine shows the compose hint and the live N/limit counter on one
 // row above the input. The counter stays visible; the hint truncates first when
 // the chat column is narrow (80-column layout).
 func (m Model) renderComposeHintLine(maxWidth int) string {
@@ -316,6 +314,11 @@ func (m Model) renderChatInputLine(maxWidth int) string {
 	ch := sanitizeScreenText(m.chat.panel.channel)
 	if maxWidth > 1 && hasWideRune(ch+normalizeScreenText(m.chat.composeDraft)) {
 		maxWidth--
+	}
+	if !m.chat.panel.caps.CanSend {
+		line := "  > " + m.t("chat.input.unsupported")
+		line = TruncateVisual(line, maxWidth)
+		return lipgloss.NewStyle().Faint(true).Render(line)
 	}
 	if !m.chat.hasToken() {
 		hint := m.t("chat.input.no_token")
@@ -596,12 +599,12 @@ func (m Model) formatChatRow(msg ChatMessage, selected bool) (string, string) {
 		selLead = "▌ "
 	}
 	body := sanitizeScreenText(msg.Body)
-	if msg.Kind == chat.MessageNotice {
+	if msg.Kind == catalog.ChatMessageNotice {
 		prefix := m.t("chat.notice_prefix")
 		return selLead, styleNotice(fmt.Sprintf("%s %s", prefix, body))
 	}
-	if msg.Kind == chat.MessageSystem {
-		if chat.ClassifyUserNotice(msg.MsgID) == chat.UserNoticeRaid {
+	if msg.Kind == catalog.ChatMessageSystem {
+		if catalog.ClassifyUserNotice(msg.MsgID) == catalog.UserNoticeRaid {
 			// Star and tag carry the meaning; the reverse video only adds to them.
 			lead := "★ "
 			if selected && m.Focus() == FocusChat {
@@ -704,14 +707,14 @@ func (m Model) systemLinePrefix(msg ChatMessage) string {
 
 func (m Model) formatDeliveryBadge(msg ChatMessage) string {
 	switch msg.Delivery {
-	case chat.DeliverySending:
+	case catalog.ChatDeliverySending:
 		return m.t("chat.send.sending")
-	case chat.DeliveryConfirmed:
+	case catalog.ChatDeliveryConfirmed:
 		return m.t("chat.send.confirmed")
-	case chat.DeliveryRejected:
+	case catalog.ChatDeliveryRejected:
 		reason := m.formatRejectReason(msg.RejectReason, msg.RejectDetail)
 		return styleReject(fmt.Sprintf(m.t("chat.send.rejected"), reason))
-	case chat.DeliveryDiscarded:
+	case catalog.ChatDeliveryDiscarded:
 		reason := m.formatRejectReason(msg.RejectReason, msg.RejectDetail)
 		return styleReject(fmt.Sprintf(m.t("chat.send.discarded"), reason))
 	default:
@@ -719,31 +722,31 @@ func (m Model) formatDeliveryBadge(msg ChatMessage) string {
 	}
 }
 
-func (m Model) formatRejectReason(reason chat.RejectReason, detail string) string {
+func (m Model) formatRejectReason(reason catalog.ChatRejectReason, detail string) string {
 	switch reason {
-	case chat.RejectSlowMode:
+	case catalog.ChatRejectSlowMode:
 		return m.t("chat.reject.slow_mode")
-	case chat.RejectFollowersOnly:
+	case catalog.ChatRejectFollowersOnly:
 		return m.t("chat.reject.followers_only")
-	case chat.RejectSubsOnly:
+	case catalog.ChatRejectSubsOnly:
 		return m.t("chat.reject.subs_only")
-	case chat.RejectEmoteOnly:
+	case catalog.ChatRejectEmoteOnly:
 		return m.t("chat.reject.emote_only")
-	case chat.RejectR9K:
+	case catalog.ChatRejectR9K:
 		return m.t("chat.reject.r9k")
-	case chat.RejectRateLimited:
+	case catalog.ChatRejectRateLimited:
 		return m.t("chat.reject.rate_limit")
-	case chat.RejectUnauthenticated:
+	case catalog.ChatRejectUnauthenticated:
 		return m.t("chat.reject.unauthenticated")
-	case chat.RejectChannelSwitched:
+	case catalog.ChatRejectChannelSwitched:
 		return m.t("chat.reject.channel_switched")
-	case chat.RejectTimeout:
+	case catalog.ChatRejectTimeout:
 		return m.t("chat.reject.timeout")
-	case chat.RejectConnectionLost:
+	case catalog.ChatRejectConnectionLost:
 		return m.t("chat.reject.connection_lost")
-	case chat.RejectReconnected:
+	case catalog.ChatRejectReconnected:
 		return m.t("chat.reject.reconnected")
-	case chat.RejectBanned:
+	case catalog.ChatRejectBanned:
 		return m.t("chat.reject.banned")
 	default:
 		if clean := sanitizeScreenText(strings.TrimSpace(detail)); clean != "" {

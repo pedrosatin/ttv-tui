@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
@@ -25,6 +26,13 @@ type chatBridge struct {
 
 func newChatBridge(mgr *chat.Manager) *chatBridge {
 	return &chatBridge{mgr: mgr}
+}
+
+func (b *chatBridge) Capabilities() catalog.ChatCapabilities {
+	if b.mgr == nil {
+		return catalog.ChatCapabilities{}
+	}
+	return b.mgr.Capabilities()
 }
 
 func (b *chatBridge) HasToken() bool {

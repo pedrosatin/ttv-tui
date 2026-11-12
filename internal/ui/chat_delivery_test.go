@@ -1,9 +1,10 @@
 package ui
 
 import (
-	"github.com/pedrosatin/ttv-tui/internal/chat"
-	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"testing"
+
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
 func TestDeliveryComposeBeforeJoin(t *testing.T) {
@@ -19,7 +20,7 @@ func TestDeliveryComposeBeforeJoin(t *testing.T) {
 		t.Error("draft lost before Join")
 	}
 	for _, msg := range m.ChatMessages() {
-		if msg.Delivery == chat.DeliverySending {
+		if msg.Delivery == catalog.ChatDeliverySending {
 			t.Fatal("message pending before Join")
 		}
 	}

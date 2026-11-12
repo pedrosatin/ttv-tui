@@ -92,12 +92,15 @@ func Run(opts Options) error {
 		return fmt.Errorf(appCat.T("app.err_persist_lang"), err)
 	}
 
+	chatMgr, stopChat := chatManager(opts.Chat, cfg)
+	defer stopChat()
+
 	source := opts.Source
 	if source == nil {
 		source = twitch.NewGQLSource(twitch.GQLConfig{})
 	}
 
-	twitchProvider := twitch.NewProvider(source)
+	twitchProvider := twitch.NewProvider(source, chatMgr)
 	urlProvider := provider.NewURLProvider()
 	providerRegistry := provider.NewRegistry(twitchProvider, urlProvider)
 
@@ -129,8 +132,6 @@ func Run(opts Options) error {
 		stopPlayer()
 		logPlayerNotes(logw, playerMgr.Notes(), appCat)
 	}()
-	chatMgr, stopChat := chatManager(opts.Chat, cfg)
-	defer stopChat()
 
 	appStore := store.New(statePath)
 	st, corruptNotice := loadState(appStore, appCat)

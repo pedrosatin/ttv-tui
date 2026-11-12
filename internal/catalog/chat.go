@@ -258,3 +258,26 @@ type Chat interface {
 	// Username returns the authenticated username, or empty if anonymous.
 	Username() string
 }
+
+// IsBlockedCommand reports whether body would be published as plain text instead
+// of running as a command. Commands starting with / other than /me are blocked.
+func IsBlockedCommand(body string) bool {
+	clean := sanitizeOutboundBody(body)
+	if !strings.HasPrefix(clean, "/") {
+		return false
+	}
+	return strings.Fields(clean)[0] != "/me"
+}
+
+func sanitizeOutboundBody(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\r' || r == '\n' || r == 0 {
+			b.WriteByte(' ')
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return strings.TrimSpace(b.String())
+}

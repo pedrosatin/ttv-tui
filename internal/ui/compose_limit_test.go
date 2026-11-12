@@ -11,6 +11,8 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
+const twitchMessageRuneLimit = 500
+
 func TestComposeCounterShortLimitAndOver(t *testing.T) {
 	cat, err := i18n.New(i18n.LangEN)
 	if err != nil {

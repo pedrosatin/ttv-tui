@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/pedrosatin/ttv-tui/internal/chat"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
 // ChatState describes the UI-facing state of the active chat session.
@@ -15,24 +15,24 @@ type ChatState string
 
 const (
 	ChatStateNone         ChatState = ""
-	ChatStateDisconnected ChatState = ChatState(chat.StateDisconnected)
-	ChatStateConnecting   ChatState = ChatState(chat.StateConnecting)
-	ChatStateConnected    ChatState = ChatState(chat.StateConnected)
-	ChatStateReconnecting ChatState = ChatState(chat.StateReconnecting)
-	ChatStateError        ChatState = ChatState(chat.StateError)
+	ChatStateDisconnected ChatState = ChatState(catalog.ChatStateDisconnected)
+	ChatStateConnecting   ChatState = ChatState(catalog.ChatStateConnecting)
+	ChatStateConnected    ChatState = ChatState(catalog.ChatStateConnected)
+	ChatStateReconnecting ChatState = ChatState(catalog.ChatStateReconnecting)
+	ChatStateError        ChatState = ChatState(catalog.ChatStateError)
 )
 
-// ChatMessage is the UI-facing alias for chat.Message.
-type ChatMessage = chat.Message
+// ChatMessage is the UI-facing alias for catalog.ChatMessage.
+type ChatMessage = catalog.ChatMessage
 
-// ChatRoomState is the UI-facing alias for chat.RoomState.
-type ChatRoomState = chat.RoomState
+// ChatRoomState is the UI-facing alias for catalog.ChatRoomState.
+type ChatRoomState = catalog.ChatRoomState
 
-// ChatSendRequest is the UI-facing alias for chat.SendRequest.
-type ChatSendRequest = chat.SendRequest
+// ChatSendRequest is the UI-facing alias for catalog.ChatSendRequest.
+type ChatSendRequest = catalog.ChatSendRequest
 
-// ChatSendStatusUpdate is the UI-facing alias for chat.SendStatusUpdate.
-type ChatSendStatusUpdate = chat.SendStatusUpdate
+// ChatSendStatusUpdate is the UI-facing alias for catalog.ChatSendStatusUpdate.
+type ChatSendStatusUpdate = catalog.ChatSendStatusUpdate
 
 // ChatEventMsg is delivered by the injected Chat bridge whenever the chat
 // session changes state, updates ROOMSTATE, updates outbound message status,
@@ -58,6 +58,7 @@ type ChatEventMsg struct {
 
 // Chat is the UI->app bridge for managing the active channel chat session.
 type Chat interface {
+	Capabilities() catalog.ChatCapabilities
 	Join(login string) tea.Cmd
 	Reconnect() tea.Cmd
 	Stop() tea.Cmd
@@ -75,6 +76,9 @@ type ChatSender interface {
 func WithChat(c Chat) Option {
 	return func(m *Model) {
 		m.chat.session = c
+		if c != nil {
+			m.chat.panel.caps = c.Capabilities()
+		}
 		if sender, ok := c.(ChatSender); ok {
 			m.chat.panel.anonymous = !sender.HasToken()
 			m.chat.panel.username = sender.Username()
@@ -83,7 +87,7 @@ func WithChat(c Chat) Option {
 }
 
 type chatPanel struct {
-	buf         *chat.Buffer
+	buf         *catalog.ChatBuffer
 	gen         uint64
 	switching   bool
 	state       ChatState
@@ -95,8 +99,12 @@ type chatPanel struct {
 	sendWarning string
 	// gapPending asks for the reconnect line once the new session is up.
 	gapPending bool
-	// unsupported marks the chat panel for a non-Twitch platform without chat.
+	// unsupported marks the chat panel for a platform without chat.
 	unsupported bool
+	// hasChat reports whether the current platform provides a chat session.
+	hasChat bool
+	// caps declares the active platform's chat capabilities.
+	caps catalog.ChatCapabilities
 
 	// Scroll state (see chat_scroll.go). followLive pins the viewport to the
 	// newest message; bottomIdx is the buffer index shown at the bottom when
@@ -108,11 +116,13 @@ type chatPanel struct {
 
 func newChatPanel() chatPanel {
 	return chatPanel{
-		buf: chat.NewBuffer(chat.DefaultMaxLines, chat.DefaultMaxBytes),
+		buf: catalog.NewChatBuffer(catalog.DefaultChatMaxLines, catalog.DefaultChatMaxBytes),
 		roomState: ChatRoomState{
 			FollowersOnly: -1,
 		},
 		followLive: true,
+		caps:       catalog.TwitchChatCapabilities,
+		hasChat:    true,
 	}
 }
 
@@ -123,11 +133,20 @@ func (m *Model) setChatUnsupported(channel string) {
 	m.chat.panel.buf.Clear()
 	m.chat.panel.channel = channel
 	m.chat.panel.unsupported = true
+	m.chat.panel.hasChat = false
+	m.chat.panel.caps = catalog.ChatCapabilities{}
 	m.chat.panel.state = ChatStateDisconnected
 	m.chat.panel.errText = ""
 	m.chat.panel.sendWarning = ""
 	m.chat.panel.switching = false
 	m.chat.composing = false
+}
+
+func (c chatState) maxRuneLength() int {
+	if c.panel.caps.MaxMessageLength > 0 {
+		return c.panel.caps.MaxMessageLength
+	}
+	return 500
 }
 
 func (c chatState) hasToken() bool {
@@ -145,7 +164,7 @@ func (c chatState) hasPendingOutgoing() bool {
 		return false
 	}
 	for _, msg := range c.panel.buf.Messages() {
-		if msg.Self && msg.Delivery == chat.DeliverySending {
+		if msg.Self && msg.Delivery == catalog.ChatDeliverySending {
 			return true
 		}
 	}
@@ -168,6 +187,10 @@ func (m *Model) startChatChannel(login string) tea.Cmd {
 	m.chat.panel.buf.Clear()
 	m.chat.panel.channel = norm
 	m.chat.panel.unsupported = false
+	m.chat.panel.hasChat = true
+	if m.chat.session != nil {
+		m.chat.panel.caps = m.chat.session.Capabilities()
+	}
 	m.chat.panel.state = ChatStateConnecting
 	m.chat.panel.errText = ""
 	if hadPending {
@@ -195,18 +218,22 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if !m.chat.panel.caps.CanSend {
+		return m, nil
+	}
+
 	if !m.chat.hasToken() {
 		m.chat.panel.sendWarning = m.t("chat.warn.no_token")
 		return m, nil
 	}
 
-	if chat.IsBlockedCommand(body) {
+	if catalog.IsBlockedCommand(body) {
 		// Keep the draft and stay in compose mode: sending would publish it.
 		m.chat.panel.sendWarning = m.t("chat.warn.command_blocked")
 		return m, nil
 	}
 
-	if utf8.RuneCountInString(body) > twitchMessageRuneLimit {
+	if utf8.RuneCountInString(body) > m.chat.maxRuneLength() {
 		// Keep the draft and stay in compose mode; never truncate on send.
 		m.chat.panel.sendWarning = m.t("chat.warn.too_long")
 		return m, nil
@@ -235,14 +262,14 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 	beforeLen := m.chat.panel.buf.Len()
 	appended := m.chat.panel.buf.Append(ChatMessage{
 		Generation:  m.chat.panel.gen,
-		Kind:        chat.MessageChat,
+		Kind:        catalog.ChatMessageChat,
 		ReceivedAt:  m.chat.now(),
 		Nonce:       nonce,
 		User:        m.chat.panel.username,
 		DisplayName: displayName,
 		Body:        body,
 		Self:        true,
-		Delivery:    chat.DeliverySending,
+		Delivery:    catalog.ChatDeliverySending,
 	})
 	m.noteChatAppend(beforeLen, appended)
 
@@ -341,7 +368,9 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 			item.Generation = msg.Generation
 		}
 		if item.UserNotice {
-			item = m.userNoticeMessage(item)
+			if m.chat.panel.caps.SupportsUserNotice {
+				item = m.userNoticeMessage(item)
+			}
 		}
 		beforeLen := m.chat.panel.buf.Len()
 		appended := m.chat.panel.buf.Append(item)
@@ -380,7 +409,7 @@ func (m *Model) markReconnectGap() {
 	}
 	appended := m.chat.panel.buf.Append(ChatMessage{
 		Generation: m.chat.panel.gen,
-		Kind:       chat.MessageSystem,
+		Kind:       catalog.ChatMessageSystem,
 		MsgID:      systemMsgIDReconnect,
 		Body:       m.t("chat.reconnected_gap"),
 	})
@@ -396,25 +425,25 @@ func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 	if gen == 0 {
 		gen = m.chat.panel.gen
 	}
-	if item.CommunityGiftID != "" && chat.ClassifyUserNotice(item.MsgID) == chat.UserNoticeGift {
-		item.Generation, item.Kind = gen, chat.MessageSystem
+	if item.CommunityGiftID != "" && catalog.ClassifyUserNotice(item.MsgID) == catalog.UserNoticeGift {
+		item.Generation, item.Kind = gen, catalog.ChatMessageSystem
 		item.Body, item.SystemMsg, item.UserNotice = "", "", false
 		return item
 	}
 	text := strings.TrimSpace(item.Body)
-	body := strings.TrimSpace(item.SystemMsg)
+	tbody := strings.TrimSpace(item.SystemMsg)
 	switch {
-	case body == "":
-		body = m.userNoticeFallback(item)
+	case tbody == "":
+		tbody = m.userNoticeFallback(item)
 		if text != "" {
-			body = fmt.Sprintf(m.t("chat.usernotice.with_text"), body, text)
+			tbody = fmt.Sprintf(m.t("chat.usernotice.with_text"), tbody, text)
 		}
 	case text != "":
-		body += " — " + text
+		tbody += " — " + text
 	}
 	return ChatMessage{
 		Generation:      gen,
-		Kind:            chat.MessageSystem,
+		Kind:            catalog.ChatMessageSystem,
 		ID:              item.ID,
 		ReceivedAt:      item.ReceivedAt,
 		User:            item.User,
@@ -424,7 +453,7 @@ func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 		CommunityGiftID: item.CommunityGiftID,
 		GiftCount:       item.GiftCount,
 		GiftRecipient:   item.GiftRecipient,
-		Body:            body,
+		Body:            tbody,
 	}
 }
 
@@ -436,22 +465,22 @@ func (m Model) userNoticeFallback(item ChatMessage) string {
 	if name == "" {
 		name = "?"
 	}
-	switch chat.ClassifyUserNotice(item.MsgID) {
-	case chat.UserNoticeSub:
+	switch catalog.ClassifyUserNotice(item.MsgID) {
+	case catalog.UserNoticeSub:
 		return fmt.Sprintf(m.t("chat.usernotice.sub"), name)
-	case chat.UserNoticeResub:
+	case catalog.UserNoticeResub:
 		if item.Months > 0 {
 			return fmt.Sprintf(m.t("chat.usernotice.resub_months"), name, item.Months)
 		}
 		return fmt.Sprintf(m.t("chat.usernotice.resub"), name)
-	case chat.UserNoticeGift:
+	case catalog.UserNoticeGift:
 		if item.GiftRecipient != "" {
 			return fmt.Sprintf(m.t("chat.usernotice.gift_recipient"), name, item.GiftRecipient)
 		}
 		return fmt.Sprintf(m.t("chat.usernotice.gift"), name)
-	case chat.UserNoticeRaid:
+	case catalog.UserNoticeRaid:
 		return fmt.Sprintf(m.t("chat.usernotice.raid"), name)
-	case chat.UserNoticeAnnouncement:
+	case catalog.UserNoticeAnnouncement:
 		return fmt.Sprintf(m.t("chat.usernotice.announcement"), name)
 	}
 	if id := strings.TrimSpace(item.MsgID); id != "" {
@@ -477,7 +506,7 @@ func (m Model) moderationClearChatMessage(msg ChatEventMsg) ChatMessage {
 	}
 	return ChatMessage{
 		Generation: gen,
-		Kind:       chat.MessageSystem,
+		Kind:       catalog.ChatMessageSystem,
 		MsgID:      systemMsgIDModeration,
 		Body:       body,
 	}
@@ -497,7 +526,7 @@ func (m Model) moderationClearMsgMessage(msg ChatEventMsg) ChatMessage {
 	}
 	return ChatMessage{
 		Generation: gen,
-		Kind:       chat.MessageSystem,
+		Kind:       catalog.ChatMessageSystem,
 		MsgID:      systemMsgIDModeration,
 		Body:       body,
 	}
@@ -533,21 +562,21 @@ func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {
 	m.chat.panel.buf.UpdateDelivery(upd)
 
 	switch upd.Status {
-	case chat.DeliveryDiscarded:
+	case catalog.ChatDeliveryDiscarded:
 		switch upd.Reason {
-		case chat.RejectTimeout, chat.RejectConnectionLost:
+		case catalog.ChatRejectTimeout, catalog.ChatRejectConnectionLost:
 			if m.chat.composeDraft == "" && normalizeChatChannel(upd.Channel) == m.chat.panel.channel {
 				m.chat.composeDraft = upd.Body
 			}
-		case chat.RejectRateLimited:
+		case catalog.ChatRejectRateLimited:
 			m.chat.panel.sendWarning = m.t("chat.warn.rate_limit")
-		case chat.RejectChannelSwitched:
+		case catalog.ChatRejectChannelSwitched:
 			m.chat.panel.sendWarning = m.t("chat.warn.channel_switched")
-		case chat.RejectReconnected:
+		case catalog.ChatRejectReconnected:
 			m.chat.panel.sendWarning = m.t("chat.warn.reconnected")
 		}
-	case chat.DeliveryRejected:
-		if upd.Reason == chat.RejectUnauthenticated {
+	case catalog.ChatDeliveryRejected:
+		if upd.Reason == catalog.ChatRejectUnauthenticated {
 			m.chat.panel.sendWarning = m.t("chat.warn.no_token")
 		}
 	}
@@ -575,7 +604,7 @@ func (m Model) ChatMessages() []ChatMessage {
 	}
 	msgs := m.chat.panel.buf.Messages()
 	for i := range msgs {
-		if msgs[i].CommunityGiftID != "" && chat.ClassifyUserNotice(msgs[i].MsgID) == chat.UserNoticeGift {
+		if msgs[i].CommunityGiftID != "" && catalog.ClassifyUserNotice(msgs[i].MsgID) == catalog.UserNoticeGift {
 			name := strings.TrimSpace(msgs[i].DisplayName)
 			if name == "" {
 				name = strings.TrimSpace(msgs[i].User)
@@ -611,7 +640,12 @@ func (m Model) ChatSendWarning() string {
 // ChatBufferLimits returns the chat buffer's configured max lines and max bytes.
 func (m Model) ChatBufferLimits() (maxLines, maxBytes int) {
 	if m.chat.panel.buf == nil {
-		return chat.DefaultMaxLines, chat.DefaultMaxBytes
+		return catalog.DefaultChatMaxLines, catalog.DefaultChatMaxBytes
 	}
 	return m.chat.panel.buf.MaxLines(), m.chat.panel.buf.MaxBytes()
+}
+
+// ChatCapabilities returns the declared capabilities for the active chat panel.
+func (m Model) ChatCapabilities() catalog.ChatCapabilities {
+	return m.chat.panel.caps
 }
