@@ -33,7 +33,7 @@ o IPC JSON e o filtro de anúncio do streamlink (regra 1). O que muda é o trans
 - O painel só usa OpenGL 1.1. Esse OpenGL recusa textura com lado fora de potência de 2 e desenha
   um retângulo branco no lugar dela. Sem OpenGL 2.0 nem `GL_ARB_texture_non_power_of_two`, a
   textura do painel é alocada com lados potência de 2 e desenhada com coordenadas que param onde o
-  painel acaba. Um painel maior que o `GL_MAX_TEXTURE_SIZE` (1024 nos relatos do genérico) vira
+  painel acaba. Um painel maior que o `GL_MAX_TEXTURE_SIZE` (1024 no genérico) vira
   uma grade de texturas. Sem OpenGL 1.2 nem `GL_EXT_bgra`, os pixels vão em `GL_RGBA`. Com OpenGL
   2.0 ou mais, o painel segue em uma textura do tamanho exato. O cálculo fica em
   `window/paneltex.go`, e um erro do OpenGL nesse caminho sai no stderr da janela.
@@ -64,7 +64,9 @@ o IPC JSON e o filtro de anúncio do streamlink (regra 1). O que muda é o trans
 - Validado à mão: Linux com Wayland (ADR 0011) e a prova de conceito no Windows 11 amd64. O código
   ajustado depois dela, o zip da release, o X11 e o macOS ainda não rodaram numa máquina real.
 - O painel em OpenGL 1.1 rodou no Linux, com o Mesa em software anunciando 1.1 sem
-  `GL_ARB_texture_non_power_of_two`. No genérico do Windows ele ainda não rodou.
+  `GL_ARB_texture_non_power_of_two`, e numa VM com Windows 11 sem aceleração 3D: o genérico
+  (`1.1.0 / GDI Generic`) aceitou `GL_BGRA`, limitou a textura a 1024 e desenhou o painel de
+  1280x720 em duas texturas, sem erro do OpenGL. O vídeo dessa VM não foi testado.
 - A release publica o `ttv-tui-window` para Linux amd64 e Windows amd64. No macOS ele é compilado
   a partir do código, com `brew install sdl3 mpv`.
 - No Windows, a janela continua presa ao console que abriu o `ttv-tui`: fechar esse terminal fecha
