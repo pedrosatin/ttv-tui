@@ -12,10 +12,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/pedrosatin/ttv-tui/internal/filelock"
 )
 
 // AllowedDomains are the only hostnames accepted for release metadata and asset downloads.
@@ -26,18 +30,25 @@ var AllowedDomains = []string{
 	"objects.githubusercontent.com",
 }
 
+const (
+	maxReleaseJSONBytes     = 2 * 1024 * 1024   // 2 MB
+	maxUncompressedZipBytes = 500 * 1024 * 1024 // 500 MB
+)
+
 // ProgressFunc reports download progress.
 type ProgressFunc func(component string, percent int, readBytes, totalBytes int64)
 
 // Downloader manages downloading and verifying managed components.
 type Downloader struct {
-	HTTPClient   *http.Client
-	AllowedHosts []string
-	APIBaseURL   string
-	DataDir      string
-	GOOS         string
-	GOARCH       string
-	InsecureHTTP bool // For tests only
+	Transport       http.RoundTripper
+	AllowedHosts    []string
+	APIBaseURL      string
+	DataDir         string
+	GOOS            string
+	GOARCH          string
+	InsecureHTTP    bool // For tests only
+	ExtractAppImage func(ctx context.Context, appImagePath, destDir string) error
+	LookPath        func(string) (string, error)
 }
 
 // NewDownloader returns a Downloader with production defaults.
@@ -47,8 +58,20 @@ func NewDownloader(dataDir string) *Downloader {
 		DataDir:      dataDir,
 		GOOS:         runtime.GOOS,
 		GOARCH:       runtime.GOARCH,
+		LookPath:     defaultLookPath,
 	}
 }
+
+type downloadCall struct {
+	done chan struct{}
+	res  Result
+	err  error
+}
+
+var (
+	downloadMu      sync.Mutex
+	activeDownloads = make(map[string]*downloadCall)
+)
 
 // gitHubRelease represents the minimal GitHub release structure.
 type gitHubRelease struct {
@@ -84,7 +107,7 @@ func (d *Downloader) isHostAllowed(host string) bool {
 	return false
 }
 
-// validateURL ensures urlStr uses HTTPS (unless InsecureHTTP is enabled for tests)
+// validateURL ensures rawURL uses HTTPS (unless InsecureHTTP is enabled for tests)
 // and points to an allowed domain.
 func (d *Downloader) validateURL(rawURL string) (*url.URL, error) {
 	u, err := url.Parse(rawURL)
@@ -102,11 +125,13 @@ func (d *Downloader) validateURL(rawURL string) (*url.URL, error) {
 
 // httpClient returns an HTTP client configured to enforce domain whitelisting across redirects.
 func (d *Downloader) httpClient() *http.Client {
-	if d.HTTPClient != nil {
-		return d.HTTPClient
+	transport := d.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
 	}
 	return &http.Client{
-		Timeout: 5 * time.Minute,
+		Transport: transport,
+		Timeout:   5 * time.Minute,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return errors.New("stopped after 10 redirects")
@@ -119,18 +144,6 @@ func (d *Downloader) httpClient() *http.Client {
 	}
 }
 
-// ManualInstallHint returns platform-specific instructions for installing streamlink manually.
-func ManualInstallHint(goos string) string {
-	switch goos {
-	case "windows":
-		return "baixe o instalador oficial em https://github.com/streamlink/windows-builds/releases ou use o Scoop ('scoop install streamlink')"
-	case "darwin":
-		return "instale o streamlink com 'brew install streamlink'"
-	default:
-		return "instale o streamlink pelo gerenciador da sua distribuição (ex: pacman, apt) ou com 'pipx install streamlink' (https://streamlink.github.io/install.html)"
-	}
-}
-
 // repoForPlatform returns the GitHub repo (owner/repo) for streamlink builds on the target OS.
 func (d *Downloader) repoForPlatform() (string, error) {
 	switch d.GOOS {
@@ -139,7 +152,7 @@ func (d *Downloader) repoForPlatform() (string, error) {
 	case "linux":
 		return "streamlink/streamlink-appimage", nil
 	case "darwin":
-		return "", errors.New("managed streamlink is not supported on macOS (use brew install streamlink)")
+		return "", errors.New("managed streamlink is not supported on macOS")
 	default:
 		return "", fmt.Errorf("unsupported OS %q for managed streamlink", d.GOOS)
 	}
@@ -169,13 +182,81 @@ func (d *Downloader) matchAsset(assets []gitHubAsset) (*gitHubAsset, error) {
 	return nil, fmt.Errorf("no matching streamlink asset found for %s/%s", d.GOOS, d.GOARCH)
 }
 
-// DownloadStreamlink downloads, verifies SHA-256 against GitHub API digest,
-// and installs streamlink in the components data directory.
+func validateTagName(tag string) error {
+	if tag == "" || tag == "." || tag == ".." {
+		return errors.New("invalid empty or dot tag name")
+	}
+	if strings.ContainsAny(tag, `/\`) || strings.Contains(tag, "..") {
+		return fmt.Errorf("tag name %q contains illegal path characters", tag)
+	}
+	return nil
+}
+
+// DownloadStreamlink coordinates in-process singleflight and invokes the download routine.
 func (d *Downloader) DownloadStreamlink(ctx context.Context, progress ProgressFunc) (Result, error) {
+	key := filepath.Clean(d.DataDir)
+	downloadMu.Lock()
+	call, active := activeDownloads[key]
+	if active {
+		downloadMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return Result{}, ctx.Err()
+		case <-call.done:
+			return call.res, call.err
+		}
+	}
+	call = &downloadCall{done: make(chan struct{})}
+	activeDownloads[key] = call
+	downloadMu.Unlock()
+
+	defer func() {
+		downloadMu.Lock()
+		delete(activeDownloads, key)
+		downloadMu.Unlock()
+		close(call.done)
+	}()
+
+	res, err := d.doDownloadStreamlink(ctx, progress)
+	call.res = res
+	call.err = err
+	return res, err
+}
+
+// doDownloadStreamlink performs the actual download, SHA-256 verification, and atomic install.
+func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress ProgressFunc) (Result, error) {
 	repo, err := d.repoForPlatform()
 	if err != nil {
 		return Result{}, err
 	}
+
+	baseDir := StreamlinkBaseDir(d.DataDir)
+	if err := os.MkdirAll(baseDir, 0o700); err != nil {
+		return Result{}, fmt.Errorf("create components directory: %w", err)
+	}
+
+	// Inter-process lock to prevent concurrent downloads and modifications.
+	lockPath := filepath.Join(baseDir, ".lock")
+	unlock, err := filelock.LockWithContext(ctx, lockPath, 10*time.Minute)
+	if err != nil {
+		return Result{}, fmt.Errorf("acquire download lock: %w", err)
+	}
+	defer func() { _ = unlock() }()
+
+	// If another process just finished installing, use the existing installation.
+	resolver := &Resolver{
+		DataDir:  d.DataDir,
+		GOOS:     d.GOOS,
+		GOARCH:   d.GOARCH,
+		LookPath: d.LookPath,
+		HasFUSE:  DefaultHasFUSE,
+	}
+	if res, ok := resolver.findManagedStreamlink(); ok {
+		return res, nil
+	}
+
+	// Clean up stale temporary directories left by crashed processes.
+	cleanStaleTemps(baseDir)
 
 	apiURL := d.APIBaseURL
 	if apiURL == "" {
@@ -187,7 +268,7 @@ func (d *Downloader) DownloadStreamlink(ctx context.Context, progress ProgressFu
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
-		return Result{}, fmt.Errorf("create API request: %w; %s", err, ManualInstallHint(d.GOOS))
+		return Result{}, fmt.Errorf("create API request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "ttv-tui")
@@ -195,82 +276,107 @@ func (d *Downloader) DownloadStreamlink(ctx context.Context, progress ProgressFu
 	client := d.httpClient()
 	resp, err := client.Do(req)
 	if err != nil {
-		return Result{}, fmt.Errorf("fetch latest release: %w; %s", err, ManualInstallHint(d.GOOS))
+		return Result{}, fmt.Errorf("fetch latest release: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return Result{}, fmt.Errorf("GitHub API returned status %d; %s", resp.StatusCode, ManualInstallHint(d.GOOS))
+		return Result{}, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
 
 	var rel gitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return Result{}, fmt.Errorf("decode release JSON: %w; %s", err, ManualInstallHint(d.GOOS))
+	lr := io.LimitReader(resp.Body, maxReleaseJSONBytes)
+	if err := json.NewDecoder(lr).Decode(&rel); err != nil {
+		return Result{}, fmt.Errorf("decode release JSON: %w", err)
+	}
+
+	if err := validateTagName(rel.TagName); err != nil {
+		return Result{}, fmt.Errorf("invalid release tag: %w", err)
 	}
 
 	asset, err := d.matchAsset(rel.Assets)
 	if err != nil {
-		return Result{}, fmt.Errorf("match asset: %w; %s", err, ManualInstallHint(d.GOOS))
+		return Result{}, fmt.Errorf("match asset: %w", err)
+	}
+
+	assetName := filepath.Base(asset.Name)
+	if assetName == "" || assetName == "." || assetName == ".." || strings.Contains(assetName, "..") {
+		return Result{}, fmt.Errorf("invalid asset filename %q", asset.Name)
 	}
 
 	expectedDigest := strings.TrimSpace(asset.Digest)
 	if !strings.HasPrefix(strings.ToLower(expectedDigest), "sha256:") {
-		return Result{}, fmt.Errorf("asset %q has no valid sha256 digest in GitHub API (got %q); %s", asset.Name, expectedDigest, ManualInstallHint(d.GOOS))
+		return Result{}, fmt.Errorf("asset %q has no valid sha256 digest in GitHub API (got %q)", asset.Name, expectedDigest)
 	}
 	expectedHash := strings.ToLower(strings.TrimPrefix(expectedDigest, "sha256:"))
 
 	version := rel.TagName
-	if version == "" {
-		version = "latest"
-	}
 
-	targetDir := StreamlinkVersionDir(d.DataDir, version)
-	baseDir := StreamlinkBaseDir(d.DataDir)
-	if err := os.MkdirAll(baseDir, 0o755); err != nil {
-		return Result{}, fmt.Errorf("create components directory: %w", err)
-	}
-
-	// Download into a temporary file
+	// Download into a temporary directory inside baseDir.
 	tempDir, err := os.MkdirTemp(baseDir, ".download-*")
 	if err != nil {
 		return Result{}, fmt.Errorf("create temp download dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	tempFile := filepath.Join(tempDir, asset.Name)
+	tempFile := filepath.Join(tempDir, assetName)
 	if err := d.downloadAndVerify(ctx, asset.BrowserDownloadURL, tempFile, asset.Size, expectedHash, progress); err != nil {
-		return Result{}, fmt.Errorf("download asset: %w; %s", err, ManualInstallHint(d.GOOS))
+		return Result{}, fmt.Errorf("download asset: %w", err)
 	}
 
-	// Unpack or install into targetDir
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return Result{}, fmt.Errorf("create version directory %s: %w", targetDir, err)
+	// Prepare complete installation in a separate staging directory inside baseDir.
+	stagingDir, err := os.MkdirTemp(baseDir, ".install-*")
+	if err != nil {
+		return Result{}, fmt.Errorf("create staging directory: %w", err)
 	}
+	// stagingDir is deleted if not promoted.
+	staged := false
+	defer func() {
+		if !staged {
+			_ = os.RemoveAll(stagingDir)
+		}
+	}()
 
 	var binPath string
 	if d.GOOS == "windows" {
-		binPath, err = installWindowsZip(tempFile, targetDir)
+		binPath, err = installWindowsZip(tempFile, stagingDir)
 		if err != nil {
-			_ = os.RemoveAll(targetDir)
 			return Result{}, fmt.Errorf("extract streamlink archive: %w", err)
 		}
 	} else {
-		// Linux AppImage
-		destFile := filepath.Join(targetDir, "streamlink")
-		if err := copyAndChmodExecutable(tempFile, destFile); err != nil {
-			_ = os.RemoveAll(targetDir)
-			return Result{}, fmt.Errorf("install streamlink binary: %w", err)
+		// Linux AppImage: extract via --appimage-extract
+		extractFn := d.ExtractAppImage
+		if extractFn == nil {
+			extractFn = defaultExtractAppImage
 		}
-		binPath = destFile
+		if err := extractFn(ctx, tempFile, stagingDir); err != nil {
+			return Result{}, fmt.Errorf("extract appimage: %w", err)
+		}
+		binPath = findStreamlinkBinaryInDir(stagingDir, d.GOOS)
+		if binPath == "" {
+			return Result{}, fmt.Errorf("AppRun executable not found after extracting AppImage")
+		}
 	}
 
-	resolver := &Resolver{
-		DataDir:  d.DataDir,
-		GOOS:     d.GOOS,
-		GOARCH:   d.GOARCH,
-		LookPath: osLookPath,
-		HasFUSE:  DefaultHasFUSE,
+	targetDir := StreamlinkVersionDir(d.DataDir, version)
+	// If targetDir already exists (installed by another process or earlier), discard stagingDir.
+	if fi, statErr := os.Stat(targetDir); statErr == nil && fi.IsDir() {
+		_ = os.RemoveAll(stagingDir)
+		staged = true
+	} else {
+		if err := os.Rename(stagingDir, targetDir); err != nil {
+			// Check if target was created in the meantime
+			if fi, statErr := os.Stat(targetDir); statErr == nil && fi.IsDir() {
+				_ = os.RemoveAll(stagingDir)
+				staged = true
+			} else {
+				return Result{}, fmt.Errorf("atomic rename staging to version dir %s: %w", targetDir, err)
+			}
+		} else {
+			staged = true
+		}
 	}
+
 	res, ok := resolver.findManagedStreamlink()
 	if !ok {
 		return Result{
@@ -282,9 +388,39 @@ func (d *Downloader) DownloadStreamlink(ctx context.Context, progress ProgressFu
 	return res, nil
 }
 
+func cleanStaleTemps(baseDir string) {
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, ".download-") || strings.HasPrefix(name, ".install-") || strings.HasPrefix(name, ".tmp-") {
+			_ = os.RemoveAll(filepath.Join(baseDir, name))
+		}
+	}
+}
+
+func defaultExtractAppImage(ctx context.Context, appImagePath, destDir string) error {
+	if err := os.Chmod(appImagePath, 0o700); err != nil {
+		return fmt.Errorf("chmod appimage: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, appImagePath, "--appimage-extract")
+	cmd.Dir = destDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("execute appimage --appimage-extract: %w (output: %s)", err, strings.TrimSpace(string(output)))
+	}
+	appRun := filepath.Join(destDir, "squashfs-root", "AppRun")
+	if fi, err := os.Stat(appRun); err != nil || fi.IsDir() {
+		return fmt.Errorf("extracted AppRun not found at %s: %w", appRun, err)
+	}
+	return nil
+}
+
 // downloadAndVerify streams the download from urlStr to destPath while computing
-// SHA-256. If digest verification fails, destPath is deleted immediately.
-func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath string, totalBytes int64, expectedHash string, progress ProgressFunc) error {
+// SHA-256 and enforcing size limits. If verification fails, destPath is deleted immediately.
+func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath string, expectedSize int64, expectedHash string, progress ProgressFunc) error {
 	if _, err := d.validateURL(urlStr); err != nil {
 		return err
 	}
@@ -306,6 +442,7 @@ func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath str
 		return fmt.Errorf("download server returned HTTP %d", resp.StatusCode)
 	}
 
+	totalBytes := expectedSize
 	if totalBytes <= 0 && resp.ContentLength > 0 {
 		totalBytes = resp.ContentLength
 	}
@@ -321,9 +458,19 @@ func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath str
 	var readBytes int64
 	lastPct := -1
 
+	// Read with LimitReader to prevent exceeding expected asset size + 1.
+	var bodyReader io.Reader = resp.Body
+	if expectedSize > 0 {
+		bodyReader = io.LimitReader(resp.Body, expectedSize+1)
+	}
+
 	for {
-		nr, rerr := resp.Body.Read(buf)
+		nr, rerr := bodyReader.Read(buf)
 		if nr > 0 {
+			if expectedSize > 0 && readBytes+int64(nr) > expectedSize {
+				_ = os.Remove(destPath)
+				return fmt.Errorf("download exceeded expected asset size of %d bytes", expectedSize)
+			}
 			nw, werr := f.Write(buf[:nr])
 			if werr != nil {
 				_ = os.Remove(destPath)
@@ -349,6 +496,11 @@ func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath str
 	}
 	_ = f.Close()
 
+	if expectedSize > 0 && readBytes < expectedSize {
+		_ = os.Remove(destPath)
+		return fmt.Errorf("download truncated: got %d bytes, expected %d", readBytes, expectedSize)
+	}
+
 	computedHash := hex.EncodeToString(hasher.Sum(nil))
 	if !strings.EqualFold(computedHash, expectedHash) {
 		_ = os.Remove(destPath)
@@ -359,27 +511,6 @@ func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath str
 		progress("streamlink", 100, readBytes, totalBytes)
 	}
 	return nil
-}
-
-// copyAndChmodExecutable copies src to dst and sets 0755 permissions.
-func copyAndChmodExecutable(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = out.Close() }()
-
-	if _, err := io.Copy(out, in); err != nil {
-		_ = os.Remove(dst)
-		return err
-	}
-	return out.Close()
 }
 
 // installWindowsZip extracts a Windows portable zip into destDir, stripping
@@ -412,9 +543,18 @@ func installWindowsZip(zipPath, destDir string) (string, error) {
 	}
 
 	cleanDest := filepath.Clean(destDir) + string(filepath.Separator)
+	var totalUncompressed int64
 
 	for _, f := range r.File {
+		mode := f.Mode()
+		if !mode.IsDir() && !mode.IsRegular() {
+			return "", fmt.Errorf("illegal entry in zip archive: %s (mode: %v)", f.Name, mode)
+		}
+
 		name := f.Name
+		if strings.Contains(name, "..") {
+			return "", fmt.Errorf("illegal relative path in zip: %s", name)
+		}
 		if commonPrefix != "" && strings.HasPrefix(name, commonPrefix) {
 			name = strings.TrimPrefix(name, commonPrefix)
 		}
@@ -424,18 +564,19 @@ func installWindowsZip(zipPath, destDir string) (string, error) {
 		}
 
 		targetPath := filepath.Join(destDir, filepath.FromSlash(name))
-		if !strings.HasPrefix(filepath.Clean(targetPath)+string(filepath.Separator), cleanDest) && filepath.Clean(targetPath) != filepath.Clean(destDir) {
+		cleanTarget := filepath.Clean(targetPath)
+		if !strings.HasPrefix(cleanTarget+string(filepath.Separator), cleanDest) && cleanTarget != filepath.Clean(destDir) {
 			return "", fmt.Errorf("illegal file path in zip: %s", f.Name)
 		}
 
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+		if mode.IsDir() {
+			if err := os.MkdirAll(targetPath, 0o700); err != nil {
 				return "", err
 			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return "", err
 		}
 
@@ -444,13 +585,25 @@ func installWindowsZip(zipPath, destDir string) (string, error) {
 			return "", err
 		}
 
-		outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		remaining := maxUncompressedZipBytes - totalUncompressed
+		if remaining <= 0 {
+			_ = rc.Close()
+			return "", fmt.Errorf("zip archive exceeds maximum uncompressed size of %d bytes", maxUncompressedZipBytes)
+		}
+
+		perm := os.FileMode(0o600)
+		if mode&0o111 != 0 || strings.HasSuffix(strings.ToLower(targetPath), ".exe") {
+			perm = 0o700
+		}
+
+		outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 		if err != nil {
 			_ = rc.Close()
 			return "", err
 		}
 
-		_, copyErr := io.Copy(outFile, rc)
+		limitedReader := io.LimitReader(rc, remaining+1)
+		nw, copyErr := io.Copy(outFile, limitedReader)
 		closeErr := outFile.Close()
 		_ = rc.Close()
 		if copyErr != nil {
@@ -458,6 +611,11 @@ func installWindowsZip(zipPath, destDir string) (string, error) {
 		}
 		if closeErr != nil {
 			return "", closeErr
+		}
+
+		totalUncompressed += nw
+		if totalUncompressed > maxUncompressedZipBytes {
+			return "", fmt.Errorf("zip archive exceeds maximum uncompressed size of %d bytes", maxUncompressedZipBytes)
 		}
 	}
 

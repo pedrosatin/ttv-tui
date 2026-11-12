@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
@@ -56,13 +58,13 @@ func NewResolver() *Resolver {
 		DataDir:  dataDir,
 		GOOS:     runtime.GOOS,
 		GOARCH:   runtime.GOARCH,
-		LookPath: osLookPath,
+		LookPath: defaultLookPath,
 		HasFUSE:  DefaultHasFUSE,
 	}
 }
 
-func osLookPath(file string) (string, error) {
-	return filepath.Abs(file)
+func defaultLookPath(file string) (string, error) {
+	return exec.LookPath(file)
 }
 
 // DefaultHasFUSE reports whether the Linux FUSE device /dev/fuse is available.
@@ -112,13 +114,17 @@ func (r *Resolver) ResolveStreamlink(configPath string) (Result, error) {
 	// 3. System PATH
 	lookPath := r.LookPath
 	if lookPath == nil {
-		lookPath = osLookPath
+		lookPath = defaultLookPath
 	}
-	if path, err := lookPath("streamlink"); err == nil && path != "" {
+	path, err := lookPath("streamlink")
+	if err == nil && path != "" {
 		return Result{
 			Path:   path,
 			Origin: OriginPath,
 		}, nil
+	}
+	if err != nil && errors.Is(err, exec.ErrDot) {
+		return Result{}, fmt.Errorf("lookup streamlink in PATH: %w", err)
 	}
 
 	return Result{}, ErrNotFound
@@ -142,9 +148,9 @@ func (r *Resolver) findManagedStreamlink() (Result, bool) {
 		return Result{}, false
 	}
 
-	// Sort versions descending (newest first).
+	// Sort versions descending (newest first) numerically by components.
 	sort.Slice(versions, func(i, j int) bool {
-		return versions[i] > versions[j]
+		return compareVersions(versions[i], versions[j]) > 0
 	})
 
 	for _, v := range versions {
@@ -171,6 +177,44 @@ func (r *Resolver) findManagedStreamlink() (Result, bool) {
 	}
 
 	return Result{}, false
+}
+
+// compareVersions compares two version strings component-wise.
+// Returns >0 if v1 > v2, <0 if v1 < v2, and 0 if v1 == v2.
+func compareVersions(v1, v2 string) int {
+	parts1 := splitVersionParts(v1)
+	parts2 := splitVersionParts(v2)
+	maxLen := max(len(parts1), len(parts2))
+	for i := 0; i < maxLen; i++ {
+		if i >= len(parts1) {
+			return -1
+		}
+		if i >= len(parts2) {
+			return 1
+		}
+		p1, p2 := parts1[i], parts2[i]
+		n1, err1 := strconv.Atoi(p1)
+		n2, err2 := strconv.Atoi(p2)
+		if err1 == nil && err2 == nil {
+			if n1 != n2 {
+				return n1 - n2
+			}
+			continue
+		}
+		if p1 != p2 {
+			if p1 > p2 {
+				return 1
+			}
+			return -1
+		}
+	}
+	return 0
+}
+
+func splitVersionParts(v string) []string {
+	return strings.FieldsFunc(v, func(r rune) bool {
+		return r == '.' || r == '-' || r == '_'
+	})
 }
 
 func isAppImage(path string) bool {
@@ -202,6 +246,8 @@ func findStreamlinkBinaryInDir(dir, goos string) string {
 	}
 
 	candidates := []string{
+		filepath.Join(dir, "squashfs-root", "AppRun"),
+		filepath.Join(dir, "AppRun"),
 		filepath.Join(dir, "streamlink"),
 		filepath.Join(dir, "streamlink.AppImage"),
 	}

@@ -26,9 +26,10 @@ Para oferecer uma experiência imediata de reprodução sem quebrar instalaçõe
    - O download ocorre exclusivamente por conexões HTTPS contra domínios autorizados (`api.github.com`, `github.com`, `release-assets.githubusercontent.com` e `objects.githubusercontent.com`).
    - O arquivo só é gravado e tornado executável se o hash SHA-256 computado bater exatamente com o digest esperado. Em caso de divergência, o arquivo é imediatamente removido e a falha é exibida com orientações para instalação manual.
 
-4. **Compatibilidade de execução**:
-   - No Linux, se `/dev/fuse` não puder ser aberto em leitura/escrita, o executável é configurado para rodar com `APPIMAGE_EXTRACT_AND_RUN=1`.
-   - No Windows, o zip é extraído descobrindo o executável sob `bin/streamlink.exe`.
+4. **Instalação atômica e compatibilidade de execução**:
+   - Todo download e montagem de componentes ocorre em diretórios temporários sob o diretório base (`$XDG_DATA_HOME/ttv-tui/components/streamlink/`), protegidos por lock de arquivo entre processos e promovidos atomicamente via renomeação (`os.Rename`), sem sobrescrever nem remover instalações existentes.
+   - No Linux, após validação do SHA-256, a AppImage é extraída uma única vez durante a instalação com `--appimage-extract`, executando diretamente o binário `squashfs-root/AppRun`. Isso elimina qualquer necessidade de FUSE (`/dev/fuse` ou `fusermount`), garantindo compatibilidade imediata em contêineres e sistemas restritos.
+   - No Windows, o zip portátil é extraído com validação estrita de tipos de entrada (rejeitando symlinks e travessia de caminho) e limite de tamanho descompactado, localizando o executável em `bin/streamlink.exe`.
 
 5. **Inspeção**:
    - O subcomando `ttv-tui doctor` relata a versão e a origem do `streamlink` em uso (`config`, `gerenciado` ou `PATH`).

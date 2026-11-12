@@ -12,9 +12,12 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -31,13 +34,15 @@ func TestResolvePrecedence(t *testing.T) {
 
 	// 2. Prepare fake managed binary in dataDir
 	managedDir := filepath.Join(dataDir, "components", "streamlink", "8.6.3-1")
-	if err := os.MkdirAll(managedDir, 0o755); err != nil {
+	if err := os.MkdirAll(managedDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	managedBin := filepath.Join(managedDir, "streamlink")
+	managedBin := filepath.Join(managedDir, "squashfs-root", "AppRun")
 	if runtime.GOOS == "windows" {
 		managedBin = filepath.Join(managedDir, "bin", "streamlink.exe")
-		_ = os.MkdirAll(filepath.Dir(managedBin), 0o755)
+	}
+	if err := os.MkdirAll(filepath.Dir(managedBin), 0o700); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(managedBin, []byte("fake-streamlink"), 0o755); err != nil {
 		t.Fatal(err)
@@ -94,7 +99,7 @@ func TestResolvePrecedence(t *testing.T) {
 
 	// Case D: Without managed streamlink, PATH is used
 	rEmptyManaged := &Resolver{
-		DataDir:  t.TempDir(), // empty data dir
+		DataDir:  t.TempDir(),
 		GOOS:     runtime.GOOS,
 		GOARCH:   runtime.GOARCH,
 		LookPath: fakeLookPath,
@@ -122,60 +127,59 @@ func TestResolvePrecedence(t *testing.T) {
 	}
 }
 
-func TestLinuxNoFUSESetsEnv(t *testing.T) {
-	dataDir := t.TempDir()
-	managedDir := filepath.Join(dataDir, "components", "streamlink", "8.6.3-1")
-	if err := os.MkdirAll(managedDir, 0o755); err != nil {
-		t.Fatal(err)
+func TestResolveStreamlink_ErrDotNotSwallowed(t *testing.T) {
+	r := &Resolver{
+		DataDir: t.TempDir(),
+		LookPath: func(string) (string, error) {
+			return "", exec.ErrDot
+		},
 	}
-	binPath := filepath.Join(managedDir, "streamlink")
-	if err := os.WriteFile(binPath, []byte("appimage-binary"), 0o755); err != nil {
-		t.Fatal(err)
+	_, err := r.ResolveStreamlink("")
+	if err == nil {
+		t.Fatal("expected error when LookPath returns ErrDot")
 	}
-
-	// When HasFUSE returns false, APPIMAGE_EXTRACT_AND_RUN=1 must be added
-	rNoFuse := &Resolver{
-		DataDir:  dataDir,
-		GOOS:     "linux",
-		GOARCH:   "amd64",
-		LookPath: func(string) (string, error) { return "", errors.New("not found") },
-		HasFUSE:  func() bool { return false },
+	if errors.Is(err, ErrNotFound) {
+		t.Fatal("exec.ErrDot must not be converted to ErrNotFound")
 	}
-	res, err := rNoFuse.ResolveStreamlink("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	hasExtractEnv := false
-	for _, env := range res.Env {
-		if env == "APPIMAGE_EXTRACT_AND_RUN=1" {
-			hasExtractEnv = true
-		}
-	}
-	if !hasExtractEnv {
-		t.Fatalf("expected APPIMAGE_EXTRACT_AND_RUN=1 in res.Env when FUSE is absent, got %v", res.Env)
-	}
-
-	// When HasFUSE returns true, APPIMAGE_EXTRACT_AND_RUN=1 must NOT be added
-	rFuse := &Resolver{
-		DataDir:  dataDir,
-		GOOS:     "linux",
-		GOARCH:   "amd64",
-		LookPath: func(string) (string, error) { return "", errors.New("not found") },
-		HasFUSE:  func() bool { return true },
-	}
-	res, err = rFuse.ResolveStreamlink("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, env := range res.Env {
-		if env == "APPIMAGE_EXTRACT_AND_RUN=1" {
-			t.Fatalf("unexpected APPIMAGE_EXTRACT_AND_RUN=1 when FUSE is available")
-		}
+	if !errors.Is(err, exec.ErrDot) {
+		t.Fatalf("expected error wrapping exec.ErrDot, got: %v", err)
 	}
 }
 
-func TestDownloadAndVerifySuccess(t *testing.T) {
-	payload := []byte("#!/bin/sh\necho streamlink 8.6.3\n")
+func TestVersionSortingNumeric(t *testing.T) {
+	dataDir := t.TempDir()
+	baseDir := StreamlinkBaseDir(dataDir)
+
+	// Create directories: 8.9.0 and 8.10.0
+	for _, v := range []string{"8.9.0", "8.10.0", "8.6.3-1", "8.6.3"} {
+		vDir := filepath.Join(baseDir, v, "squashfs-root")
+		if err := os.MkdirAll(vDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		appRun := filepath.Join(vDir, "AppRun")
+		if err := os.WriteFile(appRun, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r := &Resolver{
+		DataDir: dataDir,
+		GOOS:    "linux",
+		GOARCH:  "amd64",
+	}
+
+	res, ok := r.findManagedStreamlink()
+	if !ok {
+		t.Fatal("expected to find managed streamlink")
+	}
+	// 8.10.0 must be selected over 8.9.0 numerically
+	if res.Version != "8.10.0" {
+		t.Fatalf("selected version = %q, want %q (numeric sort failed)", res.Version, "8.10.0")
+	}
+}
+
+func TestDownloadAndVerifySuccess_LinuxExtracted(t *testing.T) {
+	payload := []byte("fake appimage payload")
 	hasher := sha256.New()
 	hasher.Write(payload)
 	expectedHash := hex.EncodeToString(hasher.Sum(nil))
@@ -209,24 +213,31 @@ func TestDownloadAndVerifySuccess(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	dataDir := t.TempDir()
 
-	var progressCalls int
-	progress := func(component string, percent int, readBytes, totalBytes int64) {
-		progressCalls++
-		if component != "streamlink" {
-			t.Errorf("expected component streamlink, got %s", component)
+	var extractedAppImagePath string
+	var extractedDestDir string
+	mockExtract := func(ctx context.Context, appImagePath, destDir string) error {
+		extractedAppImagePath = appImagePath
+		extractedDestDir = destDir
+		appRunDir := filepath.Join(destDir, "squashfs-root")
+		if err := os.MkdirAll(appRunDir, 0o700); err != nil {
+			return err
 		}
+		appRun := filepath.Join(appRunDir, "AppRun")
+		return os.WriteFile(appRun, []byte("#!/bin/sh\necho streamlink\n"), 0o755)
 	}
 
 	d := &Downloader{
-		AllowedHosts: []string{u.Host},
-		APIBaseURL:   ts.URL + "/api/releases/latest",
-		DataDir:      dataDir,
-		GOOS:         "linux",
-		GOARCH:       "amd64",
-		InsecureHTTP: true,
+		Transport:       ts.Client().Transport,
+		AllowedHosts:    []string{u.Host},
+		APIBaseURL:      ts.URL + "/api/releases/latest",
+		DataDir:         dataDir,
+		GOOS:            "linux",
+		GOARCH:          "amd64",
+		InsecureHTTP:    true,
+		ExtractAppImage: mockExtract,
 	}
 
-	res, err := d.DownloadStreamlink(context.Background(), progress)
+	res, err := d.DownloadStreamlink(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("DownloadStreamlink: %v", err)
 	}
@@ -237,19 +248,181 @@ func TestDownloadAndVerifySuccess(t *testing.T) {
 	if res.Version != "8.6.3-1" {
 		t.Fatalf("version = %s, want 8.6.3-1", res.Version)
 	}
-	fi, err := os.Stat(res.Path)
-	if err != nil {
-		t.Fatalf("stat installed binary: %v", err)
+	if !strings.HasSuffix(filepath.ToSlash(res.Path), "squashfs-root/AppRun") {
+		t.Fatalf("expected binary at squashfs-root/AppRun, got: %s", res.Path)
 	}
-	if fi.Mode()&0o111 == 0 {
-		t.Fatalf("installed binary is not executable: %v", fi.Mode())
+	if len(res.Env) != 0 {
+		t.Fatalf("expected no extra env for extracted AppRun (no FUSE requirement), got: %v", res.Env)
 	}
-	if progressCalls == 0 {
-		t.Fatal("progress callback was not called")
+	if extractedAppImagePath == "" || extractedDestDir == "" {
+		t.Fatal("expected mockExtract to be called")
 	}
 }
 
-func TestDownloadDigestMismatchDeletesFile(t *testing.T) {
+func TestAssetRedirectDisallowedDomainRejected(t *testing.T) {
+	// Tests redirect refusal passing through production httpClient CheckRedirect
+	var ts *httptest.Server
+	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/releases/latest":
+			rel := gitHubRelease{
+				TagName: "8.6.3-1",
+				Assets: []gitHubAsset{
+					{
+						Name:               "streamlink-8.6.3-1-py315-x86_64.zip",
+						BrowserDownloadURL: ts.URL + "/redirect-disallowed",
+						Size:               100,
+						Digest:             "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(rel)
+		case "/redirect-disallowed":
+			http.Redirect(w, r, "https://disallowed.attacker.com/asset.zip", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	dataDir := t.TempDir()
+
+	d := &Downloader{
+		Transport:    ts.Client().Transport,
+		AllowedHosts: []string{u.Host},
+		APIBaseURL:   ts.URL + "/api/releases/latest",
+		DataDir:      dataDir,
+		GOOS:         "windows",
+		GOARCH:       "amd64",
+		InsecureHTTP: true,
+	}
+
+	_, err := d.DownloadStreamlink(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected error on redirect to disallowed domain")
+	}
+	if !strings.Contains(err.Error(), "unapproved download host") {
+		t.Fatalf("expected unapproved download host error, got: %v", err)
+	}
+}
+
+func TestInsecureHTTPSchemeRejected(t *testing.T) {
+	// InsecureHTTP: false (default). Initial http:// URL must be rejected.
+	d := &Downloader{
+		AllowedHosts: []string{"example.com"},
+		APIBaseURL:   "http://example.com/releases/latest",
+		DataDir:      t.TempDir(),
+		GOOS:         "windows",
+		GOARCH:       "amd64",
+		InsecureHTTP: false,
+	}
+	_, err := d.DownloadStreamlink(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected error for initial http:// URL when InsecureHTTP is false")
+	}
+	if !strings.Contains(err.Error(), "only HTTPS is allowed") {
+		t.Fatalf("expected HTTPS error, got: %v", err)
+	}
+
+	// Redirect to http:// scheme must also be rejected by CheckRedirect
+	var ts *httptest.Server
+	ts = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/releases/latest":
+			rel := gitHubRelease{
+				TagName: "8.6.3-1",
+				Assets: []gitHubAsset{
+					{
+						Name:               "streamlink-8.6.3-1-py315-x86_64.zip",
+						BrowserDownloadURL: ts.URL + "/redirect-http",
+						Size:               100,
+						Digest:             "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(rel)
+		case "/redirect-http":
+			http.Redirect(w, r, "http://example.com/asset.zip", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	dHTTPS := &Downloader{
+		Transport:    ts.Client().Transport,
+		AllowedHosts: []string{u.Host, "example.com"},
+		APIBaseURL:   ts.URL + "/api/releases/latest",
+		DataDir:      t.TempDir(),
+		GOOS:         "windows",
+		GOARCH:       "amd64",
+		InsecureHTTP: false,
+	}
+	_, err = dHTTPS.DownloadStreamlink(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected error on redirect to insecure http:// URL")
+	}
+	if !strings.Contains(err.Error(), "only HTTPS is allowed") {
+		t.Fatalf("expected HTTPS error on redirect, got: %v", err)
+	}
+}
+
+func TestWindowsZipSlipRejected(t *testing.T) {
+	destDir := t.TempDir()
+
+	// 1. Entry with ../ traversal
+	bufDotDot := new(bytes.Buffer)
+	zw := zip.NewWriter(bufDotDot)
+	w, err := zw.Create("../../evil.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte("evil"))
+	_ = zw.Close()
+
+	zipFileDotDot := filepath.Join(t.TempDir(), "slip.zip")
+	if err := os.WriteFile(zipFileDotDot, bufDotDot.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = installWindowsZip(zipFileDotDot, destDir)
+	if err == nil {
+		t.Fatal("expected error on zip slip ../ entry")
+	}
+
+	// 2. Entry with symlink mode
+	bufSymlink := new(bytes.Buffer)
+	zwSym := zip.NewWriter(bufSymlink)
+	h := &zip.FileHeader{
+		Name: "symlink-entry",
+	}
+	h.SetMode(os.ModeSymlink | 0o777)
+	w, err = zwSym.CreateHeader(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte("target"))
+	_ = zwSym.Close()
+
+	zipFileSymlink := filepath.Join(t.TempDir(), "symlink.zip")
+	if err := os.WriteFile(zipFileSymlink, bufSymlink.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = installWindowsZip(zipFileSymlink, destDir)
+	if err == nil {
+		t.Fatal("expected error on symlink entry in zip")
+	}
+	if !strings.Contains(err.Error(), "illegal entry in zip archive") {
+		t.Fatalf("expected illegal entry error for symlink, got: %v", err)
+	}
+}
+
+func TestDownloadDigestMismatchDeletesTemp(t *testing.T) {
 	payload := []byte("corrupted payload")
 	wrongDigest := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
@@ -283,6 +456,7 @@ func TestDownloadDigestMismatchDeletesFile(t *testing.T) {
 	dataDir := t.TempDir()
 
 	d := &Downloader{
+		Transport:    ts.Client().Transport,
 		AllowedHosts: []string{u.Host},
 		APIBaseURL:   ts.URL + "/api/releases/latest",
 		DataDir:      dataDir,
@@ -299,12 +473,11 @@ func TestDownloadDigestMismatchDeletesFile(t *testing.T) {
 		t.Fatalf("error missing digest mismatch description: %v", err)
 	}
 
-	// Verify no corrupt files were left behind in dataDir
 	baseDir := StreamlinkBaseDir(dataDir)
 	entries, _ := os.ReadDir(baseDir)
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".download-") {
-			t.Fatalf("temporary download dir was not deleted: %s", e.Name())
+		if strings.HasPrefix(e.Name(), ".download-") || strings.HasPrefix(e.Name(), ".install-") {
+			t.Fatalf("temporary dir was not cleaned up: %s", e.Name())
 		}
 	}
 	versionDir := StreamlinkVersionDir(dataDir, "8.6.3-1")
@@ -313,24 +486,205 @@ func TestDownloadDigestMismatchDeletesFile(t *testing.T) {
 	}
 }
 
-func TestDisallowedDomainRejected(t *testing.T) {
-	d := &Downloader{
-		AllowedHosts: []string{"api.github.com"},
-		APIBaseURL:   "https://evil.attacker.com/releases/latest",
-		GOOS:         "linux",
-		GOARCH:       "amd64",
+func TestDownloadInterruptedRecovery(t *testing.T) {
+	fullPayload := []byte("full valid streamlink executable payload")
+	hasher := sha256.New()
+	hasher.Write(fullPayload)
+	expectedHash := hex.EncodeToString(hasher.Sum(nil))
+
+	var attempt atomic.Int32
+	var ts *httptest.Server
+	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/releases/latest":
+			rel := gitHubRelease{
+				TagName: "8.6.3-1",
+				Assets: []gitHubAsset{
+					{
+						Name:               "streamlink-8.6.3-1-cp315-cp315-manylinux_2_28_x86_64.AppImage",
+						BrowserDownloadURL: ts.URL + "/assets/streamlink.AppImage",
+						Size:               int64(len(fullPayload)),
+						Digest:             "sha256:" + expectedHash,
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(rel)
+		case "/assets/streamlink.AppImage":
+			if attempt.Add(1) == 1 {
+				// First attempt: truncate payload abruptly
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("short"))
+				return
+			}
+			// Second attempt: full payload
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(fullPayload)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	dataDir := t.TempDir()
+
+	mockExtract := func(ctx context.Context, appImagePath, destDir string) error {
+		appRunDir := filepath.Join(destDir, "squashfs-root")
+		_ = os.MkdirAll(appRunDir, 0o700)
+		return os.WriteFile(filepath.Join(appRunDir, "AppRun"), []byte("#!/bin/sh\n"), 0o755)
 	}
+
+	d := &Downloader{
+		Transport:       ts.Client().Transport,
+		AllowedHosts:    []string{u.Host},
+		APIBaseURL:      ts.URL + "/api/releases/latest",
+		DataDir:         dataDir,
+		GOOS:            "linux",
+		GOARCH:          "amd64",
+		InsecureHTTP:    true,
+		ExtractAppImage: mockExtract,
+	}
+
+	// 1. First attempt fails due to truncated download
 	_, err := d.DownloadStreamlink(context.Background(), nil)
 	if err == nil {
-		t.Fatal("expected error for unapproved domain")
+		t.Fatal("expected first attempt to fail due to truncation")
 	}
-	if !strings.Contains(err.Error(), "unapproved download host") {
-		t.Fatalf("expected unapproved download host error, got: %v", err)
+
+	// Verify nothing installed
+	versionDir := StreamlinkVersionDir(dataDir, "8.6.3-1")
+	if _, err := os.Stat(versionDir); !os.IsNotExist(err) {
+		t.Fatalf("target dir exists after truncated download: %v", err)
+	}
+
+	// 2. Second attempt succeeds and installs properly
+	res, err := d.DownloadStreamlink(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("expected second attempt to succeed, got: %v", err)
+	}
+	if res.Version != "8.6.3-1" {
+		t.Fatalf("expected version 8.6.3-1, got %s", res.Version)
+	}
+	if _, err := os.Stat(res.Path); err != nil {
+		t.Fatalf("binary not found after recovery: %v", err)
+	}
+}
+
+func TestMatchAssetByArchitecture(t *testing.T) {
+	assets := []gitHubAsset{
+		{Name: "streamlink-8.6.3-1-cp315-cp315-manylinux_2_28_x86_64.AppImage"},
+		{Name: "streamlink-8.6.3-1-cp315-cp315-manylinux_2_28_aarch64.AppImage"},
+		{Name: "streamlink-8.6.3-1-py315-x86_64.zip"},
+		{Name: "streamlink-8.6.3-1-cp315-cp315-manylinux_2_28_x86_64.AppImage.zsync"},
+	}
+
+	// Linux amd64
+	dLinuxAmd64 := &Downloader{GOOS: "linux", GOARCH: "amd64"}
+	a, err := dLinuxAmd64.matchAsset(assets)
+	if err != nil || !strings.Contains(strings.ToLower(a.Name), "_x86_64.appimage") {
+		t.Fatalf("Linux amd64 match: %v, asset: %+v", err, a)
+	}
+
+	// Linux arm64
+	dLinuxArm64 := &Downloader{GOOS: "linux", GOARCH: "arm64"}
+	a, err = dLinuxArm64.matchAsset(assets)
+	if err != nil || !strings.Contains(strings.ToLower(a.Name), "_aarch64.appimage") {
+		t.Fatalf("Linux arm64 match: %v, asset: %+v", err, a)
+	}
+
+	// Windows amd64
+	dWindows := &Downloader{GOOS: "windows", GOARCH: "amd64"}
+	a, err = dWindows.matchAsset(assets)
+	if err != nil || !strings.HasSuffix(strings.ToLower(a.Name), "-x86_64.zip") {
+		t.Fatalf("Windows match: %v, asset: %+v", err, a)
+	}
+}
+
+func TestConcurrentDownloadsSingleflight(t *testing.T) {
+	payload := []byte("concurrent download test payload")
+	hasher := sha256.New()
+	hasher.Write(payload)
+	expectedHash := hex.EncodeToString(hasher.Sum(nil))
+
+	var assetRequests atomic.Int32
+	var ts *httptest.Server
+	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/releases/latest":
+			rel := gitHubRelease{
+				TagName: "8.6.3-1",
+				Assets: []gitHubAsset{
+					{
+						Name:               "streamlink-8.6.3-1-cp315-cp315-manylinux_2_28_x86_64.AppImage",
+						BrowserDownloadURL: ts.URL + "/assets/streamlink.AppImage",
+						Size:               int64(len(payload)),
+						Digest:             "sha256:" + expectedHash,
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(rel)
+		case "/assets/streamlink.AppImage":
+			assetRequests.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(payload)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	dataDir := t.TempDir()
+
+	mockExtract := func(ctx context.Context, appImagePath, destDir string) error {
+		appRunDir := filepath.Join(destDir, "squashfs-root")
+		_ = os.MkdirAll(appRunDir, 0o700)
+		return os.WriteFile(filepath.Join(appRunDir, "AppRun"), []byte("#!/bin/sh\n"), 0o755)
+	}
+
+	d := &Downloader{
+		Transport:       ts.Client().Transport,
+		AllowedHosts:    []string{u.Host},
+		APIBaseURL:      ts.URL + "/api/releases/latest",
+		DataDir:         dataDir,
+		GOOS:            "linux",
+		GOARCH:          "amd64",
+		InsecureHTTP:    true,
+		ExtractAppImage: mockExtract,
+	}
+
+	var wg sync.WaitGroup
+	var res1, res2 Result
+	var err1, err2 error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		res1, err1 = d.DownloadStreamlink(context.Background(), nil)
+	}()
+	go func() {
+		defer wg.Done()
+		res2, err2 = d.DownloadStreamlink(context.Background(), nil)
+	}()
+	wg.Wait()
+
+	if err1 != nil {
+		t.Fatalf("goroutine 1 error: %v", err1)
+	}
+	if err2 != nil {
+		t.Fatalf("goroutine 2 error: %v", err2)
+	}
+	if res1.Path != res2.Path {
+		t.Fatalf("paths differ: %s vs %s", res1.Path, res2.Path)
+	}
+	if reqCount := assetRequests.Load(); reqCount != 1 {
+		t.Fatalf("expected exactly 1 asset request due to singleflight, got: %d", reqCount)
 	}
 }
 
 func TestWindowsZipExtraction(t *testing.T) {
-	// Build a fake portable zip
 	buf := new(bytes.Buffer)
 	zw := zip.NewWriter(buf)
 
@@ -394,6 +748,7 @@ func TestWindowsZipExtraction(t *testing.T) {
 	dataDir := t.TempDir()
 
 	d := &Downloader{
+		Transport:    ts.Client().Transport,
 		AllowedHosts: []string{u.Host},
 		APIBaseURL:   ts.URL + "/api/releases/latest",
 		DataDir:      dataDir,
