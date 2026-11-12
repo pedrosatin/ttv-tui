@@ -65,12 +65,17 @@ try {
     Copy-Item -LiteralPath $binary -Destination (Join-Path $binDir 'ttv-tui.exe') -Force
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     $normalizedBin = $binDir.TrimEnd('\', '/')
-    $present = @($userPath -split ';' | Where-Object { [Environment]::ExpandEnvironmentVariables($_.Trim().Trim('"')).TrimEnd('\', '/') -ieq $normalizedBin }).Count -gt 0
-    if (-not $present) {
+    $hasBin = { param([string]$pathValue) @($pathValue -split ';' | Where-Object { [Environment]::ExpandEnvironmentVariables($_.Trim().Trim('"')).TrimEnd('\', '/') -ieq $normalizedBin }).Count -gt 0 }
+    if (-not (& $hasBin $userPath)) {
         $newPath = if ([string]::IsNullOrEmpty($userPath)) { $binDir } else { $userPath.TrimEnd(';') + ';' + $binDir }
+        # .NET already broadcasts WM_SETTINGCHANGE, so terminals opened from now on see it.
         [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
         Write-Host "Added to user PATH: $binDir"
     } else { Write-Host "Already in user PATH: $binDir" }
+    # This PowerShell keeps the PATH it started with; add the folder to it too.
+    if (-not (& $hasBin $env:Path)) {
+        $env:Path = if ([string]::IsNullOrEmpty($env:Path)) { $binDir } else { $env:Path.TrimEnd(';') + ';' + $binDir }
+    }
     Write-Host "ttv-tui v$versionNumber installed in $binDir."
     # The single window ships as a folder with its DLLs, kept off the user PATH;
     # without it the app stays in the terminal.
@@ -97,7 +102,7 @@ try {
             Write-Host "Or, with the Scoop extras bucket: scoop install extras/$($dependency[0])"
         }
     }
-    Write-Host 'Open a new terminal and run: ttv-tui --version'
+    Write-Host 'Run ttv-tui --version here or in a new terminal.'
 } finally {
     if (Test-Path -LiteralPath $tempDir) { Remove-Item -LiteralPath $tempDir -Recurse -Force }
 }
