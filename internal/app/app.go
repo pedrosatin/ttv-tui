@@ -63,7 +63,7 @@ func Run(opts Options) error {
 
 	cfg, cfgPath, err := loadConfig(opts.ConfigPath)
 	if err != nil {
-		return fmt.Errorf(earlyCatalog().T("app.err_load_config"), err)
+		return fmt.Errorf(earlyCatalog().T("app.err_load_config"), err, cfgPath, cfgPath)
 	}
 	if openWindow(opts) {
 		return nil
@@ -183,12 +183,12 @@ func loadConfig(path string) (config.Config, string, error) {
 		cfg, err := config.LoadFrom(path)
 		return cfg, path, err
 	}
-	cfg, err := config.Load()
-	if err != nil {
-		return cfg, "", err
+	defaultPath, pathErr := config.DefaultPath()
+	if pathErr != nil {
+		return config.Default(), "", pathErr
 	}
-	path, _ = config.DefaultPath()
-	return cfg, path, nil
+	cfg, err := config.LoadFrom(defaultPath)
+	return cfg, defaultPath, err
 }
 
 // connectVideoHost dials the window hosting this TUI. It returns nil in an

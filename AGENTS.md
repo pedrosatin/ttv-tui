@@ -19,8 +19,8 @@ arquitetura.
    `net/http` nem conhece nomes de campo do GraphQL.
 
 3. **Login é do app, não emprestado.** Token em
-   `~/.config/ttv-tui/config.toml` (0600), criado por `ttv-tui login` via OAuth
-   implícito no navegador. `--import twt` copia o token do `twitch-tui` para
+   `~/.config/ttv-tui/config.toml` (0600), colhido por `ttv-tui login` do cookie
+   `auth-token` do navegador. `--import twt` copia o token do `twitch-tui` para
    facilitar a migração, mas o app nunca depende desse arquivo.
 
 4. **Um processo para a TUI, o vídeo fora dela.** O player roda em processo

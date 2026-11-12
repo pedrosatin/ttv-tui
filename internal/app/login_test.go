@@ -606,3 +606,94 @@ func TestRunLogin_EnglishLanguageOutput(t *testing.T) {
 		t.Fatalf("expected saved.Language == en, got %q", saved.Language)
 	}
 }
+
+func TestRunLoginInvalidConfigExplainsRecoveryAndPreservesFile(t *testing.T) {
+	const secretInConfig = "segredo-de-teste-no-config"
+	invalidContent := "access_token = \"" + secretInConfig + "\"\n[broken section\n"
+	const newValidToken = "new_valid_token_30chars_xyz123"
+
+	cases := []struct {
+		lang         string
+		wantPrefix   string
+		wantRecovery string
+		wantLoginCmd string
+	}{
+		{
+			lang:         "pt-BR",
+			wantPrefix:   "ler configuração existente:",
+			wantRecovery: "mova o arquivo para o lado com 'mv ",
+			wantLoginCmd: "rode 'ttv-tui login' de novo",
+		},
+		{
+			lang:         "en",
+			wantPrefix:   "read existing config:",
+			wantRecovery: "move the file aside with 'mv ",
+			wantLoginCmd: "run 'ttv-tui login' again",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.lang, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.toml")
+			if err := os.WriteFile(cfgPath, []byte(invalidContent), 0o600); err != nil {
+				t.Fatalf("write invalid config: %v", err)
+			}
+
+			var out bytes.Buffer
+			err := RunLogin(context.Background(), LoginOptions{
+				FromBrowser: true,
+				Browser:     "brave",
+				Profile:     "Default",
+				Lang:        tc.lang,
+				ConfigPath:  cfgPath,
+				Output:      &out,
+				ListProfiles: func() ([]auth.Profile, error) {
+					return []auth.Profile{
+						{Browser: auth.BrowserBrave, Name: "Default", Family: "chromium", CookiesPath: "/fake/Cookies"},
+					}, nil
+				},
+				ExtractToken: func(p auth.Profile) (string, error) {
+					return newValidToken, nil
+				},
+				Validate: func(ctx context.Context, token string) (auth.Validation, error) {
+					return auth.Validation{
+						Login:     "pedrosatin",
+						Scopes:    []string{"chat:read", "chat:edit"},
+						ExpiresIn: 7200,
+					}, nil
+				},
+			})
+			if err == nil {
+				t.Fatal("RunLogin with invalid config must return an error")
+			}
+			msg := err.Error()
+
+			assertNoTokenLeak(t, msg, secretInConfig)
+			assertNoTokenLeak(t, out.String(), secretInConfig)
+
+			if !strings.Contains(msg, tc.wantPrefix) {
+				t.Fatalf("error %q does not contain prefix %q", msg, tc.wantPrefix)
+			}
+			if !strings.Contains(msg, tc.wantRecovery) {
+				t.Fatalf("error %q does not explain recovery %q", msg, tc.wantRecovery)
+			}
+			wantBakCmd := "mv " + cfgPath + " " + cfgPath + ".bak"
+			if !strings.Contains(msg, wantBakCmd) {
+				t.Fatalf("error %q does not contain backup command %q", msg, wantBakCmd)
+			}
+			if !strings.Contains(msg, tc.wantLoginCmd) {
+				t.Fatalf("error %q does not instruct to rerun login: %q", msg, tc.wantLoginCmd)
+			}
+
+			// Criterion 2: Preserves the existing file; does not overwrite.
+			preserved, readErr := os.ReadFile(cfgPath)
+			if readErr != nil {
+				t.Fatalf("read preserved config: %v", readErr)
+			}
+			if string(preserved) != invalidContent {
+				t.Fatalf("corrupted file was modified: got %q, want %q", string(preserved), invalidContent)
+			}
+		})
+	}
+}
