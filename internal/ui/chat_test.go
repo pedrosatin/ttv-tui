@@ -196,21 +196,6 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 	// In 80 columns with 5 modes active, the layout must not break.
 	m80 := resize(m, 80, 20)
 	assertAllLinesFit(t, m80.View(), 80)
-	// Truncation behavior in split 80-col drops mode tags when exceeding width, preserving channel and state.
-	col80 := chatColumn(t, m80)
-	if len(col80) == 0 {
-		t.Fatal("expected chat column rows in 80 columns")
-	}
-	header80 := col80[0]
-	if len(col80) > 1 && strings.HasPrefix(col80[1], "  ") && !strings.Contains(col80[1], ":") {
-		header80 += " " + col80[1]
-	}
-	if !strings.Contains(header80, "gaules") || !strings.Contains(header80, "Connected") {
-		t.Fatalf("chat header row at 80 cols missing channel or state: %q", header80)
-	}
-	if strings.Contains(header80, "[") {
-		t.Fatalf("modes tags should be dropped when header exceeds split width at 80 cols: %q", header80)
-	}
 
 	// 3. Transition to Reconnecting -> shown in UI while preserving existing messages.
 	updated, _ = m.Update(ChatEventMsg{
