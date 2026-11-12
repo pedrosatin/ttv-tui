@@ -15,10 +15,12 @@ arquitetura.
 
 2. **Acesso a dados de cada plataforma fica atrás de um `Provider`.** O catálogo
    opcional expõe capacidades granulares (`Browser`, `Searcher`, `Resolver`) e o
-   chat declara capacidades antes de conectar (`Chat`). A UI consome tipos e
-   eventos neutros de `internal/catalog` e não importa provedores concretos
-   (`twitch`, `chat`, `player`). Nenhum pacote de UI importa `net/http` nem
-   conhece nomes de campo de APIs de plataformas.
+   chat declara as suas antes de conectar (`Chat`). A UI usa só os tipos de
+   `internal/catalog` e não importa `internal/twitch`, `internal/chat` nem
+   `internal/player`. O chat de cada plataforma é uma
+   `catalog.Chat` entregue pelo próprio provider; a ponte de `internal/app` escolhe
+   pela plataforma do canal e renumera as gerações numa sequência única. Nenhum
+   pacote de UI importa `net/http` nem conhece nomes de campo de APIs de plataformas.
 
 3. **Login é do app, não emprestado.** Token em
    `~/.config/ttv-tui/config.toml` (0600), colhido por `ttv-tui login` do cookie

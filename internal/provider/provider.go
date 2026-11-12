@@ -28,7 +28,7 @@ type Provider interface {
 	Resolver() (catalog.Resolver, bool)
 	// StreamTarget builds the playback Target for channel (URL, extra streamlink args, and qualified label).
 	StreamTarget(channel catalog.Channel) (catalog.Stream, error)
-	// Chat returns the optional platform chat interface (minimal placeholder until the chat moves behind the provider).
+	// Chat returns the optional chat of the platform. The app registers it behind one bridge that picks it by the platform of the channel.
 	Chat() (catalog.Chat, bool)
 }
 
