@@ -194,11 +194,11 @@ func (s *connSession) sendNext() (more bool, err error) {
 		return false, nil
 	}
 	head := m.pending[0]
-	if belongsElsewhere(head, s.gen, s.channel) {
+	if belongsElsewhere(head.req, s.gen, s.channel) {
 		head.stopTimer()
 		m.pending = m.pending[1:]
 		m.mu.Unlock()
-		s.addUpdate(head, DeliveryDiscarded, RejectChannelSwitched, "")
+		s.addUpdate(head.req, DeliveryDiscarded, RejectChannelSwitched, "")
 		s.flush()
 		return true, nil
 	}
@@ -208,7 +208,7 @@ func (s *connSession) sendNext() (more bool, err error) {
 		head.stopTimer()
 		m.pending = m.pending[1:]
 		m.mu.Unlock()
-		s.addUpdate(head, DeliveryDiscarded, RejectRateLimited, "")
+		s.addUpdate(head.req, DeliveryDiscarded, RejectRateLimited, "")
 		s.flush()
 		return true, nil
 	}
@@ -231,7 +231,7 @@ func (s *connSession) sendNext() (more bool, err error) {
 	m.mu.Unlock()
 	s.sendWaitCh = nil
 
-	wire := FormatPrivMsg(s.channel, head.Nonce, head.Body)
+	wire := FormatPrivMsg(s.channel, head.req.Nonce, head.req.Body)
 	if werr := s.write(wire, head.expiresAt); werr != nil {
 		return false, fmt.Errorf("write privmsg: %w", werr)
 	}
@@ -240,7 +240,7 @@ func (s *connSession) sendNext() (more bool, err error) {
 
 // serve runs the connection until it fails, the server asks for a reconnect or
 // ctx is cancelled. Whatever was coalesced is flushed before a failure returns.
-func (s *connSession) serve(sendCh <-chan SendRequest, linesCh <-chan lineResult) error {
+func (s *connSession) serve(sendCh <-chan struct{}, linesCh <-chan lineResult) error {
 	m := s.m
 	ticker := time.NewTicker(m.opts.CoalesceInterval)
 	defer ticker.Stop()
@@ -463,7 +463,7 @@ func (m *Manager) connectAndServe(
 	channel string,
 	anon bool,
 	roomState *RoomState,
-	sendCh <-chan SendRequest,
+	sendCh <-chan struct{},
 ) (connectedOnce bool, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

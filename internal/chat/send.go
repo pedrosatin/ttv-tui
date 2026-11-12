@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
 // Rate-limit parameters enforced per channel and globally across the session.
@@ -27,63 +29,41 @@ var (
 )
 
 // DeliveryStatus tracks the lifecycle of an outbound user message.
-type DeliveryStatus string
+type DeliveryStatus = catalog.ChatDeliveryStatus
 
 const (
-	DeliveryNone      DeliveryStatus = ""
-	DeliverySending   DeliveryStatus = "enviando"
-	DeliveryConfirmed DeliveryStatus = "confirmada"
-	DeliveryRejected  DeliveryStatus = "recusada"
-	DeliveryDiscarded DeliveryStatus = "descartada"
+	DeliveryNone      = catalog.ChatDeliveryNone
+	DeliverySending   = catalog.ChatDeliverySending
+	DeliveryConfirmed = catalog.ChatDeliveryConfirmed
+	DeliveryRejected  = catalog.ChatDeliveryRejected
+	DeliveryDiscarded = catalog.ChatDeliveryDiscarded
 )
 
 // RejectReason classifies why a sent or queued message was rejected or discarded.
-type RejectReason string
+type RejectReason = catalog.ChatRejectReason
 
 const (
-	RejectTimeout         RejectReason = "timeout"
-	RejectConnectionLost  RejectReason = "connection_lost"
-	RejectNone            RejectReason = ""
-	RejectSlowMode        RejectReason = "slow_mode"
-	RejectFollowersOnly   RejectReason = "followers_only"
-	RejectSubsOnly        RejectReason = "subs_only"
-	RejectEmoteOnly       RejectReason = "emote_only"
-	RejectR9K             RejectReason = "r9k"
-	RejectRateLimited     RejectReason = "rate_limit"
-	RejectUnauthenticated RejectReason = "unauthenticated"
-	RejectChannelSwitched RejectReason = "channel_switched"
-	RejectReconnected     RejectReason = "reconnected"
-	RejectBanned          RejectReason = "banned"
-	RejectOther           RejectReason = "other"
+	RejectTimeout         = catalog.ChatRejectTimeout
+	RejectConnectionLost  = catalog.ChatRejectConnectionLost
+	RejectNone            = catalog.ChatRejectNone
+	RejectSlowMode        = catalog.ChatRejectSlowMode
+	RejectFollowersOnly   = catalog.ChatRejectFollowersOnly
+	RejectSubsOnly        = catalog.ChatRejectSubsOnly
+	RejectEmoteOnly       = catalog.ChatRejectEmoteOnly
+	RejectR9K             = catalog.ChatRejectR9K
+	RejectRateLimited     = catalog.ChatRejectRateLimited
+	RejectUnauthenticated = catalog.ChatRejectUnauthenticated
+	RejectChannelSwitched = catalog.ChatRejectChannelSwitched
+	RejectReconnected     = catalog.ChatRejectReconnected
+	RejectBanned          = catalog.ChatRejectBanned
+	RejectOther           = catalog.ChatRejectOther
 )
 
-// SendRequest describes an outbound PRIVMSG tied to the channel generation in
-// which the user composed it.
-type SendRequest struct {
-	timer      *time.Timer
-	expiresAt  time.Time
-	Generation uint64
-	Channel    string
-	Nonce      string
-	Body       string
-}
+// SendRequest is an alias for catalog.ChatSendRequest.
+type SendRequest = catalog.ChatSendRequest
 
-func (r SendRequest) stopTimer() {
-	if r.timer != nil {
-		r.timer.Stop()
-	}
-}
-
-// SendStatusUpdate reports a state transition for an outbound message tracked by Nonce.
-type SendStatusUpdate struct {
-	Generation uint64
-	Channel    string
-	Nonce      string
-	Body       string
-	Status     DeliveryStatus
-	Reason     RejectReason
-	Detail     string
-}
+// SendStatusUpdate is an alias for catalog.ChatSendStatusUpdate.
+type SendStatusUpdate = catalog.ChatSendStatusUpdate
 
 // ClassifyRejectNotice maps a Twitch IRC NOTICE msg-id or body to a structured
 // RejectReason if the NOTICE represents a message delivery rejection or auth failure.

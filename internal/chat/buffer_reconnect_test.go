@@ -104,8 +104,8 @@ func TestBuffer_RememberedIDsStayBounded(t *testing.T) {
 	for i := range 100 {
 		b.Append(bufferMsg(1, fmt.Sprintf("m%d", i)))
 	}
-	if len(b.seen) != 2*limit || len(b.seenRing) != 2*limit {
-		t.Fatalf("seen=%d ring=%d, want %d", len(b.seen), len(b.seenRing), 2*limit)
+	if b.SeenLen() != 2*limit || b.SeenRingLen() != 2*limit {
+		t.Fatalf("seen=%d ring=%d, want %d", b.SeenLen(), b.SeenRingLen(), 2*limit)
 	}
 	if !b.Append(bufferMsg(1, "m0")) {
 		t.Fatal("an ID past the memory must be accepted")

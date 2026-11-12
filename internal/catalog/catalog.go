@@ -170,9 +170,6 @@ func (s Stream) Identity() string {
 	return s.URL
 }
 
-// Chat is a minimal placeholder interface for platform chat, to be expanded when the chat moves behind the provider.
-type Chat interface{}
-
 // Browser supports browsing categories and channels within a category, as well as searching categories.
 type Browser interface {
 	Categories(ctx context.Context, page PageRequest) (Page[Category], error)

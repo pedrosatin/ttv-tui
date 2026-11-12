@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/config"
 )
 
@@ -32,16 +33,31 @@ const (
 	scannerMaxBuf           = 64 * 1024
 )
 
-// State represents the observable lifecycle state of a chat session.
-type State string
+// State is an alias for catalog.ChatState.
+type State = catalog.ChatState
 
 const (
-	StateDisconnected State = "desconectado"
-	StateConnecting   State = "conectando"
-	StateConnected    State = "conectado"
-	StateReconnecting State = "reconectando"
-	StateError        State = "erro"
+	StateDisconnected = catalog.ChatStateDisconnected
+	StateConnecting   = catalog.ChatStateConnecting
+	StateConnected    = catalog.ChatStateConnected
+	StateReconnecting = catalog.ChatStateReconnecting
+	StateError        = catalog.ChatStateError
 )
+
+// SessionEvent is an alias for catalog.ChatEvent.
+type SessionEvent = catalog.ChatEvent
+
+type queuedSend struct {
+	req       SendRequest
+	timer     *time.Timer
+	expiresAt time.Time
+}
+
+func (q queuedSend) stopTimer() {
+	if q.timer != nil {
+		q.timer.Stop()
+	}
+}
 
 // DialFunc establishes a network connection to addr. Production uses TLS;
 // tests inject a local TCP or net.Pipe dialer without network access.
@@ -76,29 +92,6 @@ type Options struct {
 	After          func(d time.Duration) <-chan time.Time
 }
 
-// SessionEvent is emitted by Manager on state changes, ROOMSTATE updates,
-// CLEARCHAT/CLEARMSG moderation actions, outbound delivery updates, or
-// coalesced message batches. Every SessionEvent carries Generation so the UI
-// can discard stale updates.
-type SessionEvent struct {
-	Generation  uint64
-	Channel     string
-	State       State
-	Anonymous   bool
-	Messages    []Message
-	SendUpdates []SendStatusUpdate
-	RoomState   *RoomState
-	ClearChat   bool
-	ClearUser   string
-	ClearMsgID  string
-	// BanDuration is set for CLEARCHAT timeouts (seconds). Nil with ClearUser
-	// set and ClearChat true means a permanent ban.
-	BanDuration *int
-	Err         error
-	Attempt     int
-	NextBackoff time.Duration
-}
-
 // Manager supervises at most one active channel chat session at a time.
 type Manager struct {
 	opts   Options
@@ -112,9 +105,9 @@ type Manager struct {
 	cancel    context.CancelFunc
 	done      chan struct{}
 	closed    bool
-	sendCh    chan SendRequest
-	pending   []SendRequest
-	inFlight  []SendRequest
+	sendCh    chan struct{}
+	pending   []queuedSend
+	inFlight  []queuedSend
 	limiter   *rateLimiter
 	connected bool
 }
@@ -202,6 +195,11 @@ func (m *Manager) HasToken() bool {
 // Username returns the normalized login of the authenticated user, if any.
 func (m *Manager) Username() string {
 	return m.opts.Username
+}
+
+// Capabilities returns the declared chat features for Twitch.
+func (m *Manager) Capabilities() catalog.ChatCapabilities {
+	return catalog.TwitchChatCapabilities
 }
 
 // Events returns the stream of SessionEvents emitted by the manager.
@@ -297,7 +295,6 @@ func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
 	req.Generation = m.gen
 	req.Channel = m.channel
 	req.Body = body
-	req.expiresAt = time.Now().Add(m.opts.SendTimeout)
 
 	if !m.connected {
 		gen, ch := m.gen, m.channel
@@ -339,19 +336,23 @@ func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
 	}
 
 	sendCh := m.sendCh
-	req.timer = time.AfterFunc(m.opts.SendTimeout, func() {
+	q := queuedSend{
+		req:       req,
+		expiresAt: time.Now().Add(m.opts.SendTimeout),
+	}
+	q.timer = time.AfterFunc(m.opts.SendTimeout, func() {
 		select {
-		case sendCh <- SendRequest{}:
+		case sendCh <- struct{}{}:
 		default:
 		}
 	})
-	m.pending = append(m.pending, req)
+	m.pending = append(m.pending, q)
 	gen := m.gen
 	ch := m.channel
 	m.mu.Unlock()
 
 	select {
-	case sendCh <- req:
+	case sendCh <- struct{}{}:
 	default:
 	}
 	return SendStatusUpdate{
@@ -389,7 +390,7 @@ func (m *Manager) Join(channelLogin string) (uint64, error) {
 	m.channel = ch
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	sendCh := make(chan SendRequest, m.opts.MaxSendQueue)
+	sendCh := make(chan struct{}, m.opts.MaxSendQueue)
 	m.cancel = cancel
 	m.done = done
 	m.sendCh = sendCh
@@ -439,19 +440,18 @@ func (m *Manager) Join(channelLogin string) (uint64, error) {
 	return gen, nil
 }
 
-func (m *Manager) collectPendingLocked(sendCh chan SendRequest) []SendRequest {
+func (m *Manager) collectPendingLocked(sendCh chan struct{}) []SendRequest {
 	var out []SendRequest
-	if len(m.pending) > 0 {
-		out = append(out, m.pending...)
-		m.pending = nil
+	drain := func(q []queuedSend) {
+		for _, item := range q {
+			item.stopTimer()
+			out = append(out, item.req)
+		}
 	}
-	if len(m.inFlight) > 0 {
-		out = append(out, m.inFlight...)
-		m.inFlight = nil
-	}
-	for _, req := range out {
-		req.stopTimer()
-	}
+	drain(m.pending)
+	m.pending = nil
+	drain(m.inFlight)
+	m.inFlight = nil
 	if sendCh != nil {
 		for {
 			select {
@@ -591,7 +591,7 @@ func (m *Manager) emit(ctx context.Context, ev SessionEvent) {
 	}
 }
 
-func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64, channel string, sendCh <-chan SendRequest) {
+func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64, channel string, sendCh <-chan struct{}) {
 	defer m.sessions.Done()
 	defer close(done)
 
@@ -690,11 +690,11 @@ func (m *Manager) matchInFlightByUserState(nonce string) (SendRequest, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if nonce != "" {
-		for i, req := range m.inFlight {
-			if req.Nonce == nonce {
-				req.stopTimer()
+		for i, q := range m.inFlight {
+			if q.req.Nonce == nonce {
+				q.stopTimer()
 				m.inFlight = append(m.inFlight[:i], m.inFlight[i+1:]...)
-				return req, true
+				return q.req, true
 			}
 		}
 	}
@@ -707,10 +707,10 @@ func (m *Manager) popEarliestInFlight() (SendRequest, bool) {
 	if len(m.inFlight) == 0 {
 		return SendRequest{}, false
 	}
-	req := m.inFlight[0]
-	req.stopTimer()
+	q := m.inFlight[0]
+	q.stopTimer()
 	m.inFlight = m.inFlight[1:]
-	return req, true
+	return q.req, true
 }
 
 func (m *Manager) writeHandshake(w io.Writer, channel string, anon bool) (string, error) {
@@ -758,14 +758,14 @@ func (m *Manager) expireSends(gen uint64, channel string) []SendStatusUpdate {
 	}
 	now := time.Now()
 	var updates []SendStatusUpdate
-	expire := func(queue []SendRequest) []SendRequest {
+	expire := func(queue []queuedSend) []queuedSend {
 		kept := queue[:0]
-		for _, req := range queue {
-			if !req.expiresAt.IsZero() && !now.Before(req.expiresAt) {
-				req.stopTimer()
-				updates = append(updates, SendStatusUpdate{Generation: gen, Channel: channel, Nonce: req.Nonce, Body: req.Body, Status: DeliveryDiscarded, Reason: RejectTimeout})
+		for _, q := range queue {
+			if !q.expiresAt.IsZero() && !now.Before(q.expiresAt) {
+				q.stopTimer()
+				updates = append(updates, SendStatusUpdate{Generation: gen, Channel: channel, Nonce: q.req.Nonce, Body: q.req.Body, Status: DeliveryDiscarded, Reason: RejectTimeout})
 			} else {
-				kept = append(kept, req)
+				kept = append(kept, q)
 			}
 		}
 		return kept

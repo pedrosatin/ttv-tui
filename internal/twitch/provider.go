@@ -12,11 +12,16 @@ import (
 // Provider implements provider.Provider for the Twitch platform without importing provider.
 type Provider struct {
 	source catalog.Source
+	chat   catalog.Chat
 }
 
-// NewProvider returns a Twitch provider backed by the given catalog source.
-func NewProvider(source catalog.Source) *Provider {
-	return &Provider{source: source}
+// NewProvider returns a Twitch provider backed by the given catalog source and optional chat.
+func NewProvider(source catalog.Source, chat ...catalog.Chat) *Provider {
+	p := &Provider{source: source}
+	if len(chat) > 0 {
+		p.chat = chat[0]
+	}
+	return p
 }
 
 // ID returns the canonical platform identifier for Twitch ("twitch").
@@ -77,7 +82,10 @@ func (p *Provider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	}, nil
 }
 
-// Chat returns the chat interface for Twitch (placeholder until the chat moves behind the provider).
+// Chat returns the chat interface for Twitch.
 func (p *Provider) Chat() (catalog.Chat, bool) {
+	if p.chat != nil {
+		return p.chat, true
+	}
 	return nil, false
 }

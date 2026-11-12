@@ -5,6 +5,8 @@ package chat
 import (
 	"strconv"
 	"strings"
+
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
 // EventKind identifies the parsed IRC event category.
@@ -23,45 +25,11 @@ const (
 	EventMalformed  EventKind = "malformed"
 )
 
-// RoomState describes channel moderation modes reported by ROOMSTATE tags.
-// Nil pointer fields in Event.RoomStateUpdate allow partial updates when Twitch
-// sends single-tag ROOMSTATE deltas after the initial join.
-type RoomState struct {
-	Slow          int  // seconds; 0 = off
-	FollowersOnly int  // minutes; -1 = off, >= 0 = enabled (0 = any follower)
-	SubsOnly      bool // true = subscribers-only mode
-	EmoteOnly     bool // true = emote-only mode
-	R9K           bool // true = unique-chat mode
-}
+// RoomState is an alias for catalog.ChatRoomState.
+type RoomState = catalog.ChatRoomState
 
-// RoomStateDelta holds optional fields present in a single ROOMSTATE line.
-type RoomStateDelta struct {
-	Slow          *int
-	FollowersOnly *int
-	SubsOnly      *bool
-	EmoteOnly     *bool
-	R9K           *bool
-}
-
-// Apply merges non-nil fields from d into r and returns the updated RoomState.
-func (d RoomStateDelta) Apply(r RoomState) RoomState {
-	if d.Slow != nil {
-		r.Slow = *d.Slow
-	}
-	if d.FollowersOnly != nil {
-		r.FollowersOnly = *d.FollowersOnly
-	}
-	if d.SubsOnly != nil {
-		r.SubsOnly = *d.SubsOnly
-	}
-	if d.EmoteOnly != nil {
-		r.EmoteOnly = *d.EmoteOnly
-	}
-	if d.R9K != nil {
-		r.R9K = *d.R9K
-	}
-	return r
-}
+// RoomStateDelta is an alias for catalog.ChatRoomStateDelta.
+type RoomStateDelta = catalog.ChatRoomStateDelta
 
 // Event is the pure output of ParseLine for a single IRC line.
 type Event struct {
@@ -446,35 +414,21 @@ func populateUserNoticeTags(ev *Event) {
 	}
 }
 
-// UserNoticeKind groups USERNOTICE msg-id values by how the chat presents them.
-type UserNoticeKind string
+// UserNoticeKind is an alias for catalog.UserNoticeKind.
+type UserNoticeKind = catalog.UserNoticeKind
 
 const (
-	UserNoticeOther        UserNoticeKind = "other"
-	UserNoticeSub          UserNoticeKind = "sub"
-	UserNoticeResub        UserNoticeKind = "resub"
-	UserNoticeGift         UserNoticeKind = "gift"
-	UserNoticeRaid         UserNoticeKind = "raid"
-	UserNoticeAnnouncement UserNoticeKind = "announcement"
+	UserNoticeOther        = catalog.UserNoticeOther
+	UserNoticeSub          = catalog.UserNoticeSub
+	UserNoticeResub        = catalog.UserNoticeResub
+	UserNoticeGift         = catalog.UserNoticeGift
+	UserNoticeRaid         = catalog.UserNoticeRaid
+	UserNoticeAnnouncement = catalog.UserNoticeAnnouncement
 )
 
-// ClassifyUserNotice maps a USERNOTICE msg-id onto a UserNoticeKind. "unraid"
-// stays Other on purpose: a cancelled raid must not read as an incoming one.
+// ClassifyUserNotice maps a USERNOTICE msg-id onto a UserNoticeKind.
 func ClassifyUserNotice(msgID string) UserNoticeKind {
-	switch strings.ToLower(strings.TrimSpace(msgID)) {
-	case "sub":
-		return UserNoticeSub
-	case "resub", "resubscribe":
-		return UserNoticeResub
-	case "subgift", "anonsubgift", "submysterygift", "anonsubmysterygift":
-		return UserNoticeGift
-	case "raid":
-		return UserNoticeRaid
-	case "announcement":
-		return UserNoticeAnnouncement
-	default:
-		return UserNoticeOther
-	}
+	return catalog.ClassifyUserNotice(msgID)
 }
 
 func populateRoomState(ev *Event) {
