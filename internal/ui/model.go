@@ -278,6 +278,7 @@ type playbackState struct {
 	awaiting     uint64
 	state        PlayerState
 	login        string
+	target       PlayTarget
 	lastLine     string
 	infoLine     string
 	failure      PlayerFailure

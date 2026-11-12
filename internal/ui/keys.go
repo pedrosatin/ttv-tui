@@ -313,6 +313,9 @@ func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {
+	if m.chat.panel.unsupported {
+		return m, nil
+	}
 	if m.warnChatHiddenByWidth() || !m.layout.showChat || m.chatHiddenByWidth() {
 		return m, nil
 	}

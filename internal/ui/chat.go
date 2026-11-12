@@ -95,6 +95,8 @@ type chatPanel struct {
 	sendWarning string
 	// gapPending asks for the reconnect line once the new session is up.
 	gapPending bool
+	// unsupported marks the chat panel for a non-Twitch platform without chat.
+	unsupported bool
 
 	// Scroll state (see chat_scroll.go). followLive pins the viewport to the
 	// newest message; bottomIdx is the buffer index shown at the bottom when
@@ -112,6 +114,20 @@ func newChatPanel() chatPanel {
 		},
 		followLive: true,
 	}
+}
+
+func (m *Model) setChatUnsupported(channel string) {
+	if m.chat.panel.buf == nil {
+		m.chat.panel = newChatPanel()
+	}
+	m.chat.panel.buf.Clear()
+	m.chat.panel.channel = channel
+	m.chat.panel.unsupported = true
+	m.chat.panel.state = ChatStateDisconnected
+	m.chat.panel.errText = ""
+	m.chat.panel.sendWarning = ""
+	m.chat.panel.switching = false
+	m.chat.composing = false
 }
 
 func (c chatState) hasToken() bool {
@@ -151,6 +167,7 @@ func (m *Model) startChatChannel(login string) tea.Cmd {
 	m.chat.composeDraft = m.chat.drafts[norm]
 	m.chat.panel.buf.Clear()
 	m.chat.panel.channel = norm
+	m.chat.panel.unsupported = false
 	m.chat.panel.state = ChatStateConnecting
 	m.chat.panel.errText = ""
 	if hadPending {
@@ -195,7 +212,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.chat.panel.switching || m.chat.panel.channel == "" || m.chat.session == nil {
+	if m.chat.panel.unsupported || m.chat.panel.switching || m.chat.panel.channel == "" || m.chat.session == nil {
 		return m, nil
 	}
 	sender, ok := m.chat.session.(ChatSender)

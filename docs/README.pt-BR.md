@@ -84,7 +84,7 @@ ttv-tui login --import twt  # opcional: usa o token do twitch-tui para enviar me
 ttv-tui doctor              # confere dependências, caminhos e se há token
 ```
 
-Escolha uma categoria com `Enter` e depois um canal com `Enter`. A live começa e o chat abre à direita. Aperte `?` para ver os atalhos.
+Escolha uma categoria com `Enter` e depois um canal com `Enter`. Você também pode apertar `Ctrl+F` e colar a URL de uma transmissão (Twitch, Kick, YouTube) para tocar direto. A live começa e o chat abre à direita. Aperte `?` para ver os atalhos.
 
 ## Plataformas
 
@@ -112,7 +112,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Põe ou tira o canal dos favoritos |
 | `/` | Filtra a lista atual |
-| `Ctrl+F` ou `Ctrl+S` | Busca canais em toda a Twitch |
+| `Ctrl+F` ou `Ctrl+S` | Busca canais em toda a Twitch ou cola a URL de uma live |
 | `l` | Filtra canais por idioma e público |
 | `r` | Tenta de novo carregar a lista ou o vídeo |
 | `Esc` | Limpa o filtro ou volta às categorias |

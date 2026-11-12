@@ -146,6 +146,20 @@ func (m Model) Recents() []twitch.Channel {
 }
 
 func channelMatches(a, b twitch.Channel) bool {
+	platA := a.Platform
+	if platA == "" {
+		platA = store.PlatformTwitch
+	}
+	platB := b.Platform
+	if platB == "" {
+		platB = store.PlatformTwitch
+	}
+	if !strings.EqualFold(platA, platB) {
+		return false
+	}
+	if a.URL != "" && b.URL != "" {
+		return strings.EqualFold(a.URL, b.URL)
+	}
 	if a.ID != "" && b.ID != "" && a.ID == b.ID {
 		return true
 	}
@@ -369,6 +383,9 @@ func (p playbackState) isPlaying(ch twitch.Channel) bool {
 	}
 	switch p.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
+		if ch.Platform != "" && ch.Platform != store.PlatformTwitch {
+			return strings.EqualFold(p.login, ch.PlayerLabel()) || strings.EqualFold(p.login, ch.Login)
+		}
 		return strings.EqualFold(p.login, ch.Login)
 	default:
 		return false

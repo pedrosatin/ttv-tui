@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/store"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
@@ -171,12 +172,22 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 	if m.store != nil {
 		cmds = append(cmds, m.saveStoreCmd())
 	}
+	isNonTwitch := selected.Platform != "" && selected.Platform != store.PlatformTwitch
+	target := PlayTarget{
+		URL:      selected.URL,
+		Label:    selected.PlayerLabel(),
+		Platform: selected.Platform,
+	}
+	if target.Label == "" {
+		target.Label = selected.Login
+	}
 	if m.playback != nil {
 		// The player keeps the volume of a channel it restarts.
-		if selected.Login != m.player.login {
+		if target.Label != m.player.login {
 			m.player.volume = 100
 		}
-		m.player.login = selected.Login
+		m.player.target = target
+		m.player.login = target.Label
 		m.player.state = PlayerStateStarting
 		m.player.lastLine = ""
 		m.player.failure = PlayerFailureNone
@@ -184,9 +195,14 @@ func (m Model) applyChannelSelected(msg ChannelSelectedMsg) (tea.Model, tea.Cmd)
 		m.player.selection++
 		m.player.awaiting = m.player.selection
 		m.player.stopAfterStart = false
-		cmds = append(cmds, m.playback.Start(selected.Login, m.player.selection))
+		cmds = append(cmds, m.playback.StartTarget(target, m.player.selection))
 	}
-	if m.chat.session != nil || m.chat.panel.channel != "" {
+	if isNonTwitch {
+		if m.chat.session != nil {
+			cmds = append(cmds, m.chat.session.Stop())
+		}
+		m.setChatUnsupported(selected.Login)
+	} else if m.chat.session != nil || m.chat.panel.channel != "" {
 		if chatCmd := m.startChatChannel(selected.Login); chatCmd != nil {
 			cmds = append(cmds, chatCmd)
 		}

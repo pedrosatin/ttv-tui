@@ -33,8 +33,17 @@ const (
 	PlayerFailureTimeout           PlayerFailure = "timeout"
 	PlayerFailureStreamlinkMissing PlayerFailure = "streamlink_missing"
 	PlayerFailureMPVMissing        PlayerFailure = "mpv_missing"
+	PlayerFailureNoPlugin          PlayerFailure = "no_plugin"
 	PlayerFailureUnknown           PlayerFailure = "unknown"
 )
+
+// PlayTarget describes what to play: an optional ready URL, a qualified Label
+// for volume persistence and logs, and the platform name.
+type PlayTarget struct {
+	URL      string
+	Label    string
+	Platform string
+}
 
 // PlayerStatusMsg is delivered by the injected Playback bridge whenever the
 // supervised player changes state. Update discards messages whose Generation
@@ -70,6 +79,8 @@ type Playback interface {
 	// selection grows with each call; a Start that reaches the player after a
 	// newer one is superseded.
 	Start(login string, selection uint64) tea.Cmd
+	// StartTarget begins playback for target (with URL and qualified label).
+	StartTarget(target PlayTarget, selection uint64) tea.Cmd
 	// Stop ends the active playback and returns a Cmd that yields a terminal status.
 	Stop() tea.Cmd
 	// TogglePause flips pause on the active playback. Status arrives via PlayerStatusMsg.
@@ -199,6 +210,8 @@ func (m Model) playerFailureText() string {
 		return m.t("player.fail.streamlink_missing")
 	case PlayerFailureMPVMissing:
 		return m.t("player.fail.mpv_missing")
+	case PlayerFailureNoPlugin:
+		return m.t("player.fail.no_plugin")
 	default:
 		return m.t("player.fail.unknown")
 	}
@@ -228,7 +241,10 @@ func (m Model) playerErrorDetail() string {
 // retryPlayback restarts playback of the player's channel with the volume it had:
 // the player keeps that one.
 func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
-	login := m.player.login
+	target := m.player.target
+	if target.URL == "" && target.Label == "" {
+		target = PlayTarget{Label: m.player.login}
+	}
 	m.player.state = PlayerStateStarting
 	m.player.failure = PlayerFailureNone
 	m.player.lastLine = ""
@@ -236,7 +252,7 @@ func (m Model) retryPlayback() (tea.Model, tea.Cmd) {
 	m.player.selection++
 	m.player.awaiting = m.player.selection
 	m.player.stopAfterStart = false
-	return m, m.playback.Start(login, m.player.selection)
+	return m, m.playback.StartTarget(target, m.player.selection)
 }
 
 func clampPlayerVolume(v int) int {

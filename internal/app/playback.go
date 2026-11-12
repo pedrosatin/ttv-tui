@@ -35,16 +35,33 @@ func twitchTarget(login string) player.Target {
 }
 
 func (b *playbackBridge) Start(login string, selection uint64) tea.Cmd {
+	return b.StartTarget(ui.PlayTarget{Label: login}, selection)
+}
+
+func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea.Cmd {
 	mgr := b.mgr
-	target := twitchTarget(login)
+	var pTarget player.Target
+	if target.URL != "" {
+		label := target.Label
+		if label == "" {
+			label = target.URL
+		}
+		pTarget = player.Target{
+			URL:   target.URL,
+			Label: label,
+		}
+	} else {
+		pTarget = twitchTarget(target.Label)
+	}
+	identity := pTarget.Identity()
 	return func() tea.Msg {
 		// Cmds run in goroutines that may not keep the order of the selections.
-		gen, err := mgr.StartInOrder(target, selection)
+		gen, err := mgr.StartInOrder(pTarget, selection)
 		if err != nil {
 			return ui.PlayerStatusMsg{
 				Generation: gen,
 				State:      ui.PlayerStateError,
-				Login:      login,
+				Login:      identity,
 				LastLine:   err.Error(),
 				Failure:    ui.PlayerFailure(player.FailureOf(err)),
 				Selection:  selection,
@@ -54,7 +71,7 @@ func (b *playbackBridge) Start(login string, selection uint64) tea.Cmd {
 		return ui.PlayerStatusMsg{
 			Generation: gen,
 			State:      ui.PlayerStateStarting,
-			Login:      login,
+			Login:      identity,
 			Volume:     mgr.Volume(),
 			Selection:  selection,
 		}

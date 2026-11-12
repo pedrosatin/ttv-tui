@@ -17,10 +17,13 @@ const (
 )
 
 func (c chatState) hasPanel() bool {
-	return c.panel.channel != "" || c.panel.state != ChatStateNone || c.composing
+	return c.panel.channel != "" || c.panel.state != ChatStateNone || c.panel.unsupported || c.composing
 }
 
 func (m Model) chatStatusSummary() string {
+	if m.chat.panel.unsupported {
+		return m.t("chat.unsupported")
+	}
 	ch := sanitizeScreenText(m.chat.panel.channel)
 	switch m.chat.panel.state {
 	case ChatStateConnecting:
@@ -74,6 +77,9 @@ func (m Model) chatRoomModesSummary() string {
 }
 
 func (m Model) chatHeaderState() string {
+	if m.chat.panel.unsupported {
+		return m.t("chat.state.unsupported")
+	}
 	switch m.chat.panel.state {
 	case ChatStateConnecting:
 		return m.t("chat.state.connecting")
@@ -165,6 +171,37 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 	if !m.chat.hasPanel() {
 		return nil
+	}
+	if m.chat.panel.unsupported {
+		headerLines := m.renderChatHeaderLines(maxWidth)
+		var footer []string
+		footer = append(footer, TruncateVisual(lipgloss.NewStyle().Faint(true).Render("  > "+m.t("chat.input.unsupported")), maxWidth))
+		pinned := maxLines > 0 && m.height > 0
+		if maxLines <= 0 {
+			maxLines = defaultChatPreviewLines
+		}
+		msgBudget := maxLines - len(headerLines) - len(footer)
+		if msgBudget < 0 {
+			msgBudget = 0
+		}
+		body := make([]string, 0, msgBudget)
+		if msgBudget > 0 {
+			notice := "  " + m.t("chat.unsupported")
+			body = append(body, TruncateVisual(notice, maxWidth))
+		}
+		lines := make([]string, 0, maxLines)
+		lines = append(lines, headerLines...)
+		lines = append(lines, body...)
+		if pinned {
+			for len(lines)+len(footer) < maxLines {
+				lines = append(lines, "")
+			}
+		}
+		lines = append(lines, footer...)
+		if pinned && len(lines) > maxLines {
+			lines = lines[len(lines)-maxLines:]
+		}
+		return lines
 	}
 	headerLines := m.renderChatHeaderLines(maxWidth)
 

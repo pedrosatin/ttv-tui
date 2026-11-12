@@ -802,6 +802,7 @@ func TestInvalidTokenWarnsOnceInStatusBarWithoutCrashingApp(t *testing.T) {
 
 type fakePlayback struct {
 	started   []string
+	targets   []PlayTarget
 	stopped   int
 	pauses    int
 	volDeltas []int
@@ -809,13 +810,22 @@ type fakePlayback struct {
 }
 
 func (f *fakePlayback) Start(login string, selection uint64) tea.Cmd {
-	f.started = append(f.started, login)
+	return f.StartTarget(PlayTarget{Label: login}, selection)
+}
+
+func (f *fakePlayback) StartTarget(target PlayTarget, selection uint64) tea.Cmd {
+	label := target.Label
+	if label == "" {
+		label = target.URL
+	}
+	f.started = append(f.started, label)
+	f.targets = append(f.targets, target)
 	msg := f.startMsg
 	if msg.State == "" {
-		msg = PlayerStatusMsg{Generation: uint64(len(f.started)), State: PlayerStateStarting, Login: login, Volume: 100, Selection: selection}
+		msg = PlayerStatusMsg{Generation: uint64(len(f.started)), State: PlayerStateStarting, Login: label, Volume: 100, Selection: selection}
 	} else {
 		msg.Selection = selection
-		msg.Login = login
+		msg.Login = label
 		if msg.Volume == 0 {
 			msg.Volume = 100
 		}

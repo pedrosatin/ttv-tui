@@ -84,7 +84,7 @@ ttv-tui login --import twt  # optional: reuse your twitch-tui token to send chat
 ttv-tui doctor              # check dependencies, paths and token presence
 ```
 
-Pick a category with `Enter`, then a channel with `Enter`. The stream starts and its chat opens on the right. Press `?` for the shortcut list.
+Pick a category with `Enter`, then a channel with `Enter`. You can also press `Ctrl+F` and paste a stream URL (Twitch, Kick, YouTube) to play directly. The stream starts and its chat opens on the right. Press `?` for the shortcut list.
 
 ## Platforms
 
@@ -112,7 +112,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | `Enter` | Open the category or watch the channel |
 | `f` | Add or remove the channel from favorites |
 | `/` | Filter the current list |
-| `Ctrl+F` or `Ctrl+S` | Search channels across Twitch |
+| `Ctrl+F` or `Ctrl+S` | Search channels across Twitch, or paste a stream URL |
 | `l` | Filter channels by language and audience |
 | `r` | Retry loading the list or the video |
 | `Esc` | Clear the filter, or go back to categories |

@@ -7,6 +7,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/store"
+	"github.com/pedrosatin/ttv-tui/internal/streamurl"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
@@ -107,9 +109,10 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Select):
-		// No local match: Enter runs the same global search as Ctrl+F.
-		// With matches, Enter still opens the highlighted item.
-		if m.filterHasNoMatches() {
+		// A pasted stream URL opens immediately; otherwise with no local match,
+		// Enter runs the same global search as Ctrl+F. With matches, Enter still opens
+		// the highlighted item.
+		if streamurl.IsStreamURL(m.list.filter) || m.filterHasNoMatches() {
 			return m.startSearch(m.list.filter)
 		}
 		m.list.filtering = false
@@ -141,6 +144,32 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	m.list.filter = ""
 	if q == "" {
 		return m, nil
+	}
+	if info, ok := streamurl.Parse(q); ok {
+		var ch twitch.Channel
+		if info.IsTwitch {
+			ch = twitch.Channel{
+				Platform:    store.PlatformTwitch,
+				ID:          info.Login,
+				Login:       info.Login,
+				DisplayName: info.DisplayName,
+			}
+		} else {
+			ch = twitch.Channel{
+				Platform:    info.Platform,
+				ID:          info.Label,
+				Login:       info.Login,
+				DisplayName: info.DisplayName,
+				URL:         info.URL,
+			}
+		}
+		m.clearHighlight()
+		m.clearStaleStatusErrors()
+		m.list.enters++
+		return m.applyChannelSelected(ChannelSelectedMsg{
+			Channel: ch,
+			Enter:   m.list.enters,
+		})
 	}
 	// Remember where Esc should land. A fresh search from channels or
 	// categories records that mode; a new query while already in search keeps

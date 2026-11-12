@@ -251,6 +251,7 @@ var allowedExceptions = map[string]bool{
 	"timeout":            true,
 	"streamlink_missing": true,
 	"mpv_missing":        true,
+	"no_plugin":          true,
 	"unknown":            true,
 	"dev":                true,
 
