@@ -362,7 +362,11 @@ func (m Model) applyComponentProgress(msg ComponentProgressMsg) (tea.Model, tea.
 		return m, nil
 	}
 	m.notices.gen++
-	m.notices.status = fmt.Sprintf(m.t("components.downloading_progress"), msg.Component, msg.Percent)
+	if msg.Waiting {
+		m.notices.status = m.t("components.waiting_lock")
+	} else {
+		m.notices.status = fmt.Sprintf(m.t("components.downloading_progress"), msg.Component, msg.Percent)
+	}
 	m.notices.statusWarns = false
 	m.notices.componentProgress = true
 	return m, nil

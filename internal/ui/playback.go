@@ -80,6 +80,7 @@ type ComponentProgressMsg struct {
 	Read      int64
 	Total     int64
 	Done      bool
+	Waiting   bool
 }
 
 // Playback is the UI→app bridge for starting and stopping video. The app
@@ -280,7 +281,11 @@ func clampPlayerVolume(v int) int {
 
 // manualInstallHint returns platform-specific instructions for installing streamlink manually.
 func (m Model) manualInstallHint() string {
-	switch runtime.GOOS {
+	return m.manualInstallHintFor(runtime.GOOS)
+}
+
+func (m Model) manualInstallHintFor(goos string) string {
+	switch goos {
 	case "windows":
 		return m.t("components.manual_install.windows")
 	case "darwin":

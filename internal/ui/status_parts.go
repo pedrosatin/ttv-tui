@@ -65,7 +65,7 @@ func (m Model) blockingStatusLead() (statusLead, bool) {
 	switch {
 	case m.player.state == PlayerStateError:
 		lead := statusLead{primary: m.playerFailureText(), tone: toneError, detail: m.playerErrorDetail()}
-		if m.player.downloadFailed {
+		if m.player.failure == PlayerFailureStreamlinkMissing || m.player.downloadFailed {
 			if hint := m.manualInstallHint(); hint != "" {
 				lead.context = append(lead.context, hint)
 			}

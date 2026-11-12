@@ -314,6 +314,7 @@
   "doctor.origin.managed": "gerenciado",
   "doctor.origin.path": "PATH",
   "components.downloading_progress": "Baixando %s (%d%%)...",
+  "components.waiting_lock": "Aguardando outro download...",
   "components.manual_install.windows": "baixe o instalador oficial em https://github.com/streamlink/windows-builds/releases ou use o Scoop ('scoop install streamlink')",
   "components.manual_install.darwin": "instale o streamlink com 'brew install streamlink'",
   "components.manual_install.linux": "instale o streamlink pelo gerenciador da sua distribuição (ex: pacman, apt) ou com 'pipx install streamlink'",

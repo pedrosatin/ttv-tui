@@ -107,6 +107,7 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 				Percent:   percent,
 				Read:      readBytes,
 				Total:     totalBytes,
+				Waiting:   percent < 0,
 			})
 		}
 	})

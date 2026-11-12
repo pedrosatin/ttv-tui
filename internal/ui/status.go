@@ -316,8 +316,21 @@ func (m Model) StatusBar() string {
 		}
 	}
 
-	rest := slices.Clone(c.extra)
-	if c.detail != "" {
+	var rest []string
+	if len(c.extra) > 0 {
+		if m.chat.statusHasChannel() && strings.Contains(c.extra[0], "#") {
+			rest = append(rest, c.extra[0])
+			if c.detail != "" {
+				rest = append(rest, c.detail)
+			}
+			rest = append(rest, c.extra[1:]...)
+		} else {
+			if c.detail != "" {
+				rest = append(rest, c.detail)
+			}
+			rest = append(rest, c.extra...)
+		}
+	} else if c.detail != "" {
 		rest = append(rest, c.detail)
 	}
 	primary := c.primary

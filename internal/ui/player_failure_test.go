@@ -513,3 +513,79 @@ func TestPlayerFailureNoPlugin_UIUsable(t *testing.T) {
 		})
 	}
 }
+
+func TestPlayerFailureStreamlinkMissing_ShowsManualInstallHint(t *testing.T) {
+	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+		t.Run(lang, func(t *testing.T) {
+			m, _ := newFailureModel(t, lang, 200, "xaryu")
+			// Failure with DownloadFailed == false (e.g. macOS where managed download is not attempted)
+			msg := PlayerStatusMsg{
+				Generation:     1,
+				State:          PlayerStateError,
+				Login:          "xaryu",
+				LastLine:       "streamlink: command not found",
+				Failure:        PlayerFailureStreamlinkMissing,
+				DownloadFailed: false,
+			}
+			updated, _ := m.Update(msg)
+			m = updated.(Model)
+
+			lead, ok := m.blockingStatusLead()
+			if !ok {
+				t.Fatal("expected blockingStatusLead to be active on player error")
+			}
+			if len(lead.context) == 0 {
+				t.Fatal("expected lead.context to contain manual install hint when streamlink is missing")
+			}
+			hint := lead.context[0]
+			if hint == "" {
+				t.Fatal("manual install hint must not be empty")
+			}
+
+			// Verify macOS specific hint
+			darwinHint := m.manualInstallHintFor("darwin")
+			if !strings.Contains(darwinHint, "brew install streamlink") {
+				t.Fatalf("darwin hint should mention brew install streamlink, got: %q", darwinHint)
+			}
+			windowsHint := m.manualInstallHintFor("windows")
+			if !strings.Contains(windowsHint, "streamlink") {
+				t.Fatalf("windows hint should mention streamlink, got: %q", windowsHint)
+			}
+			linuxHint := m.manualInstallHintFor("linux")
+			if !strings.Contains(linuxHint, "streamlink") {
+				t.Fatalf("linux hint should mention streamlink, got: %q", linuxHint)
+			}
+		})
+	}
+}
+
+func TestComponentProgress_WaitingLock(t *testing.T) {
+	for _, tc := range []struct {
+		lang string
+		want string
+	}{
+		{i18n.LangEN, "Waiting for another download..."},
+		{i18n.LangPTBR, "Aguardando outro download..."},
+	} {
+		t.Run(tc.lang, func(t *testing.T) {
+			m, _ := newFailureModel(t, tc.lang, 120, "xaryu")
+			updated, _ := m.Update(ComponentProgressMsg{
+				Component: "streamlink",
+				Waiting:   true,
+			})
+			m = updated.(Model)
+			bar := ansi.Strip(m.StatusBar())
+			if !strings.Contains(bar, tc.want) {
+				t.Fatalf("status bar lacks waiting notice %q:\\n%s", tc.want, bar)
+			}
+
+			// Done clears the waiting notice
+			updated, _ = m.Update(ComponentProgressMsg{Done: true})
+			m = updated.(Model)
+			barAfter := ansi.Strip(m.StatusBar())
+			if strings.Contains(barAfter, tc.want) {
+				t.Fatalf("status bar should clear waiting notice on Done:\\n%s", barAfter)
+			}
+		})
+	}
+}
