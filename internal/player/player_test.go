@@ -1790,8 +1790,15 @@ func TestManagerStartRejectsURLsStreamlinkCouldReadAsOptions(t *testing.T) {
 	if started {
 		t.Fatal("a rejected URL reached the command")
 	}
-	if err := checkStreamURL("https://kick.com/xqc"); err != nil {
-		t.Fatalf("checkStreamURL(kick) = %v, want nil", err)
+	for _, raw := range []string{
+		"https://kick.com/xqc",
+		"https://www.youtube.com/@canal/live",
+		"HTTPS://www.twitch.tv/a?b=c",
+		"http://host:8080/x",
+	} {
+		if err := checkStreamURL(raw); err != nil {
+			t.Errorf("checkStreamURL(%q) = %v, want nil", raw, err)
+		}
 	}
 }
 
