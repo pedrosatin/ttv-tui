@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
@@ -49,6 +50,15 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 		pTarget = player.Target{
 			URL:   target.URL,
 			Label: label,
+		}
+	} else if platform.IsNonTwitch(target.Platform) {
+		return func() tea.Msg {
+			return ui.PlayerStatusMsg{
+				State:    ui.PlayerStateError,
+				Login:    target.Label,
+				LastLine: "missing URL for non-Twitch channel",
+				Failure:  ui.PlayerFailureUnknown,
+			}
 		}
 	} else {
 		pTarget = twitchTarget(target.Label)

@@ -3,13 +3,16 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
 // TestPasteStreamURL_PTY tests pasting a non-Twitch stream URL into search (Ctrl+F),
-// verifying that it starts playback and displays the unsupported chat notice on the chat panel.
+// verifying that it starts playback with the expected URL and label, and displays
+// the unsupported chat notice on the chat panel.
 func TestPasteStreamURL_PTY(t *testing.T) {
 	p := startTUIOnPTY(t, "TTV_APP_RICH=1", "LANG=en_US.UTF-8", "LC_ALL=", "LC_MESSAGES=")
 
@@ -36,4 +39,21 @@ func TestPasteStreamURL_PTY(t *testing.T) {
 		t.Fatalf("expected chat header to show Unavailable, got:\n%s", screen)
 	}
 	t.Logf("PTY CAPTURE non-Twitch URL pasted:\n%s", screen)
+
+	// Verify that the player was called with the expected URL and label
+	targetLog := filepath.Join(p.dir, "player_targets.log")
+	deadline = time.Now().Add(5 * time.Second)
+	foundTarget := false
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(targetLog)
+		if err == nil && strings.Contains(string(data), "https://kick.com/xqc\tkick:xqc") {
+			foundTarget = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !foundTarget {
+		data, _ := os.ReadFile(targetLog)
+		t.Fatalf("expected player to be invoked with URL https://kick.com/xqc and label kick:xqc, got log:\n%s", string(data))
+	}
 }

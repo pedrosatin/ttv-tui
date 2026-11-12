@@ -72,6 +72,12 @@ func (emptySource) ChannelsByLogins(context.Context, []string) ([]twitch.Channel
 
 func helperPlayerCommand(dir string) player.CommandFunc {
 	return func(target player.Target, socketPath string) *exec.Cmd {
+		line := fmt.Sprintf("%s\t%s\n", target.URL, target.Label)
+		f, err := os.OpenFile(filepath.Join(dir, "player_targets.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		if err == nil {
+			_, _ = f.WriteString(line)
+			_ = f.Close()
+		}
 		cmd := exec.Command(os.Args[0], "--", target.Identity(), socketPath)
 		cmd.Env = append(os.Environ(), "TTV_APP_HELPER=player", "TTV_APP_DIR="+dir, "TTV_APP_SOCKET="+socketPath)
 		return cmd
