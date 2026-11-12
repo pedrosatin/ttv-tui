@@ -208,7 +208,24 @@ func TestDraftAndInputPositionSurviveTabResizeAndChannelSwitch(t *testing.T) {
 	if m.ChatChannel() != "alanzoka" {
 		t.Fatalf("chat channel = %q, want alanzoka", m.ChatChannel())
 	}
-	assertBottom("after channel switch")
+	if m.ComposeDraft() != "" {
+		t.Fatalf("after channel switch: draft=%q, want empty", m.ComposeDraft())
+	}
+
+	// Switch back to gaules: draft is restored.
+	m = sendKeys(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if cmd != nil {
+		if msg := cmd(); msg != nil {
+			updated, _ = m.Update(msg)
+			m = updated.(Model)
+		}
+	}
+	if m.ChatChannel() != "gaules" {
+		t.Fatalf("chat channel = %q, want gaules", m.ChatChannel())
+	}
+	assertBottom("after returning to channel")
 }
 
 func TestComposeHintAndCursorFitAt80Columns(t *testing.T) {
