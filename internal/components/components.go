@@ -221,6 +221,16 @@ func isAppImage(path string) bool {
 	return strings.HasSuffix(strings.ToLower(path), ".appimage") || strings.EqualFold(filepath.Base(path), "streamlink")
 }
 
+// hasExecBit reports whether fi is executable. Windows reports no execute bits,
+// so there any regular file counts; this only matters when tests lay out a
+// Linux installation on a Windows host.
+func hasExecBit(fi os.FileInfo) bool {
+	if runtime.GOOS == "windows" {
+		return fi.Mode().IsRegular()
+	}
+	return fi.Mode()&0o111 != 0
+}
+
 // findStreamlinkBinaryInDir searches for the streamlink executable in a version directory.
 func findStreamlinkBinaryInDir(dir, goos string) string {
 	if goos == "windows" {
@@ -252,7 +262,7 @@ func findStreamlinkBinaryInDir(dir, goos string) string {
 		filepath.Join(dir, "streamlink.AppImage"),
 	}
 	for _, c := range candidates {
-		if fi, err := os.Stat(c); err == nil && !fi.IsDir() && (fi.Mode()&0o111 != 0) {
+		if fi, err := os.Stat(c); err == nil && !fi.IsDir() && hasExecBit(fi) {
 			return c
 		}
 	}
@@ -262,7 +272,7 @@ func findStreamlinkBinaryInDir(dir, goos string) string {
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".appimage") {
 				p := filepath.Join(dir, e.Name())
-				if fi, err := os.Stat(p); err == nil && (fi.Mode()&0o111 != 0) {
+				if fi, err := os.Stat(p); err == nil && hasExecBit(fi) {
 					return p
 				}
 			}
