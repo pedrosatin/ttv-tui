@@ -279,6 +279,119 @@ func TestReportStreamlinkOrigins(t *testing.T) {
 	})
 }
 
+// snapshotTree lists every file under dir with its size and modification time,
+// to prove a report wrote nothing.
+func snapshotTree(t *testing.T, dir string) []string {
+	t.Helper()
+	var out []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		out = append(out, fmt.Sprintf("%s %d %d", path, info.Size(), info.ModTime().UnixNano()))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestReportManagedStreamlinkUpdateInfo(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("managed streamlink is not used on macOS")
+	}
+	base := isolate(t)
+	fakeTool(t, base, "mpv")
+	t.Setenv("PATH", base)
+	dataDir := filepath.Join(base, "XDG_DATA_HOME")
+	t.Setenv("XDG_DATA_HOME", dataDir)
+	streamlinkDir := filepath.Join(dataDir, "ttv-tui", "components", "streamlink")
+
+	current := filepath.Join(streamlinkDir, "8.7.0")
+	previous := filepath.Join(streamlinkDir, "8.6.3-1")
+	for _, dir := range []string{current, previous} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fakeTool(t, current, "streamlink")
+	stub := "streamlink"
+	if runtime.GOOS == "windows" {
+		stub += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(previous, stub), []byte("stub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	checked := time.Date(2026, 11, 12, 9, 30, 0, 0, time.UTC)
+	state := fmt.Sprintf(`{"last_check":%q,"trial":"8.7.0"}`, checked.Format(time.RFC3339))
+	if err := os.WriteFile(filepath.Join(streamlinkDir, "state.json"), []byte(state), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	before := snapshotTree(t, dataDir)
+	var out bytes.Buffer
+	_ = Run(&out, Options{Version: "test", Lang: "en"})
+	report := out.String()
+	for _, want := range []string{
+		"streamlink: 9.8.7 (managed)",
+		"Previous streamlink: 8.6.3-1",
+		"Last streamlink update check: " + checked.Local().Format("2006-01-02 15:04"),
+	} {
+		if !strings.Contains(report, want) {
+			t.Errorf("report lacks %q:\n%s", want, report)
+		}
+	}
+	var outPT bytes.Buffer
+	_ = Run(&outPT, Options{Version: "test", Lang: "pt-BR"})
+	for _, want := range []string{"Streamlink anterior: 8.6.3-1", "Última checagem de atualização do streamlink: "} {
+		if !strings.Contains(outPT.String(), want) {
+			t.Errorf("pt-BR report lacks %q:\n%s", want, outPT.String())
+		}
+	}
+	if after := snapshotTree(t, dataDir); !slices.Equal(before, after) {
+		t.Fatalf("doctor wrote to the data directory:\nbefore %v\nafter  %v", before, after)
+	}
+}
+
+func TestReportManagedStreamlinkNeverChecked(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("managed streamlink is not used on macOS")
+	}
+	base := isolate(t)
+	fakeTool(t, base, "mpv")
+	t.Setenv("PATH", base)
+	dataDir := filepath.Join(base, "XDG_DATA_HOME")
+	t.Setenv("XDG_DATA_HOME", dataDir)
+	managedDir := filepath.Join(dataDir, "ttv-tui", "components", "streamlink", "8.6.3-1")
+	if err := os.MkdirAll(managedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fakeTool(t, managedDir, "streamlink")
+
+	var out bytes.Buffer
+	_ = Run(&out, Options{Version: "test", Lang: "en"})
+	for _, want := range []string{"Previous streamlink: none", "Last streamlink update check: never"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestReportUnmanagedStreamlinkHasNoUpdateInfo(t *testing.T) {
+	base := isolate(t)
+	fakeTool(t, base, "streamlink")
+	fakeTool(t, base, "mpv")
+	t.Setenv("PATH", base)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(base, "XDG_DATA_HOME"))
+
+	var out bytes.Buffer
+	_ = Run(&out, Options{Version: "test", Lang: "en"})
+	if strings.Contains(out.String(), "update check") || strings.Contains(out.String(), "Previous streamlink") {
+		t.Fatalf("a streamlink from PATH is never updated by the app, report must not talk about it:\n%s", out.String())
+	}
+}
+
 func TestReport_WindowLibmpvWindows(t *testing.T) {
 	for _, subfolder := range []bool{false, true} {
 		name := "flat"

@@ -33,6 +33,17 @@ type playbackBridge struct {
 	mu          sync.Mutex
 	resolved    components.Result
 	hasResolved bool
+	// confirmedVersion is the managed version whose trial was already reported
+	// as over; rollbacks lists the updates that were undone (see streamlink_update.go).
+	confirmedVersion string
+	rollbacks        []streamlinkRollback
+
+	// bg tracks the update check, trial bookkeeping and rollback, none of which
+	// may delay playback. useMu guards the use marker of the managed version.
+	bg         sync.WaitGroup
+	useMu      sync.Mutex
+	useVersion string
+	useRelease func() error
 }
 
 func newPlaybackBridge(mgr *player.Manager, opts ...string) *playbackBridge {
@@ -94,11 +105,7 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 	resolver.LookPath = exec.LookPath
 	res, err := resolver.ResolveStreamlink(cfgPath)
 	if err == nil {
-		b.mu.Lock()
-		b.resolved = res
-		b.hasResolved = true
-		b.mgr.SetStreamlink(res.Path, res.Env...)
-		b.mu.Unlock()
+		b.adopt(res)
 		return nil
 	}
 
@@ -110,12 +117,7 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 		return &player.MissingToolError{Tool: "streamlink"}
 	}
 
-	downloader := b.down
-	if downloader == nil {
-		downloader = components.NewDownloader(dataDir)
-	}
-
-	res, err = downloader.DownloadStreamlink(ctx, func(component string, percent int, readBytes, totalBytes int64) {
+	res, err = b.downloader().DownloadStreamlink(ctx, func(component string, percent int, readBytes, totalBytes int64) {
 		b.mu.Lock()
 		sender := b.sender
 		b.mu.Unlock()
@@ -139,11 +141,7 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 		return err
 	}
 
-	b.mu.Lock()
-	b.resolved = res
-	b.hasResolved = true
-	b.mgr.SetStreamlink(res.Path, res.Env...)
-	b.mu.Unlock()
+	b.adopt(res)
 	return nil
 }
 
@@ -217,6 +215,16 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 		// Cmds run in goroutines that may not keep the order of the selections.
 		gen, err := mgr.StartInOrder(playTarget, selection)
 		if err != nil {
+			if player.FailureOf(err).BlamesStreamlink() {
+				// The binary cannot even run: if it is an update still on
+				// trial, go back to the previous one.
+				b.mu.Lock()
+				res, managed := b.resolved, b.hasResolved
+				b.mu.Unlock()
+				if managed && res.Origin == components.OriginManaged {
+					b.rollbackAsync(res.Version)
+				}
+			}
 			return ui.PlayerStatusMsg{
 				Generation: gen,
 				State:      ui.PlayerStateError,
@@ -324,9 +332,10 @@ func logPlayerNotes(log io.Writer, notes []string, cat *i18n.Catalog) {
 	}
 }
 
-// forwardPlayerEvents sends Manager events into the running tea program.
+// forwardPlayerEvents sends Manager events into the running tea program, after
+// showing each to observe when it is set.
 // It returns when ctx is cancelled or the Events channel is closed.
-func forwardPlayerEvents(ctx context.Context, p *tea.Program, mgr *player.Manager) {
+func forwardPlayerEvents(ctx context.Context, p *tea.Program, mgr *player.Manager, observe func(player.Event)) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -334,6 +343,9 @@ func forwardPlayerEvents(ctx context.Context, p *tea.Program, mgr *player.Manage
 		case ev, ok := <-mgr.Events():
 			if !ok {
 				return
+			}
+			if observe != nil {
+				observe(ev)
 			}
 			msg := mapPlayerEvent(ev)
 			// Avoid blocking forever if the program has already exited.

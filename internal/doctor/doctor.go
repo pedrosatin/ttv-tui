@@ -47,6 +47,10 @@ func Run(out io.Writer, opts Options) int {
 	if !streamlinkOK {
 		code = 1
 	}
+	if previous, lastCheck, managed := managedUpdateInfo(cfg.StreamlinkPath, cat); managed {
+		line("doctor.streamlink_previous", previous)
+		line("doctor.streamlink_last_check", lastCheck)
+	}
 
 	mpvVal, mpvOK := mpvStatus(opts, cat)
 	_, _ = fmt.Fprintf(out, "mpv: %s\n", mpvVal)
@@ -123,6 +127,28 @@ func streamlinkStatus(cfgStreamlink string, cat *i18n.Catalog) (string, bool) {
 		originLabel = cat.T("doctor.origin.path")
 	}
 	return fmt.Sprintf("%s (%s)", ver, originLabel), true
+}
+
+// managedUpdateInfo describes the update side of a managed streamlink: the
+// version kept to go back to and when the last check for a newer one happened.
+// It reports managed=false for a streamlink from the config or PATH, which the
+// app never updates. Local files only, nothing is written.
+func managedUpdateInfo(cfgStreamlink string, cat *i18n.Catalog) (previous, lastCheck string, managed bool) {
+	resolver := components.NewResolver()
+	resolver.LookPath = exec.LookPath
+	res, err := resolver.ResolveStreamlink(cfgStreamlink)
+	if err != nil || res.Origin != components.OriginManaged {
+		return "", "", false
+	}
+	previous = cat.T("doctor.none")
+	if _, prev := resolver.ManagedVersions(); prev != "" {
+		previous = prev
+	}
+	lastCheck = cat.T("doctor.never")
+	if checked := components.LoadUpdateState(resolver.DataDir).LastCheck; !checked.IsZero() {
+		lastCheck = checked.Local().Format("2006-01-02 15:04")
+	}
+	return previous, lastCheck, true
 }
 
 func mpvStatus(opts Options, cat *i18n.Catalog) (string, bool) {

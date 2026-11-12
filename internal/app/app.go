@@ -139,6 +139,12 @@ func Run(opts Options) error {
 	playback := newPlaybackBridge(playerMgr, cfg.StreamlinkPath, dataDir)
 	playback.setRegistry(providerRegistry)
 	playback.setContext(ctx)
+	defer func() {
+		// Cancel first so background work stops promptly (cancel is idempotent).
+		cancel()
+		playback.close()
+		logStreamlinkRollbacks(logw, playback.Rollbacks(), appCat)
+	}()
 
 	uiOpts := []ui.Option{
 		hostOption,
@@ -166,7 +172,8 @@ func Run(opts Options) error {
 		tea.WithoutSignalHandler(),
 	)
 	playback.setSender(p.Send)
-	go forwardPlayerEvents(ctx, p, playerMgr)
+	go forwardPlayerEvents(ctx, p, playerMgr, playback.observePlayer)
+	playback.startUpdateCheck()
 	go forwardChatEvents(ctx, p, chatMgr)
 	final, runErr := p.Run()
 	if m, ok := final.(ui.Model); ok {

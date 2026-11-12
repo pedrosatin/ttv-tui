@@ -33,10 +33,21 @@ Para oferecer uma experiência imediata de reprodução sem quebrar instalaçõe
    - No Windows, o zip portátil é extraído com validação estrita de segmentos de caminho (rejeitando symlinks e travessia `..`, mas permitindo nomes legítimos com pontos duplos como `a..b`) e limite de tamanho descompactado, localizando o executável em `bin/streamlink.exe`.
 
 5. **Inspeção**:
-   - O subcomando `ttv-tui doctor` relata a versão e a origem do `streamlink` em uso (`config`, `gerenciado` ou `PATH`).
+   - O subcomando `ttv-tui doctor` relata a versão e a origem do `streamlink` em uso (`config`, `gerenciado` ou `PATH`). Para o gerenciado, mostra também a versão anterior guardada e a data da última checagem de atualização. Só lê arquivos locais: sem rede e sem escrita.
+
+6. **Atualização automática**:
+   - Só quando o `streamlink` em uso é o gerenciado. O caminho do `config.toml` e o executável do `PATH` são do usuário e nunca são tocados.
+   - No máximo uma checagem a cada 24 horas, em segundo plano, a partir da abertura do app (a reprodução e a inicialização não esperam). A data da última checagem fica em `components/streamlink/state.json`, no diretório de dados. Uma checagem que não consegue o lock de componentes (outro download ou outra atualização em curso) é adiada e continua pendente; uma que consultou a release conta como feita mesmo que o download falhe, para não repetir o download a cada abertura.
+   - A versão nova passa pelo mesmo caminho da primeira instalação: `releases/latest`, digest SHA-256 publicado pela API, domínios fixos, staging e renomeação atômica. Digest errado descarta o arquivo e não troca nada. A versão nova só entra em uso depois de completa no disco e é usada a partir da próxima abertura do app, nunca no meio de uma reprodução.
+   - Ficam no disco no máximo a versão atual e a anterior. As mais velhas são apagadas sob o lock, e uma versão que outra instância ainda usa não é apagada: cada processo mantém um marcador de uso (`.use-<pid>-<versão>.lock`, renovado por batimento e expirado sozinho se o processo morre) enquanto usa uma versão gerenciada.
+
+7. **Volta para a versão anterior**:
+   - Uma versão instalada por atualização fica "em teste" até a primeira reprodução que chega a tocar. Só uma versão em teste pode ser desfeita: uma versão que já tocou e quebra semanas depois (por exemplo, a Twitch mudou o protocolo) não manda o app para uma versão ainda mais velha.
+   - O que conta como falha da versão é só `player.FailureStreamlinkBroken`: erro de plugin ou do runtime Python no log (`Unable to validate`, `PluginError`, `ModuleNotFoundError`, `error while loading shared libraries` e semelhantes), binário que não executa, ou saída com erro antes de entregar o stream sem nenhuma linha que explique por canal ou rede. Canal offline, rede, tempo esgotado, URL sem plugin (`No plugin can handle URL`), ferramenta ausente e erro sem causa reconhecida não contam, e na classificação uma linha de plugin que cita rede ou canal offline fica com essa causa.
+   - Com a falha, a versão é marcada como ruim em `state.json` (o resolvedor a ignora, a atualização não a baixa de novo e seus arquivos são apagados) e o app passa a usar a anterior na próxima reprodução. Sem versão anterior instalada, nada muda. O app avisa no terminal ao sair qual versão foi desfeita.
+   - Limite conhecido: se o plugin do site que o usuário abriu está quebrado também na versão anterior, a versão nova é marcada como ruim sem ser a culpada. O custo é baixo: a próxima release corrigida é instalada normalmente.
 
 ## O que fica fora
 
-- **Atualização automática**: Não há checagem contínua ou substituição automática de versão a cada execução; isso será abordado na issue de atualização de componentes (ticket 17).
-- **macOS**: O suporte a componentes gerenciados no macOS é tratado separadamente (ticket 19), mantendo o comportamento existente baseado em `PATH` e Homebrew.
+- **macOS**: O suporte a componentes gerenciados no macOS é tratado separadamente, mantendo o comportamento existente baseado em `PATH` e Homebrew.
 - **Player gerenciado (mpv / libmpv)**: O mpv permanece resolvido pelo sistema ou pela janela empacotada da plataforma.
