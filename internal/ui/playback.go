@@ -69,6 +69,16 @@ type PlayerStatusMsg struct {
 	ContainmentDegraded bool
 }
 
+// ComponentProgressMsg reports progress of an automatic background download
+// of a managed dependency (such as streamlink).
+type ComponentProgressMsg struct {
+	Component string
+	Percent   int
+	Read      int64
+	Total     int64
+	Done      bool
+}
+
 // Playback is the UI→app bridge for starting and stopping video. The app
 // injects an implementation that talks to internal/player; the UI never
 // imports that package. Ongoing status updates arrive as PlayerStatusMsg

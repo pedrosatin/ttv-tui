@@ -1872,3 +1872,29 @@ func TestRegistryRecordStoresTargetAndIdentity(t *testing.T) {
 		t.Fatalf("old Identity = %q, want oldchan", oldRec.Identity())
 	}
 }
+
+func TestCustomStreamlinkPathAndEnv(t *testing.T) {
+	mgr := New(Options{
+		StreamlinkPath: "/custom/path/to/streamlink",
+		StreamlinkEnv:  []string{"CUSTOM_VAR=1"},
+	})
+	defer mgr.Close()
+
+	if got := mgr.StreamlinkPath(); got != "/custom/path/to/streamlink" {
+		t.Fatalf("StreamlinkPath = %q, want /custom/path/to/streamlink", got)
+	}
+
+	mgr.SetStreamlink("/updated/streamlink", "APPIMAGE_EXTRACT_AND_RUN=1")
+	if got := mgr.StreamlinkPath(); got != "/updated/streamlink" {
+		t.Fatalf("updated StreamlinkPath = %q, want /updated/streamlink", got)
+	}
+
+	// checkTools should report missing custom streamlink when file does not exist
+	err := mgr.checkTools()
+	if err == nil {
+		t.Fatal("expected checkTools to fail for non-existent streamlink path")
+	}
+	if !strings.Contains(err.Error(), "/updated/streamlink") {
+		t.Fatalf("expected error mentioning /updated/streamlink, got %v", err)
+	}
+}

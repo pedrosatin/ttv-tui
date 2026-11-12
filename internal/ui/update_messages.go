@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -349,4 +350,15 @@ func (m *Model) warnPlayerDegraded(msg PlayerStatusMsg) {
 		m.player.keysWarnedGen = msg.Generation
 		m.warnStatus(m.t("player.warn.input_conf"))
 	}
+}
+
+func (m Model) applyComponentProgress(msg ComponentProgressMsg) (tea.Model, tea.Cmd) {
+	if msg.Done {
+		m.clearStatusNotice()
+		return m, nil
+	}
+	m.notices.gen++
+	m.notices.status = fmt.Sprintf(m.t("components.downloading_progress"), msg.Component, msg.Percent)
+	m.notices.statusWarns = false
+	return m, nil
 }

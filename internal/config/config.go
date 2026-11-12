@@ -33,6 +33,8 @@ type Config struct {
 	// ChatOverlayOpacity is the percent opacity behind the chat over the video,
 	// within MinChatOpacity..100. 0 means the default. TOML key: chat_overlay_opacity.
 	ChatOverlayOpacity int
+	// StreamlinkPath is an optional explicit path to the streamlink binary. TOML key: streamlink_path.
+	StreamlinkPath string
 }
 
 // Limits of a saved panel width. The UI applies the tighter limits of the moment.
@@ -264,6 +266,9 @@ func formatTOML(cfg Config) string {
 	if percent := normalizeChatOpacity(cfg.ChatOverlayOpacity); percent > 0 {
 		fmt.Fprintf(&b, "chat_overlay_opacity = %d\n", percent)
 	}
+	if cfg.StreamlinkPath != "" {
+		fmt.Fprintf(&b, "streamlink_path = %s\n", quoteTOML(cfg.StreamlinkPath))
+	}
 	return b.String()
 }
 
@@ -412,6 +417,12 @@ func parseTOML(input string) (Config, error) {
 			if _, err := unquoteTOML(rawVal); err != nil {
 				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
 			}
+		case "streamlink_path", "player.streamlink_path", "streamlink", "player.streamlink":
+			val, err := unquoteTOML(rawVal)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+			}
+			cfg.StreamlinkPath = val
 		}
 	}
 	if err := scanner.Err(); err != nil {

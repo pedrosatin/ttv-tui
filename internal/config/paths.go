@@ -151,3 +151,30 @@ func RuntimeDir() string {
 func LocalAppData() (string, error) {
 	return osPathEnv().localAppData()
 }
+
+// dataDir is the application's data directory. $XDG_DATA_HOME wins on Linux/Unix (or when set);
+// on Windows it is %LOCALAPPDATA%\ttv-tui.
+func (e pathEnv) dataDir() (string, error) {
+	if xdg := e.getenv("XDG_DATA_HOME"); xdg != "" {
+		return filepath.Join(xdg, appDirName), nil
+	}
+	switch e.goos {
+	case "windows":
+		local, err := e.localAppData()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(local, appDirName), nil
+	case "darwin":
+		return e.homeJoin("Library", "Application Support", appDirName)
+	default:
+		return e.homeJoin(".local", "share", appDirName)
+	}
+}
+
+// DataDir returns the base application data directory:
+// $XDG_DATA_HOME/ttv-tui when set (or default ~/.local/share/ttv-tui on Linux),
+// %LOCALAPPDATA%\ttv-tui on Windows.
+func DataDir() (string, error) {
+	return osPathEnv().dataDir()
+}

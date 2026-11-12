@@ -584,6 +584,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case PlayerStatusMsg:
 		return m.applyPlayerStatus(msg)
 
+	case ComponentProgressMsg:
+		return m.applyComponentProgress(msg)
+
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
 	}

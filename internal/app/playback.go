@@ -2,10 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os/exec"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/components"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
@@ -15,11 +19,97 @@ import (
 // playbackBridge adapts player.Manager to ui.Playback without the UI importing player.
 // Events are forwarded with tea.Program.Send from a single goroutine started in Run.
 type playbackBridge struct {
-	mgr *player.Manager
+	mgr           *player.Manager
+	cfgStreamlink string
+	dataDir       string
+	sender        func(tea.Msg)
+	down          *components.Downloader
+
+	mu          sync.Mutex
+	resolved    components.Result
+	hasResolved bool
 }
 
-func newPlaybackBridge(mgr *player.Manager) *playbackBridge {
-	return &playbackBridge{mgr: mgr}
+func newPlaybackBridge(mgr *player.Manager, opts ...string) *playbackBridge {
+	b := &playbackBridge{mgr: mgr}
+	if len(opts) > 0 {
+		b.cfgStreamlink = opts[0]
+	}
+	if len(opts) > 1 {
+		b.dataDir = opts[1]
+	}
+	return b
+}
+
+func (b *playbackBridge) setSender(send func(tea.Msg)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.sender = send
+}
+
+func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
+	b.mu.Lock()
+	if b.hasResolved {
+		b.mu.Unlock()
+		return nil
+	}
+	cfgPath := b.cfgStreamlink
+	dataDir := b.dataDir
+	b.mu.Unlock()
+
+	resolver := components.NewResolver()
+	if dataDir != "" {
+		resolver.DataDir = dataDir
+	}
+	resolver.LookPath = exec.LookPath
+	res, err := resolver.ResolveStreamlink(cfgPath)
+	if err == nil {
+		b.mu.Lock()
+		b.resolved = res
+		b.hasResolved = true
+		b.mgr.SetStreamlink(res.Path, res.Env...)
+		b.mu.Unlock()
+		return nil
+	}
+
+	if !errors.Is(err, components.ErrNotFound) {
+		return err
+	}
+
+	downloader := b.down
+	if downloader == nil {
+		downloader = components.NewDownloader(dataDir)
+	}
+
+	res, err = downloader.DownloadStreamlink(ctx, func(component string, percent int, readBytes, totalBytes int64) {
+		b.mu.Lock()
+		sender := b.sender
+		b.mu.Unlock()
+		if sender != nil {
+			sender(ui.ComponentProgressMsg{
+				Component: component,
+				Percent:   percent,
+				Read:      readBytes,
+				Total:     totalBytes,
+			})
+		}
+	})
+	b.mu.Lock()
+	sender := b.sender
+	b.mu.Unlock()
+	if sender != nil {
+		sender(ui.ComponentProgressMsg{Done: true})
+	}
+	if err != nil {
+		return err
+	}
+
+	b.mu.Lock()
+	b.resolved = res
+	b.hasResolved = true
+	b.mgr.SetStreamlink(res.Path, res.Env...)
+	b.mu.Unlock()
+	return nil
 }
 
 // twitchTarget builds the playback Target for a Twitch channel login. An empty
@@ -65,6 +155,18 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 	}
 	identity := pTarget.Identity()
 	return func() tea.Msg {
+		if err := b.ensureStreamlink(context.Background()); err != nil {
+			gen := mgr.Generation()
+			return ui.PlayerStatusMsg{
+				Generation: gen,
+				State:      ui.PlayerStateError,
+				Login:      login,
+				LastLine:   err.Error(),
+				Failure:    ui.PlayerFailureStreamlinkMissing,
+				Selection:  selection,
+			}
+		}
+
 		// Cmds run in goroutines that may not keep the order of the selections.
 		gen, err := mgr.StartInOrder(pTarget, selection)
 		if err != nil {

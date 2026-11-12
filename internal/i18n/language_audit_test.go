@@ -46,8 +46,10 @@ var identicalInBothLanguages = map[string]string{
 	"channels.offline_tag": "offline é o termo usado pela Twitch em pt-BR",
 	// The word "layout" is a pt-BR loanword (help.layout and the README use it);
 	// the mode that follows it comes from layout.mode.*, translated.
-	"layout.mode.chat": "chat é o termo usado em todo o catálogo pt-BR",
-	"status.layout":    "layout é empréstimo consolidado; o modo vem de layout.mode.*",
+	"layout.mode.chat":     "chat é o termo usado em todo o catálogo pt-BR",
+	"status.layout":        "layout é empréstimo consolidado; o modo vem de layout.mode.*",
+	"doctor.origin.config": "config é abreviação técnica comum a ambos os idiomas",
+	"doctor.origin.path":   "PATH é o nome da variável de ambiente comum a ambos os idiomas",
 }
 
 // englishOnlyWords are words with no use in pt-BR interface copy. A pt-BR value

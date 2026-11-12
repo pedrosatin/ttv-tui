@@ -130,10 +130,12 @@ func Run(opts Options) error {
 	appStore := store.New(statePath)
 	st, corruptNotice := loadState(appStore, catalog)
 
+	dataDir, _ := config.DataDir()
+	playback := newPlaybackBridge(playerMgr, cfg.StreamlinkPath, dataDir)
 	uiOpts := []ui.Option{
 		hostOption,
 		ui.WithSource(source),
-		ui.WithPlayback(newPlaybackBridge(playerMgr)),
+		ui.WithPlayback(playback),
 		ui.WithChat(newChatBridge(chatMgr)),
 		ui.WithStore(appStore),
 		ui.WithFavorites(store.ToTwitchChannels(st.Favorites)),
@@ -155,6 +157,7 @@ func Run(opts Options) error {
 		tea.WithContext(ctx),
 		tea.WithoutSignalHandler(),
 	)
+	playback.setSender(p.Send)
 	go forwardPlayerEvents(ctx, p, playerMgr)
 	go forwardChatEvents(ctx, p, chatMgr)
 	final, runErr := p.Run()

@@ -378,3 +378,19 @@ func TestLoadLegacyConfigWithRefreshToken(t *testing.T) {
 		t.Fatalf("saved config missing access_token, got:\n%s", savedStr)
 	}
 }
+
+func TestStreamlinkPathRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	want := Config{StreamlinkPath: "/opt/custom/streamlink"}
+	if err := SaveTo(path, want); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if got.StreamlinkPath != want.StreamlinkPath {
+		t.Fatalf("StreamlinkPath = %q, want %q", got.StreamlinkPath, want.StreamlinkPath)
+	}
+}

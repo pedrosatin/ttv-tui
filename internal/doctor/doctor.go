@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/pedrosatin/ttv-tui/internal/components"
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
@@ -32,26 +33,32 @@ func Run(out io.Writer, opts Options) int {
 	line := func(key, value string) { _, _ = fmt.Fprintf(out, "%s: %s\n", cat.T(key), value) }
 	line("doctor.version", opts.Version)
 	line("doctor.platform", runtime.GOOS+"/"+runtime.GOARCH)
-	for _, tool := range []string{"streamlink", "mpv"} {
-		value, ok := toolVersion(tool, cat)
-		_, _ = fmt.Fprintf(out, "%s: %s\n", tool, value)
-		if !ok {
-			code = 1
-		}
-	}
 	path := opts.ConfigPath
 	if path == "" {
 		path, _ = config.DefaultPath()
 	}
+	cfg, cfgErr := config.LoadFrom(path)
+
+	streamlinkVal, streamlinkOK := streamlinkStatus(cfg.StreamlinkPath, cat)
+	_, _ = fmt.Fprintf(out, "streamlink: %s\n", streamlinkVal)
+	if !streamlinkOK {
+		code = 1
+	}
+
+	mpvVal, mpvOK := toolVersion("mpv", cat)
+	_, _ = fmt.Fprintf(out, "mpv: %s\n", mpvVal)
+	if !mpvOK {
+		code = 1
+	}
+
 	if path == "" {
 		line("doctor.config", cat.T("doctor.unavailable"))
 		code = 1
 	} else {
 		line("doctor.config", filepath.Dir(path))
 	}
-	cfg, err := config.LoadFrom(path)
 	token := cat.T("doctor.no")
-	if err != nil || path == "" {
+	if cfgErr != nil || path == "" {
 		token = cat.T("doctor.unreadable")
 		code = 1
 	} else if cfg.HasToken() {
@@ -92,14 +99,44 @@ func registryStatus(dir string) string {
 
 var versionPattern = regexp.MustCompile(`(?m)^(?:mpv v?|streamlink )?([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b`)
 
+func streamlinkStatus(cfgStreamlink string, cat *i18n.Catalog) (string, bool) {
+	resolver := components.NewResolver()
+	resolver.LookPath = exec.LookPath
+	res, err := resolver.ResolveStreamlink(cfgStreamlink)
+	if err != nil {
+		return cat.T("doctor.missing"), false
+	}
+	ver, ok := toolVersionAtPath(res.Path, res.Env, cat)
+	if !ok {
+		return ver, false
+	}
+	originLabel := string(res.Origin)
+	switch res.Origin {
+	case components.OriginConfig:
+		originLabel = cat.T("doctor.origin.config")
+	case components.OriginManaged:
+		originLabel = cat.T("doctor.origin.managed")
+	case components.OriginPath:
+		originLabel = cat.T("doctor.origin.path")
+	}
+	return fmt.Sprintf("%s (%s)", ver, originLabel), true
+}
+
 func toolVersion(tool string, cat *i18n.Catalog) (string, bool) {
 	path, err := exec.LookPath(tool)
 	if err != nil {
 		return cat.T("doctor.missing"), false
 	}
+	return toolVersionAtPath(path, nil, cat)
+}
+
+func toolVersionAtPath(path string, env []string, cat *i18n.Catalog) (string, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, "--version")
+	if len(env) > 0 {
+		cmd.Env = append(cmd.Environ(), env...)
+	}
 	cmd.WaitDelay = 100 * time.Millisecond
 	var output cappedOutput
 	cmd.Stdout = &output

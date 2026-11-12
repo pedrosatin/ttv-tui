@@ -2,9 +2,11 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -119,5 +121,34 @@ func TestTwitchTargetEmptyLoginIsRefusedByThePlayer(t *testing.T) {
 	t.Cleanup(mgr.Close)
 	if _, err := mgr.Start(twitchTarget("")); err == nil {
 		t.Fatal("Start with an empty login must fail, not open the Twitch home page")
+	}
+}
+
+func TestPlaybackBridge_EnsureStreamlink_Configured(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "streamlink")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	mgr := player.New(player.Options{})
+	t.Cleanup(mgr.Close)
+
+	bridge := newPlaybackBridge(mgr, bin, t.TempDir())
+	if err := bridge.ensureStreamlink(context.Background()); err != nil {
+		t.Fatalf("ensureStreamlink: %v", err)
+	}
+	if mgr.StreamlinkPath() != bin {
+		t.Fatalf("mgr streamlink path = %q, want %q", mgr.StreamlinkPath(), bin)
+	}
+}
+
+func TestPlaybackBridge_EnsureStreamlink_ExplicitMissing(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing-streamlink")
+	mgr := player.New(player.Options{})
+	t.Cleanup(mgr.Close)
+
+	bridge := newPlaybackBridge(mgr, missing, t.TempDir())
+	err := bridge.ensureStreamlink(context.Background())
+	if err == nil {
+		t.Fatal("expected error for non-existent configured streamlink")
 	}
 }

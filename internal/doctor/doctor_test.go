@@ -214,3 +214,64 @@ func TestRegistryFinishedSessionIsPending(t *testing.T) {
 		t.Fatalf("after cleanup = %s, want doctor.clean", got)
 	}
 }
+
+func TestReportStreamlinkOrigins(t *testing.T) {
+	// Case 1: Config origin
+	t.Run("config", func(t *testing.T) {
+		base := isolate(t)
+		cfgBin := filepath.Join(base, "custom-streamlink")
+		fakeTool(t, base, "custom-streamlink")
+		fakeTool(t, base, "mpv")
+		t.Setenv("PATH", base)
+		if err := config.Save(config.Config{StreamlinkPath: cfgBin}); err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		_ = Run(&out, Options{Version: "test", Lang: "pt-BR"})
+		if !strings.Contains(out.String(), "streamlink: 9.8.7 (config)") {
+			t.Fatalf("expected streamlink with config origin, got: %s", out.String())
+		}
+	})
+
+	// Case 2: Managed origin
+	if runtime.GOOS != "darwin" {
+		t.Run("managed", func(t *testing.T) {
+			base := isolate(t)
+			fakeTool(t, base, "mpv")
+			// Create managed streamlink under XDG_DATA_HOME
+			dataDir := filepath.Join(base, "XDG_DATA_HOME")
+			t.Setenv("XDG_DATA_HOME", dataDir)
+			managedDir := filepath.Join(dataDir, "ttv-tui", "components", "streamlink", "8.6.3-1")
+			if err := os.MkdirAll(managedDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			fakeTool(t, managedDir, "streamlink")
+			t.Setenv("PATH", base)
+
+			var out bytes.Buffer
+			_ = Run(&out, Options{Version: "test", Lang: "pt-BR"})
+			if !strings.Contains(out.String(), "streamlink: 9.8.7 (gerenciado)") {
+				t.Fatalf("expected streamlink with gerenciado origin, got: %s", out.String())
+			}
+
+			var outEN bytes.Buffer
+			_ = Run(&outEN, Options{Version: "test", Lang: "en"})
+			if !strings.Contains(outEN.String(), "streamlink: 9.8.7 (managed)") {
+				t.Fatalf("expected streamlink with managed origin, got: %s", outEN.String())
+			}
+		})
+	}
+
+	// Case 3: PATH origin
+	t.Run("path", func(t *testing.T) {
+		base := isolate(t)
+		fakeTool(t, base, "streamlink")
+		fakeTool(t, base, "mpv")
+		t.Setenv("PATH", base)
+		var out bytes.Buffer
+		_ = Run(&out, Options{Version: "test", Lang: "pt-BR"})
+		if !strings.Contains(out.String(), "streamlink: 9.8.7 (PATH)") {
+			t.Fatalf("expected streamlink with PATH origin, got: %s", out.String())
+		}
+	})
+}

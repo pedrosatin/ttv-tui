@@ -27,6 +27,7 @@ func TestXDGWinsOnEveryOS(t *testing.T) {
 	vars := map[string]string{
 		"XDG_CONFIG_HOME": "/xdg/config",
 		"XDG_STATE_HOME":  "/xdg/state",
+		"XDG_DATA_HOME":   "/xdg/data",
 		"XDG_RUNTIME_DIR": "/xdg/run",
 		"APPDATA":         "/win/roaming",
 		"LOCALAPPDATA":    "/win/local",
@@ -43,6 +44,9 @@ func TestXDGWinsOnEveryOS(t *testing.T) {
 			}
 			if got, err := e.stateDir(); err != nil || got != filepath.Join("/xdg/state", "ttv-tui") {
 				t.Fatalf("stateDir = %q, %v", got, err)
+			}
+			if got, err := e.dataDir(); err != nil || got != filepath.Join("/xdg/data", "ttv-tui") {
+				t.Fatalf("dataDir = %q, %v", got, err)
 			}
 			if got := e.runtimeDir(); got != filepath.Join("/xdg/run", "ttv-tui") {
 				t.Fatalf("runtimeDir = %q", got)
@@ -73,6 +77,7 @@ func TestFallbackPerOS(t *testing.T) {
 		config  string
 		twt     string
 		state   string
+		data    string
 		runtime string
 	}{
 		{
@@ -80,6 +85,7 @@ func TestFallbackPerOS(t *testing.T) {
 			config:  fakeHome(".config", "ttv-tui"),
 			twt:     fakeHome(".config", "twt"),
 			state:   fakeHome(".local", "state", "ttv-tui"),
+			data:    fakeHome(".local", "share", "ttv-tui"),
 			runtime: filepath.Join("/fake/tmp", "ttv-tui"),
 		},
 		{
@@ -87,6 +93,7 @@ func TestFallbackPerOS(t *testing.T) {
 			config:  fakeHome(".config", "ttv-tui"),
 			twt:     fakeHome(".config", "twt"),
 			state:   fakeHome(".local", "state", "ttv-tui"),
+			data:    fakeHome(".local", "share", "ttv-tui"),
 			runtime: filepath.Join("/fake/tmp", "ttv-tui"),
 		},
 		{
@@ -95,6 +102,7 @@ func TestFallbackPerOS(t *testing.T) {
 			config:  filepath.Join(appSupport, "ttv-tui"),
 			twt:     filepath.Join(appSupport, "twt"),
 			state:   filepath.Join(appSupport, "ttv-tui", "state"),
+			data:    filepath.Join(appSupport, "ttv-tui"),
 			runtime: filepath.Join("/var/folders/ab/T", "ttv-tui"),
 		},
 		{
@@ -103,6 +111,7 @@ func TestFallbackPerOS(t *testing.T) {
 			config:  filepath.Join("/win/roaming", "ttv-tui"),
 			twt:     filepath.Join("/win/roaming", "twt"),
 			state:   filepath.Join("/win/local", "ttv-tui"),
+			data:    filepath.Join("/win/local", "ttv-tui"),
 			runtime: filepath.Join("/win/local", "ttv-tui", "run"),
 		},
 	}
@@ -117,6 +126,9 @@ func TestFallbackPerOS(t *testing.T) {
 			}
 			if got, err := e.stateDir(); err != nil || got != tc.state {
 				t.Errorf("stateDir = %q, %v; want %q", got, err, tc.state)
+			}
+			if got, err := e.dataDir(); err != nil || got != tc.data {
+				t.Errorf("dataDir = %q, %v; want %q", got, err, tc.data)
 			}
 			if got := e.runtimeDir(); got != tc.runtime {
 				t.Errorf("runtimeDir = %q; want %q", got, tc.runtime)

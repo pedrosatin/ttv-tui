@@ -23,7 +23,7 @@ Ajuda de atalhos, aberta com `?`:
 
 ## Instalação
 
-Para tocar vídeo, `streamlink` e `mpv` precisam estar no `PATH`. As [perguntas frequentes](#perguntas-frequentes) trazem o comando de instalação de cada sistema.
+Para tocar vídeo, `streamlink` e `mpv` são necessários. No Linux e no Windows, o `streamlink` é baixado sozinho na primeira reprodução quando não for encontrado. As [perguntas frequentes](#perguntas-frequentes) trazem o comando de instalação de cada sistema.
 
 **Linux e macOS.** O script confere o SHA-256 e instala em `~/.local/bin`:
 

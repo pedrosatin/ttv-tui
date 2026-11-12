@@ -5,6 +5,7 @@ package player
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -177,6 +178,11 @@ type Options struct {
 	// RegistryDir records each live player (owner pid, process group, socket) so
 	// a later run can find a player orphaned by an abrupt exit. Empty disables it.
 	RegistryDir string
+	// StreamlinkPath is an explicit path to the streamlink binary.
+	// Empty means "streamlink" on PATH.
+	StreamlinkPath string
+	// StreamlinkEnv adds environment variables to streamlink execution.
+	StreamlinkEnv []string
 }
 
 const (
@@ -411,7 +417,19 @@ func (m *Manager) start(target Target, order uint64) (uint64, error) {
 	command := sessionCommandOf(m.opts.Command)
 	noInputConf := sessionCommandOf(m.opts.CommandNoInputConf)
 	if m.defaultCommand {
-		command = defaultSessionCommand
+		m.mu.Lock()
+		bin := "streamlink"
+		if m.opts.StreamlinkPath != "" {
+			bin = m.opts.StreamlinkPath
+		}
+		env := append([]string(nil), m.opts.StreamlinkEnv...)
+		m.mu.Unlock()
+		command = func(target Target, layout sessionLayout) *exec.Cmd {
+			return streamlinkCommandWithBin(bin, env, target.URL, mpvArgs(layout.Endpoint, inputConfPath(layout.Dir)), target.ExtraArgs...)
+		}
+		noInputConf = func(target Target, layout sessionLayout) *exec.Cmd {
+			return streamlinkCommandWithBin(bin, env, target.URL, mpvArgs(layout.Endpoint, ""), target.ExtraArgs...)
+		}
 	}
 	sess, err := startSession(sessionConfig{
 		Generation:         gen,
@@ -499,12 +517,36 @@ func (m *Manager) startVolume(target Target) int {
 
 // checkTools reports the first RequiredTools entry that LookPath cannot find.
 func (m *Manager) checkTools() error {
+	m.mu.Lock()
+	streamlinkPath := m.opts.StreamlinkPath
+	m.mu.Unlock()
 	for _, tool := range m.opts.RequiredTools {
+		if tool == "streamlink" && streamlinkPath != "" {
+			if fi, err := os.Stat(streamlinkPath); err != nil || fi.IsDir() {
+				return &MissingToolError{Tool: streamlinkPath, Err: err}
+			}
+			continue
+		}
 		if _, err := m.opts.LookPath(tool); err != nil {
 			return &MissingToolError{Tool: tool, Err: err}
 		}
 	}
 	return nil
+}
+
+// SetStreamlink updates the executable path and extra environment used for streamlink.
+func (m *Manager) SetStreamlink(path string, env ...string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.opts.StreamlinkPath = path
+	m.opts.StreamlinkEnv = append([]string(nil), env...)
+}
+
+// StreamlinkPath returns the configured streamlink path.
+func (m *Manager) StreamlinkPath() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.opts.StreamlinkPath
 }
 
 // Stop ends the active session, if any, and cancels a Start in progress. It
@@ -707,6 +749,10 @@ func mpvArgs(endpoint, inputConf string) []string {
 }
 
 func streamlinkCommand(streamURL string, mpv []string, extra ...string) *exec.Cmd {
+	return streamlinkCommandWithBin("streamlink", nil, streamURL, mpv, extra...)
+}
+
+func streamlinkCommandWithBin(bin string, env []string, streamURL string, mpv []string, extra ...string) *exec.Cmd {
 	args := append([]string{"--no-config", "--loglevel", "info"}, extra...)
 	args = append(args,
 		streamURL,
@@ -714,7 +760,11 @@ func streamlinkCommand(streamURL string, mpv []string, extra ...string) *exec.Cm
 		"--player", "mpv",
 		"--player-args", buildPlayerArgs(mpv),
 	)
-	return exec.Command("streamlink", args...)
+	cmd := exec.Command(bin, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
+	return cmd
 }
 
 // buildPlayerArgs joins an mpv argv into the single string --player-args takes.
