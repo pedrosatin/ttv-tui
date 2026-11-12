@@ -33,9 +33,12 @@ func TestHostedHelpDoesNotOfferTheTerminalVideo(t *testing.T) {
 func TestHostedNoticeExpiresOnlyIfStillShown(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.announceHosted("aviso")
-	next, _ := m.update(hostedNoticeMsg{gen: m.notices.gen + 1})
-	if next.(Model).notices.status != "aviso" {
-		t.Fatal("expirou um aviso que já era outro")
+	stale := hostedNoticeMsg{gen: m.notices.gen}
+	m.warnStatus("outro")
+	next, _ := m.update(stale)
+	m = next.(Model)
+	if m.notices.status != "outro" {
+		t.Fatalf("o timer do aviso antigo apagou outro aviso: status=%q", m.notices.status)
 	}
 	next, _ = m.update(hostedNoticeMsg{gen: m.notices.gen})
 	if next.(Model).notices.status != "" {

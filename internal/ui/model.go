@@ -349,7 +349,9 @@ type noticeState struct {
 	corrupt     string
 	status      string
 	statusWarns bool
-	gen         uint64
+	// gen rises on every status write; a notice timer clears only the
+	// instance that scheduled it.
+	gen uint64
 	// ctrlC is the transient "To quit use Ctrl+Q" status after Ctrl+C. It
 	// outranks filter/search prompts so the hint stays visible in every mode.
 	ctrlC string
