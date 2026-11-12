@@ -32,11 +32,17 @@ void rc_render(mpv_render_context *rc, int w, int h);
 void rc_free(mpv_render_context *rc);
 void load_fd(mpv_handle *m, const char *url);
 void set_property(mpv_handle *m, const char *name, const char *value);
+const char *gl_str(GLenum name);
+int gl_max_tex(void);
+int gl_error(void);
 GLuint make_tex(void);
-void tex_alloc(GLuint t, int w, int h);
-void tex_rows(GLuint t, int y, int w, int h, const void *p);
-void tex_rect(GLuint t, int x, int y, int w, int h, int stride_px, const void *p);
+void free_tex(GLuint t);
+void tex_alloc(GLuint t, int w, int h, int bgra);
+void tex_rect(GLuint t, int x, int y, int w, int h, int stride_px, const void *p, int bgra);
 void clear_to(int W, int H, float r, float g, float b);
-void draw_panel(GLuint t, int W, int H, int x, int y, int w, int h);
+void panel_begin(int W, int H);
+void panel_tile(GLuint t, int x, int y, int w, int h, float u, float v);
+void panel_end(void);
+void fb_pixel(int x, int y, unsigned char *rgba);
 
 #endif

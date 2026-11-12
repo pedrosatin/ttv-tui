@@ -5,10 +5,7 @@ package main
 */
 import "C"
 
-import (
-	"time"
-	"unsafe"
-)
+import "time"
 
 func (a *app) present(video bool) {
 	W, H := C.int(a.W), C.int(a.H)
@@ -26,8 +23,17 @@ func (a *app) present(video bool) {
 		C.clear_to(W, H, C.float(float32(bgR)/255), C.float(float32(bgG)/255), C.float(float32(bgB)/255))
 	}
 	if a.buf != nil {
-		C.draw_panel(a.tex, W, H, C.int(a.px), 0, C.int(a.pw), C.int(a.ph))
+		C.panel_begin(W, H)
+		for i, t := range a.tiles {
+			C.panel_tile(a.texs[i], C.int(a.px+t.x), C.int(t.y), C.int(t.w), C.int(t.h), C.float(t.u), C.float(t.v))
+		}
+		C.panel_end()
 	}
+	if a.glCheck {
+		a.glCheck = false
+		a.noteGLError("desenhar o painel")
+	}
+	a.answerFB()
 	C.SDL_GL_SwapWindow(a.win)
 	if a.sess != nil {
 		C.mpv_render_context_report_swap(a.sess.rc)
@@ -55,6 +61,18 @@ func (a *app) present(video bool) {
 		a.inputAt = time.Time{}
 	}
 	a.mu.Unlock()
+}
+
+// answerFB responde às leituras pendentes com o quadro que acabou de ser desenhado.
+func (a *app) answerFB() {
+	for len(a.fbq) > 0 {
+		r := <-a.fbq
+		var px [4]C.uchar
+		if r.x >= 0 && r.x < a.W && r.y >= 0 && r.y < a.H {
+			C.fb_pixel(C.int(r.x), C.int(a.H-1-r.y), &px[0])
+		}
+		r.reply <- [3]byte{byte(px[0]), byte(px[1]), byte(px[2])}
+	}
 }
 
 // painter roda em goroutine própria, no máximo a ~30 Hz.
@@ -102,8 +120,7 @@ func (a *app) uploadPanel() {
 	y0, y1, x0, x1 := a.dirtyY0, a.dirtyY1, a.dirtyX0, a.dirtyX1
 	a.dirtyY0, a.dirtyY1, a.dirtyX0, a.dirtyX1 = a.rows, -1, a.cols, -1
 	cw, ch := a.fs.cellW, a.fs.cellH
-	off := y0*ch*a.pw*4 + x0*cw*4
-	C.tex_rect(a.tex, C.int(x0*cw), C.int(y0*ch), C.int((x1-x0+1)*cw), C.int((y1-y0+1)*ch), C.int(a.pw), unsafe.Pointer(&a.buf[off]))
+	a.uploadRect(x0*cw, y0*ch, (x1-x0+1)*cw, (y1-y0+1)*ch)
 	a.mu.Lock()
 	a.uploadNs += time.Since(t0).Nanoseconds()
 	a.mu.Unlock()

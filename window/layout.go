@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"unsafe"
 )
 
 // relayout recalcula painel, PTY e emulador a partir do tamanho da janela.
@@ -51,8 +50,7 @@ func (a *app) relayoutFonts(fs *fontSet) {
 			a.buf[i], a.buf[i+1], a.buf[i+2], a.buf[i+3] = bgB, bgG, bgR, 255
 		}
 		a.prev = make([]cellKey, cols*rows)
-		C.tex_alloc(a.tex, C.int(pw), C.int(ph))
-		C.tex_rows(a.tex, 0, C.int(pw), C.int(ph), unsafe.Pointer(&a.buf[0]))
+		a.allocPanel()
 		a.term.Resize(cols, rows)
 		if a.ptmx != nil {
 			_ = a.ptmx.Resize(cols, rows, pw, ph)
