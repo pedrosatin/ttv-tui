@@ -309,11 +309,15 @@ func TestChat_ShortLivedConnectionsKeepBackingOff(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		stableAfter time.Duration
+		// lasts is how long each connection stays up before the server drops
+		// it. A real wait, not a 1 ns StableAfter: the Windows clock can
+		// measure a short connection as 0.
+		lasts       time.Duration
 		wantAttempt int
 		wantWait    time.Duration
 	}{
-		{"dropped right away", time.Hour, 2, 2 * time.Millisecond},
-		{"lasted long enough", time.Nanosecond, 1, time.Millisecond},
+		{"dropped right away", time.Hour, 0, 2, 2 * time.Millisecond},
+		{"lasted long enough", 5 * time.Millisecond, 50 * time.Millisecond, 1, time.Millisecond},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lines := chatFixture(t)
@@ -327,6 +331,7 @@ func TestChat_ShortLivedConnectionsKeepBackingOff(t *testing.T) {
 			}
 			subscribe(t, first, lines)
 			waitState(t, c, catalog.ChatStateConnected)
+			time.Sleep(tc.lasts)
 			close(first.in)
 			if ev := waitState(t, c, catalog.ChatStateReconnecting); ev.Attempt != 1 {
 				t.Fatalf("first drop: attempt = %d, want 1", ev.Attempt)
@@ -334,6 +339,7 @@ func TestChat_ShortLivedConnectionsKeepBackingOff(t *testing.T) {
 			second := d.next()
 			subscribe(t, second, lines)
 			waitState(t, c, catalog.ChatStateConnected)
+			time.Sleep(tc.lasts)
 			close(second.in)
 			ev := waitState(t, c, catalog.ChatStateReconnecting)
 			if ev.Attempt != tc.wantAttempt || ev.NextBackoff != tc.wantWait {
