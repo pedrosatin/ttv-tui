@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/pedrosatin/ttv-tui/internal/store"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 // Info holds the classified metadata from a parsed stream URL.
@@ -18,6 +18,37 @@ type Info struct {
 	IsTwitch    bool   // True if it points to a Twitch channel
 }
 
+var twitchReservedPaths = map[string]bool{
+	"directory":     true,
+	"videos":        true,
+	"downloads":     true,
+	"settings":      true,
+	"search":        true,
+	"subscriptions": true,
+	"inventory":     true,
+	"wallet":        true,
+	"drops":         true,
+	"p":             true,
+	"jobs":          true,
+	"turbo":         true,
+	"prime":         true,
+	"login":         true,
+	"signup":        true,
+	"broadcast":     true,
+	"user":          true,
+	"team":          true,
+	"popout":        true,
+	"moderator":     true,
+	"event":         true,
+	"manager":       true,
+	"friends":       true,
+	"messages":      true,
+}
+
+func isTwitchReserved(segment string) bool {
+	return twitchReservedPaths[strings.ToLower(segment)]
+}
+
 // Parse inspects raw input. If it is an http(s) URL with a host, it extracts
 // the streaming platform, channel slug, and qualified player label.
 // If raw is not an http(s) URL with a host, ok is false.
@@ -25,16 +56,20 @@ func Parse(raw string) (Info, bool) {
 	if raw == "" {
 		return Info{}, false
 	}
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
+	// Reject URLs with whitespace or control characters.
+	if strings.ContainsAny(raw, " \t\r\n\v\f") {
 		return Info{}, false
 	}
-	if strings.IndexFunc(trimmed, func(r rune) bool { return r < ' ' || r == 0x7f }) >= 0 {
+	if strings.IndexFunc(raw, func(r rune) bool { return r < ' ' || r == 0x7f }) >= 0 {
 		return Info{}, false
 	}
 
-	u, err := url.Parse(trimmed)
+	u, err := url.Parse(raw)
 	if err != nil {
+		return Info{}, false
+	}
+	// Refuse URLs with user credentials (user:pw@)
+	if u.User != nil {
 		return Info{}, false
 	}
 	if !strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https") {
@@ -48,31 +83,36 @@ func Parse(raw string) (Info, bool) {
 	switch host {
 	case "twitch.tv", "www.twitch.tv", "m.twitch.tv":
 		cleanPath := strings.Trim(u.Path, "/")
-		if cleanPath == "" || strings.Contains(cleanPath, "/") {
-			// Bare home page or sub-pages (e.g. /directory/game) are not channel URLs.
+		if cleanPath == "" {
 			return Info{}, false
 		}
-		login := strings.ToLower(cleanPath)
+		parts := strings.Split(cleanPath, "/")
+		first := strings.ToLower(parts[0])
+		if isTwitchReserved(first) {
+			return Info{}, false
+		}
+		login := first
 		return Info{
-			URL:         trimmed,
-			Platform:    store.PlatformTwitch,
+			URL:         raw,
+			Platform:    platform.Twitch,
 			Login:       login,
 			DisplayName: login,
 			Label:       login,
 			IsTwitch:    true,
 		}, true
 
-	case "kick.com", "www.kick.com":
+	case "kick.com", "www.kick.com", "m.kick.com":
 		slug := cleanSlug(u.Path)
 		if slug == "" {
-			slug = store.PlatformKick
+			return Info{}, false
 		}
+		slug = strings.ToLower(slug)
 		return Info{
-			URL:         trimmed,
-			Platform:    store.PlatformKick,
+			URL:         raw,
+			Platform:    platform.Kick,
 			Login:       slug,
 			DisplayName: slug,
-			Label:       fmt.Sprintf("%s:%s", store.PlatformKick, slug),
+			Label:       fmt.Sprintf("%s:%s", platform.Kick, slug),
 			IsTwitch:    false,
 		}, true
 
@@ -80,20 +120,30 @@ func Parse(raw string) (Info, bool) {
 		var slug string
 		if host == "youtu.be" {
 			slug = strings.Trim(u.Path, "/")
-		} else if v := u.Query().Get("v"); v != "" {
-			slug = v
 		} else {
-			slug = cleanSlug(u.Path)
+			cleanPath := strings.Trim(u.Path, "/")
+			parts := strings.Split(cleanPath, "/")
+			if len(parts) > 0 && strings.EqualFold(parts[0], "watch") {
+				v := u.Query().Get("v")
+				if v == "" {
+					return Info{}, false
+				}
+				slug = v
+			} else if v := u.Query().Get("v"); v != "" {
+				slug = v
+			} else {
+				slug = cleanSlug(u.Path)
+			}
 		}
-		if slug == "" {
-			slug = store.PlatformYouTube
+		if slug == "" || strings.EqualFold(slug, "watch") {
+			return Info{}, false
 		}
 		return Info{
-			URL:         trimmed,
-			Platform:    store.PlatformYouTube,
+			URL:         raw,
+			Platform:    platform.YouTube,
 			Login:       slug,
 			DisplayName: slug,
-			Label:       fmt.Sprintf("%s:%s", store.PlatformYouTube, slug),
+			Label:       fmt.Sprintf("%s:%s", platform.YouTube, slug),
 			IsTwitch:    false,
 		}, true
 
@@ -104,7 +154,7 @@ func Parse(raw string) (Info, bool) {
 			slug = genericPlat
 		}
 		return Info{
-			URL:         trimmed,
+			URL:         raw,
 			Platform:    genericPlat,
 			Login:       slug,
 			DisplayName: slug,
