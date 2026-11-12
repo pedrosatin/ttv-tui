@@ -13,21 +13,28 @@ import (
 const windowBinary = "ttv-tui-window"
 
 // installedWindow returns the window executable next to this one, or "". Only the
-// sibling counts: a window found on PATH could belong to another version.
+// sibling counts: a window found on PATH could belong to another version. On
+// Windows it may also sit in a ttv-tui-window folder beside this binary, with
+// its DLLs, so they stay off the user's PATH.
 func installedWindow() string {
 	exe, err := os.Executable()
 	if err != nil {
 		return ""
 	}
-	name := windowBinary
+	dir := filepath.Dir(exe)
+	candidates := []string{filepath.Join(dir, windowBinary)}
 	if runtime.GOOS == "windows" {
-		name += ".exe"
+		candidates = []string{
+			filepath.Join(dir, windowBinary+".exe"),
+			filepath.Join(dir, windowBinary, windowBinary+".exe"),
+		}
 	}
-	path := filepath.Join(filepath.Dir(exe), name)
-	if st, err := os.Stat(path); err != nil || st.IsDir() {
-		return ""
+	for _, path := range candidates {
+		if st, err := os.Stat(path); err == nil && !st.IsDir() {
+			return path
+		}
 	}
-	return path
+	return ""
 }
 
 // openWindow starts the window and reports whether it took over. Anything short of
@@ -55,6 +62,10 @@ func openWindow(opts Options) bool {
 		args = append(args, "--lang", opts.Lang)
 	}
 	cmd := exec.Command(path, args...)
+	// The window runs this same ttv-tui, wherever each of them is installed.
+	if exe, err := os.Executable(); err == nil {
+		cmd.Env = append(os.Environ(), "TTV_WINDOW_TUI="+exe)
+	}
 	cmd.Stderr = os.Stderr
 	detachWindow(cmd)
 	if cmd.Start() != nil {

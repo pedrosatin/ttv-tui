@@ -95,3 +95,26 @@ func TestOpenWindowNeedsADisplayOnLinux(t *testing.T) {
 		t.Fatal("o probe rodou sem display")
 	}
 }
+
+// No Windows a janela pode ficar numa subpasta com as DLLs, fora do PATH.
+func TestInstalledWindowInSubfolderOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("a subpasta com as DLLs só existe no Windows")
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(filepath.Dir(exe), windowBinary)
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := filepath.Join(dir, windowBinary+".exe")
+	if err := os.WriteFile(path, nil, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got := installedWindow(); got != path {
+		t.Fatalf("installedWindow() = %q; quero %q", got, path)
+	}
+}
