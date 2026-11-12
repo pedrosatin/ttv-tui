@@ -118,6 +118,8 @@
   "chat.room.slow": "lento %ds",
   "chat.room.followers": "só seguidores",
   "chat.room.subs": "só inscritos",
+  "chat.room.emotes": "só emotes",
+  "chat.room.r9k": "chat único",
   "chat.self_name": "Você",
   "chat.input.composing": "Enviar em #%s: ",
   "chat.input.draft": "Rascunho (i retoma): %s",

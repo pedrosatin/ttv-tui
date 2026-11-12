@@ -111,7 +111,7 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 	}
 
 	// 2. Receive connected state, roomstate, normal + highlighted messages.
-	rs := ChatRoomState{Slow: 15, FollowersOnly: 10, SubsOnly: true}
+	rs := ChatRoomState{Slow: 15, FollowersOnly: 10, SubsOnly: true, EmoteOnly: true, R9K: true}
 	updated, _ = m.Update(ChatEventMsg{
 		Generation: 1,
 		Channel:    "gaules",
@@ -149,7 +149,7 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 	if len(m.ChatMessages()) != 2 {
 		t.Fatalf("ChatMessages len=%d, want 2", len(m.ChatMessages()))
 	}
-	if m.ChatRoomState().Slow != 15 || !m.ChatRoomState().SubsOnly {
+	if m.ChatRoomState().Slow != 15 || !m.ChatRoomState().SubsOnly || !m.ChatRoomState().EmoteOnly || !m.ChatRoomState().R9K {
 		t.Fatalf("ChatRoomState=%+v", m.ChatRoomState())
 	}
 
@@ -160,6 +160,8 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 		"slow 15s",
 		"followers-only",
 		"subs-only",
+		"emote-only",
+		"unique-chat",
 		"ViewerOne",
 		"Salve chat!",
 		"[highlighted]",
@@ -170,6 +172,44 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 		if !strings.Contains(view, want) {
 			t.Fatalf("expected %q in View(), got:\n%s", want, view)
 		}
+	}
+
+	catPT, err := i18n.New(i18n.LangPTBR)
+	if err != nil {
+		t.Fatalf("i18n.New(pt-BR): %v", err)
+	}
+	mPT := m
+	mPT.catalog = catPT
+	viewPT := mPT.View()
+	for _, want := range []string{
+		"lento 15s",
+		"só seguidores",
+		"só inscritos",
+		"só emotes",
+		"chat único",
+	} {
+		if !strings.Contains(viewPT, want) {
+			t.Fatalf("expected %q in pt-BR View(), got:\n%s", want, viewPT)
+		}
+	}
+
+	// In 80 columns with 5 modes active, the layout must not break.
+	m80 := resize(m, 80, 20)
+	assertAllLinesFit(t, m80.View(), 80)
+	// Truncation behavior in split 80-col drops mode tags when exceeding width, preserving channel and state.
+	col80 := chatColumn(t, m80)
+	if len(col80) == 0 {
+		t.Fatal("expected chat column rows in 80 columns")
+	}
+	header80 := col80[0]
+	if len(col80) > 1 && strings.HasPrefix(col80[1], "  ") && !strings.Contains(col80[1], ":") {
+		header80 += " " + col80[1]
+	}
+	if !strings.Contains(header80, "gaules") || !strings.Contains(header80, "Connected") {
+		t.Fatalf("chat header row at 80 cols missing channel or state: %q", header80)
+	}
+	if strings.Contains(header80, "[") {
+		t.Fatalf("modes tags should be dropped when header exceeds split width at 80 cols: %q", header80)
 	}
 
 	// 3. Transition to Reconnecting -> shown in UI while preserving existing messages.

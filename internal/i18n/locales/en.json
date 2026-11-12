@@ -118,6 +118,8 @@
   "chat.room.slow": "slow %ds",
   "chat.room.followers": "followers-only",
   "chat.room.subs": "subs-only",
+  "chat.room.emotes": "emote-only",
+  "chat.room.r9k": "unique-chat",
   "chat.self_name": "You",
   "chat.input.composing": "Send to #%s: ",
   "chat.input.draft": "Draft (i resumes): %s",

@@ -64,6 +64,12 @@ func (m Model) chatRoomModesSummary() string {
 	if rs.SubsOnly {
 		tags = append(tags, m.t("chat.room.subs"))
 	}
+	if rs.EmoteOnly {
+		tags = append(tags, m.t("chat.room.emotes"))
+	}
+	if rs.R9K {
+		tags = append(tags, m.t("chat.room.r9k"))
+	}
 	return strings.Join(tags, " · ")
 }
 
