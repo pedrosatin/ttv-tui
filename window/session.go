@@ -6,11 +6,9 @@ package main
 import "C"
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
-	"syscall"
 	"time"
 	"unsafe"
 )
@@ -55,7 +53,7 @@ func (a *app) startSession(msg ctlMsg) {
 	if rc == nil {
 		fmt.Fprintln(os.Stderr, "render context falhou")
 		C.mpv_terminate_destroy(m)
-		_ = syscall.Close(msg.fd) // libmpv never took it: streamlink has to see the pipe close
+		closeFD(msg.fd) // libmpv never took it: streamlink has to see the pipe close
 		msg.conn.Close()
 		return
 	}
@@ -65,7 +63,7 @@ func (a *app) startSession(msg ctlMsg) {
 	a.sessions++
 	a.lastIpc = msg.ipc
 	a.mu.Unlock()
-	url := C.CString(fmt.Sprintf("fdclose://%d", msg.fd))
+	url := C.CString(msg.streamUrl)
 	C.load_fd(m, url)
 	C.free(unsafe.Pointer(url))
 	go func() {
@@ -114,23 +112,12 @@ func (a *app) serveCtl(l *net.UnixListener) {
 			return
 		}
 		go func(c *net.UnixConn) {
-			data, oob := make([]byte, 8192), make([]byte, 128)
-			n, oobn, _, _, err := c.ReadMsgUnix(data, oob)
+			ipc, fd, streamUrl, err := parseCtlMsg(c)
 			if err != nil {
 				c.Close()
 				return
 			}
-			var req struct {
-				IPC string `json:"ipc"`
-			}
-			_ = json.Unmarshal(data[:n], &req)
-			fd := -1
-			if ms, err := syscall.ParseSocketControlMessage(oob[:oobn]); err == nil && len(ms) > 0 {
-				if fds, err := syscall.ParseUnixRights(&ms[0]); err == nil && len(fds) > 0 {
-					fd = fds[0]
-				}
-			}
-			a.ctlq <- ctlMsg{kind: "start", ipc: req.IPC, fd: fd, conn: c}
+			a.ctlq <- ctlMsg{kind: "start", ipc: ipc, fd: fd, streamUrl: streamUrl, conn: c}
 			C.push_ev(C.ev_ctl())
 		}(c)
 	}

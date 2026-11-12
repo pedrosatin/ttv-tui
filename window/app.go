@@ -6,8 +6,8 @@ package main
 import "C"
 
 import (
+	"io"
 	"net"
-	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -26,12 +26,13 @@ type hostPanel struct {
 }
 
 type ctlMsg struct {
-	kind string // "start" | "ended"
-	ipc  string
-	fd   int
-	conn *net.UnixConn
-	s    *session
-	host hostPanel
+	kind      string // "start" | "ended"
+	ipc       string
+	fd        int
+	streamUrl string
+	conn      *net.UnixConn
+	s         *session
+	host      hostPanel
 }
 
 type session struct {
@@ -49,6 +50,11 @@ type session struct {
 	setProperty func(string, string)
 }
 
+type ptyDevice interface {
+	io.ReadWriteCloser
+	Resize(cols, rows, pw, ph int) error
+}
+
 type app struct {
 	win  *C.SDL_Window
 	tex  C.GLuint
@@ -61,7 +67,7 @@ type app struct {
 	fs   *fontSet
 	pt   float64
 	term *vt.SafeEmulator
-	ptmx *os.File
+	ptmx ptyDevice
 	cmd  *exec.Cmd
 	buf  []byte
 	prev []cellKey

@@ -2,13 +2,17 @@
 #define TTV_TUI_WINDOW_BRIDGE_H
 
 #ifndef GL_GLEXT_PROTOTYPES
+#ifndef _WIN32
 #define GL_GLEXT_PROTOTYPES 1
+#endif
 #endif
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
 #include <stdlib.h>
+
+void init_gl_extensions(void);
 
 void reg_events(void);
 Uint32 ev_mpv(void);

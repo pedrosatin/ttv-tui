@@ -10,6 +10,9 @@ import (
 // device alone is insufficient: /dev/null is one too. x/term is already used
 // by Bubble Tea and verifies the terminal on Unix and Windows.
 func isTerminal(stream any) bool {
+	if os.Getenv(videoHostEnv) != "" {
+		return true
+	}
 	f, ok := stream.(*os.File)
 	if !ok {
 		return false

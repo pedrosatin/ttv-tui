@@ -25,12 +25,15 @@ mpv_render_context *make_rc(mpv_handle *m, SDL_Window *win) {
     void *wl = SDL_GetPointerProperty(SDL_GetWindowProperties(win), SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
     mpv_opengl_init_params gi = {.get_proc_address = gpa};
     int adv = 1;
-    mpv_render_param p[] = {
-        {MPV_RENDER_PARAM_API_TYPE, (void *)MPV_RENDER_API_TYPE_OPENGL},
-        {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gi},
-        {MPV_RENDER_PARAM_WL_DISPLAY, wl},
-        {MPV_RENDER_PARAM_ADVANCED_CONTROL, &adv},
-        {0, NULL}};
+    mpv_render_param p[6];
+    int n = 0;
+    p[n++] = (mpv_render_param){MPV_RENDER_PARAM_API_TYPE, (void *)MPV_RENDER_API_TYPE_OPENGL};
+    p[n++] = (mpv_render_param){MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gi};
+    if (wl != NULL) {
+        p[n++] = (mpv_render_param){MPV_RENDER_PARAM_WL_DISPLAY, wl};
+    }
+    p[n++] = (mpv_render_param){MPV_RENDER_PARAM_ADVANCED_CONTROL, &adv};
+    p[n++] = (mpv_render_param){0, NULL};
     mpv_render_context *rc = NULL;
     if (mpv_render_context_create(&rc, m, p) < 0) return NULL;
     mpv_render_context_set_update_callback(rc, on_update, NULL);
@@ -50,6 +53,37 @@ void set_property(mpv_handle *m, const char *name, const char *value) {
     mpv_set_property_async(m, 0, name, MPV_FORMAT_STRING, &value);
 }
 
+#ifdef _WIN32
+static PFNGLBINDFRAMEBUFFERPROC p_glBindFramebuffer = NULL;
+static PFNGLBINDVERTEXARRAYPROC p_glBindVertexArray = NULL;
+static PFNGLBINDBUFFERPROC p_glBindBuffer = NULL;
+static PFNGLACTIVETEXTUREPROC p_glActiveTexture = NULL;
+static PFNGLUSEPROGRAMPROC p_glUseProgram = NULL;
+
+void init_gl_extensions(void) {
+    p_glBindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)SDL_GL_GetProcAddress("glBindFramebuffer");
+    p_glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)SDL_GL_GetProcAddress("glBindVertexArray");
+    p_glBindBuffer = (PFNGLBINDBUFFERPROC)SDL_GL_GetProcAddress("glBindBuffer");
+    p_glActiveTexture = (PFNGLACTIVETEXTUREPROC)SDL_GL_GetProcAddress("glActiveTexture");
+    p_glUseProgram = (PFNGLUSEPROGRAMPROC)SDL_GL_GetProcAddress("glUseProgram");
+}
+
+static void gl_reset(int W, int H) {
+    if (p_glBindFramebuffer) p_glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (p_glBindVertexArray) p_glBindVertexArray(0);
+    if (p_glBindBuffer) {
+        p_glBindBuffer(GL_ARRAY_BUFFER, 0);
+        p_glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    }
+    if (p_glActiveTexture) p_glActiveTexture(GL_TEXTURE0);
+    if (p_glUseProgram) p_glUseProgram(0);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glViewport(0, 0, W, H);
+}
+#else
+void init_gl_extensions(void) {}
+
 static void gl_reset(int W, int H) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindVertexArray(0);
@@ -61,6 +95,7 @@ static void gl_reset(int W, int H) {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glViewport(0, 0, W, H);
 }
+#endif
 GLuint make_tex(void) {
     GLuint t; glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D, t);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);

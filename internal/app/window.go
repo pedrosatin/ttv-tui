@@ -19,7 +19,11 @@ func installedWindow() string {
 	if err != nil {
 		return ""
 	}
-	path := filepath.Join(filepath.Dir(exe), windowBinary)
+	target := windowBinary
+	if runtime.GOOS == "windows" {
+		target += ".exe"
+	}
+	path := filepath.Join(filepath.Dir(exe), target)
 	if st, err := os.Stat(path); err != nil || st.IsDir() {
 		return ""
 	}
@@ -29,8 +33,7 @@ func installedWindow() string {
 // openWindow starts the window and reports whether it took over. Anything short of
 // a confirmed window leaves the app in the terminal, as it always worked.
 func openWindow(opts Options) bool {
-	if opts.Terminal || os.Getenv(videoHostEnv) != "" ||
-		runtime.GOOS != "linux" || os.Getenv("WAYLAND_DISPLAY") == "" {
+	if opts.Terminal || os.Getenv(videoHostEnv) != "" {
 		return false
 	}
 	path := installedWindow()

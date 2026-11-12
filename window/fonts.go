@@ -5,6 +5,8 @@ import (
 	"image"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"golang.org/x/image/font"
@@ -61,30 +63,88 @@ func fcMatch(pattern string) string {
 	return strings.TrimSpace(string(out))
 }
 
+func resolveFont(pattern string) string {
+	if runtime.GOOS == "windows" {
+		windir := os.Getenv("WINDIR")
+		if windir == "" {
+			windir = `C:\Windows`
+		}
+		fdir := filepath.Join(windir, "Fonts")
+		switch pattern {
+		case "monospace":
+			for _, name := range []string{"CascadiaMono.ttf", "CascadiaCode.ttf", "consola.ttf", "lucon.ttf", "cour.ttf"} {
+				p := filepath.Join(fdir, name)
+				if _, err := os.Stat(p); err == nil {
+					return p
+				}
+			}
+		case "monospace:bold":
+			for _, name := range []string{"CascadiaMono-Bold.ttf", "CascadiaCode-Bold.ttf", "consolab.ttf", "courbd.ttf"} {
+				p := filepath.Join(fdir, name)
+				if _, err := os.Stat(p); err == nil {
+					return p
+				}
+			}
+		case "monospace:lang=ja":
+			for _, name := range []string{"msgothic.ttc", "meiryo.ttc"} {
+				p := filepath.Join(fdir, name)
+				if _, err := os.Stat(p); err == nil {
+					return p
+				}
+			}
+		}
+		return ""
+	}
+	return fcMatch(pattern)
+}
+
 func newFontSet(px float64) (*fontSet, error) {
 	fs := &fontSet{cache: map[uint64]*glyph{}}
-	reg, regF, err := loadFace(fcMatch("monospace"), px)
+	regPath := resolveFont("monospace")
+	reg, regF, err := loadFace(regPath, px)
 	if err != nil {
-		return nil, fmt.Errorf("monospace font: %w", err)
+		return nil, fmt.Errorf("monospace font (%s): %w", regPath, err)
 	}
 	fs.faces, fs.fonts = []font.Face{reg}, []*sfnt.Font{regF}
-	for _, p := range []string{
-		fcMatch("monospace:lang=ja"),
-		"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-		"/usr/share/fonts/noto/NotoSans-Regular.ttf",
-		"/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf",
-		"/usr/share/fonts/noto/NotoSansSymbols-Regular.ttf",
-		"/usr/share/fonts/noto/NotoSansThai-Regular.ttf",
-		"/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
-		"/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf",
-		"/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf",
-		"/usr/share/fonts/noto/NotoSansMath-Regular.ttf",
-	} {
+
+	var fallbackPaths []string
+	if runtime.GOOS == "windows" {
+		windir := os.Getenv("WINDIR")
+		if windir == "" {
+			windir = `C:\Windows`
+		}
+		fdir := filepath.Join(windir, "Fonts")
+		fallbackPaths = []string{
+			resolveFont("monospace:lang=ja"),
+			filepath.Join(fdir, "seguiemj.ttf"),
+			filepath.Join(fdir, "segoeui.ttf"),
+			filepath.Join(fdir, "msyh.ttc"),
+			filepath.Join(fdir, "malgun.ttf"),
+		}
+	} else {
+		fallbackPaths = []string{
+			resolveFont("monospace:lang=ja"),
+			"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+			"/usr/share/fonts/noto/NotoSans-Regular.ttf",
+			"/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf",
+			"/usr/share/fonts/noto/NotoSansSymbols-Regular.ttf",
+			"/usr/share/fonts/noto/NotoSansThai-Regular.ttf",
+			"/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
+			"/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf",
+			"/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf",
+			"/usr/share/fonts/noto/NotoSansMath-Regular.ttf",
+		}
+	}
+
+	for _, p := range fallbackPaths {
+		if p == "" {
+			continue
+		}
 		if f, sf, err := loadFace(p, px); err == nil {
 			fs.faces, fs.fonts = append(fs.faces, f), append(fs.fonts, sf)
 		}
 	}
-	if b, bf, err := loadFace(fcMatch("monospace:bold"), px); err == nil {
+	if b, bf, err := loadFace(resolveFont("monospace:bold"), px); err == nil {
 		fs.bold, fs.boldF = b, bf
 	}
 	fs.cellW, fs.cellH, fs.base, err = cellMetrics(reg)

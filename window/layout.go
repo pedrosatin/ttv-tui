@@ -11,8 +11,6 @@ import (
 	"net"
 	"strconv"
 	"unsafe"
-
-	"github.com/creack/pty"
 )
 
 // relayout recalcula painel, PTY e emulador a partir do tamanho da janela.
@@ -57,7 +55,7 @@ func (a *app) relayoutFonts(fs *fontSet) {
 		C.tex_rows(a.tex, 0, C.int(pw), C.int(ph), unsafe.Pointer(&a.buf[0]))
 		a.term.Resize(cols, rows)
 		if a.ptmx != nil {
-			_ = pty.Setsize(a.ptmx, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows), X: uint16(pw), Y: uint16(ph)})
+			_ = a.ptmx.Resize(cols, rows, pw, ph)
 		}
 		a.tuiDirty.Store(true)
 		a.kickPaint()

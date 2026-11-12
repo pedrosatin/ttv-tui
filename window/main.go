@@ -4,27 +4,44 @@
 package main
 
 /*
-#cgo pkg-config: sdl3 mpv gl
+#cgo !windows pkg-config: sdl3 mpv gl
+#cgo windows pkg-config: sdl3 mpv
+#cgo windows LDFLAGS: -lopengl32
 #include "bridge.h"
 */
 import "C"
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"syscall"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/x/vt"
-	"github.com/creack/pty"
 )
 
 func init() { runtime.LockOSThread() }
+
+func copyExecutable(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
+}
 
 func fileExists(p string) bool {
 	st, err := os.Stat(p)
@@ -32,7 +49,10 @@ func fileExists(p string) bool {
 }
 
 func main() {
-	if filepath.Base(os.Args[0]) == "mpv" {
+	baseName := strings.ToLower(filepath.Base(os.Args[0]))
+	baseName = strings.TrimSuffix(baseName, ".exe")
+	baseName = strings.TrimSuffix(baseName, ".com")
+	if baseName == "mpv" {
 		shimMain()
 		return
 	}
@@ -40,7 +60,11 @@ func main() {
 	if tui == "" {
 		tui = filepath.Join(os.Getenv("HOME"), ".local/bin/ttv-tui")
 		if exe, err := os.Executable(); err == nil {
-			if sib := filepath.Join(filepath.Dir(exe), "ttv-tui"); fileExists(sib) {
+			target := "ttv-tui"
+			if runtime.GOOS == "windows" {
+				target = "ttv-tui.exe"
+			}
+			if sib := filepath.Join(filepath.Dir(exe), target); fileExists(sib) {
 				tui = sib
 			}
 		}
@@ -60,7 +84,6 @@ func main() {
 	binDir := filepath.Join(dir, "bin")
 	_ = os.Mkdir(binDir, 0o755)
 	exe, _ := os.Executable()
-	_ = os.Symlink(exe, filepath.Join(binDir, "mpv"))
 	ctlPath := filepath.Join(dir, "ctl.sock")
 	testPath := os.Getenv("TTV_WINDOW_TEST") // só os testes de fluxo abrem esta porta
 
@@ -68,6 +91,22 @@ func main() {
 		fmt.Fprintln(os.Stderr, args...)
 		_ = os.RemoveAll(dir)
 		os.Exit(1)
+	}
+
+	shimName := "mpv"
+	if runtime.GOOS == "windows" {
+		shimName = "mpv.exe"
+	}
+	shimDst := filepath.Join(binDir, shimName)
+	if runtime.GOOS == "windows" {
+		if err := copyExecutable(exe, filepath.Join(binDir, "mpv.exe")); err != nil {
+			fatal("copy shim mpv.exe:", err)
+		}
+		if err := copyExecutable(exe, filepath.Join(binDir, "mpv.com")); err != nil {
+			fatal("copy shim mpv.com:", err)
+		}
+	} else {
+		_ = os.Symlink(exe, shimDst)
 	}
 	ctlLn, err := net.ListenUnix("unix", &net.UnixAddr{Name: ctlPath, Net: "unix"})
 	if err != nil {
@@ -83,8 +122,10 @@ func main() {
 	cApp := C.CString(app_id)
 	cHint := C.CString("SDL_APP_ID")
 	C.SDL_SetHint(cHint, cApp)
-	drv, wl := C.CString("SDL_VIDEO_DRIVER"), C.CString("wayland")
-	C.SDL_SetHint(drv, wl)
+	if runtime.GOOS == "linux" && os.Getenv("WAYLAND_DISPLAY") != "" {
+		drv, wl := C.CString("SDL_VIDEO_DRIVER"), C.CString("wayland")
+		C.SDL_SetHint(drv, wl)
+	}
 	if !C.SDL_Init(C.SDL_INIT_VIDEO | C.SDL_INIT_EVENTS) {
 		fatal(C.GoString(C.SDL_GetError()))
 	}
@@ -100,6 +141,7 @@ func main() {
 		fatal("GL context:", C.GoString(C.SDL_GetError()))
 	}
 	defer C.SDL_GL_DestroyContext(gl)
+	C.init_gl_extensions()
 
 	scale := float64(C.SDL_GetWindowDisplayScale(win))
 	pt := 9.0
@@ -132,12 +174,13 @@ func main() {
 	go a.serveLayout(layoutLn)
 
 	a.cmd = exec.Command(tui, os.Args[1:]...)
+	pathSep := string(os.PathListSeparator)
 	a.cmd.Env = append(os.Environ(),
-		"PATH="+binDir+":"+os.Getenv("PATH"),
+		"PATH="+binDir+pathSep+filepath.Dir(exe)+pathSep+os.Getenv("PATH"),
 		"TTV_WINDOW_SOCK="+ctlPath,
 		"TTV_TUI_VIDEO_HOST="+layoutPath,
 		"TERM=xterm-256color", "COLORTERM=truecolor")
-	ptmx, err := pty.StartWithSize(a.cmd, &pty.Winsize{Cols: uint16(a.cols), Rows: uint16(a.rows), X: uint16(a.pw), Y: uint16(a.ph)})
+	ptmx, err := startPTY(a.cmd, a.cols, a.rows, a.pw, a.ph)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "pty:", err)
 		os.Exit(1)
@@ -170,7 +213,7 @@ func main() {
 		a.frame()
 	}
 
-	_ = a.cmd.Process.Signal(syscall.SIGHUP)
+	_ = a.cmd.Process.Signal(os.Interrupt)
 	waitTUI(tuiDone, tuiStopWait, func() { _ = a.cmd.Process.Kill() })
 	a.stopSession()
 }

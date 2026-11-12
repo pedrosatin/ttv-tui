@@ -1,35 +1,21 @@
 package main
 
 import (
-	"os"
+	"io"
 	"reflect"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/charmbracelet/x/vt"
 )
 
-// seqpacketPair imita o PTY com um socket SOCK_SEQPACKET, que entrega cada
-// escrita numa leitura própria.
-func seqpacketPair(t *testing.T) (r, w *os.File) {
-	t.Helper()
-	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_SEQPACKET|syscall.SOCK_CLOEXEC, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, w = os.NewFile(uintptr(fds[0]), "pty"), os.NewFile(uintptr(fds[1]), "tui")
-	t.Cleanup(func() { _, _ = r.Close(), w.Close() })
-	return r, w
-}
-
 // pumpChunks passa cada trecho ao pumpPTY numa leitura própria.
 func pumpChunks(t *testing.T, cols int, chunks ...string) *vt.SafeEmulator {
 	t.Helper()
 	r, w := seqpacketPair(t)
 	for _, c := range chunks {
-		if _, err := w.WriteString(c); err != nil {
+		if _, err := io.WriteString(w, c); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -106,7 +92,7 @@ func TestPTYTailDeadline(t *testing.T) {
 	t.Cleanup(func() { _ = a.term.Close() })
 	done := make(chan struct{})
 	go func() { a.pumpPTY(); close(done) }()
-	if _, err := w.WriteString("abcα"); err != nil {
+	if _, err := io.WriteString(w, "abcα"); err != nil {
 		t.Fatal(err)
 	}
 	// Um aviso de pintura para "abc" e outro para a cauda, ambos antes do EOF.
