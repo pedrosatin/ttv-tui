@@ -55,6 +55,11 @@ func (b *playbackBridge) setSender(send func(tea.Msg)) {
 }
 
 func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
+	if b.mgr == nil || !b.mgr.UsesStreamlink() {
+		// A custom player command does not run streamlink: nothing to resolve,
+		// and above all nothing to download.
+		return nil
+	}
 	b.mu.Lock()
 	if b.hasResolved {
 		b.mu.Unlock()

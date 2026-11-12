@@ -152,3 +152,15 @@ func TestPlaybackBridge_EnsureStreamlink_ExplicitMissing(t *testing.T) {
 		t.Fatal("expected error for non-existent configured streamlink")
 	}
 }
+
+func TestEnsureStreamlinkSkipsCustomPlayerCommand(t *testing.T) {
+	mgr := player.New(player.Options{Command: func(player.Target, string) *exec.Cmd {
+		return exec.Command("true")
+	}})
+	t.Cleanup(mgr.Close)
+	missing := filepath.Join(t.TempDir(), "no-such-streamlink")
+	bridge := newPlaybackBridge(mgr, missing, t.TempDir())
+	if err := bridge.ensureStreamlink(context.Background()); err != nil {
+		t.Fatalf("ensureStreamlink with a custom player command = %v, want nil (no lookup, no download)", err)
+	}
+}

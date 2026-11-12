@@ -542,6 +542,13 @@ func (m *Manager) SetStreamlink(path string, env ...string) {
 	m.opts.StreamlinkEnv = append([]string(nil), env...)
 }
 
+// UsesStreamlink reports whether sessions run the default streamlink command.
+// With a custom Command (tests, other players) no streamlink executable is
+// needed, so callers must not look for one or download it.
+func (m *Manager) UsesStreamlink() bool {
+	return m.defaultCommand
+}
+
 // StreamlinkPath returns the configured streamlink path.
 func (m *Manager) StreamlinkPath() string {
 	m.mu.Lock()
