@@ -270,6 +270,18 @@ func TestWebSocket_HandshakeFailures(t *testing.T) {
 		t.Errorf("wrong accept key err = %v", err)
 	}
 
+	// RFC 6455, section 4.1: a 101 without "Connection: Upgrade" is not a WebSocket.
+	noConnection := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, rw, _ := w.(http.Hijacker).Hijack()
+		defer func() { _ = conn.Close() }()
+		_, _ = rw.WriteString("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: keep-alive\r\nSec-WebSocket-Accept: " + acceptKey(r.Header.Get("Sec-WebSocket-Key")) + "\r\n\r\n")
+		_ = rw.Flush()
+	}))
+	defer noConnection.Close()
+	if _, err := dialWebSocket(ctx, "ws"+strings.TrimPrefix(noConnection.URL, "http")); err == nil || !strings.Contains(err.Error(), "upgrade") {
+		t.Errorf("handshake without Connection: Upgrade err = %v", err)
+	}
+
 	for _, bad := range []string{"http://example.com/x", "://nope"} {
 		if _, err := dialWebSocket(ctx, bad); err == nil {
 			t.Errorf("dialWebSocket(%q): want an error", bad)

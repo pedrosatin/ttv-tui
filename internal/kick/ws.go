@@ -150,13 +150,27 @@ func handshake(ctx context.Context, conn net.Conn, u *url.URL) (*wsConn, error) 
 	if res.StatusCode != http.StatusSwitchingProtocols {
 		return nil, fmt.Errorf("websocket: handshake refused (HTTP %d)", res.StatusCode)
 	}
-	if !strings.EqualFold(res.Header.Get("Upgrade"), "websocket") {
+	if !strings.EqualFold(res.Header.Get("Upgrade"), "websocket") || !headerHasToken(res.Header, "Connection", "upgrade") {
 		return nil, errors.New("websocket: handshake without upgrade")
 	}
 	if res.Header.Get("Sec-WebSocket-Accept") != acceptKey(key) {
 		return nil, errors.New("websocket: handshake with wrong accept key")
 	}
 	return &wsConn{conn: conn, br: br}, nil
+}
+
+// headerHasToken reports whether the comma-separated header name lists token,
+// case-insensitively (RFC 6455, section 4.1: "Connection" must include
+// "Upgrade").
+func headerHasToken(h http.Header, name, token string) bool {
+	for _, v := range h.Values(name) {
+		for _, t := range strings.Split(v, ",") {
+			if strings.EqualFold(strings.TrimSpace(t), token) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ctxErr prefers the reason ctx ended over the I/O error its end caused.

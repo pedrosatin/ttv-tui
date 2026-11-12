@@ -238,6 +238,8 @@ Kick has no public API for any of this without an account. The app reads the JSO
   kick_pusher_key = "<key>"
   ```
 
+- The Kick chat connects straight to Pusher and ignores `HTTPS_PROXY`. Behind a mandatory proxy the list still shows the channel state, but the chat keeps reconnecting.
+
 </details>
 
 <details>

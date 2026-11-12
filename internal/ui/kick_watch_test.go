@@ -157,6 +157,28 @@ func TestHydrate_NothingToAskIssuesNoRequest(t *testing.T) {
 	}
 }
 
+// The state lookup of a pasted channel is not a hydration round: a reload of
+// the list (a mode change, "r") while it runs must not discard its answer.
+func TestChannelStateLookup_SurvivesAListReload(t *testing.T) {
+	kick := &platformResolver{answer: []catalog.Channel{liveKick("gaules", 3600, "kick title", "Project Zomboid")}}
+	m := New(mustCatalog(t, i18n.LangEN), WithPlatformResolver(platform.Kick, kick))
+	pasted := catalog.Channel{ID: "kick:gaules", Login: "gaules", Platform: platform.Kick, URL: "https://kick.com/gaules"}
+	m.list.selectedChannel = &pasted
+
+	cmd := m.fetchChannelStateCmd(pasted)
+	if cmd == nil {
+		t.Fatal("no lookup for a Kick channel with a Kick resolver")
+	}
+	m.list.hydrateGen++
+	updated, _ := m.Update(cmd())
+	m = updated.(Model)
+
+	got := m.list.selectedChannel
+	if got == nil || got.Availability != catalog.AvailabilityLive || got.Viewers == nil || *got.Viewers != 3600 {
+		t.Fatalf("selected channel = %+v, want live with 3600 viewers", got)
+	}
+}
+
 // Pasting a Kick URL opens the channel with the chat next to it, read-only,
 // and the bar shows the channel by name with what the site says about it.
 func TestPasteKickURL_OpensWithReadOnlyChatAndChannelState(t *testing.T) {

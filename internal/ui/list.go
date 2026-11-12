@@ -1145,7 +1145,18 @@ func (m Model) fetchChannelStateCmd(ch catalog.Channel) tea.Cmd {
 	if id == "" {
 		return nil
 	}
-	return resolveCmd(m.list.hydrateGen, m.resolvers, map[string][]string{ch.CanonicalPlatform(): {id}})
+	lookup := resolveCmd(0, m.resolvers, map[string][]string{ch.CanonicalPlatform(): {id}})
+	if lookup == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		msg, ok := lookup().(SavedAvailabilityMsg)
+		if !ok {
+			return nil
+		}
+		msg.ChannelLookup = true
+		return msg
+	}
 }
 
 // resolveCmd asks each platform in ids its resolver, all at once, and delivers

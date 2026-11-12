@@ -23,6 +23,7 @@ const (
 	defaultCoalesceInterval = 50 * time.Millisecond
 	defaultInitialBackoff   = 500 * time.Millisecond
 	defaultMaxBackoff       = 30 * time.Second
+	defaultStableAfter      = 30 * time.Second
 	defaultHandshakeTimeout = 10 * time.Second
 	defaultPongTimeout      = 30 * time.Second
 	// defaultActivityTimeout is used until the server says its own; the server
@@ -53,6 +54,11 @@ type ChatOptions struct {
 	CoalesceInterval time.Duration
 	InitialBackoff   time.Duration
 	MaxBackoff       time.Duration
+	// StableAfter is how long a confirmed connection must last before the
+	// backoff starts over. A server that accepts the subscription and drops it
+	// right away keeps the growing wait instead of a reconnect every
+	// InitialBackoff.
+	StableAfter      time.Duration
 	HandshakeTimeout time.Duration
 	// ActivityTimeout is how long the connection may stay silent before the
 	// client pings; PongTimeout is how long the answer may take.
@@ -106,6 +112,9 @@ func NewChat(opts ChatOptions) *Chat {
 	}
 	if opts.MaxBackoff <= 0 {
 		opts.MaxBackoff = defaultMaxBackoff
+	}
+	if opts.StableAfter <= 0 {
+		opts.StableAfter = defaultStableAfter
 	}
 	if opts.HandshakeTimeout <= 0 {
 		opts.HandshakeTimeout = defaultHandshakeTimeout
@@ -294,6 +303,7 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 	backoff := c.opts.InitialBackoff
 	attempt := 0
 	for {
+		started := time.Now()
 		connected, err := c.attempt(ctx, gen, name, slug, &room)
 		if ctx.Err() != nil {
 			return
@@ -303,7 +313,7 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 			c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, State: catalog.ChatStateError, Err: fatal.err})
 			return
 		}
-		if connected {
+		if connected && time.Since(started) >= c.opts.StableAfter {
 			backoff, attempt = c.opts.InitialBackoff, 0
 		}
 		attempt++

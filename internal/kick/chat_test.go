@@ -302,6 +302,48 @@ func TestChat_ReconnectsAfterDrop(t *testing.T) {
 	}
 }
 
+// A server that confirms the subscription and drops it right away must not
+// get a reconnect every InitialBackoff: the wait keeps growing until a
+// connection lasts StableAfter.
+func TestChat_ShortLivedConnectionsKeepBackingOff(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		stableAfter time.Duration
+		wantAttempt int
+		wantWait    time.Duration
+	}{
+		{"dropped right away", time.Hour, 2, 2 * time.Millisecond},
+		{"lasted long enough", time.Nanosecond, 1, time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lines := chatFixture(t)
+			d := newFakeDialer()
+			first := d.next()
+			c := newTestChat(t, &fakeRooms{room: Room{ChatroomID: 66973867}}, d, func(o *ChatOptions) {
+				o.StableAfter = tc.stableAfter
+			})
+			if _, err := c.Join(context.Background(), gaules); err != nil {
+				t.Fatalf("Join: %v", err)
+			}
+			subscribe(t, first, lines)
+			waitState(t, c, catalog.ChatStateConnected)
+			close(first.in)
+			if ev := waitState(t, c, catalog.ChatStateReconnecting); ev.Attempt != 1 {
+				t.Fatalf("first drop: attempt = %d, want 1", ev.Attempt)
+			}
+			second := d.next()
+			subscribe(t, second, lines)
+			waitState(t, c, catalog.ChatStateConnected)
+			close(second.in)
+			ev := waitState(t, c, catalog.ChatStateReconnecting)
+			if ev.Attempt != tc.wantAttempt || ev.NextBackoff != tc.wantWait {
+				t.Fatalf("second drop: attempt = %d, wait = %v; want %d, %v",
+					ev.Attempt, ev.NextBackoff, tc.wantAttempt, tc.wantWait)
+			}
+		})
+	}
+}
+
 func TestChat_RetriesLookupOnNetworkError(t *testing.T) {
 	lines := chatFixture(t)
 	d := newFakeDialer()

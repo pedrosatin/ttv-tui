@@ -138,7 +138,7 @@ func (m Model) applySearchLoaded(msg SearchLoadedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) applySavedAvailability(msg SavedAvailabilityMsg) (tea.Model, tea.Cmd) {
-	if msg.Generation != m.list.hydrateGen {
+	if !msg.ChannelLookup && msg.Generation != m.list.hydrateGen {
 		return m, nil
 	}
 	if msg.Err != nil {

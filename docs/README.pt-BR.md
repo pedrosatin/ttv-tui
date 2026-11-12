@@ -238,6 +238,8 @@ A Kick não tem API pública para nada disso sem conta. O app lê o JSON que o p
   kick_pusher_key = "<chave>"
   ```
 
+- O chat da Kick conecta direto no Pusher e ignora o `HTTPS_PROXY`. Atrás de um proxy obrigatório, a lista ainda mostra o estado do canal, mas o chat fica reconectando.
+
 </details>
 
 <details>

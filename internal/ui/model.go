@@ -67,6 +67,10 @@ type SavedAvailabilityMsg struct {
 	Generation uint64
 	Channels   []catalog.Channel
 	Err        error
+	// ChannelLookup marks the lookup of the one channel just opened with no
+	// evidence of its state. It does not belong to a hydration round, so a
+	// reload of the list while it runs does not discard it.
+	ChannelLookup bool
 }
 
 // CategorySelectedMsg is emitted when the user presses Enter on a highlighted category
