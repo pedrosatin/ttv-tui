@@ -33,9 +33,14 @@ var AllowedDomains = []string{
 const (
 	maxReleaseJSONBytes     = 2 * 1024 * 1024   // 2 MB
 	maxUncompressedZipBytes = 500 * 1024 * 1024 // 500 MB
+
+	// DefaultDownloadStaleAge is the duration after which an unrenewed download lock is considered abandoned.
+	DefaultDownloadStaleAge = 30 * time.Second
+	// DefaultDownloadHeartbeat is the interval at which a download lock holder refreshes its lock mtime.
+	DefaultDownloadHeartbeat = 5 * time.Second
 )
 
-// ProgressFunc reports download progress.
+// ProgressFunc reports download progress. When percent < 0, it indicates waiting for another process's lock.
 type ProgressFunc func(component string, percent int, readBytes, totalBytes int64)
 
 // Downloader manages downloading and verifying managed components.
@@ -49,6 +54,23 @@ type Downloader struct {
 	InsecureHTTP    bool // For tests only
 	ExtractAppImage func(ctx context.Context, appImagePath, destDir string) error
 	LookPath        func(string) (string, error)
+	LockStaleAge    time.Duration
+	LockHeartbeat   time.Duration
+	OnLockAcquired  func()
+}
+
+func (d *Downloader) lockStaleAge() time.Duration {
+	if d.LockStaleAge > 0 {
+		return d.LockStaleAge
+	}
+	return DefaultDownloadStaleAge
+}
+
+func (d *Downloader) lockHeartbeat() time.Duration {
+	if d.LockHeartbeat > 0 {
+		return d.LockHeartbeat
+	}
+	return DefaultDownloadHeartbeat
 }
 
 // NewDownloader returns a Downloader with production defaults.
@@ -171,6 +193,9 @@ func (d *Downloader) matchAsset(assets []gitHubAsset) (*gitHubAsset, error) {
 			if strings.HasSuffix(name, ".zsync") {
 				continue
 			}
+			if !strings.HasPrefix(name, "streamlink-") {
+				continue
+			}
 			if d.GOARCH == "amd64" && strings.HasSuffix(name, "_x86_64.appimage") {
 				return a, nil
 			}
@@ -237,11 +262,20 @@ func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress Progress
 
 	// Inter-process lock to prevent concurrent downloads and modifications.
 	lockPath := filepath.Join(baseDir, ".lock")
-	unlock, err := filelock.LockWithContext(ctx, lockPath, 10*time.Minute)
+	staleAge := d.lockStaleAge()
+	heartbeat := d.lockHeartbeat()
+	unlock, err := filelock.LockWithHeartbeat(ctx, lockPath, staleAge, heartbeat, func() {
+		if progress != nil {
+			progress("streamlink", -1, 0, 0)
+		}
+	})
 	if err != nil {
 		return Result{}, fmt.Errorf("acquire download lock: %w", err)
 	}
 	defer func() { _ = unlock() }()
+	if d.OnLockAcquired != nil {
+		d.OnLockAcquired()
+	}
 
 	// If another process just finished installing, use the existing installation.
 	resolver := &Resolver{
@@ -337,10 +371,8 @@ func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress Progress
 		}
 	}()
 
-	var binPath string
 	if d.GOOS == "windows" {
-		binPath, err = installWindowsZip(tempFile, stagingDir)
-		if err != nil {
+		if _, err := installWindowsZip(tempFile, stagingDir); err != nil {
 			return Result{}, fmt.Errorf("extract streamlink archive: %w", err)
 		}
 	} else {
@@ -352,40 +384,45 @@ func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress Progress
 		if err := extractFn(ctx, tempFile, stagingDir); err != nil {
 			return Result{}, fmt.Errorf("extract appimage: %w", err)
 		}
-		binPath = findStreamlinkBinaryInDir(stagingDir, d.GOOS)
-		if binPath == "" {
+		if findStreamlinkBinaryInDir(stagingDir, d.GOOS) == "" {
 			return Result{}, fmt.Errorf("AppRun executable not found after extracting AppImage")
 		}
 	}
 
 	targetDir := StreamlinkVersionDir(d.DataDir, version)
-	// If targetDir already exists (installed by another process or earlier), discard stagingDir.
-	if fi, statErr := os.Stat(targetDir); statErr == nil && fi.IsDir() {
+	existingBin := findStreamlinkBinaryInDir(targetDir, d.GOOS)
+	if existingBin != "" {
 		_ = os.RemoveAll(stagingDir)
 		staged = true
 	} else {
-		if err := os.Rename(stagingDir, targetDir); err != nil {
-			// Check if target was created in the meantime
-			if fi, statErr := os.Stat(targetDir); statErr == nil && fi.IsDir() {
-				_ = os.RemoveAll(stagingDir)
-				staged = true
-			} else {
-				return Result{}, fmt.Errorf("atomic rename staging to version dir %s: %w", targetDir, err)
-			}
-		} else {
-			staged = true
+		// Under the lock, remove an empty or partial target directory before promotion.
+		_ = os.RemoveAll(targetDir)
+		if err := renameDir(stagingDir, targetDir); err != nil {
+			return Result{}, fmt.Errorf("atomic rename staging to version dir %s: %w", targetDir, err)
 		}
+		staged = true
 	}
 
 	res, ok := resolver.findManagedStreamlink()
 	if !ok {
-		return Result{
-			Path:    binPath,
-			Version: version,
-			Origin:  OriginManaged,
-		}, nil
+		return Result{}, fmt.Errorf("managed streamlink binary not found in %s after install", targetDir)
 	}
 	return res, nil
+}
+
+func renameDir(src, dst string) error {
+	if runtime.GOOS != "windows" {
+		return os.Rename(src, dst)
+	}
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		err = os.Rename(src, dst)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return err
 }
 
 func cleanStaleTemps(baseDir string) {
@@ -402,16 +439,24 @@ func cleanStaleTemps(baseDir string) {
 }
 
 func defaultExtractAppImage(ctx context.Context, appImagePath, destDir string) error {
-	if err := os.Chmod(appImagePath, 0o700); err != nil {
+	absAppImage, err := filepath.Abs(appImagePath)
+	if err != nil {
+		return fmt.Errorf("resolve appimage path: %w", err)
+	}
+	absDest, err := filepath.Abs(destDir)
+	if err != nil {
+		return fmt.Errorf("resolve dest dir: %w", err)
+	}
+	if err := os.Chmod(absAppImage, 0o700); err != nil {
 		return fmt.Errorf("chmod appimage: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, appImagePath, "--appimage-extract")
-	cmd.Dir = destDir
+	cmd := exec.CommandContext(ctx, absAppImage, "--appimage-extract")
+	cmd.Dir = absDest
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("execute appimage --appimage-extract: %w (output: %s)", err, strings.TrimSpace(string(output)))
 	}
-	appRun := filepath.Join(destDir, "squashfs-root", "AppRun")
+	appRun := filepath.Join(absDest, "squashfs-root", "AppRun")
 	if fi, err := os.Stat(appRun); err != nil || fi.IsDir() {
 		return fmt.Errorf("extracted AppRun not found at %s: %w", appRun, err)
 	}
@@ -552,7 +597,7 @@ func installWindowsZip(zipPath, destDir string) (string, error) {
 		}
 
 		name := f.Name
-		if strings.Contains(name, "..") {
+		if hasDotDotSegment(name) {
 			return "", fmt.Errorf("illegal relative path in zip: %s", name)
 		}
 		if commonPrefix != "" && strings.HasPrefix(name, commonPrefix) {
@@ -624,4 +669,15 @@ func installWindowsZip(zipPath, destDir string) (string, error) {
 		return "", fmt.Errorf("streamlink.exe not found after extracting zip to %s", destDir)
 	}
 	return bin, nil
+}
+
+func hasDotDotSegment(path string) bool {
+	for _, part := range strings.FieldsFunc(path, func(r rune) bool {
+		return r == '/' || r == '\\'
+	}) {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
 }
