@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
@@ -22,13 +23,13 @@ var ErrCorrupt = errors.New("state file corrupted")
 
 // Platform constants for supported streaming platforms.
 const (
-	PlatformTwitch  = "twitch"
-	PlatformKick    = "kick"
-	PlatformYouTube = "youtube"
+	PlatformTwitch  = platform.Twitch
+	PlatformKick    = platform.Kick
+	PlatformYouTube = platform.YouTube
 )
 
 // DefaultPlatform is the platform assigned to channels when none is specified.
-const DefaultPlatform = PlatformTwitch
+const DefaultPlatform = platform.Default
 
 // Channel represents the persistent metadata of a saved channel.
 type Channel struct {
@@ -42,25 +43,42 @@ type Channel struct {
 // CanonicalPlatform returns the trimmed, lowercase platform name for c, or
 // DefaultPlatform when nothing is left after trimming.
 func (c Channel) CanonicalPlatform() string {
-	p := strings.ToLower(strings.TrimSpace(c.Platform))
-	if p == "" {
-		return DefaultPlatform
+	return platform.Normalize(c.Platform)
+}
+
+func (c Channel) stableID() string {
+	if c.Login != "" {
+		return c.Login
 	}
-	return p
+	plat := c.CanonicalPlatform()
+	if strings.HasPrefix(strings.ToLower(c.ID), plat+":") {
+		return c.ID[len(plat)+1:]
+	}
+	return c.ID
 }
 
 // Matches reports whether two channels represent the same channel on the same platform.
+// For non-Twitch channels, it compares platform and stable identifier rather than raw URL.
 func (c Channel) Matches(other Channel) bool {
-	if c.CanonicalPlatform() != other.CanonicalPlatform() {
+	plat := c.CanonicalPlatform()
+	if plat != other.CanonicalPlatform() {
 		return false
 	}
-	if c.URL != "" && other.URL != "" {
-		return strings.EqualFold(c.URL, other.URL)
+	if plat != PlatformTwitch {
+		idA := c.stableID()
+		idB := other.stableID()
+		if idA == "" || idB == "" {
+			return false
+		}
+		if plat == PlatformYouTube {
+			return idA == idB
+		}
+		return strings.EqualFold(idA, idB)
 	}
 	if c.ID != "" && other.ID != "" && c.ID == other.ID {
 		return true
 	}
-	return strings.EqualFold(c.Login, other.Login)
+	return c.Login != "" && strings.EqualFold(c.Login, other.Login)
 }
 
 // ToTwitch converts store.Channel to twitch.Channel.

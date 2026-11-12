@@ -1248,14 +1248,26 @@ func TestStore_ChannelWithURLRoundTripAndLegacyCompat(t *testing.T) {
 		t.Fatalf("FromTwitch did not preserve platform or URL: %+v", backCh)
 	}
 
-	// 3. Matches compares URL when present.
-	chA := Channel{Platform: PlatformKick, Login: "xqc", URL: "https://kick.com/xqc"}
-	chB := Channel{Platform: PlatformKick, Login: "xqc", URL: "https://kick.com/xqc"}
-	chC := Channel{Platform: PlatformKick, Login: "xqc", URL: "https://kick.com/other"}
-	if !chA.Matches(chB) {
-		t.Fatalf("expected chA to match chB")
+	// 3. Matches compares platform + stable identifier, not raw URL.
+	// Kick channel with kick.com vs www.kick.com matches (no duplicate).
+	kickA := Channel{Platform: PlatformKick, Login: "xqc", URL: "https://kick.com/xqc"}
+	kickB := Channel{Platform: PlatformKick, Login: "xqc", URL: "https://www.kick.com/xqc"}
+	kickOther := Channel{Platform: PlatformKick, Login: "other", URL: "https://kick.com/other"}
+	if !kickA.Matches(kickB) {
+		t.Fatalf("expected kickA to match kickB (kick.com vs www.kick.com)")
 	}
-	if chA.Matches(chC) {
-		t.Fatalf("expected chA not to match chC with different URL")
+	if kickA.Matches(kickOther) {
+		t.Fatalf("expected kickA not to match kickOther")
+	}
+
+	// YouTube video IDs preserve case: AbC and abc are different videos.
+	ytUpper := Channel{Platform: PlatformYouTube, Login: "AbC", URL: "https://youtu.be/AbC"}
+	ytLower := Channel{Platform: PlatformYouTube, Login: "abc", URL: "https://youtu.be/abc"}
+	ytWatch := Channel{Platform: PlatformYouTube, Login: "AbC", URL: "https://www.youtube.com/watch?v=AbC"}
+	if ytUpper.Matches(ytLower) {
+		t.Fatalf("expected YouTube AbC not to match abc (case-sensitive video IDs)")
+	}
+	if !ytUpper.Matches(ytWatch) {
+		t.Fatalf("expected YouTube youtu.be/AbC to match youtube.com/watch?v=AbC")
 	}
 }
