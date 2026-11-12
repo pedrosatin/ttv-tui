@@ -28,6 +28,8 @@ const (
 	FailureStreamlinkMissing Failure = "streamlink_missing"
 	// FailureMPVMissing: the mpv executable is not installed.
 	FailureMPVMissing Failure = "mpv_missing"
+	// FailureNoPlugin: streamlink has no plugin capable of handling the URL.
+	FailureNoPlugin Failure = "no_plugin"
 	// FailureUnknown: an error without a recognized cause.
 	FailureUnknown Failure = "unknown"
 )
@@ -94,6 +96,8 @@ func ClassifyLine(line string) Failure {
 	case strings.Contains(l, "streamlink: command not found"),
 		strings.Contains(l, "streamlink: not found"):
 		return FailureStreamlinkMissing
+	case strings.Contains(l, "no plugin can handle url"):
+		return FailureNoPlugin
 	case strings.Contains(l, "timed out"),
 		strings.Contains(l, "timeouterror"),
 		strings.Contains(l, "timeout"):
@@ -121,7 +125,7 @@ func ClassifyLine(line string) Failure {
 // process or the IPC socket deadline.
 func isFatalLine(f Failure) bool {
 	switch f {
-	case FailureOffline, FailureMPVMissing, FailureStreamlinkMissing:
+	case FailureOffline, FailureMPVMissing, FailureStreamlinkMissing, FailureNoPlugin:
 		return true
 	default:
 		return false

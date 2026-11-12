@@ -22,6 +22,7 @@ func TestClassifyLine(t *testing.T) {
 		{"error: Unable to open URL: https://gql.twitch.tv/gql (HTTPSConnectionPool(host='gql.twitch.tv', port=443): Max retries exceeded with url: /gql (Caused by ProxyError('Unable to connect to proxy', NewConnectionError(\"Failed to establish a new connection: [Errno 111] Connection refused\"))))", FailureNetwork},
 		{"error: Unable to open URL: https://gql.twitch.tv/gql (HTTPSConnectionPool(host='gql.twitch.tv', port=443): Max retries exceeded with url: /gql (Caused by ConnectTimeoutError(<HTTPSConnection(host='gql.twitch.tv', port=443) at 0x7f>, 'Connection to gql.twitch.tv timed out. (connect timeout=0.001)')))", FailureTimeout},
 		{"error: Failed to start player: mpv (Player executable not found)", FailureMPVMissing},
+		{"error: No plugin can handle URL: https://example.com/unsupported", FailureNoPlugin},
 		{"bash: streamlink: command not found", FailureStreamlinkMissing},
 		{"[cli][info] Found matching plugin twitch for URL https://www.twitch.tv/xqc", FailureNone},
 		{"", FailureNone},
