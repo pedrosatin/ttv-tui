@@ -63,7 +63,7 @@ func Run(opts Options) error {
 
 	cfg, cfgPath, err := loadConfig(opts.ConfigPath)
 	if err != nil {
-		return fmt.Errorf(earlyCatalog().T("app.err_load_config"), err, cfgPath, cfgPath)
+		return fmt.Errorf(earlyCatalog().T("app.err_load_config"), withRecoveryHint(earlyCatalog(), err))
 	}
 	if openWindow(opts) {
 		return nil
@@ -183,12 +183,22 @@ func loadConfig(path string) (config.Config, string, error) {
 		cfg, err := config.LoadFrom(path)
 		return cfg, path, err
 	}
-	defaultPath, pathErr := config.DefaultPath()
-	if pathErr != nil {
-		return config.Default(), "", pathErr
+	cfg, err := config.Load()
+	if err != nil {
+		return cfg, "", err
 	}
-	cfg, err := config.LoadFrom(defaultPath)
-	return cfg, defaultPath, err
+	path, _ = config.DefaultPath()
+	return cfg, path, nil
+}
+
+// withRecoveryHint appends the explicit recovery step to an invalid config
+// error. Other errors, such as a missing permission, are returned unchanged.
+func withRecoveryHint(cat *i18n.Catalog, err error) error {
+	var perr *config.ParseError
+	if !errors.As(err, &perr) {
+		return err
+	}
+	return fmt.Errorf(cat.T("app.err_config_recovery"), err, perr.Path, perr.BackupPath())
 }
 
 // connectVideoHost dials the window hosting this TUI. It returns nil in an

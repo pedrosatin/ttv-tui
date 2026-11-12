@@ -147,7 +147,7 @@ func RunLogin(ctx context.Context, opts LoginOptions) error {
 
 	existingCfg, err = config.LoadFrom(cfgPath)
 	if err != nil {
-		return fmt.Errorf(cat.T("login.err_read_config"), err, cfgPath, cfgPath)
+		return fmt.Errorf(cat.T("login.err_read_config"), withRecoveryHint(cat, err))
 	}
 	if existingCfg.HasToken() {
 		_, _ = fmt.Fprintln(out, cat.T("login.warn_overwrite"))

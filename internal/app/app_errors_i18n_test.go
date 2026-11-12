@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,7 +77,7 @@ func TestRunInvalidConfigExplainsRecoveryAndHidesToken(t *testing.T) {
 			if !strings.Contains(msg, tc.wantRecovery) {
 				t.Fatalf("error %q does not explain recovery %q", msg, tc.wantRecovery)
 			}
-			wantBakCmd := "mv " + cfgPath + " " + cfgPath + ".bak"
+			wantBakCmd := fmt.Sprintf("'mv %q %q'", cfgPath, cfgPath+".bak")
 			if !strings.Contains(msg, wantBakCmd) {
 				t.Fatalf("error %q does not contain backup command %q", msg, wantBakCmd)
 			}
@@ -108,9 +109,43 @@ func TestRunInvalidConfigExplainsRecoveryAndHidesToken(t *testing.T) {
 		if strings.Contains(msg, secret) {
 			t.Fatalf("SECURITY VIOLATION: secret token %q leaked in error message: %q", secret, msg)
 		}
-		wantBakCmd := "mv " + cfgPath + " " + cfgPath + ".bak"
+		wantBakCmd := fmt.Sprintf("'mv %q %q'", cfgPath, cfgPath+".bak")
 		if !strings.Contains(msg, wantBakCmd) {
 			t.Fatalf("error %q does not contain backup command with default path %q", msg, wantBakCmd)
+		}
+	})
+}
+
+// The token line itself is malformed: the error names the key, not the value.
+func TestRunUnterminatedTokenDoesNotLeak(t *testing.T) {
+	const secret = "segredo-de-teste"
+	t.Setenv("LC_ALL", "en_US.UTF-8")
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("access_token = \""+secret+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := Run(Options{ConfigPath: cfgPath})
+	if err == nil || strings.Contains(err.Error(), secret) || !strings.Contains(err.Error(), "'mv ") {
+		t.Fatalf("Run error = %v, want the recovery hint without the token", err)
+	}
+}
+
+// Moving the file aside does not fix a read error or a missing home directory,
+// so those errors carry no recovery hint.
+func TestRunConfigErrorsWithoutRecoveryHint(t *testing.T) {
+	t.Setenv("LC_ALL", "en_US.UTF-8")
+	t.Run("path is a directory", func(t *testing.T) {
+		err := Run(Options{ConfigPath: t.TempDir()})
+		if err == nil || strings.Contains(err.Error(), "'mv ") {
+			t.Fatalf("Run error = %v, want a read error without the hint", err)
+		}
+	})
+	t.Run("no home directory", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", "")
+		t.Setenv("HOME", "")
+		err := Run(Options{})
+		if err == nil || strings.Contains(err.Error(), "'mv ") {
+			t.Fatalf("Run error = %v, want a path error without the hint", err)
 		}
 	})
 }
