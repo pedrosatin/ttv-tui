@@ -238,7 +238,7 @@ func (m Model) applyCopyResult(msg copyResultMsg) (Model, tea.Cmd) {
 		m.chat.copyNotice = m.formatCopyNotice(msg.chatMsg, msg.plaintext, msg.method)
 	}
 	gen := msg.gen
-	return m, tea.Tick(copyNoticeTTL, func(time.Time) tea.Msg {
+	return m, m.after(copyNoticeTTL, func(time.Time) tea.Msg {
 		return copyNoticeClearMsg{gen: gen}
 	})
 }
@@ -285,5 +285,5 @@ func (m Model) showCopyFocusWarning() (tea.Model, tea.Cmd) {
 	m.chat.copyNotice = m.t("chat.copy.focus_chat")
 	m.chat.copyNoticeUntil = m.chat.now().Add(copyNoticeTTL)
 	gen := m.chat.copyNoticeGen
-	return m, tea.Tick(copyNoticeTTL, func(time.Time) tea.Msg { return copyNoticeClearMsg{gen: gen} })
+	return m, m.after(copyNoticeTTL, func(time.Time) tea.Msg { return copyNoticeClearMsg{gen: gen} })
 }

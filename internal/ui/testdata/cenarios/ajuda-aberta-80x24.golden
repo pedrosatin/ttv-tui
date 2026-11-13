@@ -1,0 +1,24 @@
+Categorias ao vivo
+▸     410k  Just Chatting
+      250k  Counter-Strike
+      120k  VALORANT
+
+=== Atalhos de Teclado ===
+  Ajuda: ?/Esc/F1/q fecha · ↑/↓ PgUp/PgDn Home/End rola
+  Foco: lista — fechada a ajuda, Tab troca painel e guarda rascunho
+  Lista: ↑/↓ ou j/k mover · Enter abrir · f favoritar · Tab trocar painel
+  Esc: sai da escrita, do chat, do filtro ou da busca
+  Voltar às categorias: Esc na lista · Ctrl+R de qualquer lugar, até digitando
+  Busca: / filtra · Ctrl+F categorias e canais (Ctrl+S alt) · r tenta de novo
+  Filtros de canal: l idioma e audiência · Enter/Espaço alterna · Esc fecha
+  Layout: Ctrl+W cicla dividido/chat/lista/foco · Ctrl+H lista · Ctrl+L chat
+  Esc mantém o layout: volte com Ctrl+W, Ctrl+H ou Ctrl+L · abaixo de 80
+    colunas Ctrl+L abre só o chat
+  Player (TUI e mpv): Espaço pausa · +/- volume · Ctrl+X encerra (só na TUI)
+  Chat: ↑/PgUp/Home rola · End/G vivo · y copia · i escreve · Ctrl+T reconecta
+  App: Ctrl+Q sair · ? ou F1 alternar ajuda
+  Sem cor: NO_COLOR desliga a cor · símbolos ▸ ★ ● ▶ ‖ ✖ ! mostram o estado
+  Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito ·
+    ciano = foco · vermelho = erro/[offline] · magenta = sistema · menção com
+    sublinhado
+ ttv-tui | [pt-BR] Pronto                               | ? ajuda · Ctrl+Q sair

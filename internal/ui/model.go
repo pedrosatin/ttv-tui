@@ -263,6 +263,17 @@ type Model struct {
 	width      int
 	height     int
 	quitting   bool
+	// timer agenda as mensagens que chegam depois de um intervalo; nil usa
+	// tea.Tick. Os cenários de teste trocam por um que não espera o relógio.
+	timer func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
+}
+
+// after entrega fn depois de d, pelo timer do modelo.
+func (m Model) after(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd {
+	if m.timer != nil {
+		return m.timer(d, fn)
+	}
+	return tea.Tick(d, fn)
 }
 
 // listState is the left panel: what is loaded, what is highlighted and

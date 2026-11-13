@@ -123,6 +123,7 @@ var allowedExceptions = map[string]bool{
 	"ctrl+right": true,
 	"alt+left":   true,
 	"alt+right":  true,
+	"alt+":       true,
 	"ctrl+l":     true,
 	"space":      true,
 	"+":          true,

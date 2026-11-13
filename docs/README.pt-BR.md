@@ -414,6 +414,8 @@ TMPDIR=/tmp go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.
 
 O `TMPDIR=/tmp` mantém os caminhos dos sockets de teste abaixo do limite de 108 bytes do Unix.
 
+Os cenários de UX (teclas na entrada, a tela inteira comparada com um golden) estão descritos em [`cenarios-de-ux.md`](cenarios-de-ux.md).
+
 As decisões de desenho estão em [`docs/adr/`](adr/).
 
 </details>

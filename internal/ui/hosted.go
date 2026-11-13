@@ -271,7 +271,7 @@ func (m *Model) announceHosted(text string) tea.Cmd {
 	m.notices.gen++
 	gen := m.notices.gen
 	m.notices.status, m.notices.statusWarns = text, false
-	expire := tea.Tick(hostedNoticeDelay, func(time.Time) tea.Msg { return hostedNoticeMsg{gen: gen} })
+	expire := m.after(hostedNoticeDelay, func(time.Time) tea.Msg { return hostedNoticeMsg{gen: gen} })
 	return tea.Batch(m.scheduleHostedSave(), expire)
 }
 
@@ -286,7 +286,7 @@ func (m *Model) scheduleHostedSave() tea.Cmd {
 	}
 	m.hosted.saveGen++
 	gen := m.hosted.saveGen
-	return tea.Tick(hostedSaveDelay, func(time.Time) tea.Msg { return hostedSaveMsg{gen: gen} })
+	return m.after(hostedSaveDelay, func(time.Time) tea.Msg { return hostedSaveMsg{gen: gen} })
 }
 
 // saveColumns writes the widths, off the update loop, if gen is still the newest.

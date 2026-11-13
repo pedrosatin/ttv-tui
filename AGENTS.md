@@ -47,6 +47,11 @@ arquitetura.
    estado intermediário (teste pela metade, código não compilando). Espere o subagent
    terminar, revise o diff e só então commite.
 
+9. **Mudança de UX vem com cenário.** Mudança de tecla, de tela ou de fluxo traz um
+   cenário de UX (teclas e tela gravada num golden), e bug de UX entra primeiro como
+   cenário que reprova na `main`. O [guia](docs/cenarios-de-ux.md) mostra como
+   escrever um e como regravar um golden de propósito.
+
 ## Convenções de código
 
 - Go 1.27, módulo `github.com/pedrosatin/ttv-tui`.
