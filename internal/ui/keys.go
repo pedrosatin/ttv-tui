@@ -226,6 +226,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateHelpKey(msg)
 	}
 
+	// No campo de texto, o que se digita e as teclas de edição vão ao campo
+	// antes dos atalhos: Ctrl+H, Ctrl+W, = e _ não mexem no layout nem no volume.
+	if m.typingField() && isFieldEditKey(msg) {
+		next, cmd, _ := m.handleModeKey(msg)
+		return next, cmd
+	}
 	if next, cmd, ok := m.handleGlobalKey(msg); ok {
 		return next, cmd
 	}
@@ -259,6 +265,28 @@ func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
 	}
 	return !m.chatColumnVisible() && key.Matches(msg,
 		m.keys.Up, m.keys.Down, m.keys.Select, m.keys.Clear, m.keys.CopyMessage)
+}
+
+// typingField diz se o foco está num campo de texto à vista: o prompt de busca,
+// o filtro / ou a mensagem do chat.
+func (m Model) typingField() bool {
+	if m.listVisible() && (m.list.search.active || m.list.filtering) {
+		return true
+	}
+	return m.chat.composing && m.Focus() == FocusChat && m.chatColumnVisible()
+}
+
+// isFieldEditKey diz se a tecla pertence ao campo de texto: o que se digita
+// (runas e espaço) e as teclas de edição, Backspace, Delete, Ctrl+H, Ctrl+W e
+// Alt+Backspace. O Tab, mesmo como runa, continua trocando o painel.
+func isFieldEditKey(msg tea.KeyMsg) bool {
+	switch msg.Type {
+	case tea.KeyRunes:
+		return len(msg.Runes) != 1 || msg.Runes[0] != '\t'
+	case tea.KeySpace, tea.KeyBackspace, tea.KeyDelete, tea.KeyCtrlH, tea.KeyCtrlW:
+		return true
+	}
+	return false
 }
 
 // isSwitchFocusKey reports whether msg is Tab, including a lone '\t' rune some
@@ -382,18 +410,8 @@ func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.clearResolvedComposeWarning()
 		return m, nil
 
-	case msg.Type == tea.KeySpace, key.Matches(msg, m.keys.Pause):
+	case msg.Type == tea.KeySpace:
 		m.chat.composeDraft += " "
-		m.clearResolvedComposeWarning()
-		return m, nil
-
-	case key.Matches(msg, m.keys.VolUp):
-		m.chat.composeDraft += "+"
-		m.clearResolvedComposeWarning()
-		return m, nil
-
-	case key.Matches(msg, m.keys.VolDown):
-		m.chat.composeDraft += "-"
 		m.clearResolvedComposeWarning()
 		return m, nil
 
@@ -421,10 +439,11 @@ func (m *Model) clearResolvedComposeWarning() {
 	}
 }
 
-// isWordBackspace é Alt+Backspace, os bytes ESC DEL que a janela também manda
-// para Ctrl+Backspace.
+// isWordBackspace é a tecla que apaga a palavra anterior: Alt+Backspace (os
+// bytes ESC DEL que a janela também manda para Ctrl+Backspace) e Ctrl+W, como
+// no shell.
 func isWordBackspace(msg tea.KeyMsg) bool {
-	return msg.Type == tea.KeyBackspace && msg.Alt
+	return (msg.Type == tea.KeyBackspace && msg.Alt) || msg.Type == tea.KeyCtrlW
 }
 
 // trimLastWord apaga a palavra antes do fim e os espaços depois dela, e mantém

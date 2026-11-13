@@ -204,7 +204,7 @@
   "help.platform": "Platform: p switches the list to the next (%s) · video and chat stay",
   "help.search": "Search: / filter list · Ctrl+F search (Ctrl+S alt) · r retry",
   "help.channel_filter": "Channel filters: l language and audience · Enter/Space toggle · Esc close",
-  "help.layout": "Layout: Ctrl+W cycle split/chat/list/focus · Ctrl+H toggle list · Ctrl+L toggle chat",
+  "help.layout": "Layout: Ctrl+W cycle split/chat/list/focus · Ctrl+H toggle list · Ctrl+L toggle chat · while typing, Ctrl+W deletes a word and Ctrl+H does nothing",
   "help.layout_back": "Esc keeps the layout: go back with Ctrl+W, Ctrl+H or Ctrl+L · under 80 columns Ctrl+L opens chat only",
   "help.player": "Player (TUI and mpv): Space pause · +/- volume · Ctrl+X stop (TUI only)",
   "help.chat": "Chat: ↑/PgUp/Home scroll · End/G live · y copy · i write · Ctrl+T reconnect",

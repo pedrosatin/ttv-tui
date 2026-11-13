@@ -1,7 +1,6 @@
 Categorias ao vivo
 ▸     410k  Just Chatting
       250k  Counter-Strike
-      120k  VALORANT
 
 === Atalhos de Teclado ===
   Ajuda: ?/Esc/F1/q fecha · ↑/↓ PgUp/PgDn Home/End rola
@@ -11,7 +10,8 @@ Categorias ao vivo
   Voltar às categorias: Esc na lista · Ctrl+R de qualquer lugar, até digitando
   Busca: / filtra · Ctrl+F categorias e canais (Ctrl+S alt) · r tenta de novo
   Filtros de canal: l idioma e audiência · Enter/Espaço alterna · Esc fecha
-  Layout: Ctrl+W cicla dividido/chat/lista/foco · Ctrl+H lista · Ctrl+L chat
+  Layout: Ctrl+W cicla dividido/chat/lista/foco · Ctrl+H lista · Ctrl+L chat ·
+    digitando, Ctrl+W apaga a palavra e Ctrl+H não faz nada
   Esc mantém o layout: volte com Ctrl+W, Ctrl+H ou Ctrl+L · abaixo de 80
     colunas Ctrl+L abre só o chat
   Player (TUI e mpv): Espaço pausa · +/- volume · Ctrl+X encerra (só na TUI)

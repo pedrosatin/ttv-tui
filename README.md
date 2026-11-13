@@ -130,6 +130,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | `i` | Write a message |
 | `Enter` | Send the message |
 | `Esc` | Stop writing and keep the draft |
+| `Ctrl+W` or `Alt+Backspace` | Delete the previous word in the message, the search and the filter |
 | `↑` `↓` `PgUp` `Home` | Scroll the history |
 | `End` or `G` | Back to live messages |
 | `y` | Copy the selected message |
@@ -149,6 +150,8 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | `Ctrl+H` / `Ctrl+L` | Show or hide the list / the chat |
 | `?` or `F1` | Show or hide the shortcut help |
 | `Ctrl+Q` | Quit |
+
+With focus on the message, the search or the filter, what you type stays in the field: `Space`, `=` and `_` go in as text, `Ctrl+W` deletes a word and `Ctrl+H` does nothing. Outside the field they are shortcuts again.
 
 `Space` and `+` `-` also work in the `mpv` window. Its other keys do nothing.
 

@@ -130,6 +130,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `i` | Escreve uma mensagem |
 | `Enter` | Envia a mensagem |
 | `Esc` | Sai da escrita e guarda o rascunho |
+| `Ctrl+W` ou `Alt+Backspace` | Apaga a palavra anterior na mensagem, na busca e no filtro |
 | `↑` `↓` `PgUp` `Home` | Rola o histórico |
 | `End` ou `G` | Volta às mensagens ao vivo |
 | `y` | Copia a mensagem selecionada |
@@ -149,6 +150,8 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `Ctrl+H` / `Ctrl+L` | Mostra ou esconde a lista / o chat |
 | `?` ou `F1` | Mostra ou esconde a ajuda de atalhos |
 | `Ctrl+Q` | Sai |
+
+Com o foco na mensagem, na busca ou no filtro, o que se digita fica no campo: `Space`, `=` e `_` entram como texto, `Ctrl+W` apaga a palavra e `Ctrl+H` não faz nada. Fora do campo, voltam a ser atalhos.
 
 `Space` e `+` `-` funcionam também na janela do `mpv`. As outras teclas dela não fazem nada.
 

@@ -16,9 +16,10 @@ func TestComposeFocusHostedListReturn(t *testing.T) {
 	m = resize(m, 212, 49)
 	m = sendKeys(m, keyI)
 	m = typeRunes(m, "oi")
-	m = sendKeys(m, keyCtrlH, keyCtrlH)
+	// Na escrita o Ctrl+H é do campo: sair dela com Esc devolve a tecla ao layout.
+	m = sendKeys(m, keyEsc, keyCtrlH, keyCtrlH)
 	if m.Focus() != FocusList || m.Composing() {
-		t.Errorf("after Ctrl+H twice: focus=%q composing=%v", m.Focus(), m.Composing())
+		t.Errorf("after Esc and Ctrl+H twice: focus=%q composing=%v", m.Focus(), m.Composing())
 	}
 	before := m.HighlightedID()
 	m = typeRunes(m, "j")
@@ -121,15 +122,16 @@ func TestComposeFocusRuntime(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	p := tea.NewProgram(composeFocusRuntime{m}, tea.WithContext(ctx),
-		tea.WithInput(strings.NewReader("ioi\x08\x08jk\r\x11")),
+		tea.WithInput(strings.NewReader("ioi\x08x ab\x17\x11")),
 		tea.WithOutput(io.Discard), tea.WithoutRenderer(), tea.WithoutSignalHandler())
 	result, err := p.Run()
 	if err != nil {
 		t.Fatal(err)
 	}
 	final := result.(composeFocusRuntime).Model
-	if len(fc.sent) != 0 || final.ComposeDraft() != "oi" || final.Focus() != FocusList || final.Composing() {
-		t.Fatalf("sent=%v draft=%q focus=%q composing=%v", fc.sent, final.ComposeDraft(), final.Focus(), final.Composing())
+	// O leitor do Bubble Tea entrega 0x08 como Ctrl+H e 0x17 como Ctrl+W: na
+	// escrita, o primeiro não faz nada e o segundo apaga a palavra.
+	if len(fc.sent) != 0 || final.ComposeDraft() != "oix " || final.Focus() != FocusChat || !final.Composing() || !final.listVisible() {
+		t.Fatalf("sent=%v draft=%q focus=%q composing=%v list=%v", fc.sent, final.ComposeDraft(), final.Focus(), final.Composing(), final.listVisible())
 	}
-	t.Logf("Bubble Tea input i, oi, Ctrl+H, Ctrl+H, j, k, Enter, Ctrl+Q: sent=%d draft=%q focus=%q composing=%v", len(fc.sent), final.ComposeDraft(), final.Focus(), final.Composing())
 }

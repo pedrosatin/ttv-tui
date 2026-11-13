@@ -133,6 +133,58 @@ func TestJanelaCtrlBackspaceNaBusca(t *testing.T) {
 	})
 }
 
+// W4: com o canal aberto, Ctrl+W na busca e no filtro apaga a palavra anterior,
+// e Ctrl+H, = e _ não mexem no layout nem no volume: o que se digita fica no
+// campo. Fora do campo, Ctrl+W volta a trocar o layout.
+func TestJanelaCtrlWNaBuscaENoFiltro(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 1}})
+	w.openFirstChannel()
+	split := func(s ui.StateReport) bool { return s.Layout == string(ui.LayoutSplit) }
+
+	w.press("ctrl+f", "f", "i", "x", "Space", "a", "b")
+	w.waitState("o campo de busca com fix ab", 5*time.Second, func(s ui.StateReport) bool {
+		return s.Search && s.SearchInput == "fix ab" && split(s)
+	})
+	w.press("ctrl+w", "ctrl+h", "=", "_")
+	expect(t, func() error {
+		st, err := w.state()
+		if err != nil {
+			return err
+		}
+		if s := *st.TUI; !split(s) || !s.Search || s.SearchInput != "fix =_" {
+			return fmt.Errorf("na busca, depois de Ctrl+W, Ctrl+H, = e _: layout %q, busca aberta %v, campo %q; quer split, aberta e \"fix =_\"", s.Layout, s.Search, s.SearchInput)
+		}
+		return nil
+	})
+
+	// Esc vai sozinho: ESC seguido de outro byte no PTY seria Alt+tecla.
+	w.press("Escape")
+	w.waitState("a busca fechada", 5*time.Second, func(s ui.StateReport) bool { return !s.Search })
+	w.press("/", "f", "i", "x", "Space", "a", "b")
+	w.waitState("o filtro com fix ab", 5*time.Second, func(s ui.StateReport) bool {
+		return s.Filtering && s.Filter == "fix ab" && split(s)
+	})
+	w.press("ctrl+w", "ctrl+h")
+	expect(t, func() error {
+		st, err := w.state()
+		if err != nil {
+			return err
+		}
+		if s := *st.TUI; !split(s) || !s.Filtering || s.Filter != "fix " {
+			return fmt.Errorf("no filtro, depois de Ctrl+W e Ctrl+H: layout %q, filtro aberto %v, campo %q; quer split, aberto e \"fix \"", s.Layout, s.Filtering, s.Filter)
+		}
+		return nil
+	})
+
+	w.press("Escape")
+	w.waitState("o filtro fechado", 5*time.Second, func(s ui.StateReport) bool { return !s.Filtering })
+	w.press("ctrl+w")
+	w.waitState("o Ctrl+W fora do campo trocar o layout", 5*time.Second, func(s ui.StateReport) bool {
+		return !s.Filtering && !split(s)
+	})
+}
+
 // W5: PgDn na lista desce uma página. Hoje o destaque fica parado.
 func TestJanelaPgDnNaLista(t *testing.T) {
 	t.Parallel()

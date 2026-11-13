@@ -480,6 +480,15 @@ def flows():
     check(role, "Ctrl+Backspace apaga a palavra anterior", typed and erased, prompt()[-40:])
     time.sleep(0.3)
     check(role, "Ctrl+Backspace não esconde a lista", stats()["hole"] == h0 and "Live Channels" in screen().splitlines()[0], f"{h0} -> {stats()['hole']}")
+    # Ctrl+W apaga a palavra; Ctrl+H, = e _ ficam no campo, sem mexer no layout nem no volume
+    t("key", "ctrl+w")
+    erased = wait(lambda: prompt().endswith("Search: gaules"), 3, 0.05)
+    t("key", "ctrl+h")
+    text("=_")
+    kept = wait(lambda: prompt().endswith("Search: gaules =_"), 3, 0.05)
+    check(role, "na busca, Ctrl+W apaga a palavra e Ctrl+H, = e _ ficam no campo", erased and kept, prompt()[-40:])
+    time.sleep(0.3)
+    check(role, "Ctrl+W e Ctrl+H na busca não mexem no layout", stats()["hole"] == h0 and "Live Channels" in screen().splitlines()[0], f"{h0} -> {stats()['hole']}")
     t("key", "Escape")
     wait(lambda: "Search: " not in screen(), 3, 0.05)
 

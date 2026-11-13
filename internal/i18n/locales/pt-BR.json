@@ -204,7 +204,7 @@
   "help.platform": "Plataforma: p troca a lista para a próxima (%s) · vídeo e chat ficam",
   "help.search": "Busca: / filtra · Ctrl+F categorias e canais (Ctrl+S alt) · r tenta de novo",
   "help.channel_filter": "Filtros de canal: l idioma e audiência · Enter/Espaço alterna · Esc fecha",
-  "help.layout": "Layout: Ctrl+W cicla dividido/chat/lista/foco · Ctrl+H lista · Ctrl+L chat",
+  "help.layout": "Layout: Ctrl+W cicla dividido/chat/lista/foco · Ctrl+H lista · Ctrl+L chat · digitando, Ctrl+W apaga a palavra e Ctrl+H não faz nada",
   "help.layout_back": "Esc mantém o layout: volte com Ctrl+W, Ctrl+H ou Ctrl+L · abaixo de 80 colunas Ctrl+L abre só o chat",
   "help.player": "Player (TUI e mpv): Espaço pausa · +/- volume · Ctrl+X encerra (só na TUI)",
   "help.chat": "Chat: ↑/PgUp/Home rola · End/G vivo · y copia · i escreve · Ctrl+T reconecta",
