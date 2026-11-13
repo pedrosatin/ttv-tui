@@ -84,7 +84,7 @@ func helperPlayerCommand(dir string) player.CommandFunc {
 			_, _ = f.WriteString(line)
 			_ = f.Close()
 		}
-		cmd := exec.Command(os.Args[0], "--", target.Identity(), socketPath)
+		cmd := exec.Command(os.Args[0], "--", target.Identity(), "--input-ipc-server="+socketPath)
 		cmd.Env = append(os.Environ(), "TTV_APP_HELPER=player", "TTV_APP_DIR="+dir, "TTV_APP_SOCKET="+socketPath)
 		return cmd
 	}
@@ -197,7 +197,7 @@ func runFakePlayer() {
 	dir := os.Getenv("TTV_APP_DIR")
 	socket := os.Getenv("TTV_APP_SOCKET")
 	writePidFile(filepath.Join(dir, "player.pid"))
-	child := exec.Command(os.Args[0], "--", "mpv", socket)
+	child := exec.Command(os.Args[0], "--", "mpv", "--input-ipc-server="+socket)
 	child.Env = append(os.Environ(), "TTV_APP_HELPER=player-child")
 	if err := child.Start(); err != nil {
 		os.Exit(1)

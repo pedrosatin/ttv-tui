@@ -27,9 +27,10 @@ var (
 	_ = [1]struct{}{}[unsafe.Offsetof(unix.KinfoProc{}.Eproc)+unsafe.Offsetof(unix.KinfoProc{}.Eproc.Pgid)-kinfoPGID]
 )
 
-// osGroupHasArg reports whether a live member of pgid carries arg in its argv.
-func osGroupHasArg(pgid int, arg string) (bool, error) {
-	return darwinProcs.groupHasArg(pgid, arg)
+// osGroupHasEndpoint reports whether a live member of pgid is the player of
+// endpoint.
+func osGroupHasEndpoint(pgid int, endpoint string) (bool, error) {
+	return darwinProcs.groupHasEndpoint(pgid, endpoint)
 }
 
 // osProcStartTime returns p_starttime in microseconds, or 0 when the process is

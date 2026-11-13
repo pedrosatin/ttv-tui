@@ -127,8 +127,8 @@ func TestTraceProcsReportsSizeAndErrno(t *testing.T) {
 	logf := func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }
 	kernel := fakeKernel{table: map[int]fakeProc{pgid: {pgid: pgid, start: 1, argsErr: syscall.EINVAL}}}
 
-	if got, err := traceProcs(logf, kernel.procs()).groupHasArg(pgid, "/tmp/1-a/i"); got || !errors.Is(err, syscall.EINVAL) {
-		t.Fatalf("groupHasArg = %v, %v, want false, EINVAL", got, err)
+	if got, err := traceProcs(logf, kernel.procs()).groupHasEndpoint(pgid, "/tmp/1-a/i"); got || !errors.Is(err, syscall.EINVAL) {
+		t.Fatalf("groupHasEndpoint = %v, %v, want false, EINVAL", got, err)
 	}
 	want := []string{
 		"kern.proc.pgrp[500]: 648 bytes, errno 0",
@@ -310,9 +310,9 @@ func TestSysctlGroupHasArg(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := c.kernel.procs().groupHasArg(pgid, socket)
+			got, err := c.kernel.procs().groupHasEndpoint(pgid, socket)
 			if got != c.want || !errors.Is(err, c.wantErr) {
-				t.Fatalf("groupHasArg = %v, %v, want %v, %v", got, err, c.want, c.wantErr)
+				t.Fatalf("groupHasEndpoint = %v, %v, want %v, %v", got, err, c.want, c.wantErr)
 			}
 		})
 	}
@@ -341,9 +341,9 @@ func TestSysctlGroupHasArgMemberLeavesMidScan(t *testing.T) {
 				group: func(int) ([]byte, error) { return listing, nil },
 				args:  func(int) ([]byte, error) { return nil, syscall.EINVAL },
 			}
-			got, err := s.groupHasArg(pgid, "/tmp/1-a/i")
+			got, err := s.groupHasEndpoint(pgid, "/tmp/1-a/i")
 			if got || (err != nil) != c.wantErr {
-				t.Fatalf("groupHasArg = %v, %v, want false (error: %v)", got, err, c.wantErr)
+				t.Fatalf("groupHasEndpoint = %v, %v, want false (error: %v)", got, err, c.wantErr)
 			}
 		})
 	}
@@ -355,9 +355,9 @@ func TestSysctlGroupHasArgDistrustsForeignMember(t *testing.T) {
 		group: func(int) ([]byte, error) { return kinfoBytes(pgid+1, pgid+7, 2, 10, 0), nil },
 		args:  func(int) ([]byte, error) { return procArgs2Bytes("/bin/x", []string{"x"}, nil), nil },
 	}
-	got, err := s.groupHasArg(pgid, "/tmp/1-a/i")
+	got, err := s.groupHasEndpoint(pgid, "/tmp/1-a/i")
 	if got || err == nil || !strings.Contains(err.Error(), "reports group") {
-		t.Fatalf("groupHasArg = %v, %v, want an error", got, err)
+		t.Fatalf("groupHasEndpoint = %v, %v, want an error", got, err)
 	}
 }
 
@@ -369,8 +369,8 @@ func TestSysctlGroupHasArgSkipsZombieWithoutGroup(t *testing.T) {
 		group: func(int) ([]byte, error) { return kinfoBytes(pgid, 0, 5, 10, 0), nil },
 		args:  func(int) ([]byte, error) { return nil, syscall.EINVAL },
 	}
-	if got, err := s.groupHasArg(pgid, "/tmp/1-a/i"); got || err != nil {
-		t.Fatalf("groupHasArg = %v, %v, want false with no error", got, err)
+	if got, err := s.groupHasEndpoint(pgid, "/tmp/1-a/i"); got || err != nil {
+		t.Fatalf("groupHasEndpoint = %v, %v, want false with no error", got, err)
 	}
 }
 
@@ -382,7 +382,7 @@ func TestSysctlGroupHasArgMalformedArgumentsAreUnknown(t *testing.T) {
 		group: func(int) ([]byte, error) { return listing, nil },
 		args:  func(int) ([]byte, error) { return []byte("\x05\x00\x00\x00/bin/x\x00\x00x\x00"), nil },
 	}
-	if got, err := s.groupHasArg(pgid, "/tmp/1-a/i"); got || err == nil {
-		t.Fatalf("groupHasArg = %v, %v, want an error", got, err)
+	if got, err := s.groupHasEndpoint(pgid, "/tmp/1-a/i"); got || err == nil {
+		t.Fatalf("groupHasEndpoint = %v, %v, want an error", got, err)
 	}
 }

@@ -219,43 +219,37 @@ func TestInputConfWriteFailureWithCustomCommandKeepsCommand(t *testing.T) {
 	}
 }
 
-// Unix rejects a shared fallback before writing input.conf. Windows keeps
-// playing without input.conf when the temp directory is outside the profile.
-func TestSharedFallbackDirectory(t *testing.T) {
+// No Windows, o diretório temporário fora do perfil faz a sessão tocar sem
+// input.conf. No Unix o fallback é sempre um diretório novo e privado, e o
+// input.conf vai para ele.
+func TestFallbackOutsideProfile(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", t.TempDir())
-	base := t.TempDir()
-	defer setFallbackBaseDirForTest(base)()
-	dir, _, err := fallbackLocation(1)
-	if err != nil {
-		t.Fatalf("fallbackLocation: %v", err)
-	}
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		t.Fatalf("Mkdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	if err := os.Chmod(dir, 0o755); err != nil {
-		t.Fatalf("Chmod: %v", err)
-	}
+	defer setFallbackBaseDirForTest(t.TempDir())()
 
 	mgr := newTestManager(t, "play", Options{RuntimeDir: unusableRuntimeDir(t)})
 	gen, err := mgr.Start(testTarget("shared"))
-	if runtime.GOOS != "windows" {
-		if err == nil {
-			t.Fatal("Start accepted a shared fallback directory")
-		}
-		return
-	}
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if ev := waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second); !ev.InputConfFailed {
+	ev := waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+	mgr.mu.Lock()
+	dir := mgr.session.dir
+	mgr.mu.Unlock()
+	_, statErr := os.Lstat(filepath.Join(dir, inputConfName))
+	if runtime.GOOS != "windows" {
+		if ev.InputConfFailed || statErr != nil {
+			t.Fatalf("InputConfFailed = %v, input.conf: %v; want it in the private fallback", ev.InputConfFailed, statErr)
+		}
+		return
+	}
+	if !ev.InputConfFailed {
 		t.Fatal("playing event has no InputConfFailed")
 	}
 	if mgr.InputConfErr() == nil {
 		t.Fatal("InputConfErr = nil")
 	}
-	if _, err := os.Lstat(filepath.Join(dir, inputConfName)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("input.conf written to a shared directory: %v", err)
+	if !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("input.conf written outside the profile: %v", statErr)
 	}
 }
 

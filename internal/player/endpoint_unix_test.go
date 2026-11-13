@@ -5,7 +5,6 @@ package player
 import (
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -36,30 +35,6 @@ func TestEndpointInDirRejectsLongSocketPath(t *testing.T) {
 	}
 }
 
-func TestFallbackDropsStaleEndpoint(t *testing.T) {
-	base := t.TempDir()
-	defer setFallbackBaseDirForTest(base)()
-	dir := filepath.Join(base, "ttv-tui-"+strconv.Itoa(os.Getpid())+"-9")
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		t.Fatalf("Mkdir: %v", err)
-	}
-	stale := filepath.Join(dir, "i")
-	if err := os.WriteFile(stale, nil, 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	l, err := prepareSession(filepath.Join(t.TempDir(), strings.Repeat("x", 120)), 9)
-	if err != nil {
-		t.Fatalf("prepareSession: %v", err)
-	}
-	if l.Dir != dir || l.Endpoint != stale {
-		t.Fatalf("layout = %+v, want the fallback %q", l, dir)
-	}
-	if _, err := os.Lstat(stale); !os.IsNotExist(err) {
-		t.Fatalf("stale endpoint not removed: %v", err)
-	}
-}
-
 // A $TMPDIR that cannot hold the socket must not cost the session: it used to
 // work from /tmp and still does.
 func TestFallbackLeavesTempDirTooLongForTheSocket(t *testing.T) {
@@ -71,8 +46,8 @@ func TestFallbackLeavesTempDirTooLongForTheSocket(t *testing.T) {
 		t.Fatalf("prepareSession: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(l.Dir) })
-	if want := filepath.Join(shortFallbackBaseDir, "ttv-tui-"+strconv.Itoa(os.Getpid())+"-11"); l.Dir != want {
-		t.Fatalf("Dir = %q, want %q", l.Dir, want)
+	if filepath.Dir(l.Dir) != shortFallbackBaseDir || !strings.HasPrefix(filepath.Base(l.Dir), "ttv-tui-11-") {
+		t.Fatalf("Dir = %q, want %s/ttv-tui-11-<aleatório>", l.Dir, shortFallbackBaseDir)
 	}
 	if len(l.Endpoint) > maxSocketPathLen {
 		t.Fatalf("endpoint %q exceeds %d bytes", l.Endpoint, maxSocketPathLen)
@@ -90,5 +65,67 @@ func TestEndpointInDirSocketLimitBoundary(t *testing.T) {
 	}
 	if err := checkRuntimeDirFits(strings.Repeat("r", maxSocketPathLen), 1); err == nil {
 		t.Fatal("checkRuntimeDirFits must refuse a runtime dir that cannot hold the socket")
+	}
+}
+
+// O fallback só fica no diretório temporário quando o pior nome que o
+// MkdirTemp pode sortear ainda cabe no sun_path; senão vai para /tmp.
+func TestFallbackBaseCabeNoSunPath(t *testing.T) {
+	const gen = 12
+	// "<base>/ttv-tui-12-<até 10 dígitos>/i"
+	overhead := len("/ttv-tui-12-") + len(mkdirTempSuffixMax) + len("/i")
+	for _, tc := range []struct {
+		nome    string
+		baseLen int
+		want    string // "base" ou "short"
+	}{
+		{"curta", 20, "base"},
+		{"no limite", maxSocketPathLen - overhead, "base"},
+		{"um byte além", maxSocketPathLen - overhead + 1, "short"},
+		{"muito longa", 300, "short"},
+	} {
+		t.Run(tc.nome, func(t *testing.T) {
+			base := "/" + strings.Repeat("b", tc.baseLen-1)
+			defer setFallbackBaseDirForTest(base)()
+			got, err := fallbackBase(gen)
+			if err != nil {
+				t.Fatalf("fallbackBase: %v", err)
+			}
+			want := base
+			if tc.want == "short" {
+				want = shortFallbackBaseDir
+			}
+			if got != want {
+				t.Fatalf("fallbackBase = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// Com uma base longa, todo diretório que o fallback cria comporta o socket.
+func TestFallbackComBaseLongaCabeNoSunPath(t *testing.T) {
+	root, err := os.MkdirTemp("/tmp", "longbase-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	overhead := len("/ttv-tui-5-") + len(mkdirTempSuffixMax) + len("/i")
+	base := filepath.Join(root, strings.Repeat("l", maxSocketPathLen-overhead-len(root)-1))
+	if err := os.Mkdir(base, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	defer setFallbackBaseDirForTest(base)()
+	for range 20 {
+		l, err := prepareSession("", 5)
+		if err != nil {
+			t.Fatalf("prepareSession: %v", err)
+		}
+		if filepath.Dir(l.Dir) != base {
+			t.Fatalf("Dir = %q, want it under %q", l.Dir, base)
+		}
+		if len(l.Endpoint) > maxSocketPathLen {
+			t.Fatalf("endpoint %q has %d bytes > %d", l.Endpoint, len(l.Endpoint), maxSocketPathLen)
+		}
+		_ = os.RemoveAll(l.Dir)
 	}
 }

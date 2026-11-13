@@ -8,66 +8,6 @@ import (
 	"testing"
 )
 
-// posixShlexSplit mirrors Python's shlex.split(s) (posix=True, comments=False),
-// which is what streamlink applies to --player-args.
-func posixShlexSplit(s string) ([]string, error) {
-	var (
-		out    []string
-		cur    []byte
-		inWord bool
-	)
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch c {
-		case ' ', '\t', '\r', '\n':
-			if inWord {
-				out = append(out, string(cur))
-				cur, inWord = nil, false
-			}
-		case '\'':
-			inWord = true
-			end := strings.IndexByte(s[i+1:], '\'')
-			if end < 0 {
-				return nil, fmt.Errorf("no closing quotation")
-			}
-			cur = append(cur, s[i+1:i+1+end]...)
-			i += end + 1
-		case '"':
-			inWord = true
-			closed := false
-			for i++; i < len(s); i++ {
-				d := s[i]
-				if d == '"' {
-					closed = true
-					break
-				}
-				if d == '\\' && i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\\') {
-					i++
-					d = s[i]
-				}
-				cur = append(cur, d)
-			}
-			if !closed {
-				return nil, fmt.Errorf("no closing quotation")
-			}
-		case '\\':
-			inWord = true
-			if i+1 >= len(s) {
-				return nil, fmt.Errorf("no escaped character")
-			}
-			i++
-			cur = append(cur, s[i])
-		default:
-			inWord = true
-			cur = append(cur, c)
-		}
-	}
-	if inWord {
-		out = append(out, string(cur))
-	}
-	return out, nil
-}
-
 var playerArgsCases = []struct {
 	name string
 	argv []string

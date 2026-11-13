@@ -4,10 +4,16 @@ package player
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/pedrosatin/ttv-tui/internal/config"
 )
 
 func TestRuntimeBasePrivacy(t *testing.T) {
@@ -99,25 +105,72 @@ func TestRuntimeBaseForeignOwner(t *testing.T) {
 	}
 }
 
-func TestFallbackRejectsSharedDirectory(t *testing.T) {
-	restore := setFallbackBaseDirForTest(privateDir(t))
-	t.Cleanup(restore)
-	dir, _, err := fallbackLocation(1)
+// squatDir cria dir com modo 0755, como faria outro usuário local. O sandbox de
+// teste tem um só uid: os bits de grupo e outros caem na mesma checagem que um
+// dono estranho.
+func squatDir(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Outro usuário ocupa em /tmp os nomes que o app usava: o diretório de runtime
+// sem XDG_RUNTIME_DIR e os fallbacks ttv-tui-<pid>-<gen>. A sessão abre mesmo
+// assim, num diretório novo e privado, e o streamlink é iniciado.
+func TestSessaoAbreComNomesOcupadosEmTmp(t *testing.T) {
+	skipWithoutSocketFile(t)
+	base, err := os.MkdirTemp("/tmp", "squat-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(dir, 0o777); err != nil {
-		t.Fatal(err)
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	useTempDir(t, base)
+	t.Setenv("XDG_RUNTIME_DIR", "")
+
+	runtimeDir := config.RuntimeDir()
+	if runtimeDir != filepath.Join(base, "ttv-tui") {
+		t.Fatalf("RuntimeDir = %q, want it under the isolated temp dir %q", runtimeDir, base)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	if err := os.Chmod(dir, 0o777); err != nil {
-		t.Fatal(err)
+	squatDir(t, runtimeDir)
+	for gen := 1; gen <= 3; gen++ {
+		squatDir(t, filepath.Join(base, fmt.Sprintf("ttv-tui-%d-%d", os.Getpid(), gen)))
 	}
-	layout, err := prepareSession("", 1)
-	if err == nil {
-		t.Fatalf("session accepted shared fallback directory: %q", layout.Dir)
+
+	var spawned atomic.Int32
+	play := helperCommand("play")
+	mgr := New(Options{
+		Command: func(target Target, socket string) *exec.Cmd {
+			spawned.Add(1)
+			return play(target, socket)
+		},
+		SocketWait: 5 * time.Second,
+		StopWait:   500 * time.Millisecond,
+	})
+	t.Cleanup(mgr.Close)
+
+	for range 2 {
+		gen, err := mgr.Start(testTarget("squat"))
+		if err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+		mgr.mu.Lock()
+		dir := mgr.session.dir
+		mgr.mu.Unlock()
+		fi, err := os.Lstat(dir)
+		if err != nil || !fi.IsDir() || fi.Mode().Perm() != 0o700 {
+			t.Fatalf("session dir %q: %v, %v; want a 0700 directory", dir, fi, err)
+		}
+		if filepath.Dir(dir) != base || !strings.HasPrefix(filepath.Base(dir), fmt.Sprintf("ttv-tui-%d-", gen)) {
+			t.Fatalf("session dir = %q, want %s/ttv-tui-%d-<aleatório>", dir, base, gen)
+		}
 	}
-	if layout.Dir != "" {
-		t.Errorf("session returned rejected fallback directory: %q", layout.Dir)
+	if got := spawned.Load(); got != 2 {
+		t.Fatalf("streamlink started %d times, want 2", got)
 	}
+	mgr.Stop()
 }

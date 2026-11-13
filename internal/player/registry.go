@@ -62,9 +62,19 @@ const (
 var (
 	// procStartTime returns the start time of pid, or 0 when pid is gone.
 	procStartTime = osProcStartTime
-	// groupHasArg reports whether a live member of the group carries arg in its
-	// command line.
-	groupHasArg = osGroupHasArg
+	// groupHasEndpoint reports whether a live member of the group is the player
+	// of the endpoint (argvCarriesEndpoint on its argv).
+	groupHasEndpoint = osGroupHasEndpoint
+)
+
+// groupSignal é o sinal que Terminate manda a um grupo órfão, por
+// osSignalPlayerGroup: ela confere a identidade do grupo e só então sinaliza. No
+// Linux com pidfd, a conferência e o sinal miram os mesmos processos.
+type groupSignal int
+
+const (
+	signalTerm groupSignal = iota
+	signalKill
 )
 
 // errOwnerUnproven is the answer for a running PID whose record has no start time
@@ -205,20 +215,25 @@ func scanRegistry(dir string, cleanup bool) ([]Orphan, bool, error) {
 }
 
 // Terminate stops the orphaned process group (SIGTERM, then SIGKILL after wait)
-// and removes its socket and record. It re-checks the group identity first so a
-// recycled process group is never signalled, and it stops without touching
-// anything when the OS cannot confirm that identity.
+// and removes its socket and record. Each signal goes only after the group
+// identity is checked again, so a group recycled while the user decided, or
+// between the SIGTERM and the SIGKILL, is never signalled. When the OS cannot
+// confirm that identity it stops without touching anything.
 func (o Orphan) Terminate(wait time.Duration) error {
-	isPlayer, err := groupIsPlayer(o.PGID, o.Socket)
+	sent, err := osSignalPlayerGroup(o.PGID, o.Socket, signalTerm)
 	if err != nil {
 		return fmt.Errorf("player: orphan group %d: %w", o.PGID, err)
 	}
-	if isPlayer {
+	if sent {
 		group := recordedGroup(o.PGID)
-		_ = group.terminate()
 		if !waitGroupGone(group, nil, wait) {
-			_ = group.kill()
-			if !waitGroupGone(group, nil, groupKillWait) {
+			// Quem sobrou depois do prazo só leva SIGKILL se ainda for o player:
+			// o grupo pode ter acabado e o PGID ido para outro processo.
+			killed, err := osSignalPlayerGroup(o.PGID, o.Socket, signalKill)
+			if err != nil {
+				return fmt.Errorf("player: orphan group %d: %w", o.PGID, err)
+			}
+			if killed && !waitGroupGone(group, nil, groupKillWait) {
 				return fmt.Errorf("player: orphan group %d survived SIGKILL", o.PGID)
 			}
 		}
@@ -228,6 +243,23 @@ func (o Orphan) Terminate(wait time.Duration) error {
 		_ = os.Remove(o.path)
 	}
 	return nil
+}
+
+// signalCheckedGroup é a conferência sem pidfd: groupIsPlayer e, se passar, o
+// sinal ao grupo inteiro pelo PGID. Entre as duas chamadas o grupo pode trocar
+// de dono; a janela é curta, e é a que o pidfd fecha no Linux.
+func signalCheckedGroup(pgid int, socket string, sig groupSignal) (bool, error) {
+	isPlayer, err := groupIsPlayer(pgid, socket)
+	if err != nil || !isPlayer {
+		return false, err
+	}
+	group := recordedGroup(pgid)
+	if sig == signalKill {
+		_ = group.kill()
+	} else {
+		_ = group.terminate()
+	}
+	return true, nil
 }
 
 // removeStaleFiles deletes the endpoint, the input.conf and their private dir,
@@ -294,12 +326,13 @@ func waitGroupGone(group processGroup, leaderDone <-chan struct{}, d time.Durati
 }
 
 // groupIsPlayer reports whether a live member of pgid carries the recorded IPC
-// socket path in its command line. The socket lives in a random private dir, so
-// a match proves the group is the player we spawned and not a recycled group id.
+// endpoint as its --input-ipc-server argument, directly (mpv) or inside
+// --player-args (streamlink). The socket lives in a random private dir, so a
+// match proves the group is the player we spawned and not a recycled group id.
 // An error means the OS cannot tell.
 func groupIsPlayer(pgid int, socket string) (bool, error) {
 	if pgid <= 1 || socket == "" || !recordedGroup(pgid).alive() {
 		return false, nil
 	}
-	return groupHasArg(pgid, socket)
+	return groupHasEndpoint(pgid, socket)
 }

@@ -19,8 +19,8 @@ func checkRuntimeDirFits(string, uint64) error {
 // shlex would eat the backslashes). The pipe is not created here and does not
 // live in dir; dir only lends its unique name.
 //
-// Pipe names are global to the machine and a fallback directory's name is
-// predictable, so a random suffix keeps a reused PID from reaching a player an
+// Pipe names are global to the machine and a fallback directory's name can be
+// read by listing the temp directory, so a random suffix keeps a reused PID from reaching a player an
 // earlier process left behind. rand.Text is base32: letters and digits only,
 // which shlex leaves alone.
 func endpointInDir(dir string) (string, error) {

@@ -52,8 +52,8 @@ var maxSocketPathLen = maxSocketPathLenFor(runtime.GOOS)
 // pipeName is the named-pipe endpoint for a session directory. It is only the
 // name, with no separators: streamlink splits --player-args with shlex and mpv
 // prefixes `\\.\pipe\` itself, so a name containing slashes would be taken as a
-// path. The directory's base name is unique per session; callers add what the
-// fallback directory's predictable name cannot promise.
+// path. The directory's base name is unique per session but visible to anyone
+// who lists the temp directory; callers add a random suffix it cannot promise.
 func pipeName(dir string, pid int) string {
 	return "ttv-tui-" + strconv.Itoa(pid) + "-" + filepath.Base(dir)
 }
@@ -103,36 +103,11 @@ func checkDirWritable(dir string) error {
 	return nil
 }
 
-// createFallbackDir makes the temp fallback directory, or reuses one left by an
-// earlier run with the same pid and generation, dropping the stale endpoint.
-func createFallbackDir(dir, endpoint string) error {
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		if os.IsExist(err) {
-			if runtime.GOOS != "windows" {
-				if err := checkPrivateDir(dir); err != nil {
-					return err
-				}
-			}
-			if err := checkDirWritable(dir); err != nil {
-				return fmt.Errorf("fallback directory %q not writable: %w", dir, err)
-			}
-			removeEndpoint(endpoint)
-			return nil
-		}
-		return fmt.Errorf("create fallback directory %q: %w", dir, err)
-	}
-	if err := checkDirWritable(dir); err != nil {
-		_ = os.RemoveAll(dir)
-		return fmt.Errorf("fallback directory %q not writable: %w", dir, err)
-	}
-	return nil
-}
-
 // prepareSession creates the session's private directory and works out its IPC
-// endpoint. It prefers a directory under runtimeDir and falls back to
-// <OS temp dir>/ttv-tui-<pid>-<gen> when that one is unusable (too long an
-// endpoint, not writable). The directory is the same on every OS; the endpoint
-// comes from endpointInDir, which is per OS.
+// endpoint. It prefers a directory under runtimeDir and falls back to a fresh
+// <OS temp dir>/ttv-tui-<gen>-<random> when that one is unusable (too long an
+// endpoint, not writable, not private). The directory is the same on every OS;
+// the endpoint comes from endpointInDir, which is per OS.
 func prepareSession(runtimeDir string, gen uint64) (sessionLayout, error) {
 	var primaryErr error
 	if runtimeDir != "" {
@@ -143,39 +118,70 @@ func prepareSession(runtimeDir string, gen uint64) (sessionLayout, error) {
 		primaryErr = err
 	}
 
-	fallbackDir, fallbackEndpoint, err := fallbackLocation(gen)
+	l, err := prepareFallback(gen)
 	if err != nil {
 		if primaryErr != nil {
 			return sessionLayout{}, fmt.Errorf("player: fallback %w (primary %q: %v)", err, runtimeDir, primaryErr)
 		}
 		return sessionLayout{}, fmt.Errorf("player: fallback %w", err)
 	}
-
-	if err := createFallbackDir(fallbackDir, fallbackEndpoint); err != nil {
-		if primaryErr != nil {
-			return sessionLayout{}, fmt.Errorf("player: %w (primary %q: %v)", err, runtimeDir, primaryErr)
-		}
-		return sessionLayout{}, fmt.Errorf("player: %w", err)
-	}
-
-	return sessionLayout{Dir: fallbackDir, Endpoint: fallbackEndpoint}, nil
+	return l, nil
 }
 
-// fallbackLocation picks the fallback directory and its endpoint: the OS temp
-// directory, or shortFallbackBaseDir when a long $TMPDIR cannot hold the socket.
-// It touches nothing on disk.
-func fallbackLocation(gen uint64) (dir, endpoint string, err error) {
-	name := fmt.Sprintf("ttv-tui-%d-%d", os.Getpid(), gen)
-	dir = filepath.Join(getFallbackBaseDir(), name)
-	endpoint, err = endpointInDir(dir)
+// fallbackPrefix é o começo do nome do diretório de fallback. O os.MkdirTemp
+// completa com um sufixo aleatório: um nome fixo em /tmp deixava outro usuário
+// local criá-lo antes e impedir a reprodução.
+func fallbackPrefix(gen uint64) string {
+	return fmt.Sprintf("ttv-tui-%d-", gen)
+}
+
+// mkdirTempSuffixMax é o maior sufixo que o os.MkdirTemp acrescenta: um uint32
+// em decimal.
+const mkdirTempSuffixMax = "4294967295"
+
+// fallbackBase escolhe onde criar o diretório de fallback: o diretório temporário
+// do sistema ou, quando um $TMPDIR longo não comporta o socket, o
+// shortFallbackBaseDir. A conta usa o maior sufixo possível, então qualquer nome
+// que o MkdirTemp sortear cabe no sun_path. Não toca no disco.
+func fallbackBase(gen uint64) (string, error) {
+	worst := fallbackPrefix(gen) + mkdirTempSuffixMax
+	base := getFallbackBaseDir()
+	_, err := endpointInDir(filepath.Join(base, worst))
 	if err == nil {
-		return dir, endpoint, nil
+		return base, nil
 	}
-	short := filepath.Join(shortFallbackBaseDir, name)
-	if endpoint, shortErr := endpointInDir(short); shortErr == nil {
-		return short, endpoint, nil
+	if _, shortErr := endpointInDir(filepath.Join(shortFallbackBaseDir, worst)); shortErr == nil {
+		return shortFallbackBaseDir, nil
 	}
-	return "", "", err
+	return "", err
+}
+
+// prepareFallback cria um diretório novo, privado e de nome aleatório para a
+// sessão. Nunca reaproveita um diretório que já existe: o MkdirTemp tenta outro
+// nome quando o sorteado está ocupado.
+func prepareFallback(gen uint64) (sessionLayout, error) {
+	base, err := fallbackBase(gen)
+	if err != nil {
+		return sessionLayout{}, err
+	}
+	dir, err := os.MkdirTemp(base, fallbackPrefix(gen))
+	if err != nil {
+		return sessionLayout{}, fmt.Errorf("create fallback directory: %w", err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		_ = os.RemoveAll(dir)
+		return sessionLayout{}, fmt.Errorf("fallback directory %q: %w", dir, err)
+	}
+	endpoint, err := endpointInDir(dir)
+	if err != nil {
+		_ = os.RemoveAll(dir)
+		return sessionLayout{}, err
+	}
+	if err := checkDirWritable(dir); err != nil {
+		_ = os.RemoveAll(dir)
+		return sessionLayout{}, fmt.Errorf("fallback directory %q not writable: %w", dir, err)
+	}
+	return sessionLayout{Dir: dir, Endpoint: endpoint}, nil
 }
 
 // prepareIn builds the preferred layout under runtimeDir. Any error means "use

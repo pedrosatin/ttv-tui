@@ -41,7 +41,7 @@ func testTarget(name string) Target {
 func helperCommand(mode string) CommandFunc {
 	return func(target Target, socketPath string) *exec.Cmd {
 		login := target.Identity()
-		cmd := exec.Command(os.Args[0], "--", login, socketPath)
+		cmd := exec.Command(os.Args[0], "--", login, ipcServerFlag+socketPath)
 		cmd.Env = append(os.Environ(),
 			"TTV_PLAYER_HELPER=1",
 			"TTV_PLAYER_HELPER_MODE="+mode,
@@ -680,6 +680,8 @@ func runPlayerHelper() {
 		helperTermParentStubbornChild(socket, login)
 	case "stubborn-child":
 		helperStubbornChild()
+	case "swap-on-term":
+		helperSwapOnTerm()
 	case "session-owner":
 		helperSessionOwner()
 	default:
@@ -1766,7 +1768,7 @@ func TestFallbackNotWritableReturnsError(t *testing.T) {
 		t.Fatal("expected Start to fail when fallback is not writable")
 	}
 
-	expectedPath := filepath.Join(roBase, fmt.Sprintf("ttv-tui-%d-%d", os.Getpid(), gen))
+	expectedPath := filepath.Join(roBase, fmt.Sprintf("ttv-tui-%d-", gen))
 	errMsg := err.Error()
 
 	// Verify that error states the attempted path

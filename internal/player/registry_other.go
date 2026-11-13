@@ -11,7 +11,7 @@ import (
 // tell", never "gone". FindOrphans keeps every record it cannot judge, and no
 // orphan is detected or killed here.
 
-func osGroupHasArg(int, string) (bool, error) {
+func osGroupHasEndpoint(int, string) (bool, error) {
 	return false, fmt.Errorf("player: inspect process group: %w", errors.ErrUnsupported)
 }
 

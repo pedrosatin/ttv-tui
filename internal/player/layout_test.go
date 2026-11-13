@@ -1,7 +1,6 @@
 package player
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,9 +84,8 @@ func TestFallbackGoesToOSTempDir(t *testing.T) {
 				t.Fatalf("prepareSession: %v", err)
 			}
 			t.Cleanup(func() { _ = os.RemoveAll(l.Dir) })
-			want := filepath.Join(base, fmt.Sprintf("ttv-tui-%d-7", os.Getpid()))
-			if l.Dir != want {
-				t.Fatalf("Dir = %q, want %q", l.Dir, want)
+			if filepath.Dir(l.Dir) != base || !strings.HasPrefix(filepath.Base(l.Dir), "ttv-tui-7-") {
+				t.Fatalf("Dir = %q, want %s/ttv-tui-7-<aleatório>", l.Dir, base)
 			}
 			if fi, err := os.Stat(l.Dir); err != nil || !fi.IsDir() {
 				t.Fatalf("fallback directory: %v, %v", fi, err)

@@ -270,10 +270,10 @@ func (s liveSession) assertCleared(t *testing.T, record string) {
 // useKernel makes the registry judge with the Darwin code path, on any OS.
 func useKernel(t *testing.T, k fakeKernel) {
 	t.Helper()
-	origStart, origArg := procStartTime, groupHasArg
-	t.Cleanup(func() { procStartTime, groupHasArg = origStart, origArg })
+	origStart, origArg := procStartTime, groupHasEndpoint
+	t.Cleanup(func() { procStartTime, groupHasEndpoint = origStart, origArg })
 	procStartTime = k.procs().startTime
-	groupHasArg = k.procs().groupHasArg
+	groupHasEndpoint = k.procs().groupHasEndpoint
 }
 
 func findNoOrphans(t *testing.T, regDir string) {
@@ -448,4 +448,85 @@ func TestOwnerWithoutStartTimeIsJudgedOnlyWhenGone(t *testing.T) {
 	if owned, err := ownerAlive(Record{OwnerPID: testOwnerPID}); owned || err != nil {
 		t.Fatalf("ownerAlive(gone) = %v, %v, want false with no error", owned, err)
 	}
+}
+
+// Um processo vivo com o caminho do socket em outro argumento não é o player:
+// FindOrphans não o aponta e ninguém o sinaliza. O argumento exato, direto ou
+// dentro de --player-args, continua apontando o órfão.
+func TestOrfaoSoComArgumentoExatoDoSocket(t *testing.T) {
+	traceKernel(t)
+	for _, tc := range []struct {
+		nome     string
+		args     func(socket string) []string
+		isOrphan bool
+	}{
+		{"--title com o socket", func(s string) []string { return []string{"--title=" + s} }, false},
+		{"socket solto", func(s string) []string { return []string{s} }, false},
+		{"socket com sufixo", func(s string) []string { return []string{ipcServerFlag + s + ".bak"} }, false},
+		{"--input-ipc-server exato", func(s string) []string { return []string{ipcServerFlag + s} }, true},
+		{"--player-args do streamlink", func(s string) []string {
+			return []string{"--player-args", buildPlayerArgs(mpvArgs(s, ""))}
+		}, true},
+	} {
+		t.Run(tc.nome, func(t *testing.T) {
+			s := startLiveSession(t)
+			pgid := startHelperGroup(t, "idle-child", nil, tc.args(s.socket)...).Process.Pid
+			rec, err := writeRecord(s.regDir, Record{OwnerPID: deadPid(t), OwnerStart: 1, PGID: pgid, Socket: s.socket, Dir: s.sockDir, Generation: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			orphans, err := FindOrphans(s.regDir)
+			if err != nil {
+				t.Fatalf("FindOrphans: %v", err)
+			}
+			if got := len(orphans) == 1 && orphans[0].PGID == pgid; got != tc.isOrphan {
+				t.Fatalf("orphans = %+v, want isOrphan = %v", orphans, tc.isOrphan)
+			}
+			if !tc.isOrphan {
+				if !processAlive(pgid) {
+					t.Fatalf("group %d was signalled", pgid)
+				}
+				if _, err := os.Stat(rec); !os.IsNotExist(err) {
+					t.Fatalf("record of a group that is not the player kept: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// O grupo deixa de ser o player entre o SIGTERM e o SIGKILL (o processo se
+// troca por exec, com o mesmo PID e o mesmo grupo): Terminate não manda SIGKILL.
+func TestTerminateNaoMandaSigkillAoGrupoTrocado(t *testing.T) {
+	traceKernel(t)
+	assertTerminateSparesSwappedGroup(t)
+}
+
+func assertTerminateSparesSwappedGroup(t *testing.T) {
+	t.Helper()
+	s := startLiveSession(t)
+	ready := filepath.Join(t.TempDir(), "ready")
+	cmd := startHelperGroup(t, "swap-on-term", []string{"TTV_PLAYER_HELPER_READY=" + ready}, ipcServerFlag+s.socket)
+	pgid := cmd.Process.Pid
+	if got := waitPidFile(t, ready, 5*time.Second); got != pgid {
+		t.Fatalf("ready pid = %d, want %d", got, pgid)
+	}
+	record, err := writeRecord(s.regDir, Record{OwnerPID: deadPid(t), OwnerStart: 1, PGID: pgid, Socket: s.socket, Dir: s.sockDir, Generation: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	orphans, err := FindOrphans(s.regDir)
+	if err != nil || len(orphans) != 1 {
+		t.Fatalf("FindOrphans = %+v, %v; want the group %d", orphans, err, pgid)
+	}
+
+	if err := orphans[0].Terminate(time.Second); err != nil {
+		t.Fatalf("Terminate: %v", err)
+	}
+	if !processAlive(pgid) {
+		t.Fatalf("group %d got SIGKILL after it stopped being the player", pgid)
+	}
+	if ok, err := groupIsPlayer(pgid, s.socket); ok || err != nil {
+		t.Fatalf("groupIsPlayer after the swap = %v, %v; the helper did not swap", ok, err)
+	}
+	s.assertCleared(t, record)
 }

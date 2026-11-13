@@ -45,11 +45,11 @@ func TestOSGroupHasArgReadsArgvOfRealGroup(t *testing.T) {
 	socket := "/nonexistent/argv/i"
 	pgid := startIdleGroup(t, socket).Process.Pid
 
-	if found, err := osGroupHasArg(pgid, socket); !found || err != nil {
-		t.Fatalf("osGroupHasArg(argv) = %v, %v, want true", found, err)
+	if found, err := osGroupHasEndpoint(pgid, socket); !found || err != nil {
+		t.Fatalf("osGroupHasEndpoint(argv) = %v, %v, want true", found, err)
 	}
-	if found, err := osGroupHasArg(pgid, "/nonexistent/other/i"); found || err != nil {
-		t.Fatalf("osGroupHasArg(other) = %v, %v, want false", found, err)
+	if found, err := osGroupHasEndpoint(pgid, "/nonexistent/other/i"); found || err != nil {
+		t.Fatalf("osGroupHasEndpoint(other) = %v, %v, want false", found, err)
 	}
 }
 
@@ -70,9 +70,9 @@ func TestOSGroupHasArgIgnoresEnvironment(t *testing.T) {
 		_ = cmd.Wait()
 	})
 
-	found, err := osGroupHasArg(cmd.Process.Pid, needle)
+	found, err := osGroupHasEndpoint(cmd.Process.Pid, needle)
 	if err != nil {
-		t.Fatalf("osGroupHasArg: %v", err)
+		t.Fatalf("osGroupHasEndpoint: %v", err)
 	}
 	if found {
 		t.Fatal("environment taken for argv")
@@ -85,8 +85,8 @@ func TestOSGroupHasArgIgnoresEnvironment(t *testing.T) {
 // under -v, never the arguments themselves.
 func traceKernel(t *testing.T) {
 	t.Helper()
-	origStart, origArg := procStartTime, groupHasArg
-	t.Cleanup(func() { procStartTime, groupHasArg = origStart, origArg })
+	origStart, origArg := procStartTime, groupHasEndpoint
+	t.Cleanup(func() { procStartTime, groupHasEndpoint = origStart, origArg })
 
 	traced := traceProcs(t.Logf, darwinProcs)
 	listGroup := traced.group
@@ -100,9 +100,9 @@ func traceKernel(t *testing.T) {
 		t.Logf("procStartTime(%d) = %d, %v", pid, start, err)
 		return start, err
 	}
-	groupHasArg = func(pgid int, arg string) (bool, error) {
-		found, err := traced.groupHasArg(pgid, arg)
-		t.Logf("groupHasArg(%d, %q) = %v, %v", pgid, arg, found, err)
+	groupHasEndpoint = func(pgid int, arg string) (bool, error) {
+		found, err := traced.groupHasEndpoint(pgid, arg)
+		t.Logf("groupHasEndpoint(%d, %q) = %v, %v", pgid, arg, found, err)
 		return found, err
 	}
 }
@@ -168,7 +168,7 @@ func describeRow(row unix.KinfoProc) string {
 		row.Eproc.Pcred.P_ruid, row.Proc.P_stat, comm)
 }
 
-// explainMember reads one member's arguments the way groupHasArg does and says what
+// explainMember reads one member's arguments the way groupHasEndpoint does and says what
 // the kernel answered. It returns false for an answer xnu gives no reason for:
 // sysctl_procargsx refuses a process it cannot find, or one with another effective
 // uid unless the caller is root, and that uid is the e_ucred.cr_uid of the listing.
@@ -263,10 +263,10 @@ func TestKernelRefusesArgumentsOfAnotherUser(t *testing.T) {
 	if !errors.Is(err, syscall.EINVAL) {
 		t.Fatalf("kern.procargs2 of launchd: %v, want EINVAL", err)
 	}
-	found, err := osGroupHasArg(launchd, "/nonexistent/launchd/i")
-	t.Logf("osGroupHasArg(%d) = %v, %v", launchd, found, err)
+	found, err := osGroupHasEndpoint(launchd, "/nonexistent/launchd/i")
+	t.Logf("osGroupHasEndpoint(%d) = %v, %v", launchd, found, err)
 	if found || err == nil {
-		t.Fatalf("osGroupHasArg(launchd) = %v, %v, want false with an error", found, err)
+		t.Fatalf("osGroupHasEndpoint(launchd) = %v, %v, want false with an error", found, err)
 	}
 }
 
@@ -298,6 +298,6 @@ func TestKernelExplainsEveryMemberOfTheTestGroup(t *testing.T) {
 			t.Errorf("no documented reason for %s: %s", describeRow(row), verdict)
 		}
 	}
-	found, err := osGroupHasArg(pgid, "/nonexistent/test-group/i")
-	t.Logf("osGroupHasArg(%d) = %v, %v", pgid, found, err)
+	found, err := osGroupHasEndpoint(pgid, "/nonexistent/test-group/i")
+	t.Logf("osGroupHasEndpoint(%d) = %v, %v", pgid, found, err)
 }

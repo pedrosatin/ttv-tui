@@ -16,9 +16,9 @@ import (
 // PID and its player's PID are both gone. If Windows reused either one, the record
 // waits for a later run, which costs a few small files and nothing else.
 
-// osGroupHasArg cannot answer: reading another process's command line needs its
+// osGroupHasEndpoint cannot answer: reading another process's command line needs its
 // PEB, and a PID alone would not make the answer about our player anyway.
-func osGroupHasArg(int, string) (bool, error) {
+func osGroupHasEndpoint(int, string) (bool, error) {
 	return false, fmt.Errorf("player: inspect process group on windows: %w", errors.ErrUnsupported)
 }
 

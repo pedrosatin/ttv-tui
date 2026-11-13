@@ -66,3 +66,8 @@ func killPid(pid int) {
 		_ = p.Release()
 	}
 }
+
+// helperSwapOnTerm não existe no Windows: lá nenhum órfão é sinalizado.
+func helperSwapOnTerm() {
+	os.Exit(2)
+}

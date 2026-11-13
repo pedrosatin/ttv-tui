@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"strings"
 )
 
 // Reading the Darwin process table. Only the three sysctl calls in
@@ -123,12 +122,13 @@ func (s sysctlProcs) startTime(pid int) (uint64, error) {
 	return procs[0].start, nil
 }
 
-// groupHasArg reports whether a live member of pgid carries arg in its argv. "No"
+// groupHasEndpoint reports whether a live member of pgid is the player of
+// endpoint, as argvCarriesEndpoint judges its argv. "No"
 // needs every member read: the kernel refuses another user's arguments with the
 // same EINVAL it gives for a process that is gone, so a member it refuses counts
 // as unknown unless its start time proves that member left. A match in any member
 // is proof on its own.
-func (s sysctlProcs) groupHasArg(pgid int, arg string) (bool, error) {
+func (s sysctlProcs) groupHasEndpoint(pgid int, endpoint string) (bool, error) {
 	raw, err := s.group(pgid)
 	if err != nil {
 		return false, fmt.Errorf("player: list process group %d: %w", pgid, err)
@@ -153,10 +153,8 @@ func (s sysctlProcs) groupHasArg(pgid int, arg string) (bool, error) {
 			}
 			continue
 		}
-		for _, a := range argv {
-			if strings.Contains(a, arg) {
-				return true, nil
-			}
+		if argvCarriesEndpoint(argv, endpoint) {
+			return true, nil
 		}
 	}
 	return false, unknown

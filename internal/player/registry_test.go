@@ -26,7 +26,7 @@ func helperTermParentStubbornChild(socket, login string) {
 		fmt.Fprintln(os.Stderr, "term-parent-stubborn-child needs TTV_PLAYER_HELPER_SOCKET")
 		os.Exit(2)
 	}
-	child := exec.Command(os.Args[0], "--", login, socket)
+	child := exec.Command(os.Args[0], "--", login, ipcServerFlag+socket)
 	child.Env = append(os.Environ(), "TTV_PLAYER_HELPER_MODE=stubborn-child")
 	if err := child.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "start child: %v\n", err)
@@ -221,8 +221,15 @@ func TestRemoveStaleFilesLeavesUnknownLayoutAlone(t *testing.T) {
 // mpv's --input-ipc-server, and reaps it once it dies.
 func startIdleGroup(t *testing.T, socket string) *exec.Cmd {
 	t.Helper()
-	cmd := exec.Command(os.Args[0], "--", "idle", socket)
-	cmd.Env = append(os.Environ(), "TTV_PLAYER_HELPER=1", "TTV_PLAYER_HELPER_MODE=idle-child")
+	return startHelperGroup(t, "idle-child", nil, "idle", ipcServerFlag+socket)
+}
+
+// startHelperGroup inicia o helper no modo dado, num grupo próprio, com args no
+// argv depois de "--", e o colhe quando ele morre.
+func startHelperGroup(t *testing.T, mode string, env []string, args ...string) *exec.Cmd {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], append([]string{"--"}, args...)...)
+	cmd.Env = append(append(os.Environ(), "TTV_PLAYER_HELPER=1", "TTV_PLAYER_HELPER_MODE="+mode), env...)
 	configureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start idle group: %v", err)
@@ -249,10 +256,10 @@ func startIdleGroup(t *testing.T, socket string) *exec.Cmd {
 // cannotInspect makes the registry behave as on an OS with no process inspection.
 func cannotInspect(t *testing.T) {
 	t.Helper()
-	origStart, origArg := procStartTime, groupHasArg
-	t.Cleanup(func() { procStartTime, groupHasArg = origStart, origArg })
+	origStart, origArg := procStartTime, groupHasEndpoint
+	t.Cleanup(func() { procStartTime, groupHasEndpoint = origStart, origArg })
 	procStartTime = func(int) (uint64, error) { return 0, errors.ErrUnsupported }
-	groupHasArg = func(int, string) (bool, error) { return false, errors.ErrUnsupported }
+	groupHasEndpoint = func(int, string) (bool, error) { return false, errors.ErrUnsupported }
 }
 
 // A second instance on such an OS must not take a live session for a stale one:
