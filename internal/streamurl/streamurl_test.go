@@ -1,6 +1,7 @@
 package streamurl
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/platform"
@@ -395,5 +396,67 @@ func TestParseDistinctStreamsDoNotShareIdentity(t *testing.T) {
 		if a.Label == b.Label || a.Login == b.Login {
 			t.Errorf("%q and %q share identity %q/%q", p[0], p[1], a.Label, a.Login)
 		}
+	}
+}
+
+func TestParseConfereIdentificadorDecodificado(t *testing.T) {
+	recusados := []struct {
+		name  string
+		input string
+	}{
+		{"twitch com CRLF codificado", "https://twitch.tv/a%0D%0Ab"},
+		{"twitch com vírgula e # codificado", "https://twitch.tv/a,%23b"},
+		{"twitch com espaço codificado", "https://twitch.tv/a%20b"},
+		{"twitch com NUL codificado", "https://twitch.tv/a%00"},
+		{"twitch com hífen", "https://twitch.tv/a-b"},
+		{"twitch com login de 26 caracteres", "https://twitch.tv/" + strings.Repeat("a", 26)},
+		{"twitch com sinal Kelvin", "https://twitch.tv/%E2%84%AA"},
+		{"twitch com ESC no resto do caminho", "https://twitch.tv/gaules/%1b"},
+		{"kick com ..", "https://kick.com/.."},
+		{"kick com .. codificado no slug", "https://kick.com/a%2e%2e"},
+		{"kick com ponto no slug", "https://kick.com/a.b"},
+		{"kick com ESC no slug", "https://kick.com/a%1b"},
+		{"kick com LF no slug", "https://kick.com/a%0Ab"},
+		{"kick com .. depois do canal", "https://kick.com/xqc/%2e%2e"},
+		{"kick com slug de 65 caracteres", "https://kick.com/" + strings.Repeat("a", 65)},
+		{"kick com ESC no clip", "https://kick.com/x?clip=%1b"},
+		{"genérico com ESC no caminho", "https://vimeo.com/abc%1bdef"},
+		{"genérico com C1 no caminho", "https://vimeo.com/abc%C2%9Bdef"},
+		{"youtube com BEL em v", "https://www.youtube.com/watch?v=abc%07"},
+		{"youtu.be com ESC no caminho", "https://youtu.be/abc%1b"},
+		{"genérico com ESC em v", "https://www.facebook.com/watch/live/?v=1%1b"},
+	}
+	for _, tc := range recusados {
+		t.Run(tc.name, func(t *testing.T) {
+			if info, ok := Parse(tc.input); ok {
+				t.Fatalf("Parse(%q) = %+v, want recusado", tc.input, info)
+			}
+		})
+	}
+
+	aceitos := []struct {
+		name      string
+		input     string
+		wantLogin string
+		wantLabel string
+	}{
+		{"twitch com maiúscula vira minúscula", "https://twitch.tv/Gaules", "gaules", "gaules"},
+		{"twitch com login de 25 caracteres", "https://twitch.tv/" + strings.Repeat("a", 25), strings.Repeat("a", 25), strings.Repeat("a", 25)},
+		{"twitch com sublinhado", "https://twitch.tv/user_123", "user_123", "user_123"},
+		{"kick com hífen", "https://kick.com/ice-poseidon", "ice-poseidon", "kick:ice-poseidon"},
+		{"kick com maiúscula", "https://kick.com/XQC", "xqc", "kick:xqc"},
+		{"kick com clip", "https://kick.com/xqc?clip=Clip_01", "xqc/clip/clip_01", "kick:xqc/clip/clip_01"},
+		{"youtube com acento no caminho", "https://www.youtube.com/@canal%C3%A7%C3%A3o", "@canalção", "youtube:@canalção"},
+	}
+	for _, tc := range aceitos {
+		t.Run(tc.name, func(t *testing.T) {
+			info, ok := Parse(tc.input)
+			if !ok {
+				t.Fatalf("Parse(%q) recusado, want aceito", tc.input)
+			}
+			if info.Login != tc.wantLogin || info.Label != tc.wantLabel {
+				t.Errorf("Parse(%q) = Login %q Label %q, want %q %q", tc.input, info.Login, info.Label, tc.wantLogin, tc.wantLabel)
+			}
+		})
 	}
 }

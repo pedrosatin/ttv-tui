@@ -82,6 +82,12 @@ func Parse(raw string) (Info, bool) {
 	if host == "" {
 		return Info{}, false
 	}
+	// A checagem de cima vê só o texto colado; %0D%0A, %00 e %1b só aparecem
+	// depois de decodificar, e é o valor decodificado que vira Login e Label.
+	query := u.Query()
+	if decodedHasControl(u.Path, query) {
+		return Info{}, false
+	}
 
 	switch host {
 	case "twitch.tv", "www.twitch.tv", "m.twitch.tv":
@@ -90,8 +96,11 @@ func Parse(raw string) (Info, bool) {
 			return Info{}, false
 		}
 		parts := strings.Split(cleanPath, "/")
-		first := strings.ToLower(parts[0])
+		first := platform.LowerASCII(parts[0])
 		if isTwitchReserved(first) {
+			return Info{}, false
+		}
+		if !platform.ValidTwitchLogin(first) {
 			return Info{}, false
 		}
 		login := first
@@ -112,11 +121,19 @@ func Parse(raw string) (Info, bool) {
 		if len(segs) == 0 {
 			return Info{}, false
 		}
+		channel := platform.LowerASCII(segs[0])
+		if !platform.ValidKickSlug(channel) {
+			return Info{}, false
+		}
+		for _, seg := range segs[1:] {
+			if seg == "." || seg == ".." {
+				return Info{}, false
+			}
+		}
 		id := strings.ToLower(strings.Join(segs, "/"))
-		if clip := u.Query().Get("clip"); clip != "" {
+		if clip := query.Get("clip"); clip != "" {
 			id += "/clip/" + strings.ToLower(clip)
 		}
-		channel := strings.ToLower(segs[0])
 		return Info{
 			URL:         raw,
 			Platform:    platform.Kick,
@@ -134,12 +151,12 @@ func Parse(raw string) (Info, bool) {
 			cleanPath := strings.Trim(u.Path, "/")
 			parts := strings.Split(cleanPath, "/")
 			if len(parts) > 0 && strings.EqualFold(parts[0], "watch") {
-				v := u.Query().Get("v")
+				v := query.Get("v")
 				if v == "" {
 					return Info{}, false
 				}
 				slug = v
-			} else if v := u.Query().Get("v"); v != "" {
+			} else if v := query.Get("v"); v != "" {
 				slug = v
 			} else {
 				slug = cleanSlug(u.Path)
@@ -163,7 +180,7 @@ func Parse(raw string) (Info, bool) {
 		// the whole path. Using only the last segment made different streams
 		// such as two ".../watch/live/?v=" links collide.
 		genericPlat := strings.TrimPrefix(host, "www.")
-		id := u.Query().Get("v")
+		id := query.Get("v")
 		if id == "" {
 			id = strings.Join(pathSegments(u.Path), "/")
 		}
@@ -189,6 +206,25 @@ func Parse(raw string) (Info, bool) {
 func IsStreamURL(raw string) bool {
 	_, ok := Parse(raw)
 	return ok
+}
+
+// decodedHasControl informa se o caminho ou algum parâmetro da query, já
+// decodificados, têm caractere de controle.
+func decodedHasControl(path string, query url.Values) bool {
+	if platform.HasControl(path) {
+		return true
+	}
+	for k, vs := range query {
+		if platform.HasControl(k) {
+			return true
+		}
+		for _, v := range vs {
+			if platform.HasControl(v) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // pathSegments returns the non-empty segments of a URL path.

@@ -37,6 +37,10 @@ const (
 // with 404: no channel has that slug.
 var ErrChannelNotFound = errors.New("kick: channel not found")
 
+// ErrInvalidSlug é o erro de uma consulta cujo slug não segue a gramática da
+// Kick (platform.ValidKickSlug). Ela é recusada antes de qualquer requisição.
+var ErrInvalidSlug = errors.New("kick: invalid channel slug")
+
 // ClientConfig configures a Client. Zero values select production defaults.
 type ClientConfig struct {
 	// BaseURL is the site: channel state, chat room and categories.
@@ -112,15 +116,24 @@ type channelEnvelope struct {
 	} `json:"chatroom"`
 }
 
-// Slug returns the channel slug of ch, or "" when ch is not a live channel
-// page: a recording or a clip has a path under the channel and no live state or
-// chat of its own.
+// Slug devolve o slug do canal de ch, ou "" quando ch não é a página de um canal
+// ao vivo: gravação e clip têm caminho abaixo do canal e nenhum estado ao vivo
+// nem chat próprios. Identificador fora da gramática da Kick também dá "".
 func Slug(ch catalog.Channel) string {
-	slug := strings.ToLower(strings.TrimSpace(ch.StableID()))
-	if slug == "" || strings.ContainsAny(slug, "/?#") {
+	slug := platform.LowerASCII(strings.TrimSpace(ch.StableID()))
+	if !platform.ValidKickSlug(slug) {
 		return ""
 	}
 	return slug
+}
+
+// checkSlug recusa slug fora da gramática da Kick antes que ele entre num
+// caminho de requisição.
+func checkSlug(op, slug string) error {
+	if !platform.ValidKickSlug(slug) {
+		return fmt.Errorf("kick %s %q: %w", op, slug, ErrInvalidSlug)
+	}
+	return nil
 }
 
 // Livestream reports the live state of the channel slug. A channel that is not
@@ -128,6 +141,9 @@ func Slug(ch catalog.Channel) string {
 // error wrapping ErrChannelNotFound.
 func (c *Client) Livestream(ctx context.Context, slug string) (catalog.Channel, error) {
 	const op = "livestream"
+	if err := checkSlug(op, slug); err != nil {
+		return catalog.Channel{}, err
+	}
 	body, err := c.get(ctx, op, "/api/v2/channels/"+url.PathEscape(slug)+"/livestream")
 	if err != nil {
 		return catalog.Channel{}, err
@@ -171,6 +187,9 @@ func parseLivestream(slug string, body []byte) (catalog.Channel, error) {
 // Room finds the chat room of the channel slug.
 func (c *Client) Room(ctx context.Context, slug string) (Room, error) {
 	const op = "channel"
+	if err := checkSlug(op, slug); err != nil {
+		return Room{}, err
+	}
 	body, err := c.get(ctx, op, "/api/v2/channels/"+url.PathEscape(slug))
 	if err != nil {
 		return Room{}, err

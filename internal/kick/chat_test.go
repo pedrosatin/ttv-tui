@@ -384,6 +384,13 @@ func TestChat_FinalErrors(t *testing.T) {
 		{name: "cloudflare block", ch: gaules, rooms: &fakeRooms{errs: []error{blocked}}, reason: catalog.ChatErrorBlocked},
 		{name: "unknown channel", ch: gaules, rooms: &fakeRooms{errs: []error{missing}}, reason: catalog.ChatErrorNoRoom},
 		{name: "unreadable channel", ch: gaules, rooms: &fakeRooms{errs: []error{garbled}}, reason: catalog.ChatErrorNone},
+		{name: "slug fora da gramática", ch: gaules, rooms: &fakeRooms{errs: []error{checkSlug("channel", "..")}}, reason: catalog.ChatErrorNoRoom},
+		{
+			name:   "canal salvo com slug fora da gramática",
+			ch:     catalog.Channel{Platform: platform.Kick, Login: "a\x1bb"},
+			rooms:  &fakeRooms{room: Room{ChatroomID: 668}},
+			reason: catalog.ChatErrorNoRoom,
+		},
 		{
 			name:   "recording has no room",
 			ch:     catalog.Channel{Platform: platform.Kick, Login: "xqc/videos/0a1b", URL: "https://kick.com/xqc/videos/0a1b"},

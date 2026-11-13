@@ -256,3 +256,31 @@ func TestRetryKeepsNonTwitchTarget(t *testing.T) {
 		t.Fatalf("retry target = %+v, want URL preserved", pb.targets)
 	}
 }
+
+func TestPasteURLForaDaGramaticaViraBusca(t *testing.T) {
+	links := []string{
+		"https://twitch.tv/a%0D%0Ab",
+		"https://twitch.tv/a,%23b",
+		"https://kick.com/a%2e%2e",
+		"https://kick.com/x?clip=%1b",
+	}
+	for _, link := range links {
+		t.Run(link, func(t *testing.T) {
+			pb := &fakePlayback{}
+			fc := &fakeChat{}
+			m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(&fakeStore{}))
+
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
+			m = typeRunes(m, link)
+			m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+			m = drainCmd(t, m, cmd)
+
+			if len(pb.started) != 0 || len(fc.joined) != 0 {
+				t.Fatalf("playback %v, chat %v, want nada aberto", pb.started, fc.joined)
+			}
+			if m.Mode() != ModeSearch {
+				t.Fatalf("mode = %q, want ModeSearch", m.Mode())
+			}
+		})
+	}
+}

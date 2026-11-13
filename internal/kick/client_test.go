@@ -236,10 +236,41 @@ func TestSlug(t *testing.T) {
 		{catalog.Channel{Platform: platform.Kick, Login: "xqc/videos/0a1b"}, ""},
 		{catalog.Channel{Platform: platform.Kick, Login: "xqc/clip/clip_01"}, ""},
 		{catalog.Channel{Platform: platform.Kick}, ""},
+		{catalog.Channel{Platform: platform.Kick, Login: "ice-poseidon"}, "ice-poseidon"},
+		{catalog.Channel{Platform: platform.Kick, Login: ".."}, ""},
+		{catalog.Channel{Platform: platform.Kick, Login: "a.b"}, ""},
+		{catalog.Channel{Platform: platform.Kick, Login: "a\x1bb"}, ""},
+		{catalog.Channel{Platform: platform.Kick, Login: "a\r\nb"}, ""},
+		{catalog.Channel{Platform: platform.Kick, Login: "\u212a"}, ""},
+		{catalog.Channel{Platform: platform.Kick, Login: strings.Repeat("a", 65)}, ""},
 	}
 	for _, tc := range tests {
 		if got := Slug(tc.ch); got != tc.want {
 			t.Errorf("Slug(%+v) = %q, want %q", tc.ch, got, tc.want)
 		}
+	}
+}
+
+func TestClient_RecusaSlugForaDaGramaticaSemRequisicao(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		t.Errorf("requisição inesperada: %s", r.URL)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient(ClientConfig{BaseURL: srv.URL})
+
+	slugs := []string{"", ".", "..", "a..", "a.b", "Xqc", "a/b", "a?b", "a#b", "a\x1bb", "a\r\nb", "a\x00", "a b", "\u212a", strings.Repeat("a", 65)}
+	for _, slug := range slugs {
+		if _, err := c.Livestream(context.Background(), slug); !errors.Is(err, ErrInvalidSlug) {
+			t.Errorf("Livestream(%q) err = %v, want ErrInvalidSlug", slug, err)
+		}
+		if _, err := c.Room(context.Background(), slug); !errors.Is(err, ErrInvalidSlug) {
+			t.Errorf("Room(%q) err = %v, want ErrInvalidSlug", slug, err)
+		}
+	}
+	if n := hits.Load(); n != 0 {
+		t.Errorf("%d requisições ao site, want 0", n)
 	}
 }

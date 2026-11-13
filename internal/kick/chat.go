@@ -355,7 +355,7 @@ func (c *Chat) attempt(ctx context.Context, gen uint64, name, slug string, room 
 // a blocked request and an answer that cannot be read do not.
 func lookupError(err error) error {
 	switch {
-	case errors.Is(err, ErrChannelNotFound):
+	case errors.Is(err, ErrChannelNotFound), errors.Is(err, ErrInvalidSlug):
 		return final(catalog.ChatErrorNoRoom, err)
 	case catalog.KindOf(err) == catalog.Bloqueio:
 		return final(catalog.ChatErrorBlocked, err)
