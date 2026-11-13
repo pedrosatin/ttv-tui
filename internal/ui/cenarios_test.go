@@ -83,3 +83,17 @@ func TestCenarioAjudaAberta(t *testing.T) {
 		return m
 	})
 }
+
+// O usuário digita "gaules ao vivo" na busca e aperta Ctrl+Backspace, que chega
+// como Alt+Backspace: some a última palavra, e a lista continua à vista.
+func TestCenarioCtrlBackspaceNaBusca(t *testing.T) {
+	eachSize(t, "ctrl-backspace-na-busca", func(t *testing.T, width, height int) Model {
+		m, _ := newScenario(t, width, height)
+		m = play(t, m, "ctrl+f gaules space ao space vivo alt+backspace")
+
+		if got := m.list.search.input; got != "gaules ao " {
+			t.Fatalf("campo da busca = %q, quer \"gaules ao \"", got)
+		}
+		return m
+	})
+}

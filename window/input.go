@@ -11,20 +11,36 @@ import (
 	"time"
 )
 
+// keyBytes converte uma tecla do SDL nos bytes que um xterm mandaria à TUI. As
+// teclas de navegação levam os modificadores inteiros no parâmetro do xterm,
+// 1 + Shift + 2·Alt + 4·Ctrl: Ctrl+Alt+→ chega como Ctrl+Alt+→, não como Ctrl+→.
 func keyBytes(key C.SDL_Keycode, mod C.SDL_Keymod) []byte {
 	ctrl := mod&C.SDL_KMOD_CTRL != 0
 	alt := mod&C.SDL_KMOD_ALT != 0
 	shift := mod&C.SDL_KMOD_SHIFT != 0
-	arrow := func(c byte) []byte {
-		switch {
-		case ctrl:
-			return []byte{0x1b, '[', '1', ';', '5', c}
-		case shift:
-			return []byte{0x1b, '[', '1', ';', '2', c}
-		case alt:
-			return []byte{0x1b, '[', '1', ';', '3', c}
+	m := 1
+	if shift {
+		m++
+	}
+	if alt {
+		m += 2
+	}
+	if ctrl {
+		m += 4
+	}
+	// CSI 1;m X, como em ESC[1;7C; sem modificador, ESC[X.
+	csi := func(c byte) []byte {
+		if m == 1 {
+			return []byte{0x1b, '[', c}
 		}
-		return []byte{0x1b, '[', c}
+		return fmt.Appendf(nil, "\x1b[1;%d%c", m, c)
+	}
+	// CSI n;m ~, como em ESC[5;5~; sem modificador, ESC[n~.
+	tilde := func(n int) []byte {
+		if m == 1 {
+			return fmt.Appendf(nil, "\x1b[%d~", n)
+		}
+		return fmt.Appendf(nil, "\x1b[%d;%d~", n, m)
 	}
 	if key >= C.SDLK_F1 && key <= C.SDLK_F12 {
 		i := int(key - C.SDLK_F1)
@@ -32,24 +48,13 @@ func keyBytes(key C.SDL_Keycode, mod C.SDL_Keymod) []byte {
 		if ctrl || shift && (alt || i >= 8) {
 			return nil
 		}
-		m := 1
-		if shift {
-			m++
-		}
-		if alt {
-			m += 2
-		}
 		if i < 4 {
 			if m == 1 {
 				return []byte{0x1b, 'O', byte('P' + i)}
 			}
-			return fmt.Appendf(nil, "\x1b[1;%d%c", m, 'P'+i)
+			return csi(byte('P' + i))
 		}
-		n := [...]int{15, 17, 18, 19, 20, 21, 23, 24}[i-4]
-		if m == 1 {
-			return fmt.Appendf(nil, "\x1b[%d~", n)
-		}
-		return fmt.Appendf(nil, "\x1b[%d;%d~", n, m)
+		return tilde([...]int{15, 17, 18, 19, 20, 21, 23, 24}[i-4])
 	}
 	switch key {
 	case C.SDLK_RETURN, C.SDLK_KP_ENTER:
@@ -57,8 +62,10 @@ func keyBytes(key C.SDL_Keycode, mod C.SDL_Keymod) []byte {
 	case C.SDLK_ESCAPE:
 		return []byte{0x1b}
 	case C.SDLK_BACKSPACE:
-		if ctrl {
-			return []byte{0x08}
+		// Ctrl+Backspace apaga a palavra, como Alt+Backspace: ESC DEL. O 0x08
+		// é Ctrl+H, que na TUI esconde a lista.
+		if ctrl || alt {
+			return []byte{0x1b, 0x7f}
 		}
 		return []byte{0x7f}
 	case C.SDLK_TAB:
@@ -67,26 +74,31 @@ func keyBytes(key C.SDL_Keycode, mod C.SDL_Keymod) []byte {
 		}
 		return []byte{'\t'}
 	case C.SDLK_UP:
-		return arrow('A')
+		return csi('A')
 	case C.SDLK_DOWN:
-		return arrow('B')
+		return csi('B')
 	case C.SDLK_RIGHT:
-		return arrow('C')
+		return csi('C')
 	case C.SDLK_LEFT:
-		return arrow('D')
+		return csi('D')
 	case C.SDLK_HOME:
-		return []byte("\x1b[H")
+		return csi('H')
 	case C.SDLK_END:
-		return []byte("\x1b[F")
+		return csi('F')
 	case C.SDLK_PAGEUP:
-		return []byte("\x1b[5~")
+		return tilde(5)
 	case C.SDLK_PAGEDOWN:
-		return []byte("\x1b[6~")
+		return tilde(6)
 	case C.SDLK_DELETE:
 		return []byte("\x1b[3~")
 	}
 	if ctrl && key >= 'a' && key <= 'z' {
-		return []byte{byte(key-'a') + 1}
+		b := byte(key-'a') + 1
+		// Ctrl+Alt+letra é o controle com ESC na frente; sem Alt, Ctrl+H segue 0x08.
+		if alt {
+			return []byte{0x1b, b}
+		}
+		return []byte{b}
 	}
 	if alt && key >= 0x20 && key < 0x7f {
 		return []byte{0x1b, byte(key)}

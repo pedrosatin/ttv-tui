@@ -147,12 +147,139 @@ func TestBoundKeysHaveWindowTranslation(t *testing.T) {
 
 func asciiKey[T ~uint32](b byte, _ T) T { return T(b) }
 
-func TestFunctionKeyBytes(t *testing.T) {
-	for i, want := range []string{"\x1bOP", "\x1bOQ", "\x1bOR", "\x1bOS", "\x1b[15~", "\x1b[17~", "\x1b[18~", "\x1b[19~", "\x1b[20~", "\x1b[21~", "\x1b[23~", "\x1b[24~"} {
-		name := "F" + strconv.Itoa(i+1)
-		t.Run(name, func(t *testing.T) {
-			if got := string(keyBytes(keyNames[name], 0)); got != want {
-				t.Fatalf("bytes = %q, want %q", got, want)
+// Modificadores na ordem do parâmetro do xterm: o índice mais 1 é o parâmetro.
+var xtermMods = [...]struct {
+	name             string
+	shift, alt, ctrl bool
+}{
+	{"", false, false, false},
+	{"shift+", true, false, false},
+	{"alt+", false, true, false},
+	{"shift+alt+", true, true, false},
+	{"ctrl+", false, false, true},
+	{"ctrl+shift+", true, false, true},
+	{"ctrl+alt+", false, true, true},
+	{"ctrl+shift+alt+", true, true, true},
+}
+
+// Os dois lados do teclado: SDL_KMOD_LSHIFT, LALT e LCTRL; RSHIFT, RALT e RCTRL.
+var modSides = [...]struct {
+	name             string
+	shift, alt, ctrl uint16
+}{
+	{"esquerdo", 0x1, 0x100, 0x40},
+	{"direito", 0x2, 0x200, 0x80},
+}
+
+func TestKeyBytesWithModifiers(t *testing.T) {
+	csi := func(c string) func(int) string {
+		return func(m int) string {
+			if m == 1 {
+				return "\x1b[" + c
+			}
+			return "\x1b[1;" + strconv.Itoa(m) + c
+		}
+	}
+	tilde := func(n int) func(int) string {
+		return func(m int) string {
+			if m == 1 {
+				return "\x1b[" + strconv.Itoa(n) + "~"
+			}
+			return "\x1b[" + strconv.Itoa(n) + ";" + strconv.Itoa(m) + "~"
+		}
+	}
+	// Bubble Tea 1.3.10 reconhece só Alt+F1 a F12 e Shift+F1 a F8; nas demais
+	// combinações a janela não manda nada.
+	fn := func(i int, seq func(int) string) func(int) string {
+		return func(m int) string {
+			switch {
+			case m == 1 && i < 4:
+				return "\x1bO" + string(byte('P'+i))
+			case m == 3, m == 2 && i < 8, m == 1:
+				return seq(m)
+			}
+			return ""
+		}
+	}
+	keys := []struct {
+		name string
+		want func(m int) string
+	}{
+		{"Up", csi("A")}, {"Down", csi("B")}, {"Right", csi("C")}, {"Left", csi("D")},
+		{"Home", csi("H")}, {"End", csi("F")},
+		{"PageUp", tilde(5)}, {"PageDown", tilde(6)},
+	}
+	for i, n := range []int{0, 0, 0, 0, 15, 17, 18, 19, 20, 21, 23, 24} {
+		seq := csi(string(byte('P' + i)))
+		if i >= 4 {
+			seq = tilde(n)
+		}
+		keys = append(keys, struct {
+			name string
+			want func(m int) string
+		}{"F" + strconv.Itoa(i+1), fn(i, seq)})
+	}
+	for _, k := range keys {
+		for p, mods := range xtermMods {
+			for _, side := range modSides {
+				var mod uint16
+				if mods.shift {
+					mod |= side.shift
+				}
+				if mods.alt {
+					mod |= side.alt
+				}
+				if mods.ctrl {
+					mod |= side.ctrl
+				}
+				want := k.want(p + 1)
+				t.Run(mods.name+k.name+"/"+side.name, func(t *testing.T) {
+					got := keyBytes(keyNames[k.name], keyModifier(keyBytes, mod))
+					if string(got) != want || want == "" && got != nil {
+						t.Errorf("bytes = %q, want %q", got, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+// Teclas que mudaram de bytes ou que não podem mudar: Ctrl+Backspace não é
+// Ctrl+H, e o Ctrl+H de verdade continua 0x08.
+func TestKeyBytesEditingAndControl(t *testing.T) {
+	const lshift, lalt, lctrl, ralt, rctrl = 0x1, 0x100, 0x40, 0x200, 0x80
+	cases := []struct {
+		name string
+		key  string
+		mod  uint16
+		want string
+	}{
+		{"Backspace", "Backspace", 0, "\x7f"},
+		{"Shift+Backspace", "Backspace", lshift, "\x7f"},
+		{"Ctrl+Backspace apaga a palavra", "Backspace", lctrl, "\x1b\x7f"},
+		{"Ctrl direito+Backspace", "Backspace", rctrl, "\x1b\x7f"},
+		{"Alt+Backspace", "Backspace", lalt, "\x1b\x7f"},
+		{"Ctrl+Alt+Backspace", "Backspace", lctrl | lalt, "\x1b\x7f"},
+		{"Ctrl+H segue Ctrl+H", "h", lctrl, "\x08"},
+		{"Ctrl direito+H", "h", rctrl, "\x08"},
+		{"Ctrl+Shift+H", "h", lctrl | lshift, "\x08"},
+		{"Ctrl+Alt+H leva o Alt", "h", lctrl | lalt, "\x1b\x08"},
+		{"Ctrl+Alt direito+W", "w", lctrl | ralt, "\x1b\x17"},
+		{"Alt+H", "h", lalt, "\x1bh"},
+		{"Ctrl+Alt+→ não é Ctrl+→", "Right", lctrl | lalt, "\x1b[1;7C"},
+		{"Ctrl+→", "Right", lctrl, "\x1b[1;5C"},
+		{"Alt+←", "Left", lalt, "\x1b[1;3D"},
+		{"Shift+Tab", "Tab", lshift, "\x1b[Z"},
+		{"Delete", "Delete", 0, "\x1b[3~"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			k, ok := keyNames[c.key]
+			if !ok {
+				k = asciiKey(c.key[0], keyNames["Return"])
+			}
+			if got := string(keyBytes(k, keyModifier(keyBytes, c.mod))); got != c.want {
+				t.Fatalf("bytes = %q, want %q", got, c.want)
 			}
 		})
 	}
@@ -160,36 +287,4 @@ func TestFunctionKeyBytes(t *testing.T) {
 
 func keyModifier[K ~uint32, M ~uint16](_ func(K, M) []byte, mod uint16) M {
 	return M(mod)
-}
-
-func TestModifiedFunctionKeyBytes(t *testing.T) {
-	for i, n := range []int{1, 1, 1, 1, 15, 17, 18, 19, 20, 21, 23, 24} {
-		name := "F" + strconv.Itoa(i+1)
-		for _, side := range []struct{ shift, alt, ctrl uint16 }{{1, 0x100, 0x40}, {2, 0x200, 0x80}} {
-			for bits := 1; bits < 8; bits++ {
-				var mod uint16
-				if bits&1 != 0 {
-					mod |= side.shift
-				}
-				if bits&2 != 0 {
-					mod |= side.alt
-				}
-				if bits&4 != 0 {
-					mod |= side.ctrl
-				}
-				var want string
-				// Bubble Tea 1.3.10 reconhece Alt+F1 a F12 e Shift+F1 a F8.
-				if bits == 2 || bits == 1 && i < 8 {
-					if i < 4 {
-						want = "\x1b[1;" + strconv.Itoa(1+bits) + string(byte('P'+i))
-					} else {
-						want = "\x1b[" + strconv.Itoa(n) + ";" + strconv.Itoa(1+bits) + "~"
-					}
-				}
-				if got := keyBytes(keyNames[name], keyModifier(keyBytes, mod)); string(got) != want || want == "" && got != nil {
-					t.Errorf("%s mod=%#x: bytes = %q, want %q", name, mod, got, want)
-				}
-			}
-		}
-	}
 }

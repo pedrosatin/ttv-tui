@@ -467,6 +467,22 @@ def flows():
     check(role, "o topo do chat sempre começa pelo autor", seen_chat > 0 and no_author == 0, f"{no_author} de {seen_chat} amostras{'; topo: ' + str(tops[:3]) if tops else ''}")
     check(role, "a lista usa um corte só", seen_list > 0 and not list_cut, f"lista em {seen_list} de 12 amostras; {list_cut[:2]}")
 
+    # ---- Escrita: Ctrl+Backspace apaga a palavra, não esconde a lista
+    role = "escrita"
+    h0 = list(stats()["hole"])
+    t("key", "ctrl+f")
+    text("gaules ao vivo")
+    typed = wait(lambda: "Search: gaules ao vivo" in screen(), 3, 0.05)
+    t("key", "ctrl+Backspace")
+    # o campo fica na coluna da lista: a linha da grade traz o vídeo e o chat ao lado
+    prompt = lambda: next((c.strip() for l in screen().splitlines() for c in l.split("│") if "Search: " in c), "")
+    erased = wait(lambda: prompt().endswith("Search: gaules ao"), 3, 0.05)
+    check(role, "Ctrl+Backspace apaga a palavra anterior", typed and erased, prompt()[-40:])
+    time.sleep(0.3)
+    check(role, "Ctrl+Backspace não esconde a lista", stats()["hole"] == h0 and "Live Channels" in screen().splitlines()[0], f"{h0} -> {stats()['hole']}")
+    t("key", "Escape")
+    wait(lambda: "Search: " not in screen(), 3, 0.05)
+
     # ---- Quem quer só o vídeo: esconder e mostrar lista e chat
     role = "toggles"
     full_cols = stats()["cols"]
@@ -531,6 +547,14 @@ def flows():
     press("alt+Left", (chat_goal - chat_now) // 2)
     ok = wait(lambda: stats()["hole"] == h0, 4, 0.05)
     check(role, "dá para voltar ao tamanho inicial", ok, str(stats()["hole"]))
+    press("ctrl+alt+Right", 3)
+    time.sleep(0.5)
+    after_alt = list(stats()["hole"])
+    press("ctrl+Right", 1)  # a mesma seta sem Alt move: a tecla chegou e não foi lida como Ctrl+→
+    moved = wait(lambda: stats()["hole"][0] == h0[0] + 2, 3, 0.05)
+    check(role, "Ctrl+Alt+→ não chega como Ctrl+→", after_alt == h0 and moved, f"Ctrl+Alt+→ {h0} -> {after_alt}; Ctrl+→ em seguida {'move' if moved else 'não move'}")
+    press("ctrl+Left", 1)
+    wait(lambda: stats()["hole"] == h0, 3, 0.05)
     t("key", "ctrl+h")
     wait(lambda: stats()["hole"][0] == 1, 3, 0.05)
     press("ctrl+Right", 1)

@@ -108,28 +108,28 @@ func TestJanelaChatSobrepostoAncoradoEmbaixo(t *testing.T) {
 	})
 }
 
-// W4: na busca, Ctrl+Backspace apaga a palavra. A lista e o campo continuam à
-// vista. Hoje a janela manda 0x08, que a TUI lê como Ctrl+H e esconde a lista.
+// W4: na busca, Ctrl+Backspace apaga a palavra anterior. A lista e o campo
+// continuam à vista: a tecla não chega à TUI como Ctrl+H.
 func TestJanelaCtrlBackspaceNaBusca(t *testing.T) {
 	t.Parallel()
 	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 1}})
 	w.openFirstChannel()
-	w.press("ctrl+f", "f", "i", "x")
-	w.waitState("o campo de busca com fix", 5*time.Second, func(s ui.StateReport) bool {
-		return s.Search && s.SearchInput == "fix" && s.Layout == string(ui.LayoutSplit)
+	w.press("ctrl+f", "f", "i", "x", "Space", "a", "b")
+	w.waitState("o campo de busca com fix ab", 5*time.Second, func(s ui.StateReport) bool {
+		return s.Search && s.SearchInput == "fix ab" && s.Layout == string(ui.LayoutSplit)
 	})
 	w.press("ctrl+Backspace")
 
-	var after ui.StateReport
-	expectKnownBug(t, "W4", func() (bool, error) {
+	expect(t, func() error {
 		st, err := w.state()
 		if err != nil {
-			return false, err
+			return err
 		}
-		after = *st.TUI
-		return after.Layout != string(ui.LayoutSplit) || !after.Search, nil
-	}, func() string {
-		return fmt.Sprintf("depois do Ctrl+Backspace: layout %q, busca aberta %v", after.Layout, after.Search)
+		after := st.TUI
+		if after.Layout != string(ui.LayoutSplit) || !after.Search || after.SearchInput != "fix " {
+			return fmt.Errorf("depois do Ctrl+Backspace: layout %q, busca aberta %v, campo %q; quer split, aberta e \"fix \"", after.Layout, after.Search, after.SearchInput)
+		}
+		return nil
 	})
 }
 

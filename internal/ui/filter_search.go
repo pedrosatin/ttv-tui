@@ -56,6 +56,10 @@ func (m Model) updateSearchingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m.startSearch(q)
 
+	case isWordBackspace(msg):
+		m.list.search.input = trimLastWord(m.list.search.input)
+		return m, nil
+
 	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
 		m.list.search.input = trimLastRune(m.list.search.input)
 		return m, nil
@@ -117,6 +121,11 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.list.filtering = false
 		return m.selectHighlighted()
+
+	case isWordBackspace(msg):
+		m.list.filter = trimLastWord(m.list.filter)
+		m.reconcileHighlight()
+		return m, nil
 
 	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
 		m.list.filter = trimLastRune(m.list.filter)

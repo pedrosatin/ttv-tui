@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -370,6 +372,11 @@ func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Select):
 		return m.submitComposeMessage()
 
+	case isWordBackspace(msg):
+		m.chat.composeDraft = trimLastWord(m.chat.composeDraft)
+		m.clearResolvedComposeWarning()
+		return m, nil
+
 	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
 		m.chat.composeDraft = trimLastRune(m.chat.composeDraft)
 		m.clearResolvedComposeWarning()
@@ -412,6 +419,19 @@ func (m *Model) clearResolvedComposeWarning() {
 			m.chat.panel.sendWarning = ""
 		}
 	}
+}
+
+// isWordBackspace é Alt+Backspace, os bytes ESC DEL que a janela também manda
+// para Ctrl+Backspace.
+func isWordBackspace(msg tea.KeyMsg) bool {
+	return msg.Type == tea.KeyBackspace && msg.Alt
+}
+
+// trimLastWord apaga a palavra antes do fim e os espaços depois dela, e mantém
+// o espaço que a separa da anterior: "fix ab " vira "fix ".
+func trimLastWord(s string) string {
+	s = strings.TrimRightFunc(s, unicode.IsSpace)
+	return s[:strings.LastIndexFunc(s, unicode.IsSpace)+1]
 }
 
 func trimLastRune(s string) string {
