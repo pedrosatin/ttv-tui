@@ -538,6 +538,16 @@ func TestClassifyAdLine(t *testing.T) {
 		{"[stream.hls][warning] Encountered a stream discontinuity. This is unsupported and will result in incoherent output data.", adSignalNone},
 		{"[stream.hls][info] Stream output resumed", adSignalUnknown},
 		{"[stream.hls][info] Filtering out segments, stream output paused", adSignalUnknown},
+		{"[stream.hls][info] Filtering out segments and pausing stream output\r", adSignalHoldStart},
+		// O mesmo texto dentro de outra linha é de terceiros: o nome de um
+		// stream, a reason phrase de um servidor, outro logger ou outro nível.
+		{"[cli][info] Opening stream: Filtering out segments and pausing stream output (hls)", adSignalUnknown},
+		{"error: Unable to open URL: https://example.com/live.m3u8 (404 Client Error: Filtering out segments and pausing stream output for url: https://example.com/live.m3u8)", adSignalUnknown},
+		{"[plugins.twitch][info] Filtering out segments and pausing stream output", adSignalUnknown},
+		{"[stream.hls][warning] Filtering out segments and pausing stream output", adSignalUnknown},
+		{"[stream.hls][info] Filtering out segments and pausing stream output now", adSignalUnknown},
+		{"x[stream.hls][info] Filtering out segments and pausing stream output", adSignalUnknown},
+		{"[cli][info] Opening stream: Resuming stream output (hls)", adSignalUnknown},
 		{"", adSignalNone},
 	}
 	for _, tc := range cases {
@@ -615,6 +625,41 @@ func runPlayerHelper() {
 		fmt.Fprintln(os.Stderr, "  File \"streamlink/plugins/twitch.py\", line 12, in <module>")
 		fmt.Fprintln(os.Stderr, "ModuleNotFoundError: No module named 'streamlink.compat'")
 		os.Exit(1)
+	case "echo-offline":
+		// streamlink 8.6.2 com um canal offline: o eco da URL em nível info
+		// (main.py) e a linha de offline, saída 1.
+		url := os.Getenv("TTV_PLAYER_HELPER_URL")
+		fmt.Fprintln(os.Stderr, "[cli][info] Found matching plugin twitch for URL "+url)
+		fmt.Fprintln(os.Stderr, "error: No playable streams found on this URL: "+url)
+		os.Exit(1)
+	case "echo-exit0":
+		// Uma sessão normal que termina com 0 depois do eco da URL.
+		url := os.Getenv("TTV_PLAYER_HELPER_URL")
+		fmt.Fprintln(os.Stderr, "[cli][info] Found matching plugin twitch for URL "+url)
+		fmt.Fprintln(os.Stderr, "[cli][info] Available streams: audio_only, 160p (worst), 1080p60 (best)")
+		fmt.Fprintln(os.Stderr, "[cli][info] Opening stream: 1080p60 (hls)")
+		fmt.Fprintln(os.Stderr, "[cli][info] Stream ended")
+		fmt.Fprintln(os.Stderr, "[cli][info] Closing currently open stream...")
+	case "weak-then-offline":
+		// Uma linha de erro com classe fraca e depois a de offline: a causa
+		// verificável posterior vale.
+		url := os.Getenv("TTV_PLAYER_HELPER_URL")
+		fmt.Fprintln(os.Stderr, "[plugins.twitch][error] PluginError: Unable to parse the access token for "+url)
+		fmt.Fprintln(os.Stderr, "error: No playable streams found on this URL: "+url)
+		os.Exit(1)
+	case "traceback-exit0":
+		// Um traceback real seguido de saída 0: a classe vem da linha da
+		// exceção, não do status de saída.
+		fmt.Fprintln(os.Stderr, "Traceback (most recent call last):")
+		fmt.Fprintln(os.Stderr, "  File \"streamlink/plugins/twitch.py\", line 12, in _get_streams")
+		fmt.Fprintln(os.Stderr, "KeyError: 'x'")
+	case "traceback-bare-exit0":
+		fmt.Fprintln(os.Stderr, "Traceback (most recent call last):")
+		fmt.Fprintln(os.Stderr, "  File \"streamlink/plugins/twitch.py\", line 12, in _get_streams")
+		fmt.Fprintln(os.Stderr, "KeyError")
+	case "bare-name-exit0":
+		// O mesmo nome sozinho, sem traceback antes: não prova nada.
+		fmt.Fprintln(os.Stderr, "KeyError")
 	case "exit-silent":
 		// Exits with an error status and says nothing that explains why.
 		os.Exit(3)

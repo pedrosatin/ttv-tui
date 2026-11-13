@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"syscall"
 )
 
 // Failure classifies why playback could not start or stopped with an error.
@@ -81,7 +83,21 @@ func failureForTool(tool string) Failure {
 	return FailureStreamlinkMissing
 }
 
+// ExecError reports that the process of a session could not be started: the
+// executable exists but the system refused to run it, or it is not there.
+type ExecError struct {
+	Err error
+}
+
+func (e *ExecError) Error() string { return "player: start: " + e.Err.Error() }
+
+func (e *ExecError) Unwrap() error { return e.Err }
+
 // FailureOf classifies an error returned by Manager.Start.
+//
+// O texto do erro não é classificado: um erro de validação repete a URL alvo,
+// que vem de terceiros (o nome do canal, o link colado). Só o tipo conta, e só
+// um executável que o sistema recusa como formato inválido culpa o streamlink.
 func FailureOf(err error) Failure {
 	if err == nil {
 		return FailureNone
@@ -94,8 +110,9 @@ func FailureOf(err error) Failure {
 	if errors.As(err, &execErr) && errors.Is(execErr.Err, exec.ErrNotFound) {
 		return failureForTool(execErr.Name)
 	}
-	if f := ClassifyLine(err.Error()); f != FailureNone {
-		return f
+	var startErr *ExecError
+	if errors.As(err, &startErr) && errors.Is(startErr.Err, syscall.ENOEXEC) {
+		return FailureStreamlinkBroken
 	}
 	return FailureUnknown
 }
@@ -104,7 +121,28 @@ func FailureOf(err error) Failure {
 // FailureNone when the line proves nothing. Timeouts are checked before network
 // errors because urllib3 reports a connect timeout inside a generic
 // "Max retries exceeded" connection error.
+//
+// Linhas de nível info ou debug do streamlink ("[cli][info] Found matching
+// plugin twitch for URL ...") não classificam: repetem a URL e o nome do canal,
+// texto de terceiros que pode conter "keyerror" ou "offline". Nomes de exceção
+// Python só contam no formato "<Nome>Error:" que o Python imprime.
 func ClassifyLine(line string) Failure {
+	return classifyLine(line, false)
+}
+
+// ClassifyTargetLine is ClassifyLine for a line of the session of t: the target
+// URL and the session identity become a marker before the line is classified.
+func ClassifyTargetLine(line string, t Target) Failure {
+	return classifyLine(maskTarget(line, t), false)
+}
+
+// classifyLine is ClassifyLine; afterTraceback accepts a bare exception name
+// ("KeyError" with no message), which only means something as the last line of
+// a Python traceback.
+func classifyLine(line string, afterTraceback bool) Failure {
+	if isQuietLogLine(line) {
+		return FailureNone
+	}
 	l := strings.ToLower(line)
 	// A 404 or 403 on one segment or on one playlist reload happens during
 	// normal playback (a prefetch segment that expired, a reload racing the
@@ -151,15 +189,10 @@ func ClassifyLine(line string) Failure {
 		strings.Contains(l, "proxyerror"),
 		strings.Contains(l, "sslerror"):
 		return FailureNetwork
-	case strings.Contains(l, "pluginerror"),
-		strings.Contains(l, "plugin error"),
+	case strings.Contains(l, "plugin error"),
 		strings.Contains(l, "unable to validate"),
-		strings.Contains(l, "modulenotfounderror"),
-		strings.Contains(l, "importerror"),
-		strings.Contains(l, "syntaxerror"),
-		strings.Contains(l, "attributeerror"),
-		strings.Contains(l, "typeerror"),
-		strings.Contains(l, "keyerror"),
+		pythonException.MatchString(line),
+		afterTraceback && bareException.MatchString(line),
 		strings.Contains(l, "fatal python error"),
 		strings.Contains(l, "error while loading shared libraries"),
 		strings.Contains(l, "exec format error"):
@@ -169,6 +202,114 @@ func ClassifyLine(line string) Failure {
 	default:
 		return FailureNone
 	}
+}
+
+// buildExceptions são as exceções Python que indicam defeito do próprio
+// streamlink (plugin, import, código), e não do canal ou da rede.
+const buildExceptions = `(?:PluginError|ModuleNotFoundError|ImportError|SyntaxError|AttributeError|TypeError|KeyError)`
+
+// pythonException casa o nome da exceção como o Python o imprime, com
+// maiúsculas e dois-pontos: "KeyError: 'data'", "streamlink.exceptions.PluginError: ...".
+// Um login como "keyerror" ou "xtypeerrorx" não tem esse formato.
+var pythonException = regexp.MustCompile(buildExceptions + `:`)
+
+// bareException é a última linha de um traceback cuja exceção não tem mensagem.
+var bareException = regexp.MustCompile(`^\s*(?:[A-Za-z_]\w*\.)*` + buildExceptions + `\s*$`)
+
+// quietLogLine casa o prefixo de log do streamlink nos níveis que não relatam
+// erro ("[cli][info] ", "[plugins.twitch][debug] ").
+var quietLogLine = regexp.MustCompile(`^\[[^\]]*\]\[(?:info|debug|trace|all)\] `)
+
+// isQuietLogLine reports a streamlink log line below the warning level.
+func isQuietLogLine(line string) bool {
+	return quietLogLine.MatchString(line)
+}
+
+// isTracebackStart reports the first line of a Python traceback.
+func isTracebackStart(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "Traceback (most recent call last):")
+}
+
+// targetMarker substitui a URL alvo e a identidade da sessão antes da
+// classificação. Não contém nenhuma das frases que o classificador procura.
+const targetMarker = "<alvo>"
+
+// maskTarget troca, em line, a URL de t e a identidade da sessão por
+// targetMarker, sem diferenciar maiúsculas.
+//
+// A URL é trocada onde aparecer: não tem espaço (checkStreamURL recusa), então
+// nunca cobre uma frase do classificador. A identidade (o login, "kick:<slug>")
+// e o que vem depois do seu primeiro ":" só são trocados quando vêm depois de
+// "/", "=", aspas ou apóstrofo, como num caminho, numa query ou num repr do
+// Python: um login "streams" solto não pode apagar "No playable streams found".
+func maskTarget(line string, t Target) string {
+	if t.URL != "" {
+		line = replaceFold(line, t.URL, func(string, int, int) bool { return true })
+	}
+	names := []string{t.Label}
+	if i := strings.IndexByte(t.Label, ':'); i >= 0 {
+		names = append(names, t.Label[i+1:])
+	}
+	for _, name := range names {
+		if name == "" || name == t.URL {
+			continue
+		}
+		line = replaceFold(line, name, delimitedName)
+	}
+	return line
+}
+
+// delimitedName aceita a ocorrência de line[start:end] precedida por um
+// separador de caminho, de query ou de string, e seguida de um caractere que
+// não continua um nome.
+func delimitedName(line string, start, end int) bool {
+	if start == 0 || !strings.ContainsRune(`/='"`, rune(line[start-1])) {
+		return false
+	}
+	return end == len(line) || !isNameByte(line[end])
+}
+
+func isNameByte(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-'
+}
+
+// replaceFold troca por targetMarker as ocorrências de old em s, sem
+// diferenciar maiúsculas ASCII; accept decide quais ocorrências valem.
+func replaceFold(s, old string, accept func(s string, start, end int) bool) string {
+	ls, lo := lowerASCII(s), lowerASCII(old)
+	var b strings.Builder
+	last := 0
+	for i := 0; i <= len(ls)-len(lo); {
+		j := strings.Index(ls[i:], lo)
+		if j < 0 {
+			break
+		}
+		start, end := i+j, i+j+len(lo)
+		if accept(s, start, end) {
+			b.WriteString(s[last:start])
+			b.WriteString(targetMarker)
+			last = end
+			i = end
+			continue
+		}
+		i = start + 1
+	}
+	if last == 0 {
+		return s
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+// lowerASCII preserva o comprimento em bytes, ao contrário de strings.ToLower.
+func lowerASCII(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
 }
 
 // isPerSegmentLine reports the streamlink HLS lines about a single segment,
@@ -194,9 +335,10 @@ func isFatalLine(f Failure) bool {
 }
 
 // classifyTerminal picks the failure for an error transition: the line-based
-// class when one is recognized, otherwise fallback.
-func classifyTerminal(line string, fallback Failure) Failure {
-	if f := ClassifyLine(line); f != FailureNone {
+// class when one is recognized, otherwise fallback. A URL e a identidade de t
+// viram marcador antes, como em ClassifyTargetLine.
+func classifyTerminal(line string, t Target, fallback Failure) Failure {
+	if f := ClassifyTargetLine(line, t); f != FailureNone {
 		return f
 	}
 	if fallback != FailureNone {

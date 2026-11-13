@@ -78,12 +78,16 @@ type Session struct {
 	mu       sync.Mutex
 	state    State
 	lastLine string
-	// failLine is the first error line with a recognized failure class and
-	// failClass that class; failHint is a fallback class set by the supervisor
-	// (e.g. the IPC socket deadline) when no line explains the failure.
+	// failLine is the first error line with a recognized failure class (or a
+	// later one that proves playback cannot start) and failClass that class;
+	// failHint is a fallback class set by the supervisor (e.g. the IPC socket
+	// deadline) when no line explains the failure.
 	failLine  string
 	failClass Failure
 	failHint  Failure
+	// traceback é verdadeiro depois da primeira linha "Traceback (most recent
+	// call last):": a partir dela, um nome de exceção sozinho na linha conta.
+	traceback bool
 	// adHold is true between streamlink's verifiable hold-start and hold-end
 	// lines. breakAt is when that hold started and resumeTo is the state to
 	// show once it ends (starting/playing/paused as observed meanwhile).
@@ -212,7 +216,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		closeFiles(s.outputs...)
 		s.cleanupFiles()
 		cancel()
-		return nil, fmt.Errorf("player: start: %w", err)
+		return nil, &ExecError{Err: err}
 	}
 	s.group, err = startedGroup(cmd)
 	if err != nil {
@@ -420,13 +424,19 @@ func (s *Session) consumeLines(ctx context.Context, r io.Reader) {
 }
 
 func (s *Session) handleLine(line string) {
+	s.mu.Lock()
 	f := FailureNone
 	if strings.Contains(strings.ToLower(line), "error") {
-		f = ClassifyLine(line)
+		f = classifyLine(maskTarget(line, s.cfg.Target), s.traceback)
 	}
-	s.mu.Lock()
+	if isTracebackStart(line) {
+		s.traceback = true
+	}
 	s.lastLine = line
-	if f != FailureNone && s.failClass == FailureNone {
+	// A primeira classe fica, salvo quando uma linha posterior prova que a
+	// reprodução não pode começar (canal offline, sem plugin, ferramenta
+	// ausente): essa causa verificável vale mais que uma anterior mais fraca.
+	if f != FailureNone && (s.failClass == FailureNone || isFatalLine(f) && !isFatalLine(s.failClass)) {
 		s.failLine = line
 		s.failClass = f
 	}
@@ -965,7 +975,7 @@ func (s *Session) transition(state State, reason EndReason, lastLine string) {
 			ev.LastLine = s.failLine
 			s.lastLine = s.failLine
 		} else {
-			ev.Failure = classifyTerminal(s.lastLine, s.failHint)
+			ev.Failure = classifyTerminal(s.lastLine, s.cfg.Target, s.failHint)
 		}
 	}
 	if state == StateBreak && s.adHold {

@@ -215,7 +215,10 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 		// Cmds run in goroutines that may not keep the order of the selections.
 		gen, err := mgr.StartInOrder(playTarget, selection)
 		if err != nil {
-			if player.FailureOf(err).BlamesStreamlink() {
+			// Só um erro de exec culpa a versão: um erro de validação repete a
+			// URL alvo, texto de terceiros que não diz nada sobre o streamlink.
+			var execErr *player.ExecError
+			if errors.As(err, &execErr) && player.FailureOf(err).BlamesStreamlink() {
 				// The binary cannot even run: if it is an update still on
 				// trial, go back to the previous one.
 				b.mu.Lock()
@@ -296,7 +299,7 @@ func mapPlayerEvent(ev player.Event) ui.PlayerStatusMsg {
 	if ev.State == player.StateEnded && ev.Reason != player.EndReasonStopped {
 		ev.State = player.StateError
 		if ev.Failure == player.FailureNone {
-			ev.Failure = player.ClassifyLine(ev.LastLine)
+			ev.Failure = player.ClassifyTargetLine(ev.LastLine, ev.Target)
 			if ev.Failure == player.FailureNone {
 				ev.Failure = player.FailureUnknown
 			}
