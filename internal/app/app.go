@@ -197,6 +197,7 @@ func Run(opts Options) error {
 	// Stop the forwarders before the deferred player/chat shutdown.
 	cancel()
 	logInputConfErr(logw, playerMgr, appCat)
+	logDiscardedChannels(logw, st.Discarded(), appCat)
 	if sig, ok := caught.Load().(os.Signal); ok {
 		return &SignalError{Signal: sig}
 	}
@@ -415,6 +416,15 @@ func loadState(s *store.Store, appCat *i18n.Catalog) (store.State, string) {
 		return st, appCat.T("store.corrupt_notice")
 	default:
 		return st, appCat.T("store.load_failed_notice")
+	}
+}
+
+// logDiscardedChannels registra, depois que a TUI sai, quantos favoritos e
+// recentes o carregamento descartou por identificador inválido. Só a contagem
+// vai para o terminal: o identificador recusado não é impresso.
+func logDiscardedChannels(log io.Writer, n int, cat *i18n.Catalog) {
+	if n > 0 {
+		_, _ = fmt.Fprintf(log, cat.T("app.warn_state_discarded")+"\n", n)
 	}
 }
 

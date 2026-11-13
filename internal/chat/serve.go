@@ -226,12 +226,21 @@ func (s *connSession) sendNext() (more bool, err error) {
 		return false, nil
 	}
 	m.pending = m.pending[1:]
+	wire, ferr := FormatPrivMsg(s.channel, head.req.Nonce, head.req.Body)
+	if ferr != nil {
+		// JoinLogin já recusa esse canal; se um chegar aqui, a mensagem é
+		// recusada sem tocar o socket nem o limite.
+		head.stopTimer()
+		m.mu.Unlock()
+		s.addUpdate(head.req, DeliveryRejected, RejectOther, "")
+		s.flush()
+		return true, nil
+	}
 	m.limiter.Record(s.channel)
 	m.inFlight = append(m.inFlight, head)
 	m.mu.Unlock()
 	s.sendWaitCh = nil
 
-	wire := FormatPrivMsg(s.channel, head.req.Nonce, head.req.Body)
 	if werr := s.write(wire, head.expiresAt); werr != nil {
 		return false, fmt.Errorf("write privmsg: %w", werr)
 	}
@@ -315,6 +324,9 @@ func (s *connSession) handleLine(line string) error {
 	case EventPrivMsg:
 		s.handlePrivMsg(ev)
 	case EventNotice:
+		if !s.forThisChannel(ev) && ev.Channel != "*" {
+			return nil
+		}
 		s.handleNotice(ev)
 		if reason, rejected := ClassifyRejectNotice(ev.MsgID, ev.Body); rejected && reason == RejectUnauthenticated {
 			return ErrAuthentication
@@ -324,6 +336,9 @@ func (s *connSession) handleLine(line string) error {
 	case EventClearChat:
 		s.handleClearChat(ev)
 	case EventClearMsg:
+		if !s.forThisChannel(ev) {
+			return nil
+		}
 		s.flush()
 		s.emit(SessionEvent{ClearUser: ev.TargetUser, ClearMsgID: ev.TargetMsgID})
 	case EventUserNotice:
@@ -337,6 +352,9 @@ func (s *connSession) handleLine(line string) error {
 }
 
 // forThisChannel reports whether ev targets the channel this session serves.
+// Vale para todo evento de canal (PRIVMSG, USERNOTICE, USERSTATE, CLEARCHAT,
+// CLEARMSG, ROOMSTATE e NOTICE): moderação ou estado de outra sala não mexe
+// na sessão. NOTICE endereçado a "*" é global e passa à parte.
 func (s *connSession) forThisChannel(ev Event) bool {
 	return ev.Channel == "" || strings.EqualFold(ev.Channel, s.channel)
 }
@@ -395,6 +413,9 @@ func (s *connSession) handleNotice(ev Event) {
 // handleRoomState folds the delta into the room state kept across reconnects
 // and publishes a copy of it.
 func (s *connSession) handleRoomState(ev Event) {
+	if !s.forThisChannel(ev) {
+		return
+	}
 	*s.roomState = ev.RoomDelta.Apply(*s.roomState)
 	rsCopy := *s.roomState
 	s.flush()
@@ -403,6 +424,9 @@ func (s *connSession) handleRoomState(ev Event) {
 
 // handleClearChat publishes a chat clear, a timeout or a ban.
 func (s *connSession) handleClearChat(ev Event) {
+	if !s.forThisChannel(ev) {
+		return
+	}
 	s.flush()
 	var banDur *int
 	if ev.BanDuration != nil {

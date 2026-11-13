@@ -15,6 +15,7 @@ import (
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 // ErrAuthentication marks a refused chat login or incomplete credentials.
@@ -368,6 +369,7 @@ func (m *Manager) Send(req SendRequest) (SendStatusUpdate, error) {
 
 // Join starts the session for the Twitch channel ch. IRC wants the login in
 // lower case without "#", so that normalization lives here and not in callers.
+// Um login fora da gramática da Twitch é recusado com ErrInvalidChannel.
 func (m *Manager) Join(ctx context.Context, ch catalog.Channel) (uint64, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, fmt.Errorf("chat: join canceled: %w", err)
@@ -382,10 +384,12 @@ func (m *Manager) Join(ctx context.Context, ch catalog.Channel) (uint64, error) 
 // JoinLogin cancels any previous session (including any pending reconnect
 // backoff), increments the generation counter, discards any unsent messages
 // from the old channel, and starts a new session for channelLogin.
+// channelLogin fora da gramática da Twitch devolve ErrInvalidChannel antes de
+// qualquer efeito: a sessão anterior segue intacta e nada vai para o socket.
 func (m *Manager) JoinLogin(channelLogin string) (uint64, error) {
-	ch := normalizeChannel(channelLogin)
-	if ch == "" {
-		return 0, fmt.Errorf("chat: empty channel login")
+	ch, err := ircChannel(channelLogin)
+	if err != nil {
+		return 0, err
 	}
 
 	m.mu.Lock()
@@ -742,7 +746,11 @@ func (m *Manager) writeHandshake(w io.Writer, channel string, anon bool) (string
 		}
 		fmt.Fprintf(&b, "NICK %s\r\n", nick)
 	}
-	fmt.Fprintf(&b, "JOIN #%s\r\n", channel)
+	ch, err := ircChannel(channel)
+	if err != nil {
+		return "", err
+	}
+	fmt.Fprintf(&b, "JOIN #%s\r\n", ch)
 
 	if _, err := io.WriteString(w, b.String()); err != nil {
 		return "", fmt.Errorf("write irc handshake: %w", err)
@@ -750,6 +758,21 @@ func (m *Manager) writeHandshake(w io.Writer, channel string, anon bool) (string
 	return nick, nil
 }
 
+// ircChannel devolve o login de raw na forma do IRC, em minúsculas e sem o "#"
+// inicial, ou ErrInvalidChannel quando o resto foge de ^[a-z0-9_]{1,25}$. É a
+// última barreira antes do protocolo: CR, LF, NUL, espaço, vírgula ou "#" no
+// meio virariam linha ou alvo extra na conexão autenticada, então o valor é
+// recusado, não limpo. O erro não repete o valor recebido.
+func ircChannel(raw string) (string, error) {
+	ch := platform.LowerASCII(strings.TrimPrefix(raw, "#"))
+	if !platform.ValidTwitchLogin(ch) {
+		return "", ErrInvalidChannel
+	}
+	return ch, nil
+}
+
+// normalizeChannel só compara canais (pedido de envio, limite por canal); o que
+// vai para o protocolo passa por ircChannel.
 func normalizeChannel(raw string) string {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	s = strings.TrimPrefix(s, "#")

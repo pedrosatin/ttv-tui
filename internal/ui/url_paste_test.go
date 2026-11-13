@@ -284,3 +284,48 @@ func TestPasteURLForaDaGramaticaViraBusca(t *testing.T) {
 		})
 	}
 }
+
+// Link colado no filtro de uma vez (bracketed paste) com CR/LF ou vírgula no
+// login não chega ao Join do chat, ao player nem aos recentes.
+func TestColarLinkComInjecaoIRCNoFiltroNaoChamaJoin(t *testing.T) {
+	for _, link := range []string{
+		"https://www.twitch.tv/dummychan%0D%0Aprivmsg%20%23x%20:y",
+		"https://www.twitch.tv/dummychan%0D%0Aprivmsg%20%23victimchan%20:injected%20text%0D%0Aping",
+		"https://www.twitch.tv/dummychan%0Aprivmsg%20%23victimchan%20:lf",
+		"https://twitch.tv/dummychan,%23victimchan",
+		"https://www.twitch.tv/dummychan%00x",
+	} {
+		t.Run(link, func(t *testing.T) {
+			pb := &fakePlayback{}
+			fc := &fakeChat{hasToken: true, username: "tester"}
+			fs := &fakeStore{}
+			m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(fs))
+
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(link), Paste: true})
+			m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+			m = drainCmd(t, m, cmd)
+
+			if len(fc.joinedChannels) != 0 {
+				t.Fatalf("Join recebeu %+v", fc.joinedChannels)
+			}
+			if len(pb.started) != 0 {
+				t.Fatalf("playback %v, want nada aberto", pb.started)
+			}
+			if len(fs.savedState.Recents) != 0 || len(m.list.toStoreState().Recents) != 0 {
+				t.Fatalf("recentes gravados: %+v / %+v", fs.savedState.Recents, m.list.toStoreState().Recents)
+			}
+		})
+	}
+
+	// Controle: o mesmo caminho com um link válido chega ao Join.
+	fc := &fakeChat{hasToken: true, username: "tester"}
+	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(&fakePlayback{}), WithChat(fc), WithStore(&fakeStore{}))
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("https://www.twitch.tv/dummychan"), Paste: true})
+	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	_ = drainCmd(t, m, cmd)
+	if len(fc.joinedChannels) != 1 || fc.joinedChannels[0].Login != "dummychan" {
+		t.Fatalf("link válido: Join recebeu %+v, want dummychan", fc.joinedChannels)
+	}
+}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -535,4 +536,40 @@ func TestLoadStateWarnsWhenTheStoreCannotBeRead(t *testing.T) {
 			t.Fatalf("favorites on disk = %+v, want the saved one and the added one", got.Favorites)
 		}
 	})
+}
+
+// O carregamento descarta o recente de login inválido e a saída registra só a
+// contagem, sem o login recusado nem byte de controle.
+func TestLogDiscardedChannelsSaiSoComAContagem(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	const fixture = `{"favorites":[],"recents":[
+		{"platform":"twitch","id":"x","login":"dummychan\r\nprivmsg #victimchan :y\u001b[2J"},
+		{"platform":"twitch","id":"gaules","login":"gaules"}
+	]}`
+	if err := os.WriteFile(path, []byte(fixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for lang, want := range map[string]string{
+		i18n.LangEN:   "ttv-tui: favorites and recents dropped for an invalid identifier: 1\n",
+		i18n.LangPTBR: "ttv-tui: favoritos e recentes descartados por identificador inválido: 1\n",
+	} {
+		cat, err := i18n.New(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st, notice := loadState(store.New(path), cat)
+		if notice != "" || len(st.Recents) != 1 || st.Recents[0].Login != "gaules" {
+			t.Fatalf("%s: notice %q, recentes %+v", lang, notice, st.Recents)
+		}
+		var log bytes.Buffer
+		logDiscardedChannels(&log, st.Discarded(), cat)
+		if log.String() != want {
+			t.Fatalf("%s: log = %q want %q", lang, log.String(), want)
+		}
+	}
+	var log bytes.Buffer
+	logDiscardedChannels(&log, 0, nil)
+	if log.Len() != 0 {
+		t.Fatalf("sem descarte o log fica vazio, veio %q", log.String())
+	}
 }

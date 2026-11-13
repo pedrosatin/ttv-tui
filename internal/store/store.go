@@ -119,6 +119,15 @@ type State struct {
 	// snapshot is local bookkeeping, never serialized. Copies share successful-save
 	// acknowledgements because SaveTo accepts State by value.
 	snapshot *favoriteSnapshot
+	// discarded conta os canais que LoadFrom descartou por identificador fora
+	// da gramática da plataforma. Também não é serializado.
+	discarded int
+}
+
+// Discarded informa quantos recentes e favoritos o carregamento descartou por
+// identificador inválido.
+func (s State) Discarded() int {
+	return s.discarded
 }
 
 type favoriteSnapshot struct {
@@ -232,8 +241,10 @@ func loadFrom(path string) (State, error) {
 	if st.Recents == nil {
 		st.Recents = []Channel{}
 	}
-	st.Favorites = normalizeChannels(st.Favorites)
-	st.Recents = normalizeChannels(st.Recents)
+	var dropFav, dropRec int
+	st.Favorites, dropFav = validChannels(normalizeChannels(st.Favorites))
+	st.Recents, dropRec = validChannels(normalizeChannels(st.Recents))
+	st.discarded = dropFav + dropRec
 	st.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), st.Favorites...)}
 	return st, nil
 }
@@ -330,6 +341,42 @@ func unionChannels(first, second []Channel) []Channel {
 	return out
 }
 
+// validChannels descarta o canal cujo identificador foge da gramática da
+// plataforma e devolve quantos saíram. Um login gravado com CR, LF, vírgula ou
+// "#" viraria linha ou alvo extra no IRC ao ser reaberto. Maiúsculas ASCII
+// passam, como em streamurl, porque quem consome o login já o põe em
+// minúsculas; o canal fica como estava no arquivo.
+func validChannels(channels []Channel) ([]Channel, int) {
+	out := channels[:0]
+	for _, ch := range channels {
+		id := catalog.StableID(ch.Platform, ch.ID, ch.Login)
+		if validStoredID(ch.Platform, platform.LowerASCII(id)) {
+			out = append(out, ch)
+		}
+	}
+	return out, len(channels) - len(out)
+}
+
+// validStoredID confere o identificador gravado de um canal. Na Kick o
+// identificador pode levar subcaminho (xqc/videos/123, xqc/clip/abc), porque
+// gravação e clip têm recentes próprios: o slug do canal segue a gramática e o
+// resto não pode ter controle nem segmento "." ou "..".
+func validStoredID(plat, id string) bool {
+	if platform.Normalize(plat) != platform.Kick {
+		return platform.ValidIdentifier(plat, id)
+	}
+	slug, rest, _ := strings.Cut(id, "/")
+	if !platform.ValidKickSlug(slug) || platform.HasControl(rest) {
+		return false
+	}
+	for _, seg := range strings.Split(rest, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
 // normalizeChannels stores the canonical platform on every channel, so what is
 // written matches what Matches compares.
 func normalizeChannels(channels []Channel) []Channel {
@@ -364,8 +411,10 @@ func writeState(path string, st State) error {
 		return fmt.Errorf("chmod temp state: %w", err)
 	}
 
-	st.Favorites = normalizeChannels(st.Favorites)
-	st.Recents = normalizeChannels(st.Recents)
+	var dropFav, dropRec int
+	st.Favorites, dropFav = validChannels(normalizeChannels(st.Favorites))
+	st.Recents, dropRec = validChannels(normalizeChannels(st.Recents))
+	st.discarded = dropFav + dropRec
 
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {

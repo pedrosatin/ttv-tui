@@ -26,6 +26,7 @@ var (
 	ErrChannelSwitched = errors.New("chat: channel switched before send completed, message discarded")
 	ErrDisconnected    = errors.New("chat: disconnected, message not sent")
 	ErrSessionClosed   = errors.New("chat: session closed before send completed")
+	ErrInvalidChannel  = errors.New("chat: channel login outside the Twitch grammar")
 )
 
 // DeliveryStatus tracks the lifecycle of an outbound user message.
@@ -207,13 +208,17 @@ func (r *rateLimiter) Record(channel string) {
 }
 
 // FormatPrivMsg builds the wire-formatted IRCv3 PRIVMSG command including client-nonce.
-func FormatPrivMsg(channel, nonce, body string) string {
-	ch := normalizeChannel(channel)
+// Canal fora da gramática da Twitch devolve ErrInvalidChannel e linha vazia.
+func FormatPrivMsg(channel, nonce, body string) (string, error) {
+	ch, err := ircChannel(channel)
+	if err != nil {
+		return "", err
+	}
 	clean := catalog.SanitizeOutboundBody(body)
 	if nonce != "" {
-		return fmt.Sprintf("@client-nonce=%s PRIVMSG #%s :%s\r\n", sanitizeTagToken(nonce), ch, clean)
+		return fmt.Sprintf("@client-nonce=%s PRIVMSG #%s :%s\r\n", sanitizeTagToken(nonce), ch, clean), nil
 	}
-	return fmt.Sprintf("PRIVMSG #%s :%s\r\n", ch, clean)
+	return fmt.Sprintf("PRIVMSG #%s :%s\r\n", ch, clean), nil
 }
 
 // IsBlockedCommand reports whether body would be published as plain text instead

@@ -255,6 +255,7 @@
   "app.warn_save_on_exit": "ttv-tui: uma mudança pode não ter sido gravada antes de sair: %v",
   "app.warn_player": "ttv-tui: aviso do player: %s",
   "app.warn_streamlink_rollback": "ttv-tui: o streamlink %s falhou depois de uma atualização e não será usado de novo; voltou para o %s",
+  "app.warn_state_discarded": "ttv-tui: favoritos e recentes descartados por identificador inválido: %d",
   "login.warn_expiry": "Aviso: o token está no fim da validade (expires_in=%ds); quando expirar, basta repetir 'ttv-tui login --from-browser'.",
   "login.warn_overwrite": "Aviso: já existe um token salvo na configuração; ele será substituído.",
   "login.warn_scopes": "Aviso: o token não inclui escopos para falar no chat (chat_login, chat:edit ou chat:read; escopos atuais: %s); o envio de mensagens não vai funcionar e é preciso logar de novo no navegador.",

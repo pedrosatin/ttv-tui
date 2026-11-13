@@ -255,6 +255,7 @@
   "app.warn_save_on_exit": "ttv-tui: a change may not have been saved before exit: %v",
   "app.warn_player": "ttv-tui: player warning: %s",
   "app.warn_streamlink_rollback": "ttv-tui: streamlink %s failed after an update and will not be used again; went back to %s",
+  "app.warn_state_discarded": "ttv-tui: favorites and recents dropped for an invalid identifier: %d",
   "login.warn_expiry": "Warning: token is nearing expiration (expires_in=%ds); once expired, simply run 'ttv-tui login --from-browser'.",
   "login.warn_overwrite": "Warning: a token is already saved in the config; it will be replaced.",
   "login.warn_scopes": "Warning: token lacks chat scopes (chat_login, chat:edit or chat:read; current scopes: %s); sending messages will not work and you must sign in again via browser.",

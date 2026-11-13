@@ -22,7 +22,7 @@ func TestManagerJoinTakesTheChannelAndNormalizesForIRC(t *testing.T) {
 		ch   catalog.Channel
 		want string
 	}{
-		{"login", catalog.Channel{Platform: "twitch", Login: " #GauLes "}, "gaules"},
+		{"login", catalog.Channel{Platform: "twitch", Login: "#GauLes"}, "gaules"},
 		{"qualified id only", catalog.Channel{Platform: "twitch", ID: "twitch:XQC"}, "xqc"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -42,5 +42,11 @@ func TestManagerJoinTakesTheChannelAndNormalizesForIRC(t *testing.T) {
 	}
 	if got := mgr.Channel(); got != "xqc" {
 		t.Fatalf("a failed Join changed the channel to %q", got)
+	}
+	if _, err := mgr.Join(context.Background(), catalog.Channel{Platform: "twitch", Login: " gaules "}); !errors.Is(err, ErrInvalidChannel) {
+		t.Fatalf("Join com espaço nas pontas: err = %v, want ErrInvalidChannel", err)
+	}
+	if got := mgr.Channel(); got != "xqc" {
+		t.Fatalf("um Join recusado trocou o canal para %q", got)
 	}
 }

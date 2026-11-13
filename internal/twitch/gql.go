@@ -1094,6 +1094,11 @@ func (s *GQLSource) parseChannelsResponse(body []byte, fallbackCategoryID string
 				Err:      fmt.Errorf("edge %d missing required channel identity (login=%q, displayName=%q)", i, login, displayName),
 			}
 		}
+		if !platform.ValidTwitchLogin(login) {
+			// Login fora da gramática nunca vira canal: chegaria ao IRC
+			// autenticado e ao streamlink.
+			continue
+		}
 		id := strings.TrimSpace(edge.Node.Broadcaster.ID)
 		if id == "" {
 			id = strings.TrimSpace(edge.Node.ID)
@@ -1206,6 +1211,11 @@ func (s *GQLSource) parseSearchResponse(body []byte) (catalog.Page[catalog.Chann
 				Op:       op,
 				Err:      fmt.Errorf("edge %d missing required channel identity (login=%q, displayName=%q)", i, login, displayName),
 			}
+		}
+		if !platform.ValidTwitchLogin(login) {
+			// Login fora da gramática nunca vira canal: chegaria ao IRC
+			// autenticado e ao streamlink.
+			continue
 		}
 		id := strings.TrimSpace(edge.Item.ID)
 		if id == "" {
@@ -1357,6 +1367,11 @@ func (s *GQLSource) parseUsersByLoginsResponse(body []byte) (catalog.Page[catalo
 				Op:       op,
 				Err:      fmt.Errorf("user %d missing required identity (login=%q, displayName=%q)", i, login, displayName),
 			}
+		}
+		if !platform.ValidTwitchLogin(login) {
+			// Login fora da gramática nunca vira canal: chegaria ao IRC
+			// autenticado e ao streamlink.
+			continue
 		}
 		id := strings.TrimSpace(user.ID)
 		if id == "" {
