@@ -26,13 +26,16 @@ type hostPanel struct {
 }
 
 type ctlMsg struct {
-	kind string // "start" | "ended"
+	kind string // "start" | "ended" | "layout" | "resize"
 	ipc  string
 	fd   int    // Unix: streamlink's stdin, closed if libmpv never takes it
 	url  string // what libmpv loads: fdclose://N or the shim's named pipe
 	conn *net.UnixConn
 	s    *session
 	host hostPanel
+	// resize: o tamanho pedido em pixels e onde avisar que a grade mudou.
+	w, h    int
+	resized chan [2]int
 }
 
 type session struct {
@@ -127,4 +130,9 @@ type app struct {
 	haveHost bool
 	host     hostPanel
 	holeOn   bool
+
+	// testing liga a porta de teste (TTV_WINDOW_TEST). testState é o último
+	// resumo de estado que a TUI mandou, guardado só com testing (sob mu).
+	testing   bool
+	testState []byte
 }

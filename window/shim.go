@@ -49,11 +49,11 @@ func shimMain() {
 	}
 	c, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: sock, Net: "unix"})
 	if err != nil {
-		os.Stderr.WriteString("shim: " + err.Error() + "\n")
+		_, _ = os.Stderr.WriteString("shim: " + err.Error() + "\n")
 		os.Exit(1)
 	}
 	if err := sendShimStream(c, ipc); err != nil {
-		os.Stderr.WriteString("shim: " + err.Error() + "\n")
+		_, _ = os.Stderr.WriteString("shim: " + err.Error() + "\n")
 		os.Exit(1)
 	}
 	_, _ = io.Copy(io.Discard, c)

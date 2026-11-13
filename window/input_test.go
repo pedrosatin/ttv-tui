@@ -18,8 +18,8 @@ func TestInputWriterPreservesBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
-	defer w.Close()
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
 	a := &app{ptmx: mockPTYDevice{w}, inputq: make(chan []byte, 2)}
 	done := make(chan struct{})
 	go func() { a.pumpInput(); close(done) }()

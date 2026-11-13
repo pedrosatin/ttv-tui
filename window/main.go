@@ -68,7 +68,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	binDir := filepath.Join(dir, "bin")
 	_ = os.Mkdir(binDir, 0o755)
 	exe, _ := os.Executable()
@@ -84,13 +84,13 @@ func main() {
 	if err != nil {
 		fatal("control socket path:", err)
 	}
-	defer ctlLn.Close()
+	defer func() { _ = ctlLn.Close() }()
 	layoutPath := filepath.Join(dir, "layout.sock")
 	layoutLn, err := net.Listen("unix", layoutPath)
 	if err != nil {
 		fatal("layout socket path:", err)
 	}
-	defer layoutLn.Close()
+	defer func() { _ = layoutLn.Close() }()
 	cApp := C.CString(app_id)
 	cHint := C.CString("SDL_APP_ID")
 	C.SDL_SetHint(cHint, cApp)
@@ -137,7 +137,7 @@ func main() {
 	C.SDL_StartTextInput(win)
 	C.reg_events()
 
-	a := &app{win: win, fs: fs, pt: pt, ctlq: make(chan ctlMsg, 16), fbq: make(chan fbReq, 4), paintReq: make(chan struct{}, 1), dirtyY1: -1}
+	a := &app{win: win, fs: fs, pt: pt, ctlq: make(chan ctlMsg, 16), fbq: make(chan fbReq, 4), paintReq: make(chan struct{}, 1), dirtyY1: -1, testing: testPath != ""}
 	go a.painter()
 	a.readGL()
 	a.term = vt.NewSafeEmulator(80, 24)
@@ -163,7 +163,7 @@ func main() {
 	a.ptmx = ptmx
 	a.inputq = make(chan []byte, 64)
 	go a.pumpInput()
-	defer ptmx.Close()
+	defer func() { _ = ptmx.Close() }()
 	go a.pumpPTY()
 	go a.pumpReplies()
 	tuiDone := make(chan struct{})

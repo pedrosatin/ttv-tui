@@ -54,7 +54,7 @@ func (a *app) startSession(msg ctlMsg) {
 		fmt.Fprintln(os.Stderr, "render context falhou")
 		C.mpv_terminate_destroy(m)
 		closeFD(msg.fd) // libmpv never took it: streamlink has to see the pipe close
-		msg.conn.Close()
+		_ = msg.conn.Close()
 		return
 	}
 	s := &session{m: m, rc: rc, setProperty: propertySetter(m), conn: msg.conn, ipc: msg.ipc, done: make(chan struct{}), stopping: make(chan struct{}), started: time.Now()}
@@ -100,7 +100,7 @@ func (a *app) stopSession() {
 	<-s.done
 	C.rc_free(s.rc)
 	C.mpv_terminate_destroy(s.m)
-	s.conn.Close()
+	_ = s.conn.Close()
 	a.refreshHole()
 	a.relayout()
 }
@@ -114,7 +114,7 @@ func (a *app) serveCtl(l *net.UnixListener) {
 		go func(c *net.UnixConn) {
 			msg, err := readStart(c)
 			if err != nil {
-				c.Close()
+				_ = c.Close()
 				return
 			}
 			a.ctlq <- msg

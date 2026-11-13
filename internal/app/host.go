@@ -18,7 +18,15 @@ const videoHostEnv = "TTV_TUI_VIDEO_HOST"
 type videoHost struct {
 	conn    net.Conn
 	updates chan ui.HostPanel
-	done    chan struct{}
+	// states leva o resumo do estado (SetState), que só os cenários da janela pedem.
+	states chan ui.StateReport
+	done   chan struct{}
+}
+
+// hostStateMsg é como o resumo do estado vai pelo socket: um objeto à parte,
+// que a janela distingue de um painel pela chave testState.
+type hostStateMsg struct {
+	TestState ui.StateReport `json:"testState"`
 }
 
 func dialVideoHost(path string) (*videoHost, error) {
@@ -26,7 +34,7 @@ func dialVideoHost(path string) (*videoHost, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := &videoHost{conn: conn, updates: make(chan ui.HostPanel, 1), done: make(chan struct{})}
+	h := &videoHost{conn: conn, updates: make(chan ui.HostPanel, 1), states: make(chan ui.StateReport, 1), done: make(chan struct{})}
 	go h.write()
 	return h, nil
 }
@@ -39,6 +47,10 @@ func (h *videoHost) write() {
 			return
 		case panel := <-h.updates:
 			if err := enc.Encode(panel); err != nil {
+				return
+			}
+		case st := <-h.states:
+			if err := enc.Encode(hostStateMsg{TestState: st}); err != nil {
 				return
 			}
 		}
@@ -55,6 +67,21 @@ func (h *videoHost) SetPanel(panel ui.HostPanel) {
 		}
 		select {
 		case <-h.updates:
+		default:
+		}
+	}
+}
+
+// SetState é SetPanel para o resumo do estado: só o mais novo vai à janela.
+func (h *videoHost) SetState(st ui.StateReport) {
+	for {
+		select {
+		case h.states <- st:
+			return
+		default:
+		}
+		select {
+		case <-h.states:
 		default:
 		}
 	}

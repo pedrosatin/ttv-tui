@@ -66,6 +66,16 @@ jobs:
           go vet ./...
           go test -buildvcs=false ./...
 
+      # A janela real, offscreen no llvmpipe do mesa, com GQL, IRC e vídeo de
+      # fixture: sem compositor, sem live e sem rede. Cenário marcado com bug
+      # conhecido (W1, W4…) aparece como SKIP até a correção chegar.
+      - name: Window UX scenarios (offscreen)
+        env:
+          TMPDIR: /tmp
+        run: |
+          go vet -tags cenarios ./tools/window-scenarios
+          go test -tags cenarios -count=1 -parallel 3 -v ./tools/window-scenarios
+
   # The release ships the window only for Linux (ADR 0012). These builds keep the
   # Windows (MSYS2 UCRT64) and macOS (Homebrew) code compiling and its tests running.
   window-other:

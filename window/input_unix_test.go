@@ -20,8 +20,8 @@ func TestWriteInputDoesNotWaitForReader(t *testing.T) {
 	if _, err := term.MakeRaw(r.Fd()); err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
-	defer w.Close()
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
 	a := &app{ptmx: mockPTYDevice{w}, inputq: make(chan []byte, 1)}
 	done := make(chan struct{})
 	go func() {

@@ -1,5 +1,10 @@
 version: "2"
 
+# Os cenários da janela (tools/window-scenarios) só compilam com a tag cenarios.
+run:
+  build-tags:
+    - cenarios
+
 linters:
   default: none
   enable:

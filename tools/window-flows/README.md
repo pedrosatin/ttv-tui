@@ -73,3 +73,7 @@ execução pode gerar `FAIL` falso em "nenhuma janela do mpv".
   início.
 - "Decode por hardware" espera `vaapi`.
 - A janela abre com `--lang en`, porque as verificações leem os textos em inglês.
+
+Os cenários que dispensam Hyprland e live, com GQL, IRC e vídeo de fixture, ficam em
+[`tools/window-scenarios`](../window-scenarios/) e rodam no CI. O guia está em
+[`docs/cenarios-de-ux.md`](../../docs/cenarios-de-ux.md).

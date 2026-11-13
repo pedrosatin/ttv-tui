@@ -76,10 +76,13 @@ func Run(opts Options) error {
 	if openWindow(opts) {
 		return nil
 	}
-	var hostOption ui.Option
+	var hostOption, reportOption ui.Option
 	if host := connectVideoHost(); host != nil {
 		defer host.Close()
 		hostOption = ui.WithVideoHost(host)
+		if testStateReport() {
+			reportOption = ui.WithStateReport(host.SetState)
+		}
 	}
 
 	resolvedLang := i18n.Resolve(opts.Lang, cfg.Language, i18n.EnvLocale())
@@ -104,7 +107,7 @@ func Run(opts Options) error {
 
 	source := opts.Source
 	if source == nil {
-		source = twitch.NewGQLSource(twitch.GQLConfig{})
+		source = twitch.NewGQLSource(twitch.GQLConfig{Endpoint: testGQLEndpoint()})
 	}
 
 	kickProvider, stopKick := kickProvider(opts.Kick, cfg)
@@ -160,6 +163,7 @@ func Run(opts Options) error {
 	chats := newChatBridge(ctx, providerRegistry)
 	uiOpts := []ui.Option{
 		hostOption,
+		reportOption,
 		ui.WithPlayback(playback),
 		ui.WithChat(chats),
 		ui.WithStore(appStore),
@@ -331,11 +335,16 @@ func chatManager(injected *chat.Manager, cfg config.Config) (*chat.Manager, func
 	if injected != nil {
 		return injected, injected.Stop
 	}
-	mgr := chat.New(chat.Options{
+	mgr := chat.New(chatOptions(cfg))
+	return mgr, mgr.Close
+}
+
+// chatOptions são as opções do chat que o config pede, com o gancho de teste do IRC.
+func chatOptions(cfg config.Config) chat.Options {
+	return testIRCOptions(chat.Options{
 		Token:    cfg.AccessToken,
 		Username: cfg.Username,
 	})
-	return mgr, mgr.Close
 }
 
 // kickProvider is chatManager for Kick: the provider with its live-state lookup

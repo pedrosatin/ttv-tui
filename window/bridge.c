@@ -1,10 +1,23 @@
 #include "bridge.h"
 
-static Uint32 EV_MPV, EV_TUI, EV_CTL;
-void reg_events(void) { EV_MPV = SDL_RegisterEvents(3); EV_TUI = EV_MPV + 1; EV_CTL = EV_MPV + 2; }
+static Uint32 EV_MPV, EV_TUI, EV_CTL, EV_INPUT;
+void reg_events(void) { EV_MPV = SDL_RegisterEvents(4); EV_TUI = EV_MPV + 1; EV_CTL = EV_MPV + 2; EV_INPUT = EV_MPV + 3; }
 Uint32 ev_mpv(void) { return EV_MPV; }
 Uint32 ev_tui(void) { return EV_TUI; }
 Uint32 ev_ctl(void) { return EV_CTL; }
+Uint32 ev_input(void) { return EV_INPUT; }
+/* Bytes do socket de teste para o PTY, pela mesma fila das teclas: a ordem entre
+   key e text fica a do pedido. A cópia é liberada por take_input. */
+void inject_input(const void *p, int n) {
+    SDL_Event e; SDL_zero(e); e.type = EV_INPUT;
+    void *copy = SDL_malloc(n > 0 ? n : 1);
+    if (copy == NULL) return;
+    SDL_memcpy(copy, p, n);
+    e.user.data1 = copy; e.user.code = n;
+    if (!SDL_PushEvent(&e)) SDL_free(copy);
+}
+void *input_data(SDL_Event *e) { return e->user.data1; }
+int input_len(SDL_Event *e) { return e->user.code; }
 void push_ev(Uint32 t) { SDL_Event e; SDL_zero(e); e.type = t; SDL_PushEvent(&e); }
 void push_quit(void) { SDL_Event e; SDL_zero(e); e.type = SDL_EVENT_QUIT; SDL_PushEvent(&e); }
 void inject_key(SDL_Keycode k, SDL_Keymod m) {

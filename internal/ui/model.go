@@ -266,6 +266,10 @@ type Model struct {
 	// timer agenda as mensagens que chegam depois de um intervalo; nil usa
 	// tea.Tick. Os cenários de teste trocam por um que não espera o relógio.
 	timer func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
+	// stateReport e reported servem os cenários da janela (state_report.go).
+	stateReport func(StateReport)
+	reported    StateReport
+	keysSeen    int
 }
 
 // after entrega fn depois de d, pelo timer do modelo.
@@ -602,7 +606,7 @@ func (m Model) checkTokenCmd() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	if model, ok := next.(Model); ok {
-		return model.syncHostPanel(), cmd
+		return model.syncHostPanel().reportState(msg), cmd
 	}
 	return next, cmd
 }

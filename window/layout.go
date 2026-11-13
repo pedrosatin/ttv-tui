@@ -112,6 +112,23 @@ func (a *app) setHost(p hostPanel) {
 	a.relayout()
 }
 
+// layoutMsg é uma linha do socket de layout: um painel, ou o resumo do estado
+// que a TUI manda nos cenários de teste (TTV_TUI_TEST_STATE).
+type layoutMsg struct {
+	hostPanel
+	TestState json.RawMessage `json:"testState"`
+}
+
+// noteTestState guarda o resumo para o comando state; fora dos testes descarta.
+func (a *app) noteTestState(raw json.RawMessage) {
+	if !a.testing {
+		return
+	}
+	a.mu.Lock()
+	a.testState = append(a.testState[:0], raw...)
+	a.mu.Unlock()
+}
+
 func (a *app) serveLayout(l net.Listener) {
 	for {
 		c, err := l.Accept()
@@ -119,14 +136,18 @@ func (a *app) serveLayout(l net.Listener) {
 			return
 		}
 		go func() {
-			defer c.Close()
+			defer func() { _ = c.Close() }()
 			dec := json.NewDecoder(c)
 			for {
-				var p hostPanel
-				if dec.Decode(&p) != nil {
+				var m layoutMsg
+				if dec.Decode(&m) != nil {
 					return
 				}
-				a.ctlq <- ctlMsg{kind: "layout", host: p}
+				if m.TestState != nil {
+					a.noteTestState(m.TestState)
+					continue
+				}
+				a.ctlq <- ctlMsg{kind: "layout", host: m.hostPanel}
 				C.push_ev(C.ev_ctl())
 			}
 		}()

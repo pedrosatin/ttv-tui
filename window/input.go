@@ -132,6 +132,10 @@ func (a *app) handle(ev *C.SDL_Event) {
 		if a.sess != nil && C.rc_has_frame(a.sess.rc) != 0 {
 			a.videoDirty = true
 		}
+	case t == C.ev_input(): // socket de teste: text, raw e letras do key
+		p := C.input_data(ev)
+		a.writeInput(C.GoBytes(p, C.input_len(ev)))
+		C.SDL_free(p)
 	case t == C.ev_tui():
 		a.tuiPending.Store(false)
 	case t == C.ev_ctl():
@@ -146,6 +150,8 @@ func (a *app) handle(ev *C.SDL_Event) {
 				if a.sess == msg.s {
 					a.stopSession()
 				}
+			case "resize":
+				a.resizeForTest(msg)
 			}
 		}
 		if len(a.fbq) > 0 {
