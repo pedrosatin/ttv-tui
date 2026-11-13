@@ -63,7 +63,39 @@ type Downloader struct {
 	// UseStaleAge and UseHeartbeat tune the use markers; zero uses the defaults.
 	UseStaleAge  time.Duration
 	UseHeartbeat time.Duration
+
+	// afterStep, só em testes, roda depois de cada passo gravado da instalação
+	// e da atualização. Um erro interrompe a sequência ali, como um processo
+	// morto naquele ponto.
+	afterStep func(installStep) error
 }
+
+// installStep nomeia um ponto da sequência de gravação em disco.
+type installStep string
+
+const (
+	// stepChecked: a data da checagem foi gravada.
+	stepChecked installStep = "checked"
+	// stepStaged: o staging está completo e verificado, nada foi promovido.
+	stepStaged installStep = "staged"
+	// stepTrial: o teste foi gravado, o rename ainda não aconteceu.
+	stepTrial installStep = "trial"
+	// stepPromoted: o rename tornou a versão nova a atual.
+	stepPromoted installStep = "promoted"
+	// stepPruned: as versões antigas foram apagadas.
+	stepPruned installStep = "pruned"
+)
+
+func (d *Downloader) step(s installStep) error {
+	if d.afterStep == nil {
+		return nil
+	}
+	return d.afterStep(s)
+}
+
+// beforePromoteFunc roda com o staging verificado, logo antes do rename que
+// torna a versão atual. O undo devolvido roda se a promoção não acontecer.
+type beforePromoteFunc func(ctx context.Context) (undo func(), err error)
 
 func (d *Downloader) lockStaleAge() time.Duration {
 	if d.LockStaleAge > 0 {
@@ -213,12 +245,41 @@ func (d *Downloader) matchAsset(assets []gitHubAsset) (*gitHubAsset, error) {
 	return nil, fmt.Errorf("no matching streamlink asset found for %s/%s", d.GOOS, d.GOARCH)
 }
 
+// maxTagNameLen limita o nome do diretório da versão. As tags do streamlink
+// têm menos de 20 caracteres.
+const maxTagNameLen = 64
+
+// windowsReserved são os nomes de dispositivo que o Windows reserva com
+// qualquer extensão (nul.txt abre o dispositivo NUL).
+var windowsReserved = map[string]bool{
+	"CON": true, "PRN": true, "AUX": true, "NUL": true, "CONIN$": true, "CONOUT$": true,
+	"COM0": true, "COM1": true, "COM2": true, "COM3": true, "COM4": true,
+	"COM5": true, "COM6": true, "COM7": true, "COM8": true, "COM9": true,
+	"LPT0": true, "LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true,
+	"LPT5": true, "LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
+}
+
+// validateTagName aceita só nomes de versão que servem de diretório em
+// qualquer sistema: caracteres [A-Za-z0-9._+-], sem ponto no começo (o
+// resolvedor ignora diretórios ocultos) nem no fim (o Windows o descarta), sem
+// "..", e sem nome reservado do Windows, com ou sem extensão.
 func validateTagName(tag string) error {
-	if tag == "" || tag == "." || tag == ".." {
-		return errors.New("invalid empty or dot tag name")
+	if tag == "" || len(tag) > maxTagNameLen {
+		return fmt.Errorf("tag name %q is empty or longer than %d characters", tag, maxTagNameLen)
 	}
-	if strings.ContainsAny(tag, `/\`) || strings.Contains(tag, "..") {
-		return fmt.Errorf("tag name %q contains illegal path characters", tag)
+	for _, r := range tag {
+		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+			r == '.' || r == '_' || r == '+' || r == '-'
+		if !ok {
+			return fmt.Errorf("tag name %q has a character outside [A-Za-z0-9._+-]", tag)
+		}
+	}
+	if strings.HasPrefix(tag, ".") || strings.HasSuffix(tag, ".") || strings.Contains(tag, "..") {
+		return fmt.Errorf("tag name %q starts or ends with a dot or contains \"..\"", tag)
+	}
+	stem, _, _ := strings.Cut(tag, ".")
+	if windowsReserved[strings.ToUpper(stem)] {
+		return fmt.Errorf("tag name %q is a reserved Windows device name", tag)
 	}
 	return nil
 }
@@ -314,7 +375,7 @@ func (d *Downloader) doDownloadStreamlink(ctx context.Context, progress Progress
 		return Result{}, err
 	}
 
-	if err := d.installRelease(ctx, baseDir, rel, progress); err != nil {
+	if err := d.installRelease(ctx, baseDir, rel, progress, nil); err != nil {
 		return Result{}, err
 	}
 	res, ok := resolver.findManagedStreamlink()
@@ -382,6 +443,11 @@ func (d *Downloader) fetchLatest(ctx context.Context, repo string) (latestReleas
 		return latestRelease{}, fmt.Errorf("invalid asset filename %q", asset.Name)
 	}
 
+	// Sem tamanho positivo o download não teria limite além do timeout.
+	if asset.Size <= 0 {
+		return latestRelease{}, fmt.Errorf("asset %q has no positive size in GitHub API (got %d)", asset.Name, asset.Size)
+	}
+
 	expectedDigest := strings.TrimSpace(asset.Digest)
 	if !strings.HasPrefix(strings.ToLower(expectedDigest), "sha256:") {
 		return latestRelease{}, fmt.Errorf("asset %q has no valid sha256 digest in GitHub API (got %q)", asset.Name, expectedDigest)
@@ -397,8 +463,10 @@ func (d *Downloader) fetchLatest(ctx context.Context, repo string) (latestReleas
 // installRelease downloads the release asset, checks its SHA-256, and promotes
 // a complete installation to the version directory with one rename. The caller
 // holds the download lock. A failed check leaves nothing behind, and an
-// existing complete installation of the same version is kept.
-func (d *Downloader) installRelease(ctx context.Context, baseDir string, rel latestRelease, progress ProgressFunc) error {
+// existing complete installation of the same version is kept. beforePromote,
+// when set, runs once the staging is verified and before the rename; its undo
+// runs when the promotion then does not happen.
+func (d *Downloader) installRelease(ctx context.Context, baseDir string, rel latestRelease, progress ProgressFunc, beforePromote beforePromoteFunc) (err error) {
 	// Download into a temporary directory inside baseDir.
 	tempDir, err := os.MkdirTemp(baseDir, ".download-*")
 	if err != nil {
@@ -439,6 +507,30 @@ func (d *Downloader) installRelease(ctx context.Context, baseDir string, rel lat
 		}
 		if findStreamlinkBinaryInDir(stagingDir, d.GOOS) == "" {
 			return fmt.Errorf("AppRun executable not found after extracting AppImage")
+		}
+	}
+
+	if err := d.step(stepStaged); err != nil {
+		return err
+	}
+	if beforePromote != nil {
+		undo, perr := beforePromote(ctx)
+		if perr != nil {
+			return perr
+		}
+		// err é o resultado nomeado: o desfazer vê a falha de qualquer passo
+		// seguinte, inclusive do rename.
+		defer func() {
+			if err != nil {
+				undo()
+			}
+		}()
+		if err := d.step(stepTrial); err != nil {
+			return err
+		}
+		// Um cancelamento antes do rename não promove nada.
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("promote %s: %w", rel.Version, err)
 		}
 	}
 
@@ -513,6 +605,9 @@ func defaultExtractAppImage(ctx context.Context, appImagePath, destDir string) e
 // downloadAndVerify streams the download from urlStr to destPath while computing
 // SHA-256 and enforcing size limits. If verification fails, destPath is deleted immediately.
 func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath string, expectedSize int64, expectedHash string, progress ProgressFunc) error {
+	if expectedSize <= 0 {
+		return fmt.Errorf("refuse download without a positive expected size (got %d)", expectedSize)
+	}
 	if _, err := d.validateURL(urlStr); err != nil {
 		return err
 	}
@@ -535,9 +630,6 @@ func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath str
 	}
 
 	totalBytes := expectedSize
-	if totalBytes <= 0 && resp.ContentLength > 0 {
-		totalBytes = resp.ContentLength
-	}
 
 	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -551,15 +643,12 @@ func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath str
 	lastPct := -1
 
 	// Read with LimitReader to prevent exceeding expected asset size + 1.
-	var bodyReader io.Reader = resp.Body
-	if expectedSize > 0 {
-		bodyReader = io.LimitReader(resp.Body, expectedSize+1)
-	}
+	bodyReader := io.LimitReader(resp.Body, expectedSize+1)
 
 	for {
 		nr, rerr := bodyReader.Read(buf)
 		if nr > 0 {
-			if expectedSize > 0 && readBytes+int64(nr) > expectedSize {
+			if readBytes+int64(nr) > expectedSize {
 				_ = os.Remove(destPath)
 				return fmt.Errorf("download exceeded expected asset size of %d bytes", expectedSize)
 			}
@@ -570,7 +659,7 @@ func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath str
 			}
 			hasher.Write(buf[:nw])
 			readBytes += int64(nw)
-			if progress != nil && totalBytes > 0 {
+			if progress != nil {
 				pct := int(float64(readBytes) / float64(totalBytes) * 100)
 				if pct != lastPct {
 					lastPct = pct
@@ -588,7 +677,7 @@ func (d *Downloader) downloadAndVerify(ctx context.Context, urlStr, destPath str
 	}
 	_ = f.Close()
 
-	if expectedSize > 0 && readBytes < expectedSize {
+	if readBytes < expectedSize {
 		_ = os.Remove(destPath)
 		return fmt.Errorf("download truncated: got %d bytes, expected %d", readBytes, expectedSize)
 	}

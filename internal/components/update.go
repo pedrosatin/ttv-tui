@@ -175,26 +175,60 @@ func (d *Downloader) UpdateStreamlink(ctx context.Context) (UpdateResult, error)
 	}); err != nil {
 		return UpdateResult{}, err
 	}
+	if err := d.step(stepChecked); err != nil {
+		return UpdateResult{}, err
+	}
 	if skip {
 		return UpdateResult{Status: UpdateCurrent}, nil
 	}
 
-	if err := d.installRelease(ctx, baseDir, rel, nil); err != nil {
+	// A versão nova entra em teste antes do rename que a torna atual. Uma
+	// interrupção depois da gravação e antes do rename deixa a anterior atual e
+	// um teste de uma versão ausente, que nenhuma reprodução confirma nem desfaz;
+	// a ordem inversa podia deixar a nova atual sem teste e sem volta.
+	if err := d.installRelease(ctx, baseDir, rel, nil, d.recordTrial(rel.Version)); err != nil {
 		return UpdateResult{}, err
 	}
-	if err := d.updateState(ctx, func(st *UpdateState) (bool, error) {
-		st.Trial = rel.Version
-		return true, nil
-	}); err != nil {
+	if err := d.step(stepPromoted); err != nil {
 		return UpdateResult{}, err
 	}
 	d.pruneLocked(baseDir)
+	if err := d.step(stepPruned); err != nil {
+		return UpdateResult{}, err
+	}
 
 	installed, ok := resolver.findManagedStreamlink()
 	if !ok || installed.Version != rel.Version {
 		return UpdateResult{}, fmt.Errorf("managed streamlink %s not usable after install", rel.Version)
 	}
 	return UpdateResult{Status: UpdateInstalled, Version: installed.Version, Previous: current.Version}, nil
+}
+
+// recordTrial devolve o passo que põe version em teste antes da promoção. O
+// desfazer devolve o teste anterior quando a promoção não acontece, para que um
+// erro ou um cancelamento não deixe em teste uma versão que não foi instalada.
+func (d *Downloader) recordTrial(version string) beforePromoteFunc {
+	return func(ctx context.Context) (func(), error) {
+		previous := ""
+		if err := d.updateState(ctx, func(st *UpdateState) (bool, error) {
+			previous = st.Trial
+			st.Trial = version
+			return true, nil
+		}); err != nil {
+			return nil, fmt.Errorf("record trial: %w", err)
+		}
+		undo := func() {
+			// O contexto pode já ter caído: o desfazer roda mesmo assim.
+			_ = d.updateState(context.WithoutCancel(ctx), func(st *UpdateState) (bool, error) {
+				if st.Trial != version {
+					return false, nil
+				}
+				st.Trial = previous
+				return true, nil
+			})
+		}
+		return undo, nil
+	}
 }
 
 // ConfirmStreamlink ends the trial of version after it played a stream. It does

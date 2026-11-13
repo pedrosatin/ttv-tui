@@ -24,6 +24,8 @@ Para oferecer uma experiência imediata de reprodução sem quebrar instalaçõe
 3. **Verificação de integridade e segurança**:
    - O asset é consultado pela API oficial do GitHub (`releases/latest`), obtendo o campo `digest` (`sha256:...`) informado para o arquivo.
    - O download ocorre exclusivamente por conexões HTTPS contra domínios autorizados (`api.github.com`, `github.com`, `release-assets.githubusercontent.com` e `objects.githubusercontent.com`).
+   - O asset precisa de tamanho positivo informado pela API (`size`). Sem ele o download é recusado antes do primeiro byte, e com ele a leitura para no tamanho informado.
+   - A tag da release vira o nome do diretório da versão, então só aceita `[A-Za-z0-9._+-]`, até 64 caracteres, sem ponto no começo ou no fim, sem `..` e sem nome reservado do Windows com ou sem extensão (`CON`, `NUL`, `COM1`, `nul.txt`).
    - O arquivo só é gravado e tornado executável se o hash SHA-256 computado bater exatamente com o digest esperado. Em caso de divergência, o arquivo é imediatamente removido e a falha é exibida com orientações para instalação manual.
 
 4. **Instalação atômica e compatibilidade de execução**:
@@ -42,7 +44,7 @@ Para oferecer uma experiência imediata de reprodução sem quebrar instalaçõe
    - Ficam no disco no máximo a versão atual e a anterior. As mais velhas são apagadas sob o lock, e uma versão que outra instância ainda usa não é apagada: cada processo mantém um marcador de uso (`.use-<pid>-<versão>.lock`, renovado por batimento e expirado sozinho se o processo morre) enquanto usa uma versão gerenciada.
 
 7. **Volta para a versão anterior**:
-   - Uma versão instalada por atualização fica "em teste" até a primeira reprodução que chega a tocar. Só uma versão em teste pode ser desfeita: uma versão que já tocou e quebra semanas depois (por exemplo, a Twitch mudou o protocolo) não manda o app para uma versão ainda mais velha.
+   - Uma versão instalada por atualização fica "em teste" até a primeira reprodução que chega a tocar. O teste é gravado em `state.json` antes do rename que torna a versão atual. Uma interrupção (SIGKILL, falta de energia) depois da gravação e antes do rename deixa a anterior atual e um teste de uma versão ausente, que nenhuma reprodução confirma nem desfaz; a próxima checagem instala a versão de novo. Um erro ou um cancelamento nesse intervalo não promove nada e devolve o teste anterior. Só uma versão em teste pode ser desfeita: uma versão que já tocou e quebra semanas depois (por exemplo, a Twitch mudou o protocolo) não manda o app para uma versão ainda mais velha.
    - O que conta como falha da versão é só `player.FailureStreamlinkBroken`: erro de plugin ou do runtime Python no log (`Unable to validate`, `PluginError`, `ModuleNotFoundError`, `error while loading shared libraries` e semelhantes), binário que não executa, ou saída com erro antes de entregar o stream sem nenhuma linha que explique por canal ou rede. Canal offline, rede, tempo esgotado, URL sem plugin (`No plugin can handle URL`), ferramenta ausente e erro sem causa reconhecida não contam, e na classificação uma linha de plugin que cita rede ou canal offline fica com essa causa.
    - A classificação ignora texto derivado da URL. O streamlink repete a URL alvo e o nome do canal (`[cli][info] Found matching plugin twitch for URL ...`), e quem registra um canal `keyerror` controla esse texto:
      - as linhas `[..][info]` e `[..][debug]` não classificam, e a URL alvo e a identidade da sessão viram um marcador antes da classificação, inclusive na da última linha;
