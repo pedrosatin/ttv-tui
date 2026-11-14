@@ -577,6 +577,7 @@ func runPlayerHelper() {
 			InitialVolume:    helperInitialVolume(),
 			InitialPause:     os.Getenv("TTV_PLAYER_HELPER_INIT_PAUSE") == "1",
 			ExternalVolume:   helperEnvFloat("TTV_PLAYER_HELPER_EXTERNAL_VOLUME"),
+			ExternalMute:     os.Getenv("TTV_PLAYER_HELPER_EXTERNAL_MUTE") == "1",
 		})
 	case "ad-then-play":
 		fmt.Println("[plugins.twitch][info] Waiting for pre-roll ads to finish, be patient")
@@ -725,6 +726,9 @@ type helperIPCOptions struct {
 	// ExternalVolume is a volume change nobody asked for over IPC, as a key
 	// pressed in the mpv window: sent once, after the session's baseline.
 	ExternalVolume float64
+	// ExternalMute is m pressed in the mpv window: mute true, sent once after
+	// the session's baseline.
+	ExternalMute bool
 }
 
 func helperInitialVolume() float64 {
@@ -907,6 +911,17 @@ func serveFakeMPV(conn net.Conn, delay time.Duration, opts helperIPCOptions) {
 			})
 			opts.ExternalVolume = 0
 			if _, err := conn.Write(append(rawVol, '\n')); err != nil {
+				return
+			}
+		}
+		if prop == "pause" && opts.ExternalMute {
+			rawMute, _ := json.Marshal(map[string]any{
+				"event": "property-change",
+				"name":  "mute",
+				"data":  true,
+			})
+			opts.ExternalMute = false
+			if _, err := conn.Write(append(rawMute, '\n')); err != nil {
 				return
 			}
 		}

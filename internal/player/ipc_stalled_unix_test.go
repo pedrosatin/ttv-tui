@@ -324,3 +324,58 @@ func TestFailedPauseKeepsNewerEqualWish(t *testing.T) {
 		t.Fatalf("after the first write failed: wished pause = %v (set %v), want the third Space's true", wished, has)
 	}
 }
+
+// waitWantMuted waits until the wished mute is muted.
+func waitWantMuted(t *testing.T, s *Session, muted bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		s.mu.Lock()
+		ok := s.hasWantMuted && s.wantMuted == muted
+		s.mu.Unlock()
+		if ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the wished mute never became %v", muted)
+		}
+		runtime.Gosched()
+	}
+}
+
+// Three m while the first write is stuck: true, false, true. When the first
+// write fails, the wish of the third, which is again true, must stay.
+func TestFailedMuteKeepsNewerEqualWish(t *testing.T) {
+	s, _ := stalledIPC(t, time.Minute)
+	gate := &gatedConn{Conn: s.ipcConn, writing: make(chan struct{}), result: make(chan error)}
+	s.ipcConn = gate
+
+	first := make(chan error, 1)
+	go func() { first <- s.toggleMute() }()
+	<-gate.writing
+
+	later := make(chan error, 2)
+	go func() { later <- s.toggleMute() }()
+	waitWantMuted(t, s, false)
+	go func() { later <- s.toggleMute() }()
+	waitWantMuted(t, s, true)
+
+	gate.result <- os.ErrDeadlineExceeded
+	if err := <-first; !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("first m: err = %v, want a write deadline error", err)
+	}
+	s.mu.Lock()
+	wished, has := s.wantMuted, s.hasWantMuted
+	s.mu.Unlock()
+
+	for range 2 {
+		<-gate.writing
+		gate.result <- nil
+		if err := <-later; err != nil {
+			t.Fatalf("later m: %v", err)
+		}
+	}
+	if !has || !wished {
+		t.Fatalf("after the first write failed: wished mute = %v (set %v), want the third m's true", wished, has)
+	}
+}

@@ -113,6 +113,9 @@ type Session struct {
 	muted        bool
 	wantMuted    bool
 	hasWantMuted bool
+	// wantMutedSeq counts the toggles recorded, like desiredPauseSeq: a failed
+	// m undoes its wish only if no newer one replaced it, even with the same value.
+	wantMutedSeq uint64
 	waitDone     chan struct{}
 	waitErr      error
 	// failing is set once failFast has taken the session down: streamlink repeats
@@ -849,12 +852,14 @@ func (s *Session) toggleMute() error {
 	want := !base
 	prevWant, prevHas := s.wantMuted, s.hasWantMuted
 	s.wantMuted, s.hasWantMuted = want, true
+	s.wantMutedSeq++
+	seq := s.wantMutedSeq
 	s.mu.Unlock()
 
 	err := s.sendCommand([]any{"set_property", "mute", want}, pendingCommand{kind: pendingMute, muted: want, osd: true})
 	if err != nil {
 		s.mu.Lock()
-		if s.hasWantMuted && s.wantMuted == want {
+		if s.hasWantMuted && s.wantMutedSeq == seq {
 			s.wantMuted, s.hasWantMuted = prevWant, prevHas
 		}
 		s.mu.Unlock()

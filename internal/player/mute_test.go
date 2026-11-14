@@ -145,3 +145,54 @@ func TestInputConfMuteOSDHasNoWords(t *testing.T) {
 		}
 	}
 }
+
+// Two m pressed before mpv answers the first: the second flips the wish of the
+// first, so mpv gets mute and unmute and the session ends with sound.
+func TestQuickDoubleMuteEndsWhereItStarted(t *testing.T) {
+	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
+	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
+	// mpv answers each command late, so the second m lands before the first reply.
+	t.Setenv("TTV_PLAYER_HELPER_REPLY_DELAY_MS", "300")
+	mgr := newTestManager(t, "play-control", Options{})
+	gen, err := mgr.Start(testTarget("doublemute"))
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	_ = waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+
+	if err := mgr.ToggleMute(); err != nil {
+		t.Fatalf("first m: %v", err)
+	}
+	if err := mgr.ToggleMute(); err != nil {
+		t.Fatalf("second m: %v", err)
+	}
+	waitCommands(t, cmdLog, 3*time.Second, `["set_property","mute",true]`, `["set_property","mute",false]`)
+	waitCommandsSettled(t, mgr, StatePlaying, 5*time.Second)
+	if got := muteCommands(t, cmdLog); len(got) != 2 || got[0] != "true" || got[1] != "false" {
+		t.Fatalf("mute commands = %v, want [true false]", got)
+	}
+	waitMuted(t, mgr, gen, false, 3*time.Second)
+}
+
+// m pressed in the mpv window reaches the session through the observed
+// property, and the next m from the TUI starts from it.
+func TestMuteChangedInMPVWindowReachesEvents(t *testing.T) {
+	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
+	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
+	t.Setenv("TTV_PLAYER_HELPER_EXTERNAL_MUTE", "1")
+	mgr := newTestManager(t, "play-control", Options{})
+	gen, err := mgr.Start(testTarget("extmute"))
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitMuted(t, mgr, gen, true, 5*time.Second)
+	if got := muteCommands(t, cmdLog); len(got) != 0 {
+		t.Fatalf("mute commands = %v: the TUI asked for nothing", got)
+	}
+
+	if err := mgr.ToggleMute(); err != nil {
+		t.Fatalf("ToggleMute: %v", err)
+	}
+	waitCommands(t, cmdLog, 3*time.Second, `["set_property","mute",false]`)
+	waitMuted(t, mgr, gen, false, 3*time.Second)
+}
