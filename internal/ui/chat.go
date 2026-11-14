@@ -199,6 +199,10 @@ func (m Model) chatErrorReasonText(reason catalog.ChatErrorReason) string {
 		return fmt.Sprintf(m.t("chat.err.no_room"), name)
 	case catalog.ChatErrorKeyRefused:
 		return fmt.Sprintf(m.t("chat.err.key_refused"), name)
+	case catalog.ChatErrorVOD:
+		return fmt.Sprintf(m.t("chat.err.vod"), name)
+	case catalog.ChatErrorBotCheck:
+		return fmt.Sprintf(m.t("chat.err.bot_check"), name)
 	default:
 		return ""
 	}

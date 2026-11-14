@@ -157,6 +157,9 @@ func (m Model) applySavedAvailability(msg SavedAvailabilityMsg) (tea.Model, tea.
 		// state (a pasted URL); the bar shows what the lookup found.
 		updated := m.withLoadedAvailability([]catalog.Channel{*sel}, known)[0]
 		m.list.selectedChannel = &updated
+		if m.player.login != "" && samePlayerLabel(updated.Platform, m.player.login, updated.PlayerLabel()) {
+			m.player.target.Channel = updated
+		}
 	}
 	m.reconcileHighlight()
 	return m, nil
@@ -369,7 +372,7 @@ func (m *Model) setPlayerFailure(msg PlayerStatusMsg) {
 		m.player.downloadFailed = msg.DownloadFailed
 		// A classified offline failure is fresh evidence for this channel:
 		// the listing may still show stale viewers from before play.
-		if msg.Failure == PlayerFailureOffline {
+		if msg.Failure == PlayerFailureOffline || msg.Failure == PlayerFailureVOD {
 			m.markChannelOffline(m.player.login)
 			m.reconcileHighlight()
 		}

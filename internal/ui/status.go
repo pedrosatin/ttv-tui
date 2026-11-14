@@ -85,7 +85,7 @@ func (m Model) listErrorDetail() string {
 func (m Model) activeContextSummary() string {
 	var parts []string
 	if m.list.selectedChannel != nil {
-		playerHasLogin := m.player.login != "" && strings.EqualFold(m.player.login, m.list.selectedChannel.PlayerLabel())
+		playerHasLogin := m.player.login != "" && samePlayerLabel(m.list.selectedChannel.Platform, m.player.login, m.list.selectedChannel.PlayerLabel())
 		name := sanitizeScreenText(m.list.selectedChannel.DisplayName)
 		login := sanitizeScreenText(m.list.selectedChannel.Login)
 		chText := ""

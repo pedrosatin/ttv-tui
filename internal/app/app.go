@@ -27,6 +27,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/termtext"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
+	"github.com/pedrosatin/ttv-tui/internal/youtube"
 )
 
 // Options configures a single invocation of the application.
@@ -42,9 +43,12 @@ type Options struct {
 	Chat       *chat.Manager
 	// Kick replaces the Kick provider, so a test can run without the network
 	// (nil: the real one, built from the config).
-	Kick   *kick.Provider
-	Input  io.Reader
-	Output io.Writer
+	Kick *kick.Provider
+	// YouTube replaces the YouTube provider, so a test can run without the
+	// network (nil: the real one).
+	YouTube *youtube.Provider
+	Input   io.Reader
+	Output  io.Writer
 	// Log receives warnings printed outside the TUI (nil: os.Stderr).
 	Log io.Writer
 }
@@ -114,9 +118,12 @@ func Run(opts Options) error {
 	kickProvider, stopKick := kickProvider(opts.Kick, cfg)
 	defer stopKick()
 
+	youtubeProvider, stopYouTube := youtubeProvider(opts.YouTube)
+	defer stopYouTube()
+
 	twitchProvider := twitch.NewProvider(source, twitch.WithChat(chatMgr))
 	urlProvider := provider.NewURLProvider()
-	providerRegistry := provider.NewRegistry(twitchProvider, kickProvider, urlProvider)
+	providerRegistry := provider.NewRegistry(twitchProvider, kickProvider, youtubeProvider, urlProvider)
 
 	statePath, err := resolveStatePath(opts.StatePath)
 	if err != nil {
@@ -374,6 +381,24 @@ func kickProvider(injected *kick.Provider, cfg config.Config) (*kick.Provider, f
 		kick.WithResolver(client),
 		kick.WithChat(c),
 		kick.WithWebbrowserExecutable(cfg.KickBrowser),
+	), c.Close
+}
+
+// youtubeProvider builds the YouTube provider with its live-state lookup and
+// read-only innertube chat, plus what ends that chat when Run returns.
+func youtubeProvider(injected *youtube.Provider) (*youtube.Provider, func()) {
+	if injected != nil {
+		stop := func() {}
+		if c, ok := injected.Chat(); ok {
+			stop = c.Stop
+		}
+		return injected, stop
+	}
+	client := youtube.NewClient(youtube.ClientConfig{})
+	c := youtube.NewChat(youtube.ChatOptions{Client: client})
+	return youtube.NewProvider(
+		youtube.WithResolver(client),
+		youtube.WithChat(c),
 	), c.Close
 }
 
