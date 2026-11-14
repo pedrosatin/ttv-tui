@@ -143,8 +143,11 @@ func LanguagePtr(raw string) *string {
 
 // PageRequest describes the pagination parameters for a Source query.
 type PageRequest struct {
-	Cursor string
-	Limit  int
+	// Languages pede só canais desses idiomas, em código normalizado ("pt").
+	// Um catálogo sem filtro no servidor ignora o campo, e a UI filtra de novo. Vazio pede todos.
+	Languages []string
+	Cursor    string
+	Limit     int
 }
 
 // Page holds a single page of results from a Source along with pagination state.

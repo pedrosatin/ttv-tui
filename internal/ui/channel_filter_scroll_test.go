@@ -105,8 +105,8 @@ func TestChannelFilterMenuCursorRowIsTheSelectedItem(t *testing.T) {
 	}
 	// Index 0 is "all languages", so index 12 is the 12th code: al.
 	got := cursorRows(m)
-	if len(got) != 1 || !strings.Contains(got[0], "AL (1)") {
-		t.Fatalf("cursor row = %q, want AL (1)", got)
+	if len(got) != 1 || !strings.Contains(got[0], "AL (1 in list)") {
+		t.Fatalf("cursor row = %q, want AL (1 in list)", got)
 	}
 }
 
@@ -231,7 +231,7 @@ func TestChannelFilterMenuTallTerminalShowsEverythingWithoutPosition(t *testing.
 		t.Fatalf("position = %q, want none on a tall terminal", got)
 	}
 	view := ansi.Strip(m.View())
-	for _, want := range []string{"AA (1)", "BD (1)", "5000+"} {
+	for _, want := range []string{"AA (1 in list)", "BD (1 in list)", "5000+"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q:\n%s", want, view)
 		}

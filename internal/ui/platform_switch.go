@@ -195,6 +195,7 @@ func (m Model) switchPlatform() (tea.Model, tea.Cmd) {
 	m.list.channels = nil
 	// A category belongs to the platform it came from.
 	m.list.selectedCategory = nil
+	m.list.prefs.seenLanguages = nil
 	m.list.nextCursor = ""
 	m.list.hasMore = false
 	m.list.loadFailed = false

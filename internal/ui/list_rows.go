@@ -95,6 +95,9 @@ func (m Model) appendListEmptyLines(lines []string, maxWidth int) []string {
 	default:
 		lines = append(lines, TruncateVisual(m.listEmptyText(), maxWidth))
 	}
+	if m.Mode() == ModeChannels && m.list.hasMore && m.list.prefs.active() {
+		lines = append(lines, TruncateVisual(m.t("channel_filter.more_hint"), maxWidth))
+	}
 	return append(lines, TruncateVisual(m.t("list.empty_action"), maxWidth))
 }
 

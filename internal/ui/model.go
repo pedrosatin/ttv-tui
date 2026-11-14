@@ -351,13 +351,14 @@ type searchState struct {
 // menu. Empty languages and min 0 mean no preference filter. Unknown-language
 // channels stay visible when languages are selected (marked in the row).
 type channelPrefs struct {
-	languages  []string
-	minViewers int
-	persist    ChannelFilterPersistFunc
-	saves      *saveSlot
-	menuOpen   bool
-	menuIndex  int
-	menuItems  []channelFilterMenuItem
+	seenLanguages []string
+	languages     []string
+	minViewers    int
+	persist       ChannelFilterPersistFunc
+	saves         *saveSlot
+	menuOpen      bool
+	menuIndex     int
+	menuItems     []channelFilterMenuItem
 }
 
 // playbackState is what the UI knows about the Player.

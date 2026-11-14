@@ -45,10 +45,8 @@ func assertHighlightActs(t *testing.T, m Model, wantLogin string) {
 	}
 }
 
-// A persisted language filter hides a highlighted favorite only once the
-// hydration reports its language. The categories arrive first, so the
-// highlight was already placed on that favorite.
-func TestHighlightLeavesFavoriteHiddenByHydration(t *testing.T) {
+// A hidratação informa EN sem esconder o favorito destacado na tela inicial.
+func TestHighlightKeepsFavoriteAfterLanguageHydration(t *testing.T) {
 	cat, err := i18n.New(i18n.LangEN)
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
@@ -83,7 +81,7 @@ func TestHighlightLeavesFavoriteHiddenByHydration(t *testing.T) {
 	})
 	m = updated.(Model)
 
-	assertHighlightActs(t, m, "brasileiro")
+	assertHighlightActs(t, m, "gringo")
 }
 
 // With a minimum audience, the channel the player reports offline leaves the

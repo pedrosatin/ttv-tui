@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -89,7 +90,8 @@ func channelLanguageUnknown(ch catalog.Channel) bool {
 // Choice for unknown language (documented for ticket 01): when one or more
 // languages are selected, channels without a reported language stay visible
 // and are marked in the row as unknown. Hiding them would look like a silent
-// data loss when the API omits language.
+// data loss when the API omits language. On Twitch the server filters first,
+// so such a channel only shows up if the server returns it.
 func (p channelPrefs) passes(ch catalog.Channel) bool {
 	if p.minViewers > 0 {
 		if ch.Viewers == nil || *ch.Viewers < p.minViewers {
@@ -141,12 +143,20 @@ type langCount struct {
 // languagesInCurrentList returns language codes present among the loaded listing
 // and the favorites and recents of the active list, with counts, sorted by code.
 // Unknown-language channels are omitted from the menu counts.
+// Selected languages missing from the data are listed with zero; a channel counts once.
 func (m Model) languagesInCurrentList() []langCount {
 	counts := make(map[string]int)
+	var seen []catalog.Channel
 	add := func(ch catalog.Channel) {
 		if channelLanguageUnknown(ch) {
 			return
 		}
+		for _, previous := range seen {
+			if channelMatches(previous, ch) {
+				return
+			}
+		}
+		seen = append(seen, ch)
 		counts[catalog.NormalizeLanguage(*ch.Language)]++
 	}
 	for _, ch := range m.list.channels {
@@ -164,6 +174,15 @@ func (m Model) languagesInCurrentList() []langCount {
 	for _, ch := range baseRecents {
 		if m.savedOnList(ch) {
 			add(ch)
+		}
+	}
+	languages := slices.Clone(m.list.prefs.languages)
+	if m.Mode() == ModeChannels {
+		languages = append(languages, m.list.prefs.seenLanguages...)
+	}
+	for _, lang := range languages {
+		if _, ok := counts[lang]; !ok {
+			counts[lang] = 0
 		}
 	}
 	out := make([]langCount, 0, len(counts))
@@ -206,14 +225,10 @@ func (m Model) openChannelFilterMenu() Model {
 	m.layout.helpVisible = false
 	m.list.filtering = false
 	m.list.search.active = false
+	m.rememberListLanguages()
 	m.list.prefs.menuOpen = true
 	m.list.prefs.menuItems = m.buildChannelFilterMenuItems()
-	if m.list.prefs.menuIndex >= len(m.list.prefs.menuItems) {
-		m.list.prefs.menuIndex = 0
-	}
-	if len(m.list.prefs.menuItems) == 0 {
-		m.list.prefs.menuIndex = 0
-	}
+	m.list.prefs.menuIndex = 0
 	return m
 }
 
@@ -252,6 +267,7 @@ func (m Model) toggleChannelFilterMenuItem() (Model, tea.Cmd) {
 	}
 	m.list.prefs.menuIndex = idx
 	item := items[idx]
+	oldLanguages := m.FilterLanguages()
 	switch item.Kind {
 	case filterMenuAllLangs:
 		m.list.prefs.languages = nil
@@ -271,7 +287,19 @@ func (m Model) toggleChannelFilterMenuItem() (Model, tea.Cmd) {
 		m.list.prefs.minViewers = item.Audience
 	}
 	m.reconcileHighlight()
-	return m, m.persistChannelFilters()
+	persist := m.persistChannelFilters()
+	if !slices.Equal(oldLanguages, m.FilterLanguages()) && m.Mode() == ModeChannels && m.browser != nil && m.list.selectedCategory != nil {
+		m.list.tracker.cancelActive()
+		m.list.generation++
+		m.list.channels = nil
+		m.list.nextCursor = ""
+		m.list.hasMore = false
+		m.list.err = nil
+		m.list.loading = true
+		m.reconcileHighlight()
+		return m, tea.Batch(persist, m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, "", false))
+	}
+	return m, persist
 }
 
 func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -463,4 +491,21 @@ func (m Model) preferenceFilterHidesChannels() bool {
 		}
 	}
 	return true
+}
+
+// rememberListLanguages mantém as opções enquanto a categoria e a plataforma não mudam.
+func (m *Model) rememberListLanguages() {
+	if m.Mode() != ModeChannels {
+		return
+	}
+	langs := slices.Clone(m.list.prefs.seenLanguages)
+	for _, ch := range m.list.channels {
+		if !channelLanguageUnknown(ch) {
+			lang := catalog.NormalizeLanguage(*ch.Language)
+			if !slices.Contains(langs, lang) {
+				langs = append(langs, lang)
+			}
+		}
+	}
+	m.list.prefs.seenLanguages = langs
 }

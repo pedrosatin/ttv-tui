@@ -290,6 +290,11 @@ func (m Model) resolveSaved(saved catalog.Channel) (catalog.Channel, catalog.Ava
 // appendFavorites appends the favorites that pass the filters. A filtered
 // favorite is not marked as seen, so it does not hide a later row.
 func (m Model) appendFavorites(items []ListItem, p itemPass) []ListItem {
+	// Na tela inicial, o filtro de idioma não esconde favoritos. Texto e audiência continuam valendo.
+	if m.Mode() == ModeCategories {
+		p.prefs.languages = nil
+	}
+
 	for _, fav := range m.list.favorites {
 		if !m.savedOnList(fav) || (fav.ID == "" && fav.Login == "") {
 			continue
@@ -863,6 +868,9 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		selected := *it.Category
+		if m.list.selectedCategory == nil || m.list.selectedCategory.ID != selected.ID || m.list.selectedCategory.Name != selected.Name {
+			m.list.prefs.seenLanguages = nil
+		}
 		if m.browser == nil {
 			m.list.selectedCategory = &selected
 			return m, func() tea.Msg {
@@ -1145,7 +1153,7 @@ func (m Model) shouldLoadNextPage() bool {
 	}
 	ids := m.visibleItemIDs()
 	if len(ids) == 0 {
-		return false
+		return m.Mode() == ModeChannels
 	}
 	return ids[len(ids)-1] == m.list.highlightedID
 }
@@ -1180,6 +1188,9 @@ func (m Model) fetchCategoriesCmd(gen uint64, cursor string, appendPage bool) te
 	}
 }
 
+// maxFilteredPages limita as consultas de um fetchChannelsCmd quando os filtros escondem todos os canais recebidos.
+const maxFilteredPages = 3
+
 func (m Model) fetchChannelsCmd(gen uint64, cat catalog.Category, cursor string, appendPage bool) tea.Cmd {
 	browser := m.browser
 	if browser == nil {
@@ -1194,6 +1205,9 @@ func (m Model) fetchChannelsCmd(gen uint64, cat catalog.Category, cursor string,
 	if catID == "" {
 		catID = cat.Name
 	}
+	prefs := m.list.prefs
+	visibility := itemPass{prefs: prefs, query: strings.ToLower(strings.TrimSpace(m.list.filter))}
+	languages := m.FilterLanguages()
 	return func() tea.Msg {
 		ctx := context.Background()
 		var cancel context.CancelFunc
@@ -1201,10 +1215,38 @@ func (m Model) fetchChannelsCmd(gen uint64, cat catalog.Category, cursor string,
 			ctx, cancel = tracker.newContext()
 			defer cancel()
 		}
-		page, err := browser.Channels(ctx, catID, catalog.PageRequest{
-			Cursor: cursor,
-			Limit:  limit,
-		})
+		var page catalog.Page[catalog.Channel]
+		var err error
+		next := cursor
+		for attempt := range maxFilteredPages {
+			var part catalog.Page[catalog.Channel]
+			part, err = browser.Channels(ctx, catID, catalog.PageRequest{
+				Cursor: next, Limit: limit, Languages: languages,
+			})
+			if err != nil {
+				if attempt > 0 {
+					err = nil
+				}
+				break
+			}
+			page.Items = append(page.Items, part.Items...)
+			page.Cursor, page.HasMore = part.Cursor, part.HasMore
+			found := false
+			for _, ch := range part.Items {
+				if visibility.passes(ch) {
+					found = true
+					break
+				}
+			}
+			if found || !prefs.active() || !part.HasMore || part.Cursor == "" {
+				break
+			}
+			if part.Cursor == next {
+				page.HasMore = false
+				break
+			}
+			next = part.Cursor
+		}
 		return ChannelsLoadedMsg{
 			Generation: gen,
 			Category:   cat,

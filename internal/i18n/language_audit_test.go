@@ -19,13 +19,12 @@ var identicalInBothLanguages = map[string]string{
 	// Proper name.
 	"app.title": "nome do programa",
 	// Symbols and formats with no words.
-	"categories.viewers_unknown":    "símbolo — (sem dado)",
-	"channels.viewers_unknown":      "símbolo — (sem dado)",
-	"channels.title_unknown":        "símbolo — (sem dado)",
-	"channel_filter.language_count": "formato %s (%d)",
-	"channel_filter.audience_min":   "formato %d+",
-	"chat.usernotice.with_text":     "formato autor: texto",
-	"chat.input.counter":            "formato %d/%d",
+	"categories.viewers_unknown":  "símbolo — (sem dado)",
+	"channels.viewers_unknown":    "símbolo — (sem dado)",
+	"channels.title_unknown":      "símbolo — (sem dado)",
+	"channel_filter.audience_min": "formato %d+",
+	"chat.usernotice.with_text":   "formato autor: texto",
+	"chat.input.counter":          "formato %d/%d",
 	// Units: s, m and h are the same symbols in pt-BR.
 	"chat.mod.dur_s":   "unidade s",
 	"chat.mod.dur_m":   "unidade m",

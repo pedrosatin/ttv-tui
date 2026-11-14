@@ -102,6 +102,7 @@ func (m Model) applyChannelsLoaded(msg ChannelsLoadedMsg) (tea.Model, tea.Cmd) {
 		m.list.channels = make([]catalog.Channel, len(msg.Page.Items))
 		copy(m.list.channels, msg.Page.Items)
 	}
+	m.rememberListLanguages()
 	m.refreshSavedAvailability(msg.Page.Items)
 	m.list.nextCursor = msg.Page.Cursor
 	m.list.hasMore = msg.Page.HasMore

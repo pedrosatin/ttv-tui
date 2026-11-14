@@ -63,11 +63,11 @@ const categoriesQuery = `query($n: Int!, $after: Cursor) {
   }
 }`
 
-const channelsQuery = `query($id: ID, $name: String, $n: Int!, $after: Cursor) {
+const channelsQuery = `query($id: ID, $name: String, $n: Int!, $after: Cursor, $languages: [String!]) {
   game(id: $id, name: $name) {
     id
     name
-    streams(first: $n, after: $after) {
+    streams(first: $n, after: $after, options: {languages: $languages}) {
       edges {
         cursor
         node {
@@ -574,13 +574,18 @@ func (s *GQLSource) Channels(ctx context.Context, categoryID string, page catalo
 		limit = DefaultPageLimit
 	}
 
-	cacheKey := fmt.Sprintf("channels|%s|%s|%d", catKey, page.Cursor, limit)
+	languages := slices.Clone(page.Languages)
+	sort.Strings(languages)
+	cacheKey := fmt.Sprintf("channels|%s|%s|%d|%s", catKey, page.Cursor, limit, strings.Join(languages, ","))
 	if cached, ok := s.getCachedChannels(cacheKey); ok {
 		return cached, nil
 	}
 
 	vars := map[string]any{
 		"n": limit,
+	}
+	if len(page.Languages) > 0 {
+		vars["languages"] = page.Languages
 	}
 	if isNumericID(catKey) {
 		vars["id"] = catKey
