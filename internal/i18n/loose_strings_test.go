@@ -141,6 +141,7 @@ var allowedExceptions = map[string]bool{
 	"c":          true,
 	"r":          true,
 	"G":          true,
+	"g":          true,
 	"=":          true,
 	"_":          true,
 	// LayoutMode identifiers (internal; the screen shows layout.mode.* labels)

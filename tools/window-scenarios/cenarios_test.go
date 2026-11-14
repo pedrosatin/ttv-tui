@@ -185,22 +185,20 @@ func TestJanelaCtrlWNaBuscaENoFiltro(t *testing.T) {
 	})
 }
 
-// W5: PgDn na lista desce uma página. Hoje o destaque fica parado.
+// PgDn na lista desce uma página, também pelo teclado da janela.
 func TestJanelaPgDnNaLista(t *testing.T) {
 	t.Parallel()
 	w := openWindow(t, setup{})
 	w.press("PageDown")
-
-	var after ui.StateReport
-	expectKnownBug(t, "W5", func() (bool, error) {
+	expect(t, func() error {
 		st, err := w.state()
 		if err != nil {
-			return false, err
+			return err
 		}
-		after = *st.TUI
-		return after.HighlightIndex < 5, nil
-	}, func() string {
-		return fmt.Sprintf("depois do PgDn o destaque está no item %d (%s)", after.HighlightIndex, after.Highlighted)
+		if st.TUI.HighlightIndex < st.Window.Rows-2 {
+			return fmt.Errorf("PgDn deixou o destaque no item %d", st.TUI.HighlightIndex)
+		}
+		return nil
 	})
 }
 

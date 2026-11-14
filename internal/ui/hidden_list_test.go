@@ -39,8 +39,8 @@ func TestHiddenListEnterDoesNotChangeChannel(t *testing.T) {
 }
 
 func TestHiddenListKeys(t *testing.T) {
-	keys := []tea.KeyMsg{{Type: tea.KeyUp}, {Type: tea.KeyDown}, {Type: tea.KeyEnter}, {Type: tea.KeyEsc}, {Type: tea.KeyCtrlF}, {Type: tea.KeyCtrlS}}
-	for _, r := range "jkf/ryl" {
+	keys := []tea.KeyMsg{{Type: tea.KeyUp}, {Type: tea.KeyDown}, {Type: tea.KeyEnter}, {Type: tea.KeyEsc}, {Type: tea.KeyCtrlF}, {Type: tea.KeyCtrlS}, {Type: tea.KeyPgUp}, {Type: tea.KeyPgDown}, {Type: tea.KeyHome}, {Type: tea.KeyEnd}}
+	for _, r := range "jkf/rylgG" {
 		keys = append(keys, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 	for _, chatOn := range []bool{false, true} {
@@ -51,7 +51,10 @@ func TestHiddenListKeys(t *testing.T) {
 					m.moveHighlight(-1)
 				}
 				id, gen, login, mode := m.list.highlightedID, m.list.generation, m.list.selectedChannel.Login, m.Mode()
-				next, _ := pressKey(m, k)
+				next, cmd := pressKey(m, k)
+				if !chatOn && (next.notices.status != next.t("layout.hidden_list_key") || cmd != nil) {
+					t.Fatal("lista oculta deve avisar sem comando")
+				}
 				if next.list.highlightedID != id || next.list.generation != gen || next.list.selectedChannel.Login != login || next.Mode() != mode || next.list.filtering || next.list.search.active || next.list.prefs.menuOpen || len(next.list.favorites) != len(m.list.favorites) {
 					t.Fatalf("hidden list changed after %s", k.String())
 				}

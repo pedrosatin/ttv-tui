@@ -503,7 +503,7 @@ func TestHelpOverlayAccessibleAtAnyTime(t *testing.T) {
 		t.Fatal("expected HelpVisible() = true after pressing '?'")
 	}
 	plain := ansi.Strip(m.View())
-	if !strings.Contains(plain, "Keyboard Shortcuts") || !strings.Contains(plain, "Tab switch panel") {
+	if !strings.Contains(plain, "Keyboard Shortcuts") || !strings.Contains(plain, "Tab switches panels") {
 		t.Fatalf("expected help overlay in View():\n%s", plain)
 	}
 

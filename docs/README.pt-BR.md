@@ -109,6 +109,8 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | Tecla | Ação |
 | --- | --- |
 | `↑` `↓` ou `j` `k` | Move a seleção |
+| `PgUp` `PgDn` | Move uma tela |
+| `Home` / `g`, `End` / `G` | Primeiro ou último item carregado |
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Favorita um canal ou fixa uma categoria; aperte de novo para remover |
 | `/` | Filtra a lista atual; `Enter` abre o item destacado e `Ctrl+F` busca com o texto |
@@ -131,7 +133,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `Enter` | Envia a mensagem |
 | `Esc` | Sai da escrita e guarda o rascunho |
 | `Ctrl+W` ou `Alt+Backspace` | Apaga a palavra anterior na mensagem, na busca e no filtro |
-| `↑` `↓` `PgUp` `Home` | Rola o histórico |
+| `↑` `↓` `PgUp` `PgDn` `Home` `g` | Rola o histórico |
 | `End` ou `G` | Volta às mensagens ao vivo |
 | `y` | Copia a mensagem selecionada |
 | `Ctrl+T` | Reconecta ao chat |

@@ -308,6 +308,9 @@ func (m Model) handleMoveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case key.Matches(msg, m.keys.PageUp):
 		return handled(m.keyPageUp())
 
+	case key.Matches(msg, m.keys.PageDown):
+		return handled(m.keyPageDown())
+
 	case key.Matches(msg, m.keys.Home):
 		return handled(m.keyHome())
 
@@ -340,6 +343,11 @@ func (m Model) keyDown() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.moveHighlight(1)
+	return m.loadNextPageIfNeeded()
+}
+
+// loadNextPageIfNeeded carrega a próxima página quando o destaque chega ao fim.
+func (m Model) loadNextPageIfNeeded() (tea.Model, tea.Cmd) {
 	if m.shouldLoadNextPage() {
 		m.list.generation++
 		m.list.loading = true
@@ -353,13 +361,16 @@ func (m Model) keyDown() (tea.Model, tea.Cmd) {
 
 func (m Model) keyPageUp() (tea.Model, tea.Cmd) {
 	if m.Focus() != FocusChat {
-		return m, nil
+		return m.moveListPage(-1)
 	}
 	return m.scrollChatUp(m.chatPageSize()), nil
 }
 
 func (m Model) keyHome() (tea.Model, tea.Cmd) {
 	if m.Focus() != FocusChat {
+		if !m.list.hardErr() {
+			m.moveHighlight(-m.totalItemCount())
+		}
 		return m, nil
 	}
 	return m.scrollChatHome(), nil
@@ -367,7 +378,11 @@ func (m Model) keyHome() (tea.Model, tea.Cmd) {
 
 func (m Model) keyGoLive() (tea.Model, tea.Cmd) {
 	if m.Focus() != FocusChat {
-		return m, nil
+		if m.list.hardErr() {
+			return m, nil
+		}
+		m.moveHighlight(m.totalItemCount())
+		return m.loadNextPageIfNeeded()
 	}
 	m.chatFollowLiveNow()
 	return m, nil
@@ -381,4 +396,52 @@ func (m Model) keySelect() (tea.Model, tea.Cmd) {
 		return m.enterCompose()
 	}
 	return m.selectHighlighted()
+}
+
+func (m Model) keyPageDown() (tea.Model, tea.Cmd) {
+	if m.Focus() == FocusChat {
+		return m.scrollChatDown(m.chatPageSize()), nil
+	}
+	return m.moveListPage(1)
+}
+
+// moveListPage move o destaque uma tela de linhas desenhadas, cabeçalhos incluídos; se cair num cabeçalho, para no item vizinho.
+func (m Model) moveListPage(direction int) (tea.Model, tea.Cmd) {
+	if m.list.hardErr() {
+		return m, nil
+	}
+	width, _ := m.panelWidths()
+	lines := m.appendPromptLines([]string{""}, width)
+	lines = m.appendFilterHint(lines, width)
+	budget := m.listRowBudget(len(lines)+len(m.catalogUnavailableLines(width)), m.Mode() == ModeSearch, width)
+	items := m.VisibleItems()
+	rows := m.listRows(items, m.Mode() == ModeSearch, width)
+	current := 0
+	for i, row := range rows {
+		if !row.isHeader && row.itemID == m.list.highlightedID {
+			current = i
+			break
+		}
+	}
+	target := max(0, min(len(rows)-1, current+direction*budget))
+	if len(rows) == 0 {
+		return m, nil
+	}
+	for rows[target].isHeader {
+		if target == 0 {
+			target++
+		} else {
+			target += direction
+		}
+	}
+	for i, item := range items {
+		if item.ID() == rows[target].itemID {
+			m.moveHighlight(i - m.list.indexOfHighlighted(items))
+			break
+		}
+	}
+	if direction > 0 {
+		return m.loadNextPageIfNeeded()
+	}
+	return m, nil
 }

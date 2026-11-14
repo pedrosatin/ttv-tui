@@ -23,7 +23,7 @@ Categorias ao vivo
 === Atalhos de Teclado ===
   Ajuda: ?/Esc/F1/q fecha · ↑/↓ PgUp/PgDn Home/End rola
   Foco: lista — fechada a ajuda, Tab troca painel e guarda rascunho
-  Lista: ↑/↓ j/k mover · Enter abrir · f favorita/fixa · Tab trocar painel
+  Lista: j/k ↑/↓ · PgUp/PgDn · Home/g End/G · Enter abre · f favorita/fixa
   Esc: sai da escrita, do chat, do filtro ou da busca
   Voltar às categorias: Esc na lista · Ctrl+R de qualquer lugar, até digitando
   Busca: / filtra · Ctrl+F categorias e canais (Ctrl+S alt) · r tenta de novo
@@ -32,7 +32,7 @@ Categorias ao vivo
     Ctrl+H não faz nada
   Esc mantém o layout: volte com Ctrl+W, Ctrl+H ou Ctrl+L · abaixo de 80 colunas Ctrl+L abre só o chat
   Player (TUI e mpv): Espaço pausa · +/- volume · Ctrl+X encerra (só na TUI)
-  Chat: ↑/PgUp/Home rola · End/G vivo · y copia · i escreve · Ctrl+T reconecta
+  Chat: ↑↓ PgUp/Dn Home/g · End/G vivo · y copia · i escreve · Ctrl+T reconecta
   App: Ctrl+Q sair · ? ou F1 alternar ajuda
   Sem cor: NO_COLOR desliga a cor · símbolos ▸ ★ ● ▶ ‖ ✖ ! mostram o estado
   Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito/fixada · ciano = foco · vermelho =

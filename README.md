@@ -109,6 +109,8 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | Key | Action |
 | --- | --- |
 | `↑` `↓` or `j` `k` | Move the selection |
+| `PgUp` `PgDn` | Move one screen |
+| `Home` / `g`, `End` / `G` | First or last loaded item |
 | `Enter` | Open the category or watch the channel |
 | `f` | Favorite a channel or pin a category; press again to remove |
 | `/` | Filter the current list; `Enter` opens the highlighted item and `Ctrl+F` searches with the text |
@@ -131,7 +133,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | `Enter` | Send the message |
 | `Esc` | Stop writing and keep the draft |
 | `Ctrl+W` or `Alt+Backspace` | Delete the previous word in the message, the search and the filter |
-| `↑` `↓` `PgUp` `Home` | Scroll the history |
+| `↑` `↓` `PgUp` `PgDn` `Home` `g` | Scroll the history |
 | `End` or `G` | Back to live messages |
 | `y` | Copy the selected message |
 | `Ctrl+T` | Reconnect to the chat |

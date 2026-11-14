@@ -68,9 +68,9 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("pgdown"),
 		),
 		Home: key.NewBinding(
-			key.WithKeys("home"),
+			key.WithKeys("home", "g"),
 		),
-		// End and vim-style G pin the viewport back to the live bottom.
+		// End/G vão ao fim da lista ou retomam o ao vivo no chat.
 		GoLive: key.NewBinding(
 			key.WithKeys("end", "G"),
 		),
@@ -264,7 +264,8 @@ func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
 		return true
 	}
 	return !m.chatColumnVisible() && key.Matches(msg,
-		m.keys.Up, m.keys.Down, m.keys.Select, m.keys.Clear, m.keys.CopyMessage)
+		m.keys.Up, m.keys.Down, m.keys.PageUp, m.keys.PageDown, m.keys.Home, m.keys.GoLive,
+		m.keys.Select, m.keys.Clear, m.keys.CopyMessage)
 }
 
 // typingField diz se o foco está num campo de texto à vista: o prompt de busca,

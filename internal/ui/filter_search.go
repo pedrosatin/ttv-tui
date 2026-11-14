@@ -102,15 +102,13 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.moveHighlight(1)
-		if m.shouldLoadNextPage() {
-			m.list.generation++
-			m.list.loading = true
-			if m.Mode() == ModeChannels && m.list.selectedCategory != nil {
-				return m, m.fetchChannelsCmd(m.list.generation, *m.list.selectedCategory, m.list.nextCursor, true)
-			}
-			return m, m.fetchCategoriesCmd(m.list.generation, m.list.nextCursor, true)
-		}
-		return m, nil
+		return m.loadNextPageIfNeeded()
+
+	case key.Matches(msg, m.keys.PageUp):
+		return m.moveListPage(-1)
+
+	case key.Matches(msg, m.keys.PageDown):
+		return m.moveListPage(1)
 
 	case key.Matches(msg, m.keys.Select):
 		// A pasted stream URL opens immediately; otherwise with no local match,
