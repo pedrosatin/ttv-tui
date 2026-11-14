@@ -57,6 +57,30 @@ func serverFrame(fin bool, op byte, payload []byte) []byte {
 	return append(out, payload...)
 }
 
+// serverMaskedFrame monta um frame mascarado vindo do servidor para teste da RFC 6455 §5.1.
+func serverMaskedFrame(fin bool, op byte, mask [4]byte, payload []byte) []byte {
+	head := op
+	if fin {
+		head |= 0x80
+	}
+	out := []byte{head}
+	switch n := len(payload); {
+	case n < 126:
+		out = append(out, 0x80|byte(n))
+	case n <= 0xFFFF:
+		out = append(out, 0x80|126)
+		out = binary.BigEndian.AppendUint16(out, uint16(n))
+	default:
+		out = append(out, 0x80|127)
+		out = binary.BigEndian.AppendUint64(out, uint64(n))
+	}
+	out = append(out, mask[:]...)
+	for i, b := range payload {
+		out = append(out, b^mask[i%4])
+	}
+	return out
+}
+
 // readClientFrame reads one frame a client sent and checks it is masked.
 func readClientFrame(r io.Reader) (op byte, payload []byte, err error) {
 	var head [2]byte
@@ -101,7 +125,7 @@ func dialTest(t *testing.T, url string) Socket {
 }
 
 func TestWebSocket_TextBothWays(t *testing.T) {
-	long := strings.Repeat("é", 40000) // needs the 16-bit length, then the 64-bit one
+	long := strings.Repeat("é", 15000) // 30.000 bytes: exercita comprimento de 16 bits dentro do teto de 64 KiB
 	got := make(chan string, 4)
 	url := wsServer(t, func(conn net.Conn, rw *bufio.ReadWriter) {
 		_, _ = conn.Write(serverFrame(true, wsOpText, []byte("olá")))
@@ -305,5 +329,236 @@ func TestWebSocket_HandshakeFailures(t *testing.T) {
 	defer cancelShort()
 	if _, err := dialWebSocket(short, "ws://"+ln.Addr().String()); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("silent server err = %v, want the deadline", err)
+	}
+}
+
+func TestWebSocket_FrameMascaradoDoServidor_FechaComErroDeProtocolo(t *testing.T) {
+	mask := [4]byte{0x12, 0x34, 0x56, 0x78}
+	casos := []struct {
+		nome  string
+		frame []byte
+	}{
+		{
+			nome:  "texto mascarado",
+			frame: serverMaskedFrame(true, wsOpText, mask, []byte("ola")),
+		},
+		{
+			nome:  "ping mascarado",
+			frame: serverMaskedFrame(true, wsOpPing, mask, []byte("eco")),
+		},
+		{
+			nome:  "continuacao mascarada",
+			frame: serverMaskedFrame(false, wsOpContinuation, mask, []byte("parte")),
+		},
+		{
+			nome:  "frame montado a mao sem payload",
+			frame: []byte{0x81, 0x80, 0x11, 0x22, 0x33, 0x44},
+		},
+	}
+	for _, tc := range casos {
+		t.Run(tc.nome, func(t *testing.T) {
+			recebeuClose := make(chan uint16, 1)
+			conexaoFechada := make(chan struct{})
+			url := wsServer(t, func(conn net.Conn, rw *bufio.ReadWriter) {
+				_, _ = conn.Write(tc.frame)
+				op, payload, err := readClientFrame(rw)
+				if err == nil && op == wsOpClose && len(payload) >= 2 {
+					recebeuClose <- binary.BigEndian.Uint16(payload[:2])
+				}
+				var b [1]byte
+				if _, rerr := rw.Read(b[:]); rerr != nil {
+					close(conexaoFechada)
+				}
+			})
+			sock := dialTest(t, url)
+			text, err := sock.ReadText()
+			if err == nil {
+				t.Fatalf("ReadText = %q, esperava erro de protocolo", text)
+			}
+			if !strings.Contains(err.Error(), "masked") && !strings.Contains(err.Error(), "1002") {
+				t.Errorf("erro %v não menciona protocolo/mascarado", err)
+			}
+			select {
+			case codigo := <-recebeuClose:
+				if codigo != wsCloseProtocolError {
+					t.Errorf("código de close = %d, esperado 1002 (wsCloseProtocolError)", codigo)
+				}
+			case <-time.After(testTimeout):
+				t.Fatal("servidor não recebeu frame de close 1002 do cliente")
+			}
+			select {
+			case <-conexaoFechada:
+			case <-time.After(testTimeout):
+				t.Fatal("conexão subjacente não foi encerrada pelo cliente após erro de protocolo")
+			}
+		})
+	}
+}
+
+func TestWebSocket_TetoMensagemPusher(t *testing.T) {
+	t.Run("cabecalho enorme 1 GiB sem corpo fecha com 1009 sem alocar", func(t *testing.T) {
+		recebeuClose := make(chan uint16, 1)
+		conexaoFechada := make(chan struct{})
+		url := wsServer(t, func(conn net.Conn, rw *bufio.ReadWriter) {
+			// Cabeçalho declarando 1 GiB (0x40000000 bytes) sem enviar os bytes do corpo.
+			cabecalho := []byte{0x81, 127, 0, 0, 0, 0, 0x40, 0, 0, 0}
+			_, _ = conn.Write(cabecalho)
+			op, payload, err := readClientFrame(rw)
+			if err == nil && op == wsOpClose && len(payload) >= 2 {
+				recebeuClose <- binary.BigEndian.Uint16(payload[:2])
+			}
+			var b [1]byte
+			if _, rerr := rw.Read(b[:]); rerr != nil {
+				close(conexaoFechada)
+			}
+		})
+		sock := dialTest(t, url)
+		_, err := sock.ReadText()
+		if err == nil {
+			t.Fatal("ReadText esperava erro de teto de mensagem")
+		}
+		if !strings.Contains(err.Error(), "message too large") {
+			t.Errorf("erro %v não menciona 'message too large'", err)
+		}
+		select {
+		case codigo := <-recebeuClose:
+			if codigo != wsCloseMessageTooBig {
+				t.Errorf("código de close = %d, esperado 1009 (wsCloseMessageTooBig)", codigo)
+			}
+		case <-time.After(testTimeout):
+			t.Fatal("servidor não recebeu frame de close 1009 do cliente")
+		}
+		select {
+		case <-conexaoFechada:
+		case <-time.After(testTimeout):
+			t.Fatal("conexão não foi encerrada após ultrapassar teto")
+		}
+	})
+
+	t.Run("mensagem real de 65 KiB fecha com 1009 sem alocar alem do teto", func(t *testing.T) {
+		recebeuClose := make(chan uint16, 1)
+		conexaoFechada := make(chan struct{})
+		payload := make([]byte, 65*1024)
+		for i := range payload {
+			payload[i] = 'x'
+		}
+		url := wsServer(t, func(conn net.Conn, rw *bufio.ReadWriter) {
+			_, _ = conn.Write(serverFrame(true, wsOpText, payload))
+			op, payload, err := readClientFrame(rw)
+			if err == nil && op == wsOpClose && len(payload) >= 2 {
+				recebeuClose <- binary.BigEndian.Uint16(payload[:2])
+			}
+			var b [1]byte
+			if _, rerr := rw.Read(b[:]); rerr != nil {
+				close(conexaoFechada)
+			}
+		})
+		sock := dialTest(t, url)
+		_, err := sock.ReadText()
+		if err == nil {
+			t.Fatal("ReadText esperava erro para mensagem de 65 KiB")
+		}
+		if !strings.Contains(err.Error(), "message too large") {
+			t.Errorf("erro %v não menciona 'message too large'", err)
+		}
+		select {
+		case codigo := <-recebeuClose:
+			if codigo != wsCloseMessageTooBig {
+				t.Errorf("código de close = %d, esperado 1009", codigo)
+			}
+		case <-time.After(testTimeout):
+			t.Fatal("servidor não recebeu frame de close 1009")
+		}
+		select {
+		case <-conexaoFechada:
+		case <-time.After(testTimeout):
+			t.Fatal("conexão não foi encerrada")
+		}
+	})
+
+	t.Run("mensagem fragmentada acumulando alem do teto de 64 KiB fecha com 1009", func(t *testing.T) {
+		recebeuClose := make(chan uint16, 1)
+		conexaoFechada := make(chan struct{})
+		// Primeiro fragmento com 40 KiB (fin=false)
+		f1 := serverFrame(false, wsOpText, make([]byte, 40*1024))
+		// Segundo fragmento cabeçalho de 30 KiB (fin=true) -> 40 + 30 = 70 KiB > 64 KiB
+		f2 := serverFrame(true, wsOpContinuation, make([]byte, 30*1024))
+		url := wsServer(t, func(conn net.Conn, rw *bufio.ReadWriter) {
+			_, _ = conn.Write(f1)
+			_, _ = conn.Write(f2)
+			op, payload, err := readClientFrame(rw)
+			if err == nil && op == wsOpClose && len(payload) >= 2 {
+				recebeuClose <- binary.BigEndian.Uint16(payload[:2])
+			}
+			var b [1]byte
+			if _, rerr := rw.Read(b[:]); rerr != nil {
+				close(conexaoFechada)
+			}
+		})
+		sock := dialTest(t, url)
+		_, err := sock.ReadText()
+		if err == nil {
+			t.Fatal("ReadText esperava erro para fragmentos acumulados acima de 64 KiB")
+		}
+		if !strings.Contains(err.Error(), "message too large") {
+			t.Errorf("erro %v não menciona 'message too large'", err)
+		}
+		select {
+		case codigo := <-recebeuClose:
+			if codigo != wsCloseMessageTooBig {
+				t.Errorf("código de close = %d, esperado 1009", codigo)
+			}
+		case <-time.After(testTimeout):
+			t.Fatal("servidor não recebeu frame de close 1009")
+		}
+		select {
+		case <-conexaoFechada:
+		case <-time.After(testTimeout):
+			t.Fatal("conexão não foi encerrada")
+		}
+	})
+
+	t.Run("mensagem exatamente no limite de 64 KiB passa", func(t *testing.T) {
+		corpo := make([]byte, 64*1024)
+		for i := range corpo {
+			corpo[i] = 'z'
+		}
+		url := wsServer(t, func(conn net.Conn, _ *bufio.ReadWriter) {
+			_, _ = conn.Write(serverFrame(true, wsOpText, corpo))
+		})
+		sock := dialTest(t, url)
+		text, err := sock.ReadText()
+		if err != nil {
+			t.Fatalf("ReadText falhou no limite de 64 KiB: %v", err)
+		}
+		if len(text) != 64*1024 {
+			t.Fatalf("tamanho da mensagem lida = %d, esperado %d", len(text), 64*1024)
+		}
+	})
+}
+
+// O comprimento de 64 bits com o bit mais significativo ligado viola o RFC 6455
+// §5.2: erro de protocolo (1002), não "mensagem grande demais" (1009).
+func TestWebSocket_ComprimentoDe64BitsComBitAltoFechaComErroDeProtocolo(t *testing.T) {
+	recebeuClose := make(chan uint16, 1)
+	url := wsServer(t, func(conn net.Conn, rw *bufio.ReadWriter) {
+		cabecalho := []byte{0x81, 127, 0x80, 0, 0, 0, 0, 0, 0x01, 0}
+		_, _ = conn.Write(cabecalho)
+		op, payload, err := readClientFrame(rw)
+		if err == nil && op == wsOpClose && len(payload) >= 2 {
+			recebeuClose <- binary.BigEndian.Uint16(payload[:2])
+		}
+	})
+	sock := dialTest(t, url)
+	if _, err := sock.ReadText(); err == nil {
+		t.Fatal("ReadText esperava erro de protocolo")
+	}
+	select {
+	case codigo := <-recebeuClose:
+		if codigo != wsCloseProtocolError {
+			t.Errorf("código de close = %d, esperado 1002", codigo)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("servidor não recebeu o close 1002 do cliente")
 	}
 }

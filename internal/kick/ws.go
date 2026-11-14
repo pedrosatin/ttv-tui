@@ -34,8 +34,10 @@ type DialFunc func(ctx context.Context, rawURL string) (Socket, error)
 
 const (
 	wsGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-	// wsMaxMessage bounds one message. A chat message is a few hundred bytes.
-	wsMaxMessage = 1 << 20
+	// wsMaxMessage limita o tamanho máximo de uma mensagem recebida a 64 KiB.
+	// Eventos de chat da Kick têm poucas centenas de bytes; o teto estrito
+	// reduz o pior caso de consumo de memória com a fila de leitura cheia (H29).
+	wsMaxMessage = 64 * 1024
 	// wsMaxControl is the payload limit of a control frame (RFC 6455, 5.5).
 	wsMaxControl     = 125
 	wsWriteTimeout   = 10 * time.Second
@@ -47,6 +49,10 @@ const (
 	wsOpClose        = 0x8
 	wsOpPing         = 0x9
 	wsOpPong         = 0xA
+
+	wsCloseNormalClosure = 1000
+	wsCloseProtocolError = 1002
+	wsCloseMessageTooBig = 1009
 )
 
 // errSocketClosed is what ReadText returns after the peer sent a close frame.
@@ -209,15 +215,18 @@ func (w *wsConn) ReadText() (string, error) {
 			return "", closeError(payload)
 		case wsOpText, wsOpBinary:
 			if assembled {
+				_ = w.closeWithCode(wsCloseProtocolError)
 				return "", errors.New("websocket: new message inside a fragmented one")
 			}
 			message, assembled, text = payload, true, op == wsOpText
 		case wsOpContinuation:
 			if !assembled {
+				_ = w.closeWithCode(wsCloseProtocolError)
 				return "", errors.New("websocket: continuation without a message")
 			}
 			message = append(message, payload...)
 		default:
+			_ = w.closeWithCode(wsCloseProtocolError)
 			return "", fmt.Errorf("websocket: unknown opcode %#x", op)
 		}
 		if assembled && fin && op <= wsOpBinary {
@@ -247,10 +256,17 @@ func (w *wsConn) readFrame(have int) (fin bool, op byte, payload []byte, err err
 	}
 	fin = head[0]&0x80 != 0
 	if head[0]&0x70 != 0 {
+		_ = w.closeWithCode(wsCloseProtocolError)
 		return false, 0, nil, errors.New("websocket: reserved bits set without an extension")
 	}
 	op = head[0] & 0x0F
 	masked := head[1]&0x80 != 0
+	if masked {
+		// RFC 6455 §5.1: servidor não pode mascarar frames enviados ao cliente.
+		// O cliente deve fechar a conexão com erro de protocolo (código 1002).
+		_ = w.closeWithCode(wsCloseProtocolError)
+		return false, 0, nil, errors.New("websocket: server frame was masked (protocol error 1002)")
+	}
 	size := uint64(head[1] & 0x7F)
 	switch size {
 	case 126:
@@ -265,27 +281,23 @@ func (w *wsConn) readFrame(have int) (fin bool, op byte, payload []byte, err err
 			return false, 0, nil, fmt.Errorf("websocket: read: %w", err)
 		}
 		size = binary.BigEndian.Uint64(ext[:])
+		if size>>63 != 0 {
+			// RFC 6455 §5.2: o bit mais significativo do comprimento de 64 bits é zero.
+			_ = w.closeWithCode(wsCloseProtocolError)
+			return false, 0, nil, errors.New("websocket: invalid 64-bit payload length (protocol error 1002)")
+		}
 	}
 	if op >= wsOpClose && (size > wsMaxControl || !fin) {
+		_ = w.closeWithCode(wsCloseProtocolError)
 		return false, 0, nil, errors.New("websocket: invalid control frame")
 	}
 	if size > wsMaxMessage || uint64(have)+size > wsMaxMessage {
+		_ = w.closeWithCode(wsCloseMessageTooBig)
 		return false, 0, nil, errors.New("websocket: message too large")
-	}
-	var mask [4]byte
-	if masked {
-		if _, err = io.ReadFull(w.br, mask[:]); err != nil {
-			return false, 0, nil, fmt.Errorf("websocket: read: %w", err)
-		}
 	}
 	payload = make([]byte, size)
 	if _, err = io.ReadFull(w.br, payload); err != nil {
 		return false, 0, nil, fmt.Errorf("websocket: read: %w", err)
-	}
-	if masked {
-		for i := range payload {
-			payload[i] ^= mask[i%4]
-		}
 	}
 	return fin, op, payload, nil
 }
@@ -344,13 +356,17 @@ func clientFrame(op byte, payload []byte) ([]byte, error) {
 	return frame, nil
 }
 
-// Close says goodbye when the connection can take it right now and closes it. A
-// blocked ReadText returns. A write in progress is not waited for: closing the
-// connection ends it.
+// Close encerra a conexão normalmente (código 1000) e fecha o socket.
 func (w *wsConn) Close() error {
+	return w.closeWithCode(wsCloseNormalClosure)
+}
+
+// closeWithCode envia um frame de close com o código especificado e encerra o socket.
+func (w *wsConn) closeWithCode(code uint16) error {
 	w.closeOnce.Do(func() {
-		// 1000: normal closure.
-		if frame, err := clientFrame(wsOpClose, []byte{0x03, 0xE8}); err == nil && w.wmu.TryLock() {
+		var payload [2]byte
+		binary.BigEndian.PutUint16(payload[:], code)
+		if frame, err := clientFrame(wsOpClose, payload[:]); err == nil && w.wmu.TryLock() {
 			_ = w.writeLocked(frame, wsCloseTimeout)
 			w.wmu.Unlock()
 		}
