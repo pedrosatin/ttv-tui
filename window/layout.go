@@ -95,10 +95,12 @@ func (a *app) applyMargins() {
 	a.sess.setProperty("osd-margin-x", strconv.Itoa(margin))
 }
 
-// refreshHole recalcula se as células do vídeo ficam transparentes agora.
+// refreshHole recalcula se as células do vídeo ficam transparentes agora. Só
+// depois do primeiro quadro: até lá a TUI escreve ali o canal que está abrindo,
+// e o buraco mostraria só o fundo do mpv.
 func (a *app) refreshHole() {
 	a.paintMu.Lock()
-	a.holeOn = a.haveHost && a.host.Visible && a.sess != nil
+	a.holeOn = a.haveHost && a.host.Visible && a.sess != nil && a.sess.gotFirst.Load()
 	a.paintMu.Unlock()
 	a.tuiDirty.Store(true)
 	a.kickPaint()

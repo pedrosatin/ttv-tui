@@ -17,6 +17,7 @@ func (a *app) present(video bool) {
 				a.mu.Lock()
 				a.lastTtff = a.sess.ttffMs.Load()
 				a.mu.Unlock()
+				a.refreshHole() // o primeiro quadro abre o buraco do vídeo
 			}
 		}
 	} else {

@@ -80,6 +80,9 @@ type setup struct {
 	state   string
 	irc     fixture.IRCConfig
 	catalog *fixture.Catalog
+	// env são variáveis a mais para a janela e o que ela abre (a TUI, o
+	// streamlink falso), como fixture.OpenDelayEnv.
+	env []string
 }
 
 // window é uma janela de teste em execução, com os fixtures dela.
@@ -164,6 +167,7 @@ func openWindow(t *testing.T, s setup) *window {
 		"TTV_TUI_TEST_STATE=1",
 		"TTV_CENARIOS_RUN="+w.mark,
 	)
+	cmd.Env = append(cmd.Env, s.env...)
 	logf, err := os.Create(w.logPath)
 	if err != nil {
 		t.Fatalf("log da janela: %v", err)

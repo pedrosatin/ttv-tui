@@ -24,6 +24,10 @@ func ClipLooksRight(r, g, b int) bool {
 	return r >= 170 && g <= 90 && b <= 90
 }
 
+// OpenDelayEnv é a variável com que um cenário pede ao streamlink falso que
+// espere antes de abrir o player, no formato de time.ParseDuration ("3s").
+const OpenDelayEnv = "TTV_FIXTURE_OPEN_DELAY"
+
 // WriteClip escreve o cabeçalho e frames quadros (0 = até a escrita falhar), no
 // ritmo de ClipFPS depois de um segundo adiantado. O ritmo poupa o pipe: o mpv
 // lê adiantado tudo o que recebe.

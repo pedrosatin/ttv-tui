@@ -114,3 +114,69 @@ func TestJanelaTeclaMAlternaOMudo(t *testing.T) {
 	w.waitState("o mudo de novo", 5*time.Second, func(s ui.StateReport) bool { return s.Muted })
 	expect(t, barSays("mudo", "vol 100"))
 }
+
+// W10: a área do vídeo diz o que Enter faz com o item destacado: na tela
+// inicial, com uma categoria, abre a categoria; dentro dela, com um canal,
+// assiste ao canal.
+func TestJanelaTelaInicialFalaDoDestacado(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{})
+	w.waitScreen("Enter abre a categoria", 5*time.Second)
+	if row := rowWith(w.screen(), "selecionado"); row >= 0 {
+		t.Fatalf("a tela inicial ainda fala do selecionado: %q", w.screen()[row])
+	}
+	w.press("Return")
+	w.waitState("os canais da Categoria 01", 10*time.Second, func(s ui.StateReport) bool {
+		return s.Mode == string(ui.ModeChannels) && s.Highlighted == "FixtureUm"
+	})
+	w.waitScreen("Enter assiste a FixtureUm", 5*time.Second)
+}
+
+// W9: enquanto o streamlink procura a live, a área do vídeo diz "Abrindo
+// <canal>…" em vez de ficar preta: a janela só abre o buraco do vídeo com o
+// primeiro quadro.
+func TestJanelaCarregandoMostraOCanal(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{env: []string{fixture.OpenDelayEnv + "=3s"}})
+	w.press("Return")
+	w.waitState("os canais da Categoria 01", 10*time.Second, func(s ui.StateReport) bool {
+		return s.Mode == string(ui.ModeChannels) && s.Highlighted == "FixtureUm"
+	})
+	w.press("Return")
+	w.waitState("o player abrindo", 5*time.Second, func(s ui.StateReport) bool {
+		return s.Player == string(ui.PlayerStateStarting)
+	})
+	expect(t, func() error {
+		st, err := w.state()
+		if err != nil {
+			return err
+		}
+		if st.TUI.Player != string(ui.PlayerStateStarting) {
+			return fmt.Errorf("o player saiu de starting (%s) antes de a tela ser lida", st.TUI.Player)
+		}
+		if st.Window.HoleOn {
+			return fmt.Errorf("a janela abriu o buraco do vídeo antes do primeiro quadro")
+		}
+		if rowWith(w.screen(), "Abrindo fixture_um…") < 0 {
+			return fmt.Errorf("a área do vídeo não diz que está abrindo fixture_um:\n%s", strings.Join(w.screen(), "\n"))
+		}
+		return nil
+	})
+
+	w.waitState("o player tocando", 15*time.Second, func(s ui.StateReport) bool {
+		return s.Player == string(ui.PlayerStatePlaying)
+	})
+	expect(t, func() error {
+		st, err := w.state()
+		if err != nil {
+			return err
+		}
+		if !st.Window.HoleOn {
+			return fmt.Errorf("o vídeo toca e a janela não abriu o buraco")
+		}
+		if row := rowWith(w.screen(), "Abrindo"); row >= 0 {
+			return fmt.Errorf("o aviso de abertura ficou na grade com o vídeo tocando: %q", w.screen()[row])
+		}
+		return nil
+	})
+}

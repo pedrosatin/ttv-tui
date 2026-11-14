@@ -51,3 +51,27 @@ func TestApplyMarginsQueuesLayout(t *testing.T) {
 	a.sess = nil
 	check(nil)
 }
+
+// O buraco do vídeo só abre com o primeiro quadro da sessão: antes dele, as
+// células mostram o que a TUI escreveu ali ("Abrindo canal…").
+func TestHoleWaitsForTheFirstFrame(t *testing.T) {
+	a := &app{haveHost: true, host: hostPanel{Visible: true, Col: 1, Row: 1, Cols: 10, Rows: 5}}
+	steps := []struct {
+		name string
+		set  func()
+		want bool
+	}{
+		{"sem sessão", func() {}, false},
+		{"sessão sem quadro", func() { a.sess = &session{} }, false},
+		{"primeiro quadro", func() { a.sess.gotFirst.Store(true) }, true},
+		{"painel escondido", func() { a.host.Visible = false }, false},
+		{"sessão nova", func() { a.host.Visible, a.sess = true, &session{} }, false},
+	}
+	for _, s := range steps {
+		s.set()
+		a.refreshHole()
+		if a.holeOn != s.want {
+			t.Fatalf("%s: holeOn = %v, quer %v", s.name, a.holeOn, s.want)
+		}
+	}
+}

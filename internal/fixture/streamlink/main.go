@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/fixture"
 )
@@ -52,6 +53,11 @@ func run(args []string) error {
 		return err
 	}
 	fmt.Printf("[cli][info] Found matching plugin twitch for URL %s\n", url)
+	// OpenDelayEnv imita o streamlink que demora a achar a live: o player só
+	// abre depois da espera.
+	if d, err := time.ParseDuration(os.Getenv(fixture.OpenDelayEnv)); err == nil && d > 0 {
+		time.Sleep(d)
+	}
 	fmt.Println("[cli][info] Available streams: best (fixture)")
 	fmt.Println("[cli][info] Opening stream: best (fixture)")
 	fmt.Printf("[cli][info] Starting player: %s\n", player)

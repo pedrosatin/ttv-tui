@@ -55,3 +55,49 @@ func TestTeclaMNaEscritaEhTexto(t *testing.T) {
 		t.Fatalf("na escrita: %d trocas de mudo, rascunho %q", w.playback.muteToggles, m.chat.composeDraft)
 	}
 }
+
+// hostedScenario é o cenário dentro da janela única: o vídeo fica na coluna do
+// meio, entre a lista e o chat.
+func hostedScenario(t *testing.T, width, height int, opts ...Option) (Model, *scenarioWorld) {
+	t.Helper()
+	exactCellWidths = true
+	t.Cleanup(func() { exactCellWidths = false })
+	return newScenario(t, width, height, append([]Option{WithVideoHost(&recordingHost{})}, opts...)...)
+}
+
+// Na janela, com uma categoria destacada na tela inicial, a área do vídeo diz
+// que Enter abre a categoria; com um canal destacado, que Enter assiste a ele.
+func TestCenarioJanelaTelaInicialFalaDoDestacado(t *testing.T) {
+	eachSize(t, "janela-tela-inicial", func(t *testing.T, width, height int) Model {
+		m, _ := hostedScenario(t, width, height)
+		if !strings.Contains(screen(m), "Enter abre a categoria") {
+			t.Fatalf("tela inicial sem a dica da categoria:\n%s", screen(m))
+		}
+		return m
+	})
+	eachSize(t, "janela-canal-destacado", func(t *testing.T, width, height int) Model {
+		m, _ := hostedScenario(t, width, height)
+		m = play(t, m, "j enter")
+		if !strings.Contains(screen(m), "Enter assiste a Gaules") {
+			t.Fatalf("canais sem a dica do canal destacado:\n%s", screen(m))
+		}
+		return m
+	})
+}
+
+// Na janela, enquanto o player abre gaules, a área do vídeo diz "Abrindo
+// gaules…"; com o vídeo tocando, ela fica livre para o quadro.
+func TestCenarioJanelaAbrindoCanal(t *testing.T) {
+	eachSize(t, "janela-abrindo-canal", func(t *testing.T, width, height int) Model {
+		m, _ := hostedScenario(t, width, height)
+		m = play(t, m, "ctrl+f gaules enter enter")
+		if m.PlayerState() != PlayerStateStarting || !strings.Contains(screen(m), "Abrindo gaules…") {
+			t.Fatalf("player %s, tela:\n%s", m.PlayerState(), screen(m))
+		}
+		playing := feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+		if strings.Contains(screen(playing), "Abrindo") {
+			t.Fatalf("o aviso de abertura ficou com o vídeo tocando:\n%s", screen(playing))
+		}
+		return m
+	})
+}

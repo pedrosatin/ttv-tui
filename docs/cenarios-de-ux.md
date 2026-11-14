@@ -116,7 +116,12 @@ Hyprland nem a configuração do operador. `TTV_CENARIOS_BUILD` muda onde os bin
   `fixture_um`, `fixture_dois` e `fixture_tres`;
 - o IRC de fixture, com `setup.irc.Messages` mensagens logo depois do JOIN e, se `Every` for maior que zero, mais
   uma a cada intervalo;
-- o `streamlink` falso no `PATH`, que abre o player como o streamlink e entrega um clipe vermelho em YUV4MPEG2.
+- o `streamlink` falso no `PATH`, que abre o player como o streamlink e entrega um clipe vermelho em YUV4MPEG2;
+- as variáveis de `setup.env`. Com `fixture.OpenDelayEnv` (`TTV_FIXTURE_OPEN_DELAY=3s`), o streamlink falso espera
+  antes de abrir o player, e o cenário vê a tela de carregamento.
+
+Os emojis usam a fonte de emoji do sistema, que o `fc-match emoji` indica. No CI é a `noto-fonts-emoji`; sem ela, o
+cenário dos emojis reprova.
 
 A janela fecha pelo mesmo caminho do botão de fechar. O que sobrar com a marca do cenário (TUI, streamlink, shim) é
 morto, e a sobra reprova o teste. Na falha, o log traz a tela, o `state` e a saída da janela.

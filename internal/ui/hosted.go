@@ -340,11 +340,27 @@ func (m Model) hostedPanel() HostPanel {
 	return panel
 }
 
-// hostedIdleText is what the video column says while no playback owns it.
+// hostedIdleText is what the video column says while it shows no picture: the
+// channel being opened, or what Enter does with the highlighted item. Once the
+// window draws the video over these cells, the text is no longer seen.
 func (m Model) hostedIdleText() string {
 	switch m.player.state {
-	case PlayerStateStarting, PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
+	case PlayerStateStarting:
+		if label := m.playerLabel(); label != "" {
+			return fmt.Sprintf(m.t("video.hosted_opening"), sanitizeScreenText(label))
+		}
+		return m.t("player.starting")
+	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
 		return ""
+	}
+	it, ok := m.HighlightedItem()
+	switch {
+	case !ok:
+		return m.t("video.hosted_idle")
+	case it.Type == ItemTypeCategory || it.Type == ItemTypePinnedCategory:
+		return m.t("video.hosted_idle_category")
+	case it.Channel != nil:
+		return fmt.Sprintf(m.t("video.hosted_idle_channel"), sanitizeScreenText(it.DisplayName()))
 	default:
 		return m.t("video.hosted_idle")
 	}
