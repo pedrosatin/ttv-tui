@@ -7,15 +7,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 )
 
 // closeFD has nothing to close: the stream comes through the shim's named pipe.
 func closeFD(int) {}
 
-// readStart reads the shim's request, one JSON line with the IPC path and the
-// named pipe libmpv opens; the shim pumps streamlink's stdin into that pipe.
+// readStart first identifies this window process to the shim, then reads its
+// request with the IPC path and the named pipe libmpv opens. The shim checks
+// the pipe client's PID before pumping streamlink's stdin into it.
 func readStart(c *net.UnixConn) (ctlMsg, error) {
+	if err := json.NewEncoder(c).Encode(struct {
+		PID int `json:"pid"`
+	}{os.Getpid()}); err != nil {
+		return ctlMsg{}, err
+	}
 	line, err := bufio.NewReader(c).ReadBytes('\n')
 	if err != nil && len(line) == 0 {
 		return ctlMsg{}, err

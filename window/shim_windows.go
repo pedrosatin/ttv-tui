@@ -12,8 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/Microsoft/go-winio"
 )
 
 const exeSuffix = ".exe"
@@ -71,10 +69,20 @@ func execRealMpv(real string, args []string) {
 }
 
 // sendShimStream opens a named pipe, tells the window its name and pumps
-// streamlink's stdin into it once libmpv connects. Windows has no SCM_RIGHTS.
+// streamlink's stdin into it once the announced window PID connects.
+// Windows has no SCM_RIGHTS.
 func sendShimStream(c *net.UnixConn, ipc string) error {
+	var peer struct {
+		PID uint32 `json:"pid"`
+	}
+	if err := json.NewDecoder(c).Decode(&peer); err != nil {
+		return fmt.Errorf("PID da janela: %w", err)
+	}
+	if peer.PID == 0 {
+		return fmt.Errorf("PID da janela ausente")
+	}
 	name := fmt.Sprintf(`\\.\pipe\ttv-win-stream-%d-%d`, os.Getpid(), time.Now().UnixNano())
-	l, err := winio.ListenPipe(name, nil)
+	l, err := listenStreamPipe(name)
 	if err != nil {
 		return err
 	}
@@ -92,7 +100,7 @@ func sendShimStream(c *net.UnixConn, ipc string) error {
 		close(ended)
 		_ = l.Close()
 	}()
-	conn, err := l.Accept()
+	conn, err := acceptStreamClient(l, peer.PID)
 	if err != nil {
 		select {
 		case <-ended:
