@@ -15,10 +15,11 @@ O anúncio vem marcado na playlist da live:
 
     #EXT-X-DATERANGE:ID="stitched-ad-<início>-<duração>",CLASS="live-video-net-stitched-ad",START-DATE=...,DURATION=...
 
-Todo segmento cujo EXT-X-PROGRAM-DATE-TIME cai num desses intervalos é
-descartado pelo writer HLS do streamlink, que registra "Filtering out segments
-and pausing stream output" no primeiro descartado e "Resuming stream output"
-no primeiro conteúdo depois deles, como acontece na Twitch.
+Todo segmento cujo EXT-X-PROGRAM-DATE-TIME cai num desses intervalos, com
+início e fim conhecidos, é descartado pelo writer HLS do streamlink, que
+registra "Filtering out segments and pausing stream output" no primeiro
+descartado e "Resuming stream output" no primeiro conteúdo depois deles, como
+acontece na Twitch.
 
 Se faltar o que este arquivo espera (uma classe renomeada, um método que
 sumiu), o módulo não exporta __plugin__: o streamlink ignora o arquivo e usa o
@@ -49,6 +50,55 @@ def is_ad_daterange(daterange) -> bool:
         getattr(daterange, "classname", None) == AD_CLASS
         or str(getattr(daterange, "id", None) or "").startswith(AD_ID_PREFIX)
     )
+
+
+def _has_duration(value) -> bool:
+    return value is not None and value.total_seconds() >= 0
+
+
+def bounded_ad_dateranges(dateranges):
+    """Os anúncios da playlist com início e fim conhecidos.
+
+    Declarações com o mesmo ID descrevem o mesmo intervalo: uma posterior pode
+    trazer o fim que faltava na primeira (RFC 8216bis, 4.4.5.1). Os atributos
+    são juntados por ID, e só fica o anúncio que, juntado, tem início e fim
+    (END-DATE, DURATION ou PLANNED-DURATION). Sem fim conhecido, nada é
+    descartado: a marca aberta valeria para todo o conteúdo seguinte.
+    """
+    from dataclasses import is_dataclass, replace
+
+    merged = {}
+    for d in dateranges or []:
+        key = getattr(d, "id", None)
+        if key is None or not is_dataclass(d):
+            merged[object()] = d
+            continue
+        prev = merged.get(key)
+        if prev is None:
+            merged[key] = d
+            continue
+        missing = {
+            f: getattr(d, f)
+            for f in _MERGED_FIELDS
+            if getattr(prev, f, None) is None and getattr(d, f, None) is not None
+        }
+        if missing:
+            merged[key] = replace(prev, **missing)
+
+    return [
+        d
+        for d in merged.values()
+        if is_ad_daterange(d)
+        and getattr(d, "start_date", None) is not None
+        and (
+            getattr(d, "end_date", None) is not None
+            or _has_duration(getattr(d, "duration", None))
+            or _has_duration(getattr(d, "planned_duration", None))
+        )
+    ]
+
+
+_MERGED_FIELDS = ("classname", "start_date", "end_date", "duration", "planned_duration")
 
 
 def _load_builtin():
@@ -129,14 +179,23 @@ def _build(base):
         __segment__ = KickAdHLSSegment
 
     class KickAdHLSStreamWorker(base.KickHLSStreamWorker):
+        _ttv_tui_warned = False
+
         def process_segments(self, playlist, *args, **kwargs):
             # A playlist inteira já foi lida: vale até um EXT-X-DATERANGE que
             # aparece depois dos segmentos que ele cobre.
-            ads = [d for d in getattr(playlist, "dateranges", None) or [] if is_ad_daterange(d)]
-            if ads:
-                for seg in playlist.segments:
+            try:
+                ads = bounded_ad_dateranges(getattr(playlist, "dateranges", None))
+                for seg in playlist.segments if ads else []:
                     if any(M3U8.is_date_in_daterange(seg.date, d) for d in ads):
                         seg.ad = True
+            except Exception as err:  # noqa: BLE001 - na dúvida, o vídeo passa inteiro
+                for seg in playlist.segments:
+                    seg.ad = False
+                if not self._ttv_tui_warned:
+                    self._ttv_tui_warned = True
+                    detail = " ".join(f"{type(err).__name__}: {err}".split())
+                    log.warning("ttv-tui ad filter skipped a playlist (" + detail + ")")
             return super().process_segments(playlist, *args, **kwargs)
 
     class KickAdHLSStreamWriter(base.KickHLSStreamWriter):

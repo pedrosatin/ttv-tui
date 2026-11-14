@@ -235,6 +235,27 @@ func TestAdFilterPluginInStreamlink(t *testing.T) {
 		}
 	})
 
+	t.Run("anúncio declarado em duas partes com o mesmo ID", func(t *testing.T) {
+		stdout, stderr := run(t, "filter-split")
+		if !slices.Contains(stdout, "DATA content-0|content-1|content-2|content-3|") {
+			t.Fatalf("stdout = %q, want only the content segments", stdout)
+		}
+		start, end := slices.Index(stderr, holdStartLine), slices.Index(stderr, holdEndLine)
+		if start < 0 || end < start {
+			t.Fatalf("stderr lacks %q then %q:\n%s", holdStartLine, holdEndLine, strings.Join(stderr, "\n"))
+		}
+	})
+
+	t.Run("anúncio sem fim conhecido não descarta nada", func(t *testing.T) {
+		stdout, stderr := run(t, "filter-open")
+		if !slices.Contains(stdout, "DATA content-0|content-1|ad-0|ad-1|content-2|content-3|") {
+			t.Fatalf("stdout = %q, want every segment", stdout)
+		}
+		if slices.Contains(stderr, holdStartLine) || slices.Contains(stderr, holdEndLine) {
+			t.Fatalf("an unbounded ad paused the output:\n%s", strings.Join(stderr, "\n"))
+		}
+	})
+
 	t.Run("sem o plugin o anúncio passa", func(t *testing.T) {
 		stdout, stderr := run(t, "builtin")
 		if !slices.Contains(stdout, "DATA content-0|content-1|ad-0|ad-1|content-2|content-3|") {

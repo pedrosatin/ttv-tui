@@ -293,7 +293,7 @@ Deleting the local file does not end the session on Twitch. Do both:
 
 On Twitch, `streamlink` drops the ad segments from the stream. During an ad break, the status bar shows `Ad break: the video resumes on its own` with a countdown.
 
-On Kick, ads run in the site's player today, not in the video, so a Kick stream reaches the app without them. If Kick starts stitching ads into the video (Amazon IVS, which delivers Kick's video, can do that), the app gives `streamlink` its own copy of the Kick plugin, which drops the segments marked as ads, and the status bar shows the ad break as on Twitch. If a `streamlink` update changes the parts that copy builds on, the video plays through the stock Kick plugin, ads included, and the reason is printed when you quit the app. See [ADR 0019](docs/adr/0019-kick-filtro-de-anuncio.md).
+On Kick, ads run in the site's player today, not in the video, so a Kick stream reaches the app without them. Amazon IVS, which delivers Kick's video, can stitch ads into it. If Kick turns that on, the app gives `streamlink` its own copy of the Kick plugin, which drops the segments marked as ads, and the status bar shows the ad break as on Twitch. If a `streamlink` update changes the parts that copy builds on, the video plays through the stock Kick plugin, ads included, and the reason is printed when you quit the app. See [ADR 0019](docs/adr/0019-kick-filtro-de-anuncio.md).
 
 </details>
 

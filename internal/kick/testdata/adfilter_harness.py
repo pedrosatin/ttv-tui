@@ -5,6 +5,10 @@ Uso: adfilter_harness.py <modo> <diretório do plugin> [diretório de trabalho]
 Modos:
   filter          live com anúncio marcado numa playlist servida em 127.0.0.1;
                   imprime em stdout os bytes que o streamlink entregou.
+  filter-split    o mesmo anúncio declarado duas vezes com o mesmo ID: a
+                  primeira sem fim, a segunda, depois dele, com a duração.
+                  O conteúdo seguinte passa.
+  filter-open     o anúncio marcado sem fim conhecido: nada é descartado.
   builtin         a mesma live pelo plugin kick embutido, sem o do ttv-tui:
                   controle de que o anúncio passa sem o filtro (o diretório do
                   plugin é ignorado).
@@ -36,6 +40,15 @@ CONTENT = [b"content-0|", b"content-1|", b"content-2|", b"content-3|"]
 ADS = [b"ad-0|", b"ad-1|"]
 
 
+# "ivs", "split" ou "open"; main escolhe pelo modo.
+VARIANT = "ivs"
+
+AD_DATERANGE = (
+    '#EXT-X-DATERANGE:ID="stitched-ad-1794657604-4000000000",CLASS="live-video-net-stitched-ad",'
+    'START-DATE="2026-11-14T12:00:04.000Z",X-NET-LIVE-VIDEO-AD-AD-BREAK-ID="ttv-tui-test"'
+)
+
+
 def media_playlist() -> str:
     lines = [
         "#EXTM3U",
@@ -51,8 +64,7 @@ def media_playlist() -> str:
         "/seg/content-1.ts",
         # As três marcas que o IVS põe antes do anúncio (guia do IVS, "SSAI
         # Playlist Reference").
-        '#EXT-X-DATERANGE:ID="stitched-ad-1794657604-4000000000",CLASS="live-video-net-stitched-ad",'
-        'START-DATE="2026-11-14T12:00:04.000Z",DURATION=4.000,X-NET-LIVE-VIDEO-AD-AD-BREAK-ID="ttv-tui-test"',
+        AD_DATERANGE + ("" if VARIANT in ("split", "open") else ",DURATION=4.000"),
         '#EXT-X-DATERANGE:ID="source-1794657604",CLASS="live-video-net-stream-source",'
         'START-DATE="2026-11-14T12:00:04.000Z",END-ON-NEXT=YES,X-NET-LIVE-VIDEO-STREAM-SOURCE="0f262e65"',
         "#EXT-X-DISCONTINUITY",
@@ -62,6 +74,11 @@ def media_playlist() -> str:
         "#EXT-X-PROGRAM-DATE-TIME:2026-11-14T12:00:06.000Z",
         "#EXTINF:2.000,0f262e65-a709-4ef1-8741-e82d936c",
         "/seg/ad-1.ts",
+        *(
+            ['#EXT-X-DATERANGE:ID="stitched-ad-1794657604-4000000000",START-DATE="2026-11-14T12:00:04.000Z",DURATION=4.000']
+            if VARIANT == "split"
+            else []
+        ),
         '#EXT-X-DATERANGE:ID="source-1794657608",CLASS="live-video-net-stream-source",'
         'START-DATE="2026-11-14T12:00:08.000Z",END-ON-NEXT=YES,X-NET-LIVE-VIDEO-STREAM-SOURCE="live"',
         "#EXT-X-DISCONTINUITY",
@@ -153,7 +170,7 @@ def run_filter(plugin_dir: str | None) -> None:
         server.shutdown()
     sys.stdout.write("DATA " + data.decode() + "\n")
     want = b"".join(CONTENT)
-    if plugin_dir is None:
+    if plugin_dir is None or VARIANT == "open":
         want = b"".join(CONTENT[:2] + ADS + CONTENT[2:])
     if data != want:
         fail("streamlink wrote " + repr(data))
@@ -195,7 +212,9 @@ def main() -> None:
         sys.stdout.flush()
         os._exit(0)
     setup_logging()
-    if mode == "filter":
+    global VARIANT
+    if mode in ("filter", "filter-split", "filter-open"):
+        VARIANT = {"filter": "ivs", "filter-split": "split", "filter-open": "open"}[mode]
         run_filter(plugin_dir)
     elif mode == "builtin":
         run_filter(None)
