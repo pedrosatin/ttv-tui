@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
@@ -46,7 +47,7 @@ func TestParseTarget(t *testing.T) {
 			wantOK:   true,
 			wantID:   "dQw4w9WgXcQ",
 			wantPath: "/watch?v=dQw4w9WgXcQ",
-			wantPlay: "https://youtu.be/dQw4w9WgXcQ",
+			wantPlay: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 		},
 		{
 			name:     "/live/id url",
@@ -54,7 +55,17 @@ func TestParseTarget(t *testing.T) {
 			wantOK:   true,
 			wantID:   "4t4AQ15yj1M",
 			wantPath: "/watch?v=4t4AQ15yj1M",
-			wantPlay: "https://www.youtube.com/live/4t4AQ15yj1M?feature=shared",
+			wantPlay: "https://www.youtube.com/watch?v=4t4AQ15yj1M",
+		},
+		{
+			// streamlink has no matcher for /attribution_link: playback goes by
+			// the canonical watch URL of the same video.
+			name:     "attribution link with v= plays the canonical watch url",
+			input:    "https://www.youtube.com/attribution_link?v=dQw4w9WgXcQ",
+			wantOK:   true,
+			wantID:   "dQw4w9WgXcQ",
+			wantPath: "/watch?v=dQw4w9WgXcQ",
+			wantPlay: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 		},
 		{
 			name:     "@handle/live url",
@@ -134,7 +145,7 @@ func TestParseTarget(t *testing.T) {
 			wantOK:   true,
 			wantID:   "4t4AQ15yj1M",
 			wantPath: "/watch?v=4t4AQ15yj1M",
-			wantPlay: "https://www.youtube.com/embed/4t4AQ15yj1M",
+			wantPlay: "https://www.youtube.com/watch?v=4t4AQ15yj1M",
 		},
 		{
 			name:     "/embed/live_stream?channel=id url",
@@ -150,7 +161,7 @@ func TestParseTarget(t *testing.T) {
 			wantOK:   true,
 			wantID:   "dQw4w9WgXcQ",
 			wantPath: "/watch?v=dQw4w9WgXcQ",
-			wantPlay: "https://www.youtube.com/v/dQw4w9WgXcQ",
+			wantPlay: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 		},
 		{
 			name:     "qualified youtube channel ref",
@@ -365,5 +376,19 @@ func TestClient_ChannelsByIDs(t *testing.T) {
 	// Bot check fails batch with Bloqueio so UI preserves saved states.
 	if _, err := client.ChannelsByIDs(context.Background(), []string{"botcheck123"}); catalog.KindOf(err) != catalog.Bloqueio {
 		t.Errorf("bot check batch err = %v, want Bloqueio", err)
+	}
+}
+
+func TestParseRetryAfterCapsHugeSeconds(t *testing.T) {
+	now := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+	h := http.Header{}
+	h.Set("Retry-After", "99999999999")
+	d, at, ok := parseRetryAfter(h, now)
+	if !ok || d != 24*time.Hour || !at.Equal(now.Add(24*time.Hour)) {
+		t.Fatalf("parseRetryAfter(huge) = %v, %v, %v; want 24h from now", d, at, ok)
+	}
+	h.Set("Retry-After", now.Add(90*time.Second).Format(http.TimeFormat))
+	if d, _, ok := parseRetryAfter(h, now); !ok || d != 90*time.Second {
+		t.Fatalf("parseRetryAfter(date) = %v, %v; want 90s", d, ok)
 	}
 }

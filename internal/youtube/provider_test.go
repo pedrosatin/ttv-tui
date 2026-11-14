@@ -69,7 +69,7 @@ func TestProvider_CapabilitiesAndStreamTarget(t *testing.T) {
 		{
 			name:  "youtu.be preserves case",
 			ch:    catalog.Channel{Platform: platform.YouTube, Login: "AbCdEf12345", URL: "https://youtu.be/AbCdEf12345"},
-			url:   "https://youtu.be/AbCdEf12345",
+			url:   "https://www.youtube.com/watch?v=AbCdEf12345",
 			label: "youtube:AbCdEf12345",
 		},
 	}
