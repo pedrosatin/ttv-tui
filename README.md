@@ -267,7 +267,7 @@ Yes, by URL or `@channel`, with no catalog to browse. Press `Ctrl+F` (or `/`) an
 
 The YouTube chat is read-only and polls innertube at the interval YouTube asks for, backing off on errors. The status bar never shows an ad break on YouTube because `streamlink`'s YouTube plugin emits no verifiable ad signal.
 
-Saved YouTube channels show `[YouTube]` in favorites and recents and refresh their live state at startup. On-demand videos (VODs), channels with no active live stream, and bot verification prompts (`"Sign in to confirm you're not a bot"`) show direct messages in the status bar or chat panel.
+Saved YouTube channels show `[YouTube]` in favorites and recents and refresh their live state at startup. On-demand videos (VODs), channels with no active live stream, and bot verification prompts (`"Sign in to confirm you're not a bot"`) show their own message in the status bar or chat panel.
 
 </details>
 

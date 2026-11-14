@@ -98,7 +98,7 @@
   "chat.err.blocked": "%s recusou o pedido (HTTP 403) · {action.reconnect_chat} tenta de novo",
   "chat.err.no_room": "%s não tem chat ao vivo para este canal",
   "chat.err.key_refused": "%s recusou a chave do chat · defina outra no config.toml (veja o README)",
-  "chat.err.vod": "%s não tem chat ao vivo para vídeo sob demanda (não está ao vivo)",
+  "chat.err.vod": "%s não tem chat em vídeo sob demanda",
   "chat.err.bot_check": "%s pediu verificação contra robôs (\"Sign in to confirm you're not a bot\") · {action.reconnect_chat} tenta de novo",
   "chat.err.login_required": "%s exige login para esta transmissão (idade, membros ou privada)",
   "chat.reconnected_gap": "Reconectado; mensagens enviadas durante a desconexão podem ter se perdido",

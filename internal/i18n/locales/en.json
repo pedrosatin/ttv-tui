@@ -98,7 +98,7 @@
   "chat.err.blocked": "%s refused the request (HTTP 403) · {action.reconnect_chat} tries again",
   "chat.err.no_room": "%s has no live chat for this channel",
   "chat.err.key_refused": "%s refused the chat key · set a new one in config.toml (see the README)",
-  "chat.err.vod": "%s live chat is unavailable for an on-demand video (not live)",
+  "chat.err.vod": "%s has no live chat on an on-demand video",
   "chat.err.bot_check": "%s asked for bot verification (\"Sign in to confirm you're not a bot\") · {action.reconnect_chat} tries again",
   "chat.err.login_required": "%s requires sign-in for this stream (age, members, or private)",
   "chat.reconnected_gap": "Reconnected; messages sent while disconnected may be missing",

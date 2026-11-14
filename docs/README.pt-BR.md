@@ -267,7 +267,7 @@ Dá, por URL ou `@canal`, sem catálogo para navegar. Aperte `Ctrl+F`, ou `/`, e
 
 O chat do YouTube é só leitura e consulta o innertube no intervalo que a própria resposta pede, com espera crescente em caso de erro. A barra de status nunca mostra intervalo comercial no YouTube porque o plugin do YouTube no `streamlink` não emite sinal verificável de anúncio.
 
-Canais salvos do YouTube aparecem nos favoritos e recentes com a marca `[YouTube]` e conferem o estado ao vivo ao abrir o app. Vídeos sob demanda, canais sem live ativa e bloqueios com `"Sign in to confirm you're not a bot"` mostram mensagens explícitas na barra ou no chat.
+Canais salvos do YouTube aparecem nos favoritos e recentes com a marca `[YouTube]` e conferem o estado ao vivo ao abrir o app. Vídeos sob demanda, canais sem live ativa e bloqueios com `"Sign in to confirm you're not a bot"` mostram mensagem própria na barra ou no chat.
 
 </details>
 
