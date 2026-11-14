@@ -16,11 +16,11 @@
               "giftMessageViewModel": {
                 "id": "ChwKGkNOXzN4dnZQaDVnREZTTEpQd1FkY3ljUDNR",
                 "authorName": {
-                  "content": "@toaster_scramble ",
+                  "content": "@user_alpha ",
                   "styleRuns": [
                     {
                       "startIndex": 0,
-                      "length": 18
+                      "length": 12
                     }
                   ]
                 },
@@ -44,7 +44,7 @@
                 "id": "ChwKGkNNT3RoOGJvaDVnREZSQWYxZ0FkQ3FZZEZB",
                 "timestampUsec": "1794671558914514",
                 "authorName": {
-                  "simpleText": "@Luffy-j7u2n"
+                  "simpleText": "@viewer_bravo"
                 },
                 "message": {
                   "runs": [
@@ -64,7 +64,7 @@
                 "id": "ChwKGkNOZUVsTWJvaDVnREZYdzNkZ1lkTjM0OHdR",
                 "timestampUsec": "1794671559122378",
                 "authorName": {
-                  "simpleText": "@Gremlin_who_drinks_shampoo"
+                  "simpleText": "@viewer_charlie"
                 },
                 "message": {
                   "runs": [
@@ -89,7 +89,7 @@
                 "id": "ChwKGkNPN0poc3JvaDVnREZVX2M1d01kcHg4akln",
                 "timestampUsec": "1794671567292531",
                 "authorName": {
-                  "simpleText": "@ChasingShade11"
+                  "simpleText": "@viewer_delta"
                 },
                 "message": {
                   "runs": [
@@ -109,7 +109,7 @@
                 "id": "ChwKGkNJamkyc3JvaDVnREZRRW5kZ1lkaFlNek5n",
                 "timestampUsec": "1794671568669103",
                 "authorName": {
-                  "simpleText": "@Gremlin_who_drinks_shampoo"
+                  "simpleText": "@viewer_charlie"
                 },
                 "message": {
                   "runs": [
@@ -129,7 +129,7 @@
                 "id": "ChwKGkNOcl82c3pvaDVnREZXVEdQd1FkckRFVjRR",
                 "timestampUsec": "1794671573132905",
                 "authorName": {
-                  "simpleText": "@Luffy-j7u2n"
+                  "simpleText": "@viewer_bravo"
                 },
                 "message": {
                   "runs": [
@@ -149,7 +149,7 @@
                 "id": "ChwKGkNMMmI1dERvaDVnREZSelI1d01kT3VVRTN3",
                 "timestampUsec": "1794671581435033",
                 "authorName": {
-                  "simpleText": "@Mortalmp4"
+                  "simpleText": "@viewer_echo"
                 },
                 "message": {
                   "runs": [

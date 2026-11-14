@@ -87,14 +87,14 @@ func (c *Client) PollChat(ctx context.Context, req PollRequest, now time.Time) (
 	defer func() { _ = res.Body.Close() }()
 
 	respBytes, readErr := io.ReadAll(io.LimitReader(res.Body, maxJSONBytes))
+	if now.IsZero() {
+		now = time.Now()
+	}
 	if res.StatusCode != http.StatusOK {
-		return PollResult{}, statusError(op, res.StatusCode, ErrChatDisabled)
+		return PollResult{}, statusError(op, res.StatusCode, res.Header, now, ErrChatDisabled)
 	}
 	if readErr != nil {
 		return PollResult{}, &catalog.Error{Platform: platform.YouTube, Kind: catalog.Rede, Op: op, Err: fmt.Errorf("read response: %w", readErr)}
-	}
-	if now.IsZero() {
-		now = time.Now()
 	}
 	return parseLiveChatResponse(respBytes, now)
 }
@@ -111,11 +111,13 @@ type innertubeRun struct {
 		EmojiID       string   `json:"emojiId"`
 		Shortcuts     []string `json:"shortcuts"`
 		IsCustomEmoji bool     `json:"isCustomEmoji"`
-		Accessibility *struct {
-			AccessibilityData *struct {
-				Label string `json:"label"`
-			} `json:"accessibilityData"`
-		} `json:"accessibility"`
+		Image         *struct {
+			Accessibility *struct {
+				AccessibilityData *struct {
+					Label string `json:"label"`
+				} `json:"accessibilityData"`
+			} `json:"accessibility"`
+		} `json:"image"`
 	} `json:"emoji"`
 }
 
@@ -410,8 +412,8 @@ func extractText(t *innertubeText) string {
 					b.WriteString(r.Emoji.EmojiID)
 				case len(r.Emoji.Shortcuts) > 0 && r.Emoji.Shortcuts[0] != "":
 					b.WriteString(r.Emoji.Shortcuts[0])
-				case r.Emoji.Accessibility != nil && r.Emoji.Accessibility.AccessibilityData != nil:
-					b.WriteString(r.Emoji.Accessibility.AccessibilityData.Label)
+				case r.Emoji.Image != nil && r.Emoji.Image.Accessibility != nil && r.Emoji.Image.Accessibility.AccessibilityData != nil:
+					b.WriteString(r.Emoji.Image.Accessibility.AccessibilityData.Label)
 				case r.Emoji.EmojiID != "":
 					b.WriteString(r.Emoji.EmojiID)
 				}

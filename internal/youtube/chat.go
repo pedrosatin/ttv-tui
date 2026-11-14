@@ -251,14 +251,36 @@ func final(reason catalog.ChatErrorReason, err error) error {
 	return &finalError{err: err}
 }
 
+type retryState struct {
+	initial    time.Duration
+	backoff    time.Duration
+	maxBackoff time.Duration
+	attempt    int
+}
+
+func (r *retryState) nextWait(err error) time.Duration {
+	r.attempt++
+	wait := errorBackoffWait(err, r.backoff, r.maxBackoff)
+	r.backoff = min(r.backoff*2, r.maxBackoff)
+	return wait
+}
+
+func (r *retryState) reset() {
+	r.backoff = r.initial
+	r.attempt = 0
+}
+
 func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, name, target string) {
 	defer c.sessions.Done()
 	defer close(done)
 
 	c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, State: catalog.ChatStateConnecting})
 
-	backoff := c.opts.InitialBackoff
-	attempt := 0
+	retry := retryState{
+		initial:    c.opts.InitialBackoff,
+		backoff:    c.opts.InitialBackoff,
+		maxBackoff: c.opts.MaxBackoff,
+	}
 	var resolved *Resolved
 
 	for {
@@ -277,20 +299,18 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 					c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, State: catalog.ChatStateError, Err: fatal.err})
 					return
 				}
-				attempt++
-				wait := errorBackoffWait(classified, backoff, c.opts.MaxBackoff)
+				wait := retry.nextWait(classified)
 				c.emit(ctx, catalog.ChatEvent{
 					Generation:  gen,
 					Channel:     name,
 					State:       catalog.ChatStateReconnecting,
 					Err:         classified,
-					Attempt:     attempt,
+					Attempt:     retry.attempt,
 					NextBackoff: wait,
 				})
 				if !waitCtx(ctx, wait) {
 					return
 				}
-				backoff = min(backoff*2, c.opts.MaxBackoff)
 				continue
 			}
 			if strings.TrimSpace(res.ChatContinuation) == "" {
@@ -303,10 +323,9 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 				return
 			}
 			resolved = &res
-			backoff, attempt = c.opts.InitialBackoff, 0
 		}
 
-		if err := c.pollLoop(ctx, gen, name, resolved); ctx.Err() != nil {
+		if err := c.pollLoop(ctx, gen, name, resolved, &retry); ctx.Err() != nil {
 			return
 		} else {
 			var fatal *finalError
@@ -314,14 +333,13 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 				c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, State: catalog.ChatStateError, Err: fatal.err})
 				return
 			}
-			attempt++
-			wait := errorBackoffWait(err, backoff, c.opts.MaxBackoff)
+			wait := retry.nextWait(err)
 			c.emit(ctx, catalog.ChatEvent{
 				Generation:  gen,
 				Channel:     name,
 				State:       catalog.ChatStateReconnecting,
 				Err:         err,
-				Attempt:     attempt,
+				Attempt:     retry.attempt,
 				NextBackoff: wait,
 			})
 			// Re-resolve watch page if continuation fails or disappears so a fresh
@@ -330,17 +348,14 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 			if !waitCtx(ctx, wait) {
 				return
 			}
-			backoff = min(backoff*2, c.opts.MaxBackoff)
 		}
 	}
 }
 
-func (c *Chat) pollLoop(ctx context.Context, gen uint64, name string, resolved *Resolved) error {
+func (c *Chat) pollLoop(ctx context.Context, gen uint64, name string, resolved *Resolved, retry *retryState) error {
 	cont := resolved.ChatContinuation
 	seen := newSeenIDs(seenRingCapacity)
 	connected := false
-	backoff := c.opts.InitialBackoff
-	attempt := 0
 	consecErrors := 0
 
 	for {
@@ -361,32 +376,31 @@ func (c *Chat) pollLoop(ctx context.Context, gen uint64, name string, resolved *
 			if errors.As(classified, &fatal) {
 				return classified
 			}
+			connected = false
 			consecErrors++
-			attempt++
-			wait := errorBackoffWait(classified, backoff, c.opts.MaxBackoff)
+			if consecErrors >= 3 {
+				// After repeated poll errors (e.g. stale continuation), fall back to
+				// re-resolving the watch page; runSession emits the single Reconnecting
+				// event and sleeps the backoff before retrying.
+				return classified
+			}
+			wait := retry.nextWait(classified)
 			c.emit(ctx, catalog.ChatEvent{
 				Generation:  gen,
 				Channel:     name,
 				State:       catalog.ChatStateReconnecting,
 				Err:         classified,
-				Attempt:     attempt,
+				Attempt:     retry.attempt,
 				NextBackoff: wait,
 			})
-			if consecErrors >= 3 {
-				// After repeated poll errors (e.g. stale continuation), fall back to
-				// re-resolving the watch page.
-				return classified
-			}
 			if !waitCtx(ctx, wait) {
 				return ctx.Err()
 			}
-			backoff = min(backoff*2, c.opts.MaxBackoff)
 			continue
 		}
 
 		consecErrors = 0
-		backoff = c.opts.InitialBackoff
-		attempt = 0
+		retry.reset()
 
 		if !connected {
 			connected = true
@@ -431,24 +445,21 @@ func (c *Chat) pollLoop(ctx context.Context, gen uint64, name string, resolved *
 	}
 }
 
-// nextPollWait enforces the server-requested interval without ever polling faster
-// than the server asked (up to MaxPollInterval). When the server gives no
-// timeout, PollInterval is used instead (clamped to [MinPollInterval, MaxPollInterval]).
+// nextPollWait enforces the server-requested interval clamped to
+// [MinPollInterval, MaxPollInterval]. When the server gives no timeout,
+// PollInterval is used instead (also clamped to [MinPollInterval, MaxPollInterval]).
 func (c *Chat) nextPollWait(serverTimeout time.Duration) time.Duration {
-	if serverTimeout <= 0 {
-		wait := c.opts.PollInterval
-		if wait < c.opts.MinPollInterval {
-			return c.opts.MinPollInterval
-		}
-		if wait > c.opts.MaxPollInterval {
-			return c.opts.MaxPollInterval
-		}
-		return wait
+	wait := serverTimeout
+	if wait <= 0 {
+		wait = c.opts.PollInterval
 	}
-	if serverTimeout > c.opts.MaxPollInterval {
-		return c.opts.MaxPollInterval
+	if wait < c.opts.MinPollInterval {
+		wait = c.opts.MinPollInterval
 	}
-	return serverTimeout
+	if wait > c.opts.MaxPollInterval {
+		wait = c.opts.MaxPollInterval
+	}
+	return wait
 }
 
 func errorBackoffWait(err error, backoff, maxBackoff time.Duration) time.Duration {

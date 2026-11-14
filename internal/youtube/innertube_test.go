@@ -3,6 +3,7 @@ package youtube
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -61,14 +62,14 @@ func TestClient_PollChatWithRealFixture(t *testing.T) {
 	if len(res.Messages) != 7 {
 		t.Fatalf("len(Messages) = %d, want 7", len(res.Messages))
 	}
-	if res.Messages[0].Kind != catalog.ChatMessageNotice || res.Messages[0].DisplayName != "@toaster_scramble" || res.Messages[0].Body != "sent Star" {
+	if res.Messages[0].Kind != catalog.ChatMessageNotice || res.Messages[0].DisplayName != "@user_alpha" || res.Messages[0].Body != "sent Star" {
 		t.Errorf("Messages[0] = %+v", res.Messages[0])
 	}
-	if res.Messages[1].DisplayName != "@Luffy-j7u2n" || res.Messages[1].Body != "kya howw??" {
+	if res.Messages[1].DisplayName != "@viewer_bravo" || res.Messages[1].Body != "kya howw??" {
 		t.Errorf("Messages[1] = %+v", res.Messages[1])
 	}
 	last := res.Messages[len(res.Messages)-1]
-	if last.DisplayName != "@Mortalmp4" || last.Body != "udhar Reze baat kr rha hai 🥀🥀" {
+	if last.DisplayName != "@viewer_echo" || last.Body != "udhar Reze baat kr rha hai 🥀🥀" {
 		t.Errorf("last message = %+v", last)
 	}
 }
@@ -130,5 +131,55 @@ func TestParseLiveChatResponse_AdditionalRenderers(t *testing.T) {
 	}
 	if res.Messages[2].Kind != catalog.ChatMessageNotice || res.Messages[2].Body != "Gifted 5 memberships" {
 		t.Errorf("gift = %+v", res.Messages[2])
+	}
+}
+
+func TestExtractText_EmojiImageAccessibility(t *testing.T) {
+	raw := []byte(`{
+	  "continuationContents": {
+	    "liveChatContinuation": {
+	      "continuations": [{"timedContinuationData": {"timeoutMs": 5000, "continuation": "NEXT"}}],
+	      "actions": [{
+	        "addChatItemAction": {"item": {"liveChatTextMessageRenderer": {
+	          "id": "e1",
+	          "authorName": {"simpleText": "@Viewer"},
+	          "message": {"runs": [
+	            {"text": "hi "},
+	            {"emoji": {
+	              "emojiId": "UCxyz/custom1",
+	              "isCustomEmoji": true,
+	              "image": {"accessibility": {"accessibilityData": {"label": ":pogchamp:"}}}
+	            }}
+	          ]}
+	        }}}
+	      }]
+	    }
+	  }
+	}`)
+	res, err := parseLiveChatResponse(raw, time.Unix(1700000000, 0))
+	if err != nil {
+		t.Fatalf("parseLiveChatResponse: %v", err)
+	}
+	if len(res.Messages) != 1 || res.Messages[0].Body != "hi :pogchamp:" {
+		t.Fatalf("messages = %+v, want body \"hi :pogchamp:\"", res.Messages)
+	}
+}
+
+func TestClient_429RetryAfter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "42")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	client := NewClient(ClientConfig{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	now := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+	_, err := client.PollChat(context.Background(), PollRequest{Continuation: "C"}, now)
+	var ce *catalog.Error
+	if err == nil || !errors.As(err, &ce) {
+		t.Fatalf("err = %v, want *catalog.Error", err)
+	}
+	if ce.Kind != catalog.RateLimit || ce.StatusCode != 429 || ce.ResetAfter != 42*time.Second {
+		t.Fatalf("ce = %+v, want RateLimit 429 ResetAfter=42s", ce)
 	}
 }
