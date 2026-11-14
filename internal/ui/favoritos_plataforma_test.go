@@ -146,3 +146,57 @@ func TestSalvoSemCatalogoUsaListaInicial(t *testing.T) {
 		t.Fatal("Twitch deve ser preferida mesmo registrada depois")
 	}
 }
+
+// O usuário encontra gaules da Twitch nos favoritos e o homônimo do Vimeo nos recentes.
+func TestCenarioSalvosHomonimosPorPlataforma(t *testing.T) {
+	eachSize(t, "salvos-homonimos-por-plataforma", func(t *testing.T, width, height int) Model {
+		m, _ := newScenario(t, width, height,
+			WithFavorites([]catalog.Channel{{Platform: platform.Twitch, Login: "gaules"}}),
+			WithRecents([]catalog.Channel{{Platform: "vimeo.com", Login: "gaules"}}))
+		m = play(t, m, "down")
+		var favorites, recents int
+		for _, it := range m.VisibleItems() {
+			if it.Type == ItemTypeFavorite && it.Channel.CanonicalPlatform() == platform.Twitch {
+				favorites++
+			}
+			if it.Type == ItemTypeRecent && it.Channel.CanonicalPlatform() == "vimeo.com" {
+				recents++
+			}
+		}
+		if favorites != 1 || recents != 1 {
+			t.Fatalf("favoritos Twitch = %d, recentes Vimeo = %d; esperados 1 e 1", favorites, recents)
+		}
+		if lineWith(m, "[vimeo.com] gaules") < 0 {
+			t.Fatal("recente sem marca de plataforma")
+		}
+		return m
+	})
+}
+
+func TestDeduplicacaoSalvosPorPlataforma(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		favorite, recent catalog.Channel
+		want             int
+	}{
+		{"login na mesma plataforma", catalog.Channel{Login: "Gaules", ID: "1"}, catalog.Channel{Platform: platform.Twitch, Login: "gaules", ID: "2"}, 1},
+		{"ID na mesma plataforma", catalog.Channel{Login: "antigo", ID: "1"}, catalog.Channel{Login: "novo", ID: "1"}, 1},
+		{"ID em plataformas distintas", catalog.Channel{Login: "gaules", ID: "1"}, catalog.Channel{Platform: "vimeo.com", Login: "gaules", ID: "1"}, 2},
+		{"favorito YouTube e recente Twitch", catalog.Channel{Platform: platform.YouTube, Login: "gaules"}, catalog.Channel{Login: "gaules"}, 2},
+		{"YouTube distingue maiúsculas", catalog.Channel{Platform: platform.YouTube, Login: "Video"}, catalog.Channel{Platform: platform.YouTube, Login: "video"}, 2},
+		{"prefixo do identificador", catalog.Channel{Platform: "vimeo.com", Login: "vimeo.com:gaules"}, catalog.Channel{Platform: "vimeo.com", Login: "gaules"}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, _ := newScenario(t, 80, 24, WithFavorites([]catalog.Channel{tc.favorite}), WithRecents([]catalog.Channel{tc.recent}))
+			count := 0
+			for _, it := range m.VisibleItems() {
+				if it.Channel != nil {
+					count++
+				}
+			}
+			if count != tc.want {
+				t.Fatalf("canais = %d; esperado %d", count, tc.want)
+			}
+		})
+	}
+}

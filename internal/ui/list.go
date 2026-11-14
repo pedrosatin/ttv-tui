@@ -188,8 +188,8 @@ func (m Model) VisibleItems() []ListItem {
 	p := itemPass{
 		query:      strings.ToLower(strings.TrimSpace(m.list.filter)),
 		prefs:      m.list.prefs,
-		seenLogins: make(map[string]struct{}),
-		seenIDs:    make(map[string]struct{}),
+		seenLogins: make(map[seenChannelKey]struct{}),
+		seenIDs:    make(map[seenChannelKey]struct{}),
 	}
 	if m.Mode() != ModeCategories {
 		p.starred = m.starredListing()
@@ -206,29 +206,47 @@ func (m Model) VisibleItems() []ListItem {
 type itemPass struct {
 	query      string // text filter, trimmed and lowercased
 	prefs      channelPrefs
-	seenLogins map[string]struct{}
-	seenIDs    map[string]struct{}
+	seenLogins map[seenChannelKey]struct{}
+	seenIDs    map[seenChannelKey]struct{}
 	// starred são os índices de m.list.channels que são favoritos e ganham ★.
 	starred map[int]bool
 }
 
-func (p itemPass) markSeen(ch catalog.Channel) {
-	if ch.Login != "" {
-		p.seenLogins[strings.ToLower(ch.Login)] = struct{}{}
+// seenChannelKey mantém cada identificador dentro da sua plataforma.
+type seenChannelKey struct {
+	platform string
+	id       string
+}
+
+func channelSeenKeys(ch catalog.Channel) (seenChannelKey, seenChannelKey) {
+	plat := ch.CanonicalPlatform()
+	stable := ch.StableID()
+	if plat != platform.YouTube {
+		stable = strings.ToLower(stable)
 	}
-	if ch.ID != "" {
-		p.seenIDs[ch.ID] = struct{}{}
+	return seenChannelKey{plat, stable},
+		seenChannelKey{plat, catalog.StableID(plat, ch.ID, "")}
+}
+
+func (p itemPass) markSeen(ch catalog.Channel) {
+	stable, id := channelSeenKeys(ch)
+	if stable.id != "" {
+		p.seenLogins[stable] = struct{}{}
+	}
+	if id.id != "" {
+		p.seenIDs[id] = struct{}{}
 	}
 }
 
 func (p itemPass) isSeen(ch catalog.Channel) bool {
-	if ch.Login != "" {
-		if _, ok := p.seenLogins[strings.ToLower(ch.Login)]; ok {
+	stable, id := channelSeenKeys(ch)
+	if stable.id != "" {
+		if _, ok := p.seenLogins[stable]; ok {
 			return true
 		}
 	}
-	if ch.ID != "" {
-		if _, ok := p.seenIDs[ch.ID]; ok {
+	if id.id != "" {
+		if _, ok := p.seenIDs[id]; ok {
 			return true
 		}
 	}
