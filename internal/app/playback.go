@@ -179,10 +179,11 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 		}
 	}
 	playTarget := player.Target{
-		URL:       pTarget.URL,
-		ExtraArgs: pTarget.ExtraArgs,
-		Plugins:   playerPlugins(pTarget.Plugins),
-		Label:     pTarget.Label,
+		URL:        pTarget.URL,
+		ExtraArgs:  pTarget.ExtraArgs,
+		Plugins:    playerPlugins(pTarget.Plugins),
+		Label:      pTarget.Label,
+		NoAdSignal: pTarget.NoAdSignal,
 	}
 	identity := playTarget.Identity()
 	return func() tea.Msg {

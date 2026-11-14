@@ -30,6 +30,11 @@ func TestYouTubeFailureMessagesPerClass(t *testing.T) {
 			line:    "ERROR: [youtube] abc123: Sign in to confirm you're not a bot. This helps protect our community.",
 			key:     "player.fail.bot_check",
 		},
+		{
+			failure: PlayerFailureLoginRequired,
+			line:    "[plugins.youtube][error] Could not get video info - LOGIN_REQUIRED: Sign in to confirm your age",
+			key:     "player.fail.login_required",
+		},
 	}
 
 	for _, tc := range cases {
@@ -78,12 +83,41 @@ func TestYouTubeVODFailureMarksChannelOffline(t *testing.T) {
 	}
 }
 
+func TestYouTubeLoginRequiredDoesNotMarkChannelOffline(t *testing.T) {
+	yt := catalog.Channel{
+		Platform:     platform.YouTube,
+		ID:           "youtube:jfKfPfyJRdk",
+		Login:        "jfKfPfyJRdk",
+		DisplayName:  "Lofi Girl",
+		URL:          "https://www.youtube.com/watch?v=jfKfPfyJRdk",
+		Availability: catalog.AvailabilityLive,
+		Viewers:      catalog.IntPtr(12000),
+	}
+	m := New(mustCatalog(t, i18n.LangEN),
+		WithPlayback(&fakePlayback{}),
+		WithFavorites([]catalog.Channel{yt}),
+		WithRecents([]catalog.Channel{yt}),
+	)
+	m = resize(m, 120, 24)
+	updated, cmd := m.Update(ChannelSelectedMsg{Channel: yt})
+	m = drainCmd(t, updated.(Model), cmd)
+
+	m = failWith(t, m, 1, PlayerFailureLoginRequired, "[plugins.youtube][error] Could not get video info - LOGIN_REQUIRED: Sign in to confirm your age")
+	if got := m.Favorites()[0]; got.Availability != catalog.AvailabilityLive {
+		t.Fatalf("favorite after login_required = %+v, want live preserved", got)
+	}
+	if got := m.Recents()[0]; got.Availability != catalog.AvailabilityLive {
+		t.Fatalf("recent after login_required = %+v, want live preserved", got)
+	}
+}
+
 func TestYouTubeChatErrorReasons(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		cat := mustCatalog(t, lang)
 		for reason, key := range map[catalog.ChatErrorReason]string{
-			catalog.ChatErrorVOD:      "chat.err.vod",
-			catalog.ChatErrorBotCheck: "chat.err.bot_check",
+			catalog.ChatErrorVOD:           "chat.err.vod",
+			catalog.ChatErrorBotCheck:      "chat.err.bot_check",
+			catalog.ChatErrorLoginRequired: "chat.err.login_required",
 		} {
 			fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{
 				platform.YouTube: catalog.ReadOnlyChatCapabilities,

@@ -501,7 +501,7 @@ func (s *Session) handleLine(line string) {
 		go s.failFast()
 	}
 
-	if !isYouTubeTarget(s.cfg.Target) {
+	if !s.cfg.Target.NoAdSignal {
 		switch classifyAdLine(line) {
 		case adSignalHoldStart:
 			s.startAdHold()
@@ -514,15 +514,6 @@ func (s *Session) handleLine(line string) {
 			s.endAdHold()
 		}
 	}
-}
-
-func isYouTubeTarget(t Target) bool {
-	if strings.HasPrefix(strings.ToLower(t.Label), "youtube:") {
-		return true
-	}
-	u := strings.ToLower(t.URL)
-	return strings.Contains(u, "://youtube.com/") || strings.Contains(u, "://www.youtube.com/") ||
-		strings.Contains(u, "://m.youtube.com/") || strings.Contains(u, "://youtu.be/")
 }
 
 func (s *Session) superviseIPC(ctx context.Context) {

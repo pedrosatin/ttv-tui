@@ -80,8 +80,9 @@ func (p *Provider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 		labelID = target.ID
 	}
 	return catalog.Stream{
-		URL:   target.PlaybackURL,
-		Label: platform.YouTube + ":" + labelID,
+		URL:        target.PlaybackURL,
+		Label:      platform.YouTube + ":" + labelID,
+		NoAdSignal: true,
 	}, nil
 }
 

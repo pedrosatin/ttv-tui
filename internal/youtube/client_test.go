@@ -194,6 +194,7 @@ func TestClient_ResolveWatchPageFixtures(t *testing.T) {
 	offlineSlateHTML := loadFixture(t, "watch_offline_slate.html")
 	channelNoLiveHTML := loadFixture(t, "channel_no_live.html")
 	botCheckHTML := loadFixture(t, "watch_bot_check.html")
+	loginRequiredHTML := []byte(`<!DOCTYPE html><html><head><link rel="canonical" href="https://www.youtube.com/watch?v=agegate1234"></head><body><script>var ytInitialPlayerResponse = {"playabilityStatus": {"status": "LOGIN_REQUIRED", "reason": "Sign in to confirm your age"}};</script></body></html>`)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.RequestURI() {
@@ -207,6 +208,8 @@ func TestClient_ResolveWatchPageFixtures(t *testing.T) {
 			_, _ = w.Write(channelNoLiveHTML)
 		case "/watch?v=botcheck123":
 			_, _ = w.Write(botCheckHTML)
+		case "/watch?v=agegate1234":
+			_, _ = w.Write(loginRequiredHTML)
 		case "/@Missing404/live":
 			http.NotFound(w, r)
 		case "/watch?v=forbidden43":
@@ -279,6 +282,16 @@ func TestClient_ResolveWatchPageFixtures(t *testing.T) {
 		}
 	})
 
+	t.Run("login required without bot check", func(t *testing.T) {
+		_, err := client.Resolve(ctx, "https://www.youtube.com/watch?v=agegate1234")
+		if !errors.Is(err, ErrLoginRequired) {
+			t.Fatalf("err = %v, want ErrLoginRequired", err)
+		}
+		if errors.Is(err, ErrBotCheck) {
+			t.Fatalf("err = %v, must not match ErrBotCheck", err)
+		}
+	})
+
 	t.Run("404 channel not found", func(t *testing.T) {
 		_, err := client.Resolve(ctx, "@Missing404")
 		if !errors.Is(err, ErrChannelNotFound) {
@@ -299,6 +312,7 @@ func TestClient_ChannelsByIDs(t *testing.T) {
 	vodHTML := loadFixture(t, "watch_vod.html")
 	channelNoLiveHTML := loadFixture(t, "channel_no_live.html")
 	botCheckHTML := loadFixture(t, "watch_bot_check.html")
+	loginRequiredHTML := []byte(`<!DOCTYPE html><html><body><script>var ytInitialPlayerResponse = {"playabilityStatus": {"status": "LOGIN_REQUIRED", "reason": "This video is available to this channel's members on level: Member (or any higher level)."}};</script></body></html>`)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.RequestURI() {
@@ -310,6 +324,8 @@ func TestClient_ChannelsByIDs(t *testing.T) {
 			_, _ = w.Write(channelNoLiveHTML)
 		case "/watch?v=botcheck123":
 			_, _ = w.Write(botCheckHTML)
+		case "/watch?v=membersOnly":
+			_, _ = w.Write(loginRequiredHTML)
 		default:
 			http.NotFound(w, r)
 		}
@@ -322,6 +338,7 @@ func TestClient_ChannelsByIDs(t *testing.T) {
 		"youtube:@LofiGirl", // duplicate collapsed
 		"@Fireship",
 		"dQw4w9WgXcQ",
+		"membersOnly",      // LOGIN_REQUIRED (members/age/private) omitted instead of failing batch
 		"@DoesNotExist404", // 404 omitted
 	})
 	if err != nil {

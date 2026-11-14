@@ -79,8 +79,8 @@ func TestProvider_CapabilitiesAndStreamTarget(t *testing.T) {
 			if err != nil {
 				t.Fatalf("StreamTarget: %v", err)
 			}
-			if got.URL != tc.url || got.Label != tc.label || len(got.ExtraArgs) != 0 || len(got.Plugins) != 0 {
-				t.Errorf("got = %+v, want url=%q label=%q", got, tc.url, tc.label)
+			if got.URL != tc.url || got.Label != tc.label || !got.NoAdSignal || len(got.ExtraArgs) != 0 || len(got.Plugins) != 0 {
+				t.Errorf("got = %+v, want url=%q label=%q NoAdSignal=true", got, tc.url, tc.label)
 			}
 		})
 	}

@@ -33,6 +33,9 @@ const (
 	ChatErrorVOD ChatErrorReason = "vod"
 	// ChatErrorBotCheck: the platform presented an anti-bot verification prompt.
 	ChatErrorBotCheck ChatErrorReason = "bot_check"
+	// ChatErrorLoginRequired: the stream requires a platform account sign-in
+	// (age-restricted, members-only, or private) rather than a bot check.
+	ChatErrorLoginRequired ChatErrorReason = "login_required"
 )
 
 // ChatError is the error a chat implementation puts in an event when the
