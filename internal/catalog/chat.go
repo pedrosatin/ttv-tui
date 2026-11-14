@@ -287,8 +287,11 @@ func ClassifyUserNotice(msgID string) UserNoticeKind {
 // changes state, updates room moderation modes, updates outbound message status,
 // or flushes a batch of messages.
 type ChatEvent struct {
-	Generation  uint64
-	Channel     string
+	Generation uint64
+	Channel    string
+	// ChannelName carries the resolved human-readable channel name (e.g.
+	// YouTube Author) when Channel is an opaque identifier such as a video ID.
+	ChannelName string
 	State       ChatState
 	Anonymous   bool
 	Messages    []ChatMessage

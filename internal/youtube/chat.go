@@ -292,17 +292,19 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 			if ctx.Err() != nil {
 				return
 			}
+			author := strings.TrimSpace(res.Author)
 			if err != nil {
 				classified := classifyResolveError(err)
 				var fatal *finalError
 				if errors.As(classified, &fatal) {
-					c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, State: catalog.ChatStateError, Err: fatal.err})
+					c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, ChannelName: author, State: catalog.ChatStateError, Err: fatal.err})
 					return
 				}
 				wait := retry.nextWait(classified)
 				c.emit(ctx, catalog.ChatEvent{
 					Generation:  gen,
 					Channel:     name,
+					ChannelName: author,
 					State:       catalog.ChatStateReconnecting,
 					Err:         classified,
 					Attempt:     retry.attempt,
@@ -315,28 +317,31 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 			}
 			if strings.TrimSpace(res.ChatContinuation) == "" {
 				c.emit(ctx, catalog.ChatEvent{
-					Generation: gen,
-					Channel:    name,
-					State:      catalog.ChatStateError,
-					Err:        &catalog.ChatError{Reason: catalog.ChatErrorNoRoom, Err: ErrChatDisabled},
+					Generation:  gen,
+					Channel:     name,
+					ChannelName: author,
+					State:       catalog.ChatStateError,
+					Err:         &catalog.ChatError{Reason: catalog.ChatErrorNoRoom, Err: ErrChatDisabled},
 				})
 				return
 			}
 			resolved = &res
 		}
 
+		author := strings.TrimSpace(resolved.Author)
 		if err := c.pollLoop(ctx, gen, name, resolved, &retry); ctx.Err() != nil {
 			return
 		} else {
 			var fatal *finalError
 			if errors.As(err, &fatal) {
-				c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, State: catalog.ChatStateError, Err: fatal.err})
+				c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, ChannelName: author, State: catalog.ChatStateError, Err: fatal.err})
 				return
 			}
 			wait := retry.nextWait(err)
 			c.emit(ctx, catalog.ChatEvent{
 				Generation:  gen,
 				Channel:     name,
+				ChannelName: author,
 				State:       catalog.ChatStateReconnecting,
 				Err:         err,
 				Attempt:     retry.attempt,
@@ -354,6 +359,7 @@ func (c *Chat) runSession(ctx context.Context, done chan struct{}, gen uint64, n
 
 func (c *Chat) pollLoop(ctx context.Context, gen uint64, name string, resolved *Resolved, retry *retryState) error {
 	cont := resolved.ChatContinuation
+	author := strings.TrimSpace(resolved.Author)
 	seen := newSeenIDs(seenRingCapacity)
 	connected := false
 	consecErrors := 0
@@ -388,6 +394,7 @@ func (c *Chat) pollLoop(ctx context.Context, gen uint64, name string, resolved *
 			c.emit(ctx, catalog.ChatEvent{
 				Generation:  gen,
 				Channel:     name,
+				ChannelName: author,
 				State:       catalog.ChatStateReconnecting,
 				Err:         classified,
 				Attempt:     retry.attempt,
@@ -404,7 +411,7 @@ func (c *Chat) pollLoop(ctx context.Context, gen uint64, name string, resolved *
 
 		if !connected {
 			connected = true
-			c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, State: catalog.ChatStateConnected})
+			c.emit(ctx, catalog.ChatEvent{Generation: gen, Channel: name, ChannelName: author, State: catalog.ChatStateConnected})
 		}
 
 		fresh := make([]catalog.ChatMessage, 0, len(res.Messages))
