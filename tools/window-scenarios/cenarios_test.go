@@ -283,6 +283,54 @@ func TestJanelaBuscaMostraResultadosPrimeiro(t *testing.T) {
 	})
 }
 
+// U6: o espectador busca "zelda" com Ctrl+F, abre a categoria encontrada com
+// Enter e aperta Esc: a janela volta aos resultados de "zelda", com a categoria
+// destacada. Esc de novo volta às categorias ao vivo.
+func TestJanelaEscVoltaABusca(t *testing.T) {
+	t.Parallel()
+	cat := fixture.DefaultCatalog()
+	cat.Categories = append(cat.Categories, fixture.Category{
+		ID:      "2001",
+		Name:    "The Legend of Zelda: Tears of the Kingdom",
+		Viewers: 85000,
+		Channels: []fixture.Channel{{
+			Login:    "hero_of_time",
+			Name:     "HeroOfTime",
+			Title:    "Zelda ao vivo",
+			Language: "pt",
+			Viewers:  1500,
+		}},
+	})
+	w := openWindow(t, setup{catalog: &cat})
+	w.press("ctrl+f", "z", "e", "l", "d", "a", "Return")
+	w.waitState("os resultados de zelda", 10*time.Second, func(s ui.StateReport) bool {
+		return s.Mode == string(ui.ModeSearch) && s.SearchQuery == "zelda" && s.Highlighted == "The Legend of Zelda: Tears of the Kingdom"
+	})
+
+	w.press("Return")
+	w.waitState("os canais da categoria zelda", 10*time.Second, func(s ui.StateReport) bool {
+		return s.Mode == string(ui.ModeChannels) && s.Highlighted == "HeroOfTime"
+	})
+
+	w.press("Escape")
+	expect(t, func() error {
+		st, err := w.state()
+		if err != nil {
+			return err
+		}
+		s := *st.TUI
+		if s.Mode != string(ui.ModeSearch) || s.SearchQuery != "zelda" || s.Highlighted != "The Legend of Zelda: Tears of the Kingdom" {
+			return fmt.Errorf("após Esc: modo %q, busca %q, destaque %q; quer search, zelda e a categoria", s.Mode, s.SearchQuery, s.Highlighted)
+		}
+		return nil
+	})
+
+	w.press("Escape")
+	w.waitState("as categorias ao vivo após segundo Esc", 10*time.Second, func(s ui.StateReport) bool {
+		return s.Mode == string(ui.ModeCategories)
+	})
+}
+
 // rowWith devolve a linha da tela (base 0) que contém text, ou -1.
 func rowWith(screen []string, text string) int {
 	return slices.IndexFunc(screen, func(l string) bool { return strings.Contains(l, text) })

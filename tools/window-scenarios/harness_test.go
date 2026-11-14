@@ -77,8 +77,9 @@ type setup struct {
 	config string
 	// state é o state.json de partida (favoritos e recentes); vazio, o app
 	// começa sem nenhum.
-	state string
-	irc   fixture.IRCConfig
+	state   string
+	irc     fixture.IRCConfig
+	catalog *fixture.Catalog
 }
 
 // window é uma janela de teste em execução, com os fixtures dela.
@@ -130,7 +131,11 @@ func openWindow(t *testing.T, s setup) *window {
 		}
 	}
 
-	gql := httptest.NewServer(fixture.GQLHandler(fixture.DefaultCatalog()))
+	cat := fixture.DefaultCatalog()
+	if s.catalog != nil {
+		cat = *s.catalog
+	}
+	gql := httptest.NewServer(fixture.GQLHandler(cat))
 	t.Cleanup(gql.Close)
 	irc, err := fixture.NewIRCServer(s.irc)
 	if err != nil {

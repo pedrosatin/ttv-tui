@@ -185,7 +185,17 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	// the original origin so Esc still steps back one level.
 	if m.list.mode != ModeSearch {
 		m.list.search.origin = m.Mode()
+		if m.Mode() == ModeChannels {
+			m.list.search.originCategory = m.list.selectedCategory
+		} else {
+			m.list.search.originCategory = nil
+		}
 	}
+	m.list.search.categoryOpened = false
+	m.list.search.savedChannels = nil
+	m.list.search.savedNextCursor = ""
+	m.list.search.savedHasMore = false
+	m.list.search.savedHighlightedID = ""
 	m.list.search.query = q
 	m.list.mode = ModeSearch
 	m.list.channels = nil

@@ -328,10 +328,22 @@ type searchState struct {
 	// origin is the list mode active when the current search started
 	// (ModeChannels or ModeCategories). Esc returns there; Ctrl+R ignores it.
 	origin Mode
+	// originCategory is the category selected when search started from ModeChannels,
+	// restored when Esc steps all the way back to it.
+	originCategory *catalog.Category
 	// categories holds category hits for ModeSearch only. Kept separate from
 	// the list categories so Esc back to the live top list does not briefly
 	// show search results while the reload runs.
 	categories []catalog.Category
+	// categoryOpened is true when a category hit was opened from this search's
+	// results into ModeChannels. Esc in ModeChannels then returns to this search.
+	categoryOpened bool
+	// savedChannels, savedNextCursor, savedHasMore and savedHighlightedID
+	// preserve the search result list while the opened category's channels are viewed.
+	savedChannels      []catalog.Channel
+	savedNextCursor    string
+	savedHasMore       bool
+	savedHighlightedID string
 }
 
 // channelPrefs holds the channel preference filters (ticket 01) and their

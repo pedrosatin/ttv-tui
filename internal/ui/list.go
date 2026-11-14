@@ -585,13 +585,10 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.list.hydrateGen++
 	m.applyPendingRecents()
 	m.list.mode = ModeCategories
-	m.list.search.origin = ""
+	m.list.search = searchState{}
 	m.list.filtering = false
-	m.list.search.active = false
 	m.list.prefs.menuOpen = false
 	m.list.filter = ""
-	m.list.search.input = ""
-	m.list.search.categories = nil
 	m.list.channels = nil
 	m.clearStaleStatusErrors()
 	m.list.nextCursor = ""
@@ -610,6 +607,43 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	}
 	m.list.loading = true
 	return m, m.withHydrate(m.fetchCategoriesCmd(m.list.generation, "", false))
+}
+
+// canReturnToSearch indica se a categoria em exibição foi aberta a partir dos
+// resultados da busca, caso em que o primeiro Esc volta aos resultados.
+func (m Model) canReturnToSearch() bool {
+	return m.list.search.categoryOpened
+}
+
+// returnToSearch restaura a lista de resultados da busca preservada quando a
+// categoria foi aberta com Enter.
+func (m Model) returnToSearch() (tea.Model, tea.Cmd) {
+	m.list.tracker.cancelActive()
+	m.list.generation++
+	m.list.hydrateGen++
+	m.applyPendingRecents()
+	m.list.mode = ModeSearch
+	m.list.channels = m.list.search.savedChannels
+	m.list.nextCursor = m.list.search.savedNextCursor
+	m.list.hasMore = m.list.search.savedHasMore
+	m.list.highlightedID = m.list.search.savedHighlightedID
+	m.list.highlightedLogin = ""
+	m.list.selectedCategory = m.list.search.originCategory
+	m.list.search.savedChannels = nil
+	m.list.search.savedNextCursor = ""
+	m.list.search.savedHasMore = false
+	m.list.search.savedHighlightedID = ""
+	m.list.search.categoryOpened = false
+	m.list.filtering = false
+	m.list.search.active = false
+	m.list.prefs.menuOpen = false
+	m.list.filter = ""
+	m.list.search.input = ""
+	m.clearStaleStatusErrors()
+	m.list.focusResults = false
+	m.list.loading = false
+	m.reconcileHighlight()
+	return m, m.withHydrate(nil)
 }
 
 // returnFromSearch steps back from search results to the list that started the
@@ -632,14 +666,10 @@ func (m Model) returnToChannels() (tea.Model, tea.Cmd) {
 	m.list.hydrateGen++
 	m.applyPendingRecents()
 	m.list.mode = ModeChannels
-	m.list.search.origin = ""
+	m.list.search = searchState{}
 	m.list.filtering = false
-	m.list.search.active = false
 	m.list.prefs.menuOpen = false
 	m.list.filter = ""
-	m.list.search.input = ""
-	m.list.search.query = ""
-	m.list.search.categories = nil
 	m.clearStaleStatusErrors()
 	m.list.nextCursor = ""
 	m.list.hasMore = false
@@ -819,19 +849,26 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		selected := *it.Category
-		m.list.selectedCategory = &selected
 		if m.browser == nil {
+			m.list.selectedCategory = &selected
 			return m, func() tea.Msg {
 				return CategorySelectedMsg{Category: selected}
 			}
 		}
 		m.list.tracker.cancelActive()
 		m.list.generation++
+		if m.Mode() == ModeSearch {
+			m.list.search.categoryOpened = true
+			m.list.search.savedChannels = m.list.channels
+			m.list.search.savedNextCursor = m.list.nextCursor
+			m.list.search.savedHasMore = m.list.hasMore
+			m.list.search.savedHighlightedID = it.ID()
+		} else {
+			m.list.search = searchState{}
+		}
+		m.list.selectedCategory = &selected
 		m.list.mode = ModeChannels
 		m.list.channels = nil
-		m.list.search.categories = nil
-		m.list.search.query = ""
-		m.list.search.origin = ""
 		m.list.filter = ""
 		m.list.filtering = false
 		m.list.search.active = false

@@ -221,11 +221,15 @@ func (m Model) keyClear() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	// Esc steps back one level (vim-style). Search returns to the list it
-	// left; channels return to categories. Ctrl+R still jumps to categories.
+	// left; channels return to search results (if opened from search) or to
+	// categories. Ctrl+R still jumps to categories.
 	switch m.Mode() {
 	case ModeSearch:
 		return m.returnFromSearch()
 	case ModeChannels:
+		if m.canReturnToSearch() {
+			return m.returnToSearch()
+		}
 		return m.returnToCategories()
 	default:
 		return m, nil

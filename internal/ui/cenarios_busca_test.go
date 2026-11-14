@@ -212,3 +212,56 @@ func TestCenarioNomeUsaLarguraDoPainel(t *testing.T) {
 		return m
 	})
 }
+
+// U6: o usuário busca "zelda" com Ctrl+F, abre a categoria encontrada e aperta
+// Esc: a tela volta aos resultados de "zelda", com a mesma busca e a categoria
+// destacada. Esc de novo leva às categorias ao vivo. Ctrl+R vai direto às
+// categorias de qualquer modo.
+func TestCenarioEscVoltaABusca(t *testing.T) {
+	run := func(t *testing.T, width, height int) Model {
+		m, w := newScenario(t, width, height)
+		m = play(t, m, "ctrl+f zelda enter")
+
+		if !slices.Equal(w.searched, []string{"zelda"}) {
+			t.Fatalf("buscas = %q, quer só \"zelda\"", w.searched)
+		}
+		it, ok := m.HighlightedItem()
+		if !ok || it.Category == nil || it.Category.ID != "cat-zelda" {
+			t.Fatalf("destaque antes do Enter = %q (%v), quer cat-zelda", m.HighlightedID(), it.Type)
+		}
+
+		// Abre a categoria
+		m = play(t, m, "enter")
+		if m.Mode() != ModeChannels || m.SelectedCategory() == nil || m.SelectedCategory().ID != "cat-zelda" {
+			t.Fatalf("após Enter na categoria: modo %q, categoria %+v, quer ModeChannels em cat-zelda", m.Mode(), m.SelectedCategory())
+		}
+
+		// Esc volta aos resultados da busca, com a categoria destacada
+		m = play(t, m, "esc")
+		if m.Mode() != ModeSearch {
+			t.Fatalf("após Esc: modo %q, quer ModeSearch", m.Mode())
+		}
+		if m.SearchQuery() != "zelda" {
+			t.Fatalf("após Esc: busca = %q, quer \"zelda\"", m.SearchQuery())
+		}
+		it, ok = m.HighlightedItem()
+		if !ok || it.Category == nil || it.Category.ID != "cat-zelda" {
+			t.Fatalf("após Esc: destaque = %q (%v), quer cat-zelda", m.HighlightedID(), it.Type)
+		}
+
+		// Esc a partir dos resultados leva às categorias ao vivo
+		mEsc := play(t, m, "esc")
+		if mEsc.Mode() != ModeCategories {
+			t.Fatalf("após segundo Esc: modo %q, quer ModeCategories", mEsc.Mode())
+		}
+
+		// Ctrl+R a partir da categoria aberta vai direto às categorias
+		mCtrlR := play(t, m, "enter ctrl+r")
+		if mCtrlR.Mode() != ModeCategories {
+			t.Fatalf("após Enter e Ctrl+R: modo %q, quer ModeCategories", mCtrlR.Mode())
+		}
+
+		return m
+	}
+	eachSize(t, "esc-volta-a-busca", run)
+}

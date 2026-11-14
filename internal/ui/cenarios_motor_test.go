@@ -286,10 +286,28 @@ func newScenario(t *testing.T, width, height int, opts ...Option) (Model, *scena
 			return catalog.Page[catalog.Category]{Items: scenarioCategories()}, nil
 		},
 		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+			if categoryID == "cat-zelda" {
+				return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+					{ID: "ch-link", Login: "hero_of_time", DisplayName: "HeroOfTime", Language: &scenarioLangPT, Viewers: catalog.IntPtr(1500), Availability: catalog.AvailabilityLive},
+				}}, nil
+			}
 			return catalog.Page[catalog.Channel]{Items: scenarioChannels()}, nil
+		},
+		searchCategoriesFn: func(ctx context.Context, query string) ([]catalog.Category, error) {
+			if strings.EqualFold(query, "zelda") {
+				return []catalog.Category{
+					{ID: "cat-zelda", Name: "The Legend of Zelda: Tears of the Kingdom", Viewers: catalog.IntPtr(85000)},
+				}, nil
+			}
+			return nil, nil
 		},
 		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			w.searched = append(w.searched, query)
+			if strings.EqualFold(query, "zelda") {
+				return catalog.Page[catalog.Channel]{Items: []catalog.Channel{
+					{ID: "ch-zelda-fan", Login: "zeldafan", DisplayName: "ZeldaFan", Language: &scenarioLangPT, Viewers: catalog.IntPtr(300), Availability: catalog.AvailabilityLive},
+				}}, nil
+			}
 			return catalog.Page[catalog.Channel]{Items: scenarioSearchHits()}, nil
 		},
 		channelsByIDsFn: func(ctx context.Context, ids []string) ([]catalog.Channel, error) {
