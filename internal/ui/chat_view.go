@@ -342,12 +342,8 @@ func (m Model) renderChatInputLine(maxWidth int) string {
 		return lipgloss.NewStyle().Faint(true).Render(line)
 	}
 	if !m.chat.hasToken() {
-		hint := m.t("chat.input.no_token")
-		if maxWidth > 0 && ansi.StringWidth("  > "+hint) > maxWidth {
-			hint = m.t("chat.input.no_token_short")
-		}
-		line := "  > " + hint
-		line = TruncateVisual(line, maxWidth)
+		// The same text as the warning i shows, cut to the column if it must.
+		line := TruncateVisual("  > "+m.t("chat.no_token"), maxWidth)
 		return lipgloss.NewStyle().Faint(true).Render(line)
 	}
 	if m.chat.composing {

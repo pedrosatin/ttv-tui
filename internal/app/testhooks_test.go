@@ -11,6 +11,7 @@ import (
 
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/kick"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
 
@@ -19,6 +20,10 @@ func TestGanchosDeTesteDesligadosSemVariavel(t *testing.T) {
 	t.Setenv(testGQLEnv, "")
 	t.Setenv(testIRCEnv, "")
 	t.Setenv(testStateEnv, "")
+	t.Setenv(testKickEnv, "")
+	if got := testKickConfig(); got != (kick.ClientConfig{}) {
+		t.Errorf("testKickConfig() = %+v sem a variável", got)
+	}
 	if got := testGQLEndpoint(); got != "" {
 		t.Errorf("testGQLEndpoint() = %q sem a variável", got)
 	}
@@ -54,6 +59,17 @@ func TestGanchosDeTesteSoAceitamLoopback(t *testing.T) {
 	t.Setenv(testIRCEnv, "127.0.0.1:6667")
 	if opts := testIRCOptions(chat.Options{}); opts.Addr != "127.0.0.1:6667" || opts.Dial == nil {
 		t.Errorf("testIRCOptions não usou o IRC de teste: %+v", opts)
+	}
+	for _, raw := range []string{"https://127.0.0.1:1", "http://kick.com", "http://localhost:1"} {
+		t.Setenv(testKickEnv, raw)
+		if got := testKickConfig(); got != (kick.ClientConfig{}) {
+			t.Errorf("testKickConfig() aceitou %q: %+v", raw, got)
+		}
+	}
+	t.Setenv(testKickEnv, "http://127.0.0.1:4568")
+	want := kick.ClientConfig{BaseURL: "http://127.0.0.1:4568", WebBaseURL: "http://127.0.0.1:4568", SearchBaseURL: "http://127.0.0.1:4568"}
+	if got := testKickConfig(); got != want {
+		t.Errorf("testKickConfig() = %+v, quer %+v", got, want)
 	}
 }
 

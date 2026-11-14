@@ -142,6 +142,12 @@ func (m Model) listPlatformName() string {
 	return platform.DisplayName(m.ListPlatform())
 }
 
+// listOffDefaultPlatform reports whether p took the list away from the platform
+// the app opens on.
+func (m Model) listOffDefaultPlatform() bool {
+	return len(m.catalogs) > 1 && m.ListPlatform() != m.catalogs[0].platform
+}
+
 // listPlatformStatus is the status bar token that names the platform of the
 // list. A list error needs the columns, and the unavailable catalog names it.
 func (m Model) listPlatformStatus() string {

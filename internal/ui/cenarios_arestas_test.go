@@ -5,6 +5,9 @@ package ui
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
 // statusLine é a barra de status, a última linha da tela.
@@ -162,4 +165,52 @@ func TestSelecaoDaListaAtenuaForaDeFoco(t *testing.T) {
 	if !strings.Contains(dim, "\x1b[100m") || strings.Contains(dim, "7m") {
 		t.Fatalf("seleção com o foco no chat: %q", dim)
 	}
+}
+
+// Com a Twitch tocando, o usuário troca a lista para a Kick com p: a barra
+// mostra "lista: Kick" antes do contexto e mantém o foco e as dicas. Em 80
+// colunas, onde os dois não cabem, o foco fica e o título da lista nomeia a Kick.
+func TestCenarioBarraComListaDaKick(t *testing.T) {
+	eachSize(t, "barra-lista-kick", func(t *testing.T, width, height int) Model {
+		m := twoPlatforms(t, i18n.LangPTBR, twitchCatalog(), kickCatalog(), WithChat(&fakeChat{}), WithPlayback(&fakePlayback{}))
+		m.timer = scenarioTimer
+		m = feed(t, m, tea.WindowSizeMsg{Width: width, Height: height})
+		m = openFirst(t, m)
+		m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "twitchone", Volume: 100})
+		m = play(t, m, "p")
+		bar := statusLine(m)
+		for _, want := range []string{"Reproduzindo twitchone", "Foco: lista", "Ctrl+Q sair"} {
+			if !strings.Contains(bar, want) {
+				t.Fatalf("a barra perdeu %q: %q", want, bar)
+			}
+		}
+		if width >= 100 && !strings.Contains(bar, "lista: Kick") {
+			t.Fatalf("a barra de %d colunas sem a plataforma da lista: %q", width, bar)
+		}
+		return m
+	})
+}
+
+// Sem token, o usuário abre gaules e aperta i: o aviso e a linha de entrada
+// dizem a mesma coisa, citando --import twt. Esc tira o aviso.
+func TestCenarioEscreverSemToken(t *testing.T) {
+	eachSize(t, "escrever-sem-token", func(t *testing.T, width, height int) Model {
+		m, w := newScenario(t, width, height)
+		w.chat.hasToken = false
+		m = play(t, m, "ctrl+f gaules enter enter")
+		m = chatLines(t, m, [2]string{"Fulano", "oi"})
+		m = play(t, m, "i")
+		text := m.t("chat.no_token")
+		if m.Composing() || m.ChatSendWarning() != text || !strings.Contains(text, "--import twt") {
+			t.Fatalf("i sem token: escrevendo=%v, aviso %q", m.Composing(), m.ChatSendWarning())
+		}
+		if n := strings.Count(screen(m), "Para enviar:"); n != 2 {
+			t.Fatalf("o texto aparece %d vezes; quer no aviso e na linha de entrada:\n%s", n, screen(m))
+		}
+		after := play(t, m, "esc")
+		if after.ChatSendWarning() != "" || strings.Count(screen(after), "Para enviar:") != 1 {
+			t.Fatalf("o aviso ficou depois do Esc:\n%s", screen(after))
+		}
+		return m
+	})
 }

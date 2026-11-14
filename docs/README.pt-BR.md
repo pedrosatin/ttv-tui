@@ -149,7 +149,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `+` `-` | Sobe ou desce o volume em 5% |
 | `m` | Liga ou desliga o mudo; a barra de status mostra `mudo` no lugar do volume |
 | `Ctrl+X` | Para o vídeo sem sair do app |
-| `Ctrl+W` | Troca o layout: lista + chat, chat, lista, nenhum |
+| `Ctrl+W` | Troca o layout: dividido (lista + chat), chat, lista, foco (nenhum painel) |
 | `Ctrl+H` / `Ctrl+L` | Mostra ou esconde a lista / o chat |
 | `?` ou `F1` | Mostra ou esconde a ajuda de atalhos |
 | `Ctrl+Q` | Sai |

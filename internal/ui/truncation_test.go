@@ -265,7 +265,7 @@ func TestSendNoticeIn80Columns(t *testing.T) {
 			warnings := []string{
 				cat.T("chat.warn.rate_limit"),
 				cat.T("chat.warn.channel_switched"),
-				cat.T("chat.warn.no_token"),
+				cat.T("chat.no_token"),
 			}
 			for _, w := range warnings {
 				m, _, _ := setupTwoPanelModel(t)

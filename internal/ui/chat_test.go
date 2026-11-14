@@ -192,7 +192,7 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 		"[highlighted]",
 		"VIPUser",
 		"Mensagem em destaque!",
-		"ttv-tui login --from-browser",
+		"ttv-tui login (--from-browser",
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("expected %q in View(), got:\n%s", want, view)
@@ -476,7 +476,7 @@ func TestChatCompose_NoTokenBlocksSendWithLoginInstruction(t *testing.T) {
 	m = updated.(Model)
 
 	// Input line already shows the login instruction.
-	if !strings.Contains(m.View(), "ttv-tui login --from-browser") {
+	if !strings.Contains(m.View(), "ttv-tui login (--from-browser") {
 		t.Fatalf("expected login instruction in View():\n%s", m.View())
 	}
 
@@ -486,8 +486,19 @@ func TestChatCompose_NoTokenBlocksSendWithLoginInstruction(t *testing.T) {
 	if m.Composing() {
 		t.Fatal("expected Composing() = false when no token is configured")
 	}
-	if !strings.Contains(m.ChatSendWarning(), "ttv-tui login --from-browser") {
+	if !strings.Contains(m.ChatSendWarning(), "--import twt") {
 		t.Fatalf("expected login instruction in ChatSendWarning(), got %q", m.ChatSendWarning())
+	}
+	// The warning and the input line say the same thing.
+	if m.ChatSendWarning() != catEN.T("chat.no_token") {
+		t.Fatalf("warning %q differs from the input line's text %q", m.ChatSendWarning(), catEN.T("chat.no_token"))
+	}
+
+	// Any key that does not write again takes the warning away.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.ChatSendWarning() != "" {
+		t.Fatalf("warning still up after Esc: %q", m.ChatSendWarning())
 	}
 }
 

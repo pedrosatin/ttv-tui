@@ -149,7 +149,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | `+` `-` | Volume up or down by 5% |
 | `m` | Mute or unmute; the status bar shows `muted` in place of the volume |
 | `Ctrl+X` | Stop the video and stay in the app |
-| `Ctrl+W` | Cycle layouts: list + chat, chat, list, none |
+| `Ctrl+W` | Cycle layouts: split (list + chat), chat, list, focus (no panel) |
 | `Ctrl+H` / `Ctrl+L` | Show or hide the list / the chat |
 | `?` or `F1` | Show or hide the shortcut help |
 | `Ctrl+Q` | Quit |

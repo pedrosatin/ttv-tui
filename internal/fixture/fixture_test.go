@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/chat"
+	"github.com/pedrosatin/ttv-tui/internal/kick"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 )
 
@@ -124,5 +126,31 @@ func TestClipeTemCabecalhoEQuadrosInteiros(t *testing.T) {
 	frame := len("FRAME\n") + ClipWidth*ClipHeight*3/2
 	if len(body) != 3*frame || strings.Count(body, "FRAME\n") != 3 {
 		t.Fatalf("corpo de %d bytes, quer 3 quadros de %d", len(body), frame)
+	}
+}
+
+// O site da Kick de fixture responde no formato que internal/kick lê: as
+// categorias, as lives vazias e as buscas vazias.
+func TestKickHandlerServesTheCatalogRoutes(t *testing.T) {
+	srv := httptest.NewServer(KickHandler(DefaultKickCatalog()))
+	defer srv.Close()
+	client := kick.NewClient(kick.ClientConfig{BaseURL: srv.URL, WebBaseURL: srv.URL, SearchBaseURL: srv.URL})
+	ctx := context.Background()
+	page, err := client.Categories(ctx, catalog.PageRequest{})
+	if err != nil {
+		t.Fatalf("Categories: %v", err)
+	}
+	if len(page.Items) != 5 || page.Items[0].Name != "Kick Categoria 01" || page.HasMore {
+		t.Fatalf("categorias = %+v", page)
+	}
+	chans, err := client.Channels(ctx, page.Items[0].ID, catalog.PageRequest{})
+	if err != nil || len(chans.Items) != 0 {
+		t.Fatalf("Channels = %+v, %v", chans, err)
+	}
+	if hits, err := client.Search(ctx, "x"); err != nil || len(hits.Items) != 0 {
+		t.Fatalf("Search = %+v, %v", hits, err)
+	}
+	if cats, err := client.SearchCategories(ctx, "x"); err != nil || len(cats) != 0 {
+		t.Fatalf("SearchCategories = %+v, %v", cats, err)
 	}
 }

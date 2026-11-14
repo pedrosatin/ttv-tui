@@ -5,6 +5,7 @@ package windowscenarios
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -258,6 +259,67 @@ func TestJanelaFocoClaroEmColunaEstreita(t *testing.T) {
 		t.Logf("brilho da seleção: com foco %d, fora de foco %d", focused, dim)
 		if dim+90 > focused {
 			return fmt.Errorf("seleção fora de foco com brilho %d, com foco %d: quer bem mais escura", dim, focused)
+		}
+		return nil
+	})
+}
+
+// W8: o espectador assiste a um canal da Twitch e troca a lista para a Kick com
+// p. Numa janela de 100 colunas a barra mostra "lista: Kick" e o foco inteiros:
+// o aviso da plataforma vem antes do contexto e do chat, que ficam de fora.
+func TestJanelaBarraMostraListaKickEFoco(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 1}})
+	w.openFirstChannel()
+	w.press("p")
+	w.waitState("a lista da Kick de fixture", 10*time.Second, func(s ui.StateReport) bool {
+		return s.ListPlatform == "kick" && s.Highlighted == "Kick Categoria 01"
+	})
+	w.resizeCols(100)
+	expect(t, func() error {
+		bar := statusBar(w.screen())
+		for _, want := range []string{"Reproduzindo fixture_um", "lista: Kick", "Foco: lista", "Ctrl+Q sair"} {
+			if !strings.Contains(bar, want) {
+				return fmt.Errorf("a barra perdeu %q: %q", want, bar)
+			}
+		}
+		if !strings.HasSuffix(strings.TrimRight(bar, " "), "Ctrl+Q sair") {
+			return fmt.Errorf("a barra não termina nas dicas: %q", bar)
+		}
+		return nil
+	})
+}
+
+// W17: sem login, i mostra um aviso com o mesmo texto da linha de entrada,
+// citando --import twt, e Esc tira o aviso. Antes eram dois textos diferentes,
+// e o aviso ficava até trocar de canal.
+func TestJanelaEscreverSemTokenUmTextoSo(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 1}})
+	w.openFirstChannel()
+	const text = "Para enviar: ttv-tui login (--from-browser ou --import twt)"
+	w.waitScreen("Para enviar:", 5*time.Second)
+	w.press("i")
+	w.waitState("o aviso de envio sem login", 5*time.Second, func(s ui.StateReport) bool { return s.ChatWarning == text })
+	expect(t, func() error {
+		screen := w.screen()
+		rows := 0
+		for _, l := range screen {
+			if strings.Contains(l, "Para enviar:") {
+				rows++
+			}
+		}
+		if rows != 2 {
+			return fmt.Errorf("o texto aparece em %d linhas; quer no aviso e na linha de entrada:\n%s", rows, strings.Join(screen, "\n"))
+		}
+		return nil
+	})
+
+	w.press("Escape")
+	w.waitState("o aviso fora da tela", 5*time.Second, func(s ui.StateReport) bool { return s.ChatWarning == "" })
+	expect(t, func() error {
+		if n := len(slices.DeleteFunc(w.screen(), func(l string) bool { return !strings.Contains(l, "Para enviar:") })); n != 1 {
+			return fmt.Errorf("depois do Esc o texto aparece em %d linhas, quer só a de entrada", n)
 		}
 		return nil
 	})

@@ -43,10 +43,16 @@ func (m Model) statusParts() statusContent {
 
 	c.extra = appendStatusContext(c.extra, chatStatus, channelInPrimary, lead.context)
 	c.extra = m.appendPlayerInfo(c.extra)
-	// The list header already names the platform; the bar repeats it in the
-	// room the rest leaves.
+	// The list header already names the platform. On the default platform the
+	// bar repeats it in the room the rest leaves. On another one it is news: it
+	// comes before the context and the chat status, though never at the cost of
+	// the focus hint, which the narrowest bars keep.
 	if token := m.listPlatformStatus(); token != "" {
-		c.extra = append(c.extra, token)
+		if m.listOffDefaultPlatform() {
+			c.extra = append([]string{token}, c.extra...)
+		} else {
+			c.extra = append(c.extra, token)
+		}
 	}
 	c.primary = primary
 	return c

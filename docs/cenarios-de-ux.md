@@ -114,6 +114,7 @@ Hyprland nem a configuração do operador. `TTV_CENARIOS_BUILD` muda onde os bin
   recentes) em `setup.state`;
 - o GQL de fixture ([`internal/fixture`](../internal/fixture/)): 60 categorias, a primeira com os canais
   `fixture_um`, `fixture_dois` e `fixture_tres`;
+- o site da Kick de fixture, com as categorias `Kick Categoria 01` a `05`, sem lives, para o `p` não ir à rede;
 - o IRC de fixture, com `setup.irc.Messages` mensagens logo depois do JOIN e, se `Every` for maior que zero, mais
   uma a cada intervalo;
 - o `streamlink` falso no `PATH`, que abre o player como o streamlink e entrega um clipe vermelho em YUV4MPEG2;
@@ -136,6 +137,7 @@ loopback (`127.0.0.0/8` ou `::1`); um nome, mesmo `localhost`, é recusado, porq
 | `TTV_WINDOW_TEST` | janela | abre o socket de teste no caminho dado |
 | `TTV_TUI_TEST_GQL` | TUI | troca o endpoint do GQL da Twitch, por exemplo `http://127.0.0.1:4567/gql` |
 | `TTV_TUI_TEST_IRC` | TUI | troca o IRC da Twitch por `host:porta` em TCP sem TLS |
+| `TTV_TUI_TEST_KICK` | TUI | troca o site da Kick (categorias, lives e buscas) por um servidor de fixture, por exemplo `http://127.0.0.1:4568` |
 | `TTV_TUI_TEST_STATE` | TUI | com `1`, a TUI manda o resumo do estado à janela, que o guarda só com `TTV_WINDOW_TEST` |
 
 `TTV_TUI_TEST_IRC` não vale quando o config tem `access_token`: o handshake manda o token em `PASS oauth:`, e o dial
@@ -154,7 +156,7 @@ Uma linha por conexão, a resposta até o fim da conexão:
 | `key f`, `key shift+f`, `key Space` | `ok`; letra sem Ctrl nem Alt é texto, como o SDL entrega |
 | `text abc`, `raw 1b5b41` | `ok`; texto ou bytes em hex, na mesma fila das teclas |
 | `screen` | o texto da grade, uma linha por linha |
-| `state` | JSON com a geometria da janela (`window`) e o resumo da TUI (`tui`): foco, modo, layout, busca, aviso, item destacado, chat e o config que ela aplica |
+| `state` | JSON com a geometria da janela (`window`) e o resumo da TUI (`tui`): foco, plataforma da lista, modo, layout, busca, aviso, item destacado, volume e mudo, chat e aviso de envio, e o config que ela aplica |
 | `resize W H` | a grade nova, `colunas linhas`, depois de a janela ter `W`x`H` pixels |
 | `pixel X Y`, `fbpixel X Y` | o alfa de uma célula; a cor RGB de um pixel no quadro que a GPU desenhou |
 | `stats`, `stats reset` | os contadores de desempenho; zera os da sessão |

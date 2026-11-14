@@ -9,14 +9,16 @@ import tea "github.com/charmbracelet/bubbletea"
 type StateReport struct {
 	// Keys conta as teclas que a TUI já tratou (uma por caractere digitado), para
 	// o cenário saber que a tecla que mandou chegou antes de olhar o estado.
-	Keys      int
-	Width     int
-	Height    int
-	Focus     string
-	Mode      string
-	Layout    string
-	Help      bool
-	Composing bool
+	Keys   int
+	Width  int
+	Height int
+	Focus  string
+	// ListPlatform é a plataforma que a lista mostra.
+	ListPlatform string
+	Mode         string
+	Layout       string
+	Help         bool
+	Composing    bool
 	// Search é o campo do Ctrl+F aberto; SearchInput, o texto nele.
 	Search      bool
 	SearchInput string
@@ -35,6 +37,8 @@ type StateReport struct {
 	Muted        bool
 	ChatChannel  string
 	ChatMessages int
+	// ChatWarning é o aviso sobre o envio no rodapé do chat.
+	ChatWarning string
 	// ChatVisible diz se o chat aparece, ao lado ou sobre o vídeo.
 	ChatVisible bool
 	Config      ReportConfig
@@ -77,7 +81,7 @@ func (m Model) stateSnapshot() StateReport {
 	r := StateReport{
 		Keys:  m.keysSeen,
 		Width: m.width, Height: m.height,
-		Focus: string(m.Focus()), Mode: string(m.Mode()), Layout: string(m.LayoutMode()),
+		Focus: string(m.Focus()), ListPlatform: m.ListPlatform(), Mode: string(m.Mode()), Layout: string(m.LayoutMode()),
 		Help: m.layout.helpVisible, Composing: m.chat.composing,
 		Search: m.list.search.active, SearchInput: m.list.search.input, SearchQuery: m.list.search.query,
 		Filtering: m.list.filtering, Filter: m.list.filter,
@@ -87,6 +91,7 @@ func (m Model) stateSnapshot() StateReport {
 		Volume:         m.player.volume,
 		Muted:          m.player.muted,
 		ChatChannel:    m.chat.panel.channel,
+		ChatWarning:    m.chat.panel.sendWarning,
 		ChatVisible:    m.chatColumnVisible(),
 		Config: ReportConfig{
 			ChatOverlay: m.hosted.chatOverlay, ChatOverlayOpacity: m.hosted.chatOpacity(),

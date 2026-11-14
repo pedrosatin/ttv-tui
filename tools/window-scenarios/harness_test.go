@@ -140,6 +140,8 @@ func openWindow(t *testing.T, s setup) *window {
 	}
 	gql := httptest.NewServer(fixture.GQLHandler(cat))
 	t.Cleanup(gql.Close)
+	kickSite := httptest.NewServer(fixture.KickHandler(fixture.DefaultKickCatalog()))
+	t.Cleanup(kickSite.Close)
 	irc, err := fixture.NewIRCServer(s.irc)
 	if err != nil {
 		t.Fatal(err)
@@ -164,6 +166,7 @@ func openWindow(t *testing.T, s setup) *window {
 		"TTV_WINDOW_TUI="+bins.tui,
 		"TTV_TUI_TEST_GQL="+gql.URL+"/gql",
 		"TTV_TUI_TEST_IRC="+irc.Addr(),
+		"TTV_TUI_TEST_KICK="+kickSite.URL,
 		"TTV_TUI_TEST_STATE=1",
 		"TTV_CENARIOS_RUN="+w.mark,
 	)

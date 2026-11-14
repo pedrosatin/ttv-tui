@@ -23,6 +23,7 @@ func (m *Model) clearKeyNotices() {
 	m.notices.ctrlC = ""
 	m.chat.copyNotice = ""
 	m.player.windowNotice = false
+	m.clearNoTokenWarning()
 }
 
 // handleAppKey answers the two keys that outrank the help: Ctrl+Q and Ctrl+C.

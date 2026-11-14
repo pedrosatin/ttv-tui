@@ -350,7 +350,7 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 	}
 
 	if !m.chat.hasToken() {
-		m.chat.panel.sendWarning = m.t("chat.warn.no_token")
+		m.chat.panel.sendWarning = m.t("chat.no_token")
 		return m, nil
 	}
 
@@ -708,7 +708,7 @@ func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {
 		}
 	case catalog.ChatDeliveryRejected:
 		if upd.Reason == catalog.ChatRejectUnauthenticated {
-			m.chat.panel.sendWarning = m.t("chat.warn.no_token")
+			m.chat.panel.sendWarning = m.t("chat.no_token")
 		}
 	}
 }

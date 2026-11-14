@@ -9,6 +9,7 @@ import (
 
 	"github.com/pedrosatin/ttv-tui/internal/chat"
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/kick"
 )
 
 // Ganchos dos cenários da janela real (tools/window-scenarios). Fora deles as
@@ -23,12 +24,27 @@ const (
 	testIRCEnv = "TTV_TUI_TEST_IRC"
 	// testStateEnv = "1" faz a TUI contar o próprio estado à janela que a hospeda.
 	testStateEnv = "TTV_TUI_TEST_STATE"
+	// testKickEnv troca o site da Kick (as três bases do cliente) por um
+	// servidor de fixture, por exemplo http://127.0.0.1:4568.
+	testKickEnv = "TTV_TUI_TEST_KICK"
 )
 
 // testGQLEndpoint devolve o endpoint de teste, ou "" sem a variável ou com um
 // endereço que não seja http de loopback.
 func testGQLEndpoint() string {
-	raw := os.Getenv(testGQLEnv)
+	return loopbackHTTP(os.Getenv(testGQLEnv))
+}
+
+// testKickConfig aponta o cliente da Kick para o site de teste. Sem a variável,
+// ou com um endereço que não seja http de loopback, devolve a configuração de
+// produção.
+func testKickConfig() kick.ClientConfig {
+	base := loopbackHTTP(os.Getenv(testKickEnv))
+	return kick.ClientConfig{BaseURL: base, WebBaseURL: base, SearchBaseURL: base}
+}
+
+// loopbackHTTP devolve raw se for uma URL http de loopback, ou "".
+func loopbackHTTP(raw string) string {
 	if raw == "" {
 		return ""
 	}

@@ -170,7 +170,7 @@ func (m Model) enterCompose() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if !m.chat.hasToken() && (m.chat.session != nil || m.chat.panel.channel != "") {
-		m.chat.panel.sendWarning = m.t("chat.warn.no_token")
+		m.chat.panel.sendWarning = m.t("chat.no_token")
 		return m, nil
 	}
 	m.setFocus(FocusChat)
@@ -213,12 +213,21 @@ func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case actBack:
 		// Esc leaves composition and stays on the chat panel; draft is kept.
 		m.chat.composing = false
+		m.clearNoTokenWarning()
 		return m, nil
 
 	case actSelect:
 		return m.submitComposeMessage()
 	}
 	return m, nil
+}
+
+// clearNoTokenWarning drops the warning about sending without a login once the
+// viewer is no longer writing: it explains the i just pressed, not the panel.
+func (m *Model) clearNoTokenWarning() {
+	if !m.chat.composing && m.chat.panel.sendWarning == m.t("chat.no_token") {
+		m.chat.panel.sendWarning = ""
+	}
 }
 
 // clearResolvedComposeWarning drops a warning about the draft once the edit fixed

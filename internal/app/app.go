@@ -366,7 +366,7 @@ func kickProvider(injected *kick.Provider, cfg config.Config) (*kick.Provider, f
 		}
 		return injected, stop
 	}
-	client := kick.NewClient(kick.ClientConfig{})
+	client := kick.NewClient(testKickConfig())
 	c := kick.NewChat(kick.ChatOptions{Rooms: client, PusherKey: cfg.KickPusherKey})
 	return kick.NewProvider(
 		kick.WithBrowser(client),
