@@ -253,7 +253,7 @@ A Kick não tem API pública para nada disso sem conta. O app lê o JSON que o p
   kick_browser = "/usr/bin/brave"
   ```
 
-  Um caminho relativo vale a partir do diretório em que você abre o app. O navegador só vai para o streamlink quando um canal da Kick toca. O `ttv-tui doctor` mostra qual o streamlink vai usar.
+  Um caminho relativo vale a partir do diretório em que você abre o app. O navegador só vai para o streamlink quando um canal da Kick toca. O `ttv-tui doctor` informa os navegadores compatíveis que encontra nas entradas absolutas do `PATH` e nos diretórios padrão de instalação.
 
 - O chat da Kick conecta direto no Pusher e ignora o `HTTPS_PROXY`. Atrás de um proxy obrigatório, a lista ainda mostra o estado do canal, mas o chat fica reconectando.
 

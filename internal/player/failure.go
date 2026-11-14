@@ -157,7 +157,7 @@ func classifyLine(line string, afterTraceback bool) Failure {
 	switch {
 	case l == "":
 		return FailureNone
-	case isBrowserMissingLine(l):
+	case isBrowserMissingLine(line):
 		// First: the "Invalid web browser executable" line repeats the
 		// configured path, which may contain any of the phrases below.
 		return FailureBrowserMissing
@@ -220,12 +220,20 @@ func classifyLine(line string, afterTraceback bool) Failure {
 //	[plugins.kick][error] Could not find Chromium-based web browser executable: Please set the path to a supported web browser using --webbrowser-executable
 //	[plugins.kick][error] Invalid web browser executable: /path/from/the/config
 //
-// The first one ends with the hint about --webbrowser-executable, which the
-// generic "Could not find web browser executable" of other browsers shares.
-func isBrowserMissingLine(l string) bool {
-	return strings.Contains(l, "please set the path to a supported web browser using --webbrowser-executable") ||
-		strings.Contains(l, "invalid web browser executable:")
+// Só a linha inteira vale, com o logger e o nível do plugin kick, como em
+// detect.go: o mesmo texto dentro de outra linha (o caminho do player numa
+// falha do mpv, a mensagem de outro logger) é texto de terceiros. Da segunda
+// linha, só o prefixo é fixo; o resto é o caminho do config.
+func isBrowserMissingLine(line string) bool {
+	l := strings.TrimRight(line, " \r")
+	return l == browserNotFoundLine ||
+		(strings.HasPrefix(l, browserInvalidPrefix) && len(l) > len(browserInvalidPrefix))
 }
+
+const (
+	browserNotFoundLine  = "[plugins.kick][error] Could not find Chromium-based web browser executable: Please set the path to a supported web browser using --webbrowser-executable"
+	browserInvalidPrefix = "[plugins.kick][error] Invalid web browser executable: "
+)
 
 // buildExceptions são as exceções Python que indicam defeito do próprio
 // streamlink (plugin, import, código), e não do canal ou da rede.

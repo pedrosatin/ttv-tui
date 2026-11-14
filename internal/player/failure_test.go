@@ -36,6 +36,13 @@ func TestClassifyLine(t *testing.T) {
 		// The same with --webbrowser-executable pointing at nothing. The path
 		// comes from the config and must not decide the class.
 		{"[plugins.kick][error] Invalid web browser executable: /home/u/timeout/no playable streams found/chromium", FailureBrowserMissing},
+		// The same words outside the whole kick line are third-party text: another
+		// logger, another level, text before it, or a player path that contains
+		// the phrase.
+		{"[outro.logger][error] Invalid web browser executable: /opt/chrome", FailureNone},
+		{"[plugins.kick][warning] Invalid web browser executable: /opt/chrome", FailureNone},
+		{"x [plugins.kick][error] Could not find Chromium-based web browser executable: Please set the path to a supported web browser using --webbrowser-executable", FailureNone},
+		{"[plugins.kick][error] Invalid web browser executable: ", FailureNone},
 		{"bash: streamlink: command not found", FailureStreamlinkMissing},
 		{"error: Unable to validate response text: ValidationError(dict): Key 'data' not found in <dict>", FailureStreamlinkBroken},
 		{"streamlink.exceptions.PluginError: Unable to parse manifest", FailureStreamlinkBroken},
@@ -387,5 +394,13 @@ func TestStreamlinkNotOnPathIsClassified(t *testing.T) {
 	ev := waitError(t, mgr, gen, time.Second)
 	if ev.Failure != FailureStreamlinkMissing {
 		t.Fatalf("Failure = %q, want streamlink_missing (err %v)", ev.Failure, err)
+	}
+}
+
+// Um caminho de player com a frase do navegador é falha do player, não da Kick.
+func TestBrowserPhraseInsidePlayerPathIsNotBrowserMissing(t *testing.T) {
+	line := "error: Failed to start player: /home/u/invalid web browser executable: mpv (Permission denied)"
+	if got := classifyLine(line, false); got == FailureBrowserMissing {
+		t.Fatalf("classifyLine(%q) = %v, want a player failure", line, got)
 	}
 }

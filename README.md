@@ -253,7 +253,7 @@ Kick has no public API for any of this without an account. The app reads the JSO
   kick_browser = "/usr/bin/brave"
   ```
 
-  A relative path is resolved from the directory you start the app in. The browser is passed to streamlink only when a Kick channel plays. `ttv-tui doctor` shows which one streamlink will use.
+  A relative path is resolved from the directory you start the app in. The browser is passed to streamlink only when a Kick channel plays. `ttv-tui doctor` reports the compatible browsers it finds in absolute `PATH` entries and the standard install directories.
 
 - The Kick chat connects straight to Pusher and ignores `HTTPS_PROXY`. Behind a mandatory proxy the list still shows the channel state, but the chat keeps reconnecting.
 
