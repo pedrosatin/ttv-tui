@@ -75,7 +75,7 @@ func TestReport(t *testing.T) {
 			fakeTool(t, base, "streamlink")
 			fakeTool(t, base, "mpv")
 			t.Setenv("PATH", base)
-			secret := "doctor-test-credential-never-display"
+			secret := "doctortestcredentialneverdisplay"
 			t.Setenv("TTV_DOCTOR_FAKE_SECRET", secret)
 			if err := config.Save(config.Config{AccessToken: secret}); err != nil {
 				t.Fatal("save fixture failed")

@@ -18,7 +18,7 @@ import (
 func TestRunLogin_FromBrowser_SingleProfileUsedDirectly(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
-	secret := "single_profile_secret_token_30c"
+	secret := "singleprofilesecrettoken30c"
 
 	var out bytes.Buffer
 	err := RunLogin(context.Background(), LoginOptions{
@@ -78,7 +78,7 @@ func TestRunLogin_FromBrowser_InteractiveSelectionAndFlags(t *testing.T) {
 	t.Run("interactive choice selects second profile", func(t *testing.T) {
 		dir := t.TempDir()
 		cfgPath := filepath.Join(dir, "config.toml")
-		secret := "interactive_ff_secret_token_30ch"
+		secret := "interactiveffsecrettoken30ch"
 		var out bytes.Buffer
 
 		err := RunLogin(context.Background(), LoginOptions{
@@ -123,7 +123,7 @@ func TestRunLogin_FromBrowser_InteractiveSelectionAndFlags(t *testing.T) {
 	t.Run("flags --browser and --profile skip interactive choice", func(t *testing.T) {
 		dir := t.TempDir()
 		cfgPath := filepath.Join(dir, "config.toml")
-		secret := "flagged_brave_secret_token_30chr"
+		secret := "flaggedbravesecrettoken30chr"
 		var out bytes.Buffer
 
 		err := RunLogin(context.Background(), LoginOptions{
@@ -166,7 +166,7 @@ func TestRunLogin_ImportTwt_PrefixNoPrefixMissingAndInvalid(t *testing.T) {
 		dir := t.TempDir()
 		cfgPath := filepath.Join(dir, "config.toml")
 		twtPath := filepath.Join(dir, "twt.toml")
-		secret := "twt_secret_token_with_prefix_30"
+		secret := "twtsecrettokenwithprefix30"
 
 		rawTwt := fmt.Sprintf("[twitch]\nusername = \"pedrosatin\"\ntoken = \"oauth:%s\"\n", secret)
 		if err := os.WriteFile(twtPath, []byte(rawTwt), 0o600); err != nil {
@@ -209,7 +209,7 @@ func TestRunLogin_ImportTwt_PrefixNoPrefixMissingAndInvalid(t *testing.T) {
 		dir := t.TempDir()
 		cfgPath := filepath.Join(dir, "config.toml")
 		twtPath := filepath.Join(dir, "twt.toml")
-		secret := "twt_secret_token_no_prefix_30ch"
+		secret := "twtsecrettokennoprefix30ch"
 
 		rawTwt := fmt.Sprintf("[twitch]\nusername = \"pedrosatin\"\ntoken = \"%s\"\n", secret)
 		if err := os.WriteFile(twtPath, []byte(rawTwt), 0o600); err != nil {
@@ -272,7 +272,7 @@ func TestRunLogin_ImportTwt_PrefixNoPrefixMissingAndInvalid(t *testing.T) {
 		dir := t.TempDir()
 		cfgPath := filepath.Join(dir, "config.toml")
 		twtPath := filepath.Join(dir, "twt.toml")
-		secret := "invalid_twt_token_value_30chars"
+		secret := "invalidtwttokenvalue30chars"
 
 		rawTwt := fmt.Sprintf("[twitch]\nusername = \"pedrosatin\"\ntoken = \"oauth:%s\"\n", secret)
 		if err := os.WriteFile(twtPath, []byte(rawTwt), 0o600); err != nil {
@@ -307,8 +307,8 @@ func TestRunLogin_ImportTwt_PrefixNoPrefixMissingAndInvalid(t *testing.T) {
 func TestRunLogin_Warnings_ScopesExpiryAndOverwrite(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
-	oldSecret := "old_secret_token_to_be_replaced"
-	newSecret := "new_secret_token_replacing_old1"
+	oldSecret := "oldsecrettokentobereplaced"
+	newSecret := "newsecrettokenreplacingold1"
 
 	// Pre-populate config with loose 0644 permissions and an existing token.
 	if err := os.WriteFile(cfgPath, []byte(fmt.Sprintf("language = \"pt-BR\"\nusername = \"olduser\"\naccess_token = %q\n", oldSecret)), 0o644); err != nil {
@@ -435,7 +435,7 @@ func TestRunLogin_DistinctActionableErrors(t *testing.T) {
 				},
 				ExtractToken: func(p auth.Profile) (string, error) {
 					if errors.Is(tc.err, auth.ErrTokenInvalid) || errors.Is(tc.err, auth.ErrValidateTimeout) {
-						return "secret_token_for_error_test_30c", nil
+						return "secrettokenforerrortest30c", nil
 					}
 					return "", tc.err
 				},
@@ -447,8 +447,8 @@ func TestRunLogin_DistinctActionableErrors(t *testing.T) {
 				t.Fatalf("err = %v, want errors.Is(%v)", err, tc.wantSent)
 			}
 			msg := err.Error()
-			assertNoTokenLeak(t, msg, "secret_token_for_error_test_30c")
-			assertNoTokenLeak(t, out.String(), "secret_token_for_error_test_30c")
+			assertNoTokenLeak(t, msg, "secrettokenforerrortest30c")
+			assertNoTokenLeak(t, out.String(), "secrettokenforerrortest30c")
 			if !strings.Contains(msg, tc.wantSub) {
 				t.Fatalf("error message %q does not contain expected actionable phrase %q", msg, tc.wantSub)
 			}
@@ -530,7 +530,7 @@ func TestRunLogin_ScopeWarnings(t *testing.T) {
 					}, nil
 				},
 				ExtractToken: func(p auth.Profile) (string, error) {
-					return "valid_token_30chars_for_scope_test", nil
+					return "validtoken30charsforscopetest", nil
 				},
 				Validate: func(ctx context.Context, token string) (auth.Validation, error) {
 					return auth.Validation{
@@ -561,7 +561,7 @@ func TestRunLogin_ScopeWarnings(t *testing.T) {
 func TestRunLogin_EnglishLanguageOutput(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
-	secret := "secret_token_for_english_test_123"
+	secret := "secrettokenforenglishtest123"
 
 	var out bytes.Buffer
 	err := RunLogin(context.Background(), LoginOptions{
@@ -610,7 +610,7 @@ func TestRunLogin_EnglishLanguageOutput(t *testing.T) {
 func TestRunLoginInvalidConfigExplainsRecoveryAndPreservesFile(t *testing.T) {
 	const secretInConfig = "segredo-de-teste-no-config"
 	invalidContent := "access_token = \"" + secretInConfig + "\"\n[broken section\n"
-	const newValidToken = "new_valid_token_30chars_xyz123"
+	const newValidToken = "newvalidtoken30charsxyz123"
 
 	cases := []struct {
 		lang         string

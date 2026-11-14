@@ -120,8 +120,12 @@ func New(opts Options) *Manager {
 	if opts.Addr == "" {
 		opts.Addr = DefaultAddr
 	}
-	opts.Token = config.NormalizeToken(opts.Token)
-	opts.Username = strings.ToLower(strings.TrimSpace(opts.Username))
+	// Token com caractere de controle fica sem normalizar: o TrimSpace de
+	// NormalizeToken cortaria um CR/LF das pontas e a validação não o recusaria.
+	if !platform.HasControl(opts.Token) {
+		opts.Token = config.NormalizeToken(opts.Token)
+	}
+	opts.Username = platform.LowerASCII(opts.Username)
 	if opts.CoalesceInterval <= 0 {
 		opts.CoalesceInterval = defaultCoalesceInterval
 	}
@@ -614,6 +618,10 @@ func (m *Manager) runSession(ctx context.Context, done chan struct{}, gen uint64
 	defer m.sessions.Done()
 	defer close(done)
 
+	if err := config.ValidateCredentials(m.opts.Token, m.opts.Username); err != nil {
+		m.emit(ctx, SessionEvent{Generation: gen, Channel: channel, State: StateError, Err: fmt.Errorf("irc credentials: %w", err)})
+		return
+	}
 	anon := m.opts.Token == ""
 	roomState := RoomState{FollowersOnly: -1}
 
@@ -734,15 +742,25 @@ func (m *Manager) popEarliestInFlight() (SendRequest, bool) {
 
 func (m *Manager) writeHandshake(w io.Writer, channel string, anon bool) (string, error) {
 	nick := m.opts.Username
+	if err := config.ValidateCredentials(m.opts.Token, nick); err != nil {
+		return "", fmt.Errorf("irc credentials: %w", err)
+	}
+	token := config.NormalizeToken(m.opts.Token)
+	if !anon && (token == "" || nick == "") {
+		return "", ErrAuthentication
+	}
 	var b strings.Builder
 	b.WriteString("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n")
 	if !anon {
-		fmt.Fprintf(&b, "PASS oauth:%s\r\n", m.opts.Token)
+		fmt.Fprintf(&b, "PASS oauth:%s\r\n", token)
 		fmt.Fprintf(&b, "NICK %s\r\n", nick)
 	} else {
 		nick = m.opts.RandNick()
 		if nick == "" {
 			nick = "justinfan12345"
+		}
+		if !platform.ValidTwitchLogin(platform.LowerASCII(nick)) {
+			return "", fmt.Errorf("invalid anonymous IRC username")
 		}
 		fmt.Fprintf(&b, "NICK %s\r\n", nick)
 	}

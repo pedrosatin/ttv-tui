@@ -977,7 +977,7 @@ func TestManager_AuthenticatedHandshake(t *testing.T) {
 	mgr := New(Options{
 		Addr:     srv.Addr(),
 		Dial:     srv.Dial,
-		Token:    "oauth:secret_tok_123",
+		Token:    "oauth:secrettok123",
 		Username: "PedroSatin",
 	})
 	defer mgr.Close()
@@ -990,7 +990,7 @@ func TestManager_AuthenticatedHandshake(t *testing.T) {
 	case lines := <-handshakeCh:
 		want := []string{
 			"CAP REQ :twitch.tv/tags twitch.tv/commands\r\n",
-			"PASS oauth:secret_tok_123\r\n",
+			"PASS oauth:secrettok123\r\n",
 			"NICK pedrosatin\r\n",
 			"JOIN #alanzoka\r\n",
 		}
@@ -1268,7 +1268,7 @@ func TestManager_SendRateLimitQueueAndExcessDiscardWithFakeIRC(t *testing.T) {
 	mgr := New(Options{
 		Addr:             srv.Addr(),
 		Dial:             srv.Dial,
-		Token:            "oauth:valid_token_abc",
+		Token:            "oauth:validtokenabc",
 		Username:         "pedrosatin",
 		CoalesceInterval: 10 * time.Millisecond,
 		Now:              clk.Now,
@@ -1397,7 +1397,7 @@ func TestManager_ChannelSwitchDiscardsPendingAndNeverSendsToNewChannel(t *testin
 	mgr := New(Options{
 		Addr:             srv.Addr(),
 		Dial:             srv.Dial,
-		Token:            "oauth:tok_switch",
+		Token:            "oauth:tokswitch",
 		Username:         "pedrosatin",
 		CoalesceInterval: 10 * time.Millisecond,
 		Now:              clk.Now,
@@ -1513,7 +1513,7 @@ func TestManager_ConfirmAndNoticeRejectReasons(t *testing.T) {
 	mgr := New(Options{
 		Addr:             srv.Addr(),
 		Dial:             srv.Dial,
-		Token:            "oauth:tok_confirm",
+		Token:            "oauth:tokconfirm",
 		Username:         "pedrosatin",
 		CoalesceInterval: 10 * time.Millisecond,
 		Now:              clk.Now,
