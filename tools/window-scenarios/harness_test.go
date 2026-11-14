@@ -75,7 +75,10 @@ func build(dir string) error {
 type setup struct {
 	// config é o config.toml de partida; vazio, o app começa sem arquivo.
 	config string
-	irc    fixture.IRCConfig
+	// state é o state.json de partida (favoritos e recentes); vazio, o app
+	// começa sem nenhum.
+	state string
+	irc   fixture.IRCConfig
 }
 
 // window é uma janela de teste em execução, com os fixtures dela.
@@ -115,6 +118,15 @@ func openWindow(t *testing.T, s setup) *window {
 	if s.config != "" {
 		if err := os.WriteFile(w.cfgPath, []byte(s.config), 0o600); err != nil {
 			t.Fatalf("config de partida: %v", err)
+		}
+	}
+	if s.state != "" {
+		stateDir := filepath.Join(dir, "state", "ttv-tui")
+		if err := os.MkdirAll(stateDir, 0o700); err != nil {
+			t.Fatalf("diretório do estado de partida: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(stateDir, "state.json"), []byte(s.state), 0o600); err != nil {
+			t.Fatalf("estado de partida: %v", err)
 		}
 	}
 
@@ -166,8 +178,10 @@ func openWindow(t *testing.T, s setup) *window {
 	t.Cleanup(w.close)
 	t.Cleanup(w.reportOnFailure)
 
-	w.waitState("catálogo de fixture na lista", 20*time.Second, func(s ui.StateReport) bool {
-		return s.Items >= 60 && s.Highlighted == "Categoria 01"
+	// Com favoritos ou recentes guardados, o destaque começa no primeiro deles.
+	saved := s.state != ""
+	w.waitState("catálogo de fixture na lista", 20*time.Second, func(st ui.StateReport) bool {
+		return st.Items >= 60 && (st.Highlighted == "Categoria 01" || saved && st.Highlighted != "")
 	})
 	return w
 }

@@ -12,7 +12,7 @@ import (
 )
 
 // focusFixture builds a model with a favorite and a recent that do not belong
-// to the listing about to be opened; they render above the results.
+// to the listing about to be opened; they stay on the home screen.
 func focusFixture(t *testing.T, src *fakeSource) Model {
 	t.Helper()
 	cat, err := i18n.New(i18n.LangPTBR)
@@ -74,9 +74,8 @@ func TestOpenCategoryHighlightsFirstCategoryChannel(t *testing.T) {
 	if got := m.HighlightedID(); got != "c-1" {
 		t.Fatalf("highlight = %q, want first category channel c-1 (not favorite/recent)", got)
 	}
-	items := m.VisibleItems()
-	if items[0].ID() != "fav-1" || items[1].ID() != "rec-1" {
-		t.Fatalf("favorites and recents must stay on top, got order %v", m.visibleItemIDs())
+	if got := m.visibleItemIDs(); !equalStringSlices(got, []string{"c-1", "c-2"}) {
+		t.Fatalf("a categoria lista só os canais dela; favoritos e recentes ficam na tela inicial, got order %v", got)
 	}
 
 	// Enter right after the load opens exactly the highlighted channel.
@@ -90,9 +89,9 @@ func TestOpenCategoryHighlightsFirstCategoryChannel(t *testing.T) {
 	}
 }
 
-func TestOpenCategorySkipsChannelsAlreadyShownAsFavorite(t *testing.T) {
-	// The category's top channel is a favorite: it renders in Favorites and the
-	// highlight goes to the first row of the category section.
+func TestOpenCategoryHighlightsFavoriteInPlace(t *testing.T) {
+	// O primeiro canal da categoria é favorito: ele fica no lugar dele, com ★,
+	// e recebe o destaque como qualquer primeiro resultado.
 	src := &fakeSource{
 		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(live("fav-1", "xqc"), live("c-2", "gaules")), nil
@@ -101,8 +100,9 @@ func TestOpenCategorySkipsChannelsAlreadyShownAsFavorite(t *testing.T) {
 	m := focusFixture(t, src)
 	m, cmd := pressEnter(t, m)
 	m = run(t, m, cmd)
-	if got := m.HighlightedID(); got != "c-2" {
-		t.Fatalf("highlight = %q, want c-2 (first row of the category section)", got)
+	it, ok := m.HighlightedItem()
+	if !ok || it.ID() != "fav-1" || it.Type != ItemTypeChannel || !it.Favorite {
+		t.Fatalf("highlight = %+v, want fav-1 starred in the category section", it)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestOpenCategoryWhoseChannelsAreAllSavedHighlightsFirstLoaded(t *testing.T)
 	m, cmd := pressEnter(t, m)
 	m = run(t, m, cmd)
 	if got := m.HighlightedID(); got != "rec-1" {
-		t.Fatalf("highlight = %q, want rec-1 (first loaded channel, rendered as recent)", got)
+		t.Fatalf("highlight = %q, want rec-1 (first loaded channel)", got)
 	}
 }
 
@@ -208,9 +208,9 @@ func TestSearchExactOfflineStillFirstWhenCloneIsLive(t *testing.T) {
 	}
 }
 
-func TestSearchHighlightsExactEvenWhenFoldedIntoRecents(t *testing.T) {
-	// Real failure mode: landonorris is already a recent, so VisibleItems omits it
-	// from the search section and would otherwise highlight the first clone.
+func TestSearchHighlightsExactChannelAlreadyInRecents(t *testing.T) {
+	// landonorris já é recente e também é o canal exato da busca: a busca lista só
+	// resultados, e o destaque tem de ir ao canal exato, não ao primeiro clone.
 	src := &fakeSource{
 		searchFn: func(ctx context.Context, query string) (catalog.Page[catalog.Channel], error) {
 			return channelsPage(
@@ -328,8 +328,8 @@ func TestRefreshRemovedItemFallsToNearestNeighborNotTop(t *testing.T) {
 	m, cmd := pressEnter(t, m)
 	m = run(t, m, cmd)
 
-	// After open, highlight is on c-1 (first category row). Visible order:
-	// fav-1, rec-1, c-1, c-shadow, c-3. One Down lands on shadowkekw.
+	// Ao abrir, o destaque fica em c-1 (primeira linha da categoria). A lista
+	// mostra só os canais da categoria: c-1, c-shadow, c-3. Um Down cai em shadowkekw.
 	if got := m.HighlightedID(); got != "c-1" {
 		t.Fatalf("after open, highlight = %q, want c-1", got)
 	}
@@ -348,8 +348,8 @@ func TestRefreshRemovedItemFallsToNearestNeighborNotTop(t *testing.T) {
 	if got := m.HighlightedID(); got == "c-shadow" {
 		t.Fatal("removed channel stayed highlighted")
 	}
-	// Previous index pointed at c-shadow; after removal the row at that index is c-3 (gaules).
-	// New order: fav-1, rec-1, c-1, c-3, c-9.
+	// O índice anterior apontava para c-shadow; depois da remoção, a linha nesse
+	// índice é c-3 (gaules). Nova ordem: c-1, c-3, c-9.
 	if got := m.HighlightedID(); got != "c-3" {
 		t.Fatalf("highlight = %q at index %d (was %d), want c-3 (neighbor)", got, m.list.highlightIndex, prevIdx)
 	}
@@ -489,20 +489,21 @@ func markerLine(view string) string {
 	return "(no ▸ marker)"
 }
 
-func TestManualMoveDuringLoadWins(t *testing.T) {
+// Com a categoria carregando, a lista não tem linha: a seta não escolhe nada, e
+// o primeiro canal ganha o destaque quando a página chega.
+func TestArrowDuringLoadStillFocusesFirstResult(t *testing.T) {
 	src := &fakeSource{
 		channelsFn: func(ctx context.Context, categoryID string, page catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
-			return channelsPage(live("c-1", "strogo")), nil
+			return channelsPage(live("c-1", "strogo"), live("c-2", "gaules")), nil
 		},
 	}
 	m := focusFixture(t, src)
 	m, cmd := pressEnter(t, m)
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	chosen := m.HighlightedID()
 	m = run(t, m, cmd)
-	if got := m.HighlightedID(); got != chosen {
-		t.Fatalf("load overrode the user's move: highlight = %q, want %q", got, chosen)
+	if got := m.HighlightedID(); got != "c-1" {
+		t.Fatalf("highlight = %q, want the first channel c-1", got)
 	}
 }
 
@@ -540,12 +541,16 @@ func TestEmptyCategoryAndEmptySearchKeepAValidHighlight(t *testing.T) {
 		},
 	}
 
-	// Empty category: the highlight lands on a row that exists.
+	// Categoria vazia: os favoritos e recentes ficam na tela inicial, então
+	// não há linha; o destaque não aponta para nada e Enter não faz nada.
 	m := focusFixture(t, src)
 	m, cmd := pressEnter(t, m)
 	m = run(t, m, cmd)
-	if _, ok := m.HighlightedItem(); !ok {
-		t.Fatalf("empty category left a dangling highlight %q", m.HighlightedID())
+	if got := m.HighlightedID(); got != "" {
+		t.Fatalf("empty category left a dangling highlight %q", got)
+	}
+	if _, cmd := pressEnter(t, m); cmd != nil {
+		t.Fatal("Enter on an empty category should do nothing")
 	}
 	_ = m.View()
 

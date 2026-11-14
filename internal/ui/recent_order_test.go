@@ -46,15 +46,14 @@ func TestOpenChannelDoesNotReorderVisibleList(t *testing.T) {
 			{ID: "rec-c", Login: "carol", DisplayName: "Carol"},
 		}),
 	)
-	m.list.mode = ModeChannels
-	m.list.channels = []catalog.Channel{
-		{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: catalog.IntPtr(100)},
-	}
+	// Os recentes ficam na tela inicial, acima das categorias.
+	m.list.mode = ModeCategories
+	m.list.categories = []catalog.Category{{ID: "cat-1", Name: "Just Chatting"}}
 	m.list.highlightedID = "rec-c"
 	m.reconcileHighlight()
 
 	before := visibleLogins(m.VisibleItems())
-	wantBefore := []string{"fav_one", "alice", "bob", "carol", "xqc"}
+	wantBefore := []string{"fav_one", "alice", "bob", "carol", "Just Chatting"}
 	if !equalStringSlices(before, wantBefore) {
 		t.Fatalf("setup order = %v, want %v", before, wantBefore)
 	}
@@ -142,11 +141,9 @@ func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 			{ID: "rec-b", Login: "bob", DisplayName: "Bob"},
 		}),
 	)
-	m.list.mode = ModeChannels
-	m.list.selectedCategory = &catalog.Category{ID: "cat-1", Name: "Just Chatting"}
-	m.list.channels = []catalog.Channel{
-		{ID: "ch-x", Login: "xqc", DisplayName: "xQc", Viewers: catalog.IntPtr(10)},
-	}
+	// Os recentes ficam na tela inicial: bob abre de lá.
+	m.list.mode = ModeCategories
+	m.list.categories = []catalog.Category{{ID: "cat-1", Name: "Just Chatting"}}
 	m.list.highlightedID = "rec-b"
 	m.reconcileHighlight()
 
@@ -165,7 +162,7 @@ func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 		m = feedLoadedMsgs(t, m, cmd)
 	}
 	got := visibleLogins(m.VisibleItems())
-	want := []string{"fav_one", "bob", "alice", "xqc"}
+	want := []string{"fav_one", "bob", "alice", "Just Chatting"}
 	if !equalStringSlices(got, want) {
 		t.Fatalf("after refresh order = %v, want %v", got, want)
 	}
@@ -173,9 +170,15 @@ func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 		t.Fatalf("favorite moved: %+v", m.Favorites())
 	}
 
-	// Open alice (now second recent), freeze again, then Esc applies on categories.
-	m.list.highlightedID = "rec-a"
+	// Abre a categoria e xqc dentro dela: a listagem não mexe, e Esc de volta à
+	// tela inicial aplica o recente novo.
+	m.list.highlightedID = "cat-1"
 	m.reconcileHighlight()
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = feedLoadedMsgs(t, updated.(Model), cmd)
+	if m.Mode() != ModeChannels || m.HighlightedID() != "ch-x" {
+		t.Fatalf("mode=%q highlight=%q, want channels on ch-x", m.Mode(), m.HighlightedID())
+	}
 	beforeBack := visibleLogins(m.VisibleItems())
 	m = openChannel(t, m)
 	if got := visibleLogins(m.VisibleItems()); !equalStringSlices(got, beforeBack) {
@@ -187,14 +190,14 @@ func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 	if m.Mode() != ModeCategories {
 		t.Fatalf("mode=%q, want categories", m.Mode())
 	}
-	if m.Recents()[0].Login != "alice" {
-		t.Fatalf("after Esc Recents()[0] = %q, want alice", m.Recents()[0].Login)
+	if m.Recents()[0].Login != "xqc" {
+		t.Fatalf("after Esc Recents()[0] = %q, want xqc", m.Recents()[0].Login)
 	}
 	if cmd != nil {
 		m = feedLoadedMsgs(t, m, cmd)
 	}
 	got = visibleLogins(m.VisibleItems())
-	wantCats := []string{"fav_one", "alice", "bob", "Just Chatting"}
+	wantCats := []string{"fav_one", "xqc", "bob", "alice", "Just Chatting"}
 	if !equalStringSlices(got, wantCats) {
 		t.Fatalf("after Esc order = %v, want %v", got, wantCats)
 	}
@@ -222,8 +225,9 @@ func TestOpenChannelKeepsFavoritePositionAndDedup(t *testing.T) {
 	m.list.highlightedID = "ch-new"
 	m.reconcileHighlight()
 
+	// Na categoria, o favorito shared fica no lugar dele, com ★.
 	before := visibleLogins(m.VisibleItems())
-	wantBefore := []string{"shared", "second_fav", "recent_one", "brand_new"}
+	wantBefore := []string{"shared", "brand_new"}
 	if !equalStringSlices(before, wantBefore) {
 		t.Fatalf("setup = %v, want %v", before, wantBefore)
 	}
@@ -240,7 +244,9 @@ func TestOpenChannelKeepsFavoritePositionAndDedup(t *testing.T) {
 		t.Fatalf("store recents[0] = %+v, want brand_new", fs.savedState.Recents)
 	}
 
+	// Na tela inicial, o recente novo não repete o favorito.
 	m.applyPendingRecents()
+	m.list.mode = ModeCategories
 	items := m.VisibleItems()
 	logins := visibleLogins(items)
 	want := []string{"shared", "second_fav", "brand_new", "recent_one"}

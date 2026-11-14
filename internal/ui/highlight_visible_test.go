@@ -136,6 +136,8 @@ func TestHighlightMovesToNeighborWhenRetryDropsHighlightedRecent(t *testing.T) {
 	m := New(cat, WithRecents(recents), WithSource(&fakeSource{}))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
+	// O usuário já abriu "mais…": o último recente só aparece com a lista inteira.
+	m.list.recentsExpanded = true
 
 	items := m.VisibleItems()
 	m.setHighlightToItem(items, len(items)-1)

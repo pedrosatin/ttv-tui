@@ -102,7 +102,8 @@ func TestClearedLoadErrorSaysListDidNotLoad(t *testing.T) {
 }
 
 // A batch lookup that omits the stream field has no evidence either way. Inside
-// a category listing the favorite must stay unverified, not turn live.
+// a category listing the favorite must stay unverified, not turn live. Os
+// favoritos aparecem na tela inicial, então a conferência é feita lá.
 func TestHydrationWithoutStreamKeepsFavoriteUnverified(t *testing.T) {
 	m := listErrorModel(t, i18n.LangEN)
 	m.list.mode = ModeChannels
@@ -113,6 +114,7 @@ func TestHydrationWithoutStreamKeepsFavoriteUnverified(t *testing.T) {
 		Channels:   []catalog.Channel{{ID: "1", Login: "alpha", DisplayName: "Alpha"}},
 	})
 	m = updated.(Model)
+	m.list.mode = ModeCategories
 
 	for _, it := range m.VisibleItems() {
 		if it.Login() != "alpha" {

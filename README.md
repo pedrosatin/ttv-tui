@@ -111,7 +111,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | `↑` `↓` or `j` `k` | Move the selection |
 | `Enter` | Open the category or watch the channel |
 | `f` | Add or remove the channel from favorites |
-| `/` | Filter the current list |
+| `/` | Filter the current list; `Enter` opens the highlighted item and `Ctrl+F` searches with the text |
 | `Ctrl+F` or `Ctrl+S` | Search channels and categories on the platform the list shows, or paste a stream URL |
 | `p` | Switch the list between Twitch and Kick; the video and the chat keep going |
 | `l` | Filter channels by language and audience |
@@ -213,7 +213,7 @@ Run `ttv-tui doctor` afterwards. It lists what is missing.
 <details>
 <summary><b>How do favorites and recent channels work?</b></summary>
 
-Press `f` on a channel to add it to favorites, and press it again to remove it. Every channel you open goes to the recent list, which keeps the last 50. Both sections sit at the top of the list.
+Press `f` on a channel to add it to favorites, and press it again to remove it. Every channel you open goes to the recent list, which keeps the last 50. The start screen shows the favorites, the 6 latest recent channels and a `more…` line that opens the rest. Inside a category or a search the results come first, and a favorite stays in its place, marked with ★.
 
 In a new session, those channels show `[unverified]` until you open them or they show up in a live list. They are stored in `state.json`, not on your Twitch account.
 

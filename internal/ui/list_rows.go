@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 // listRow is one drawn line of the list: a section header or an item.
@@ -40,6 +41,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	lines := make([]string, 0, len(rows)+5)
 	lines = append(lines, header)
 	lines = m.appendPromptLines(lines, maxWidth)
+	lines = m.appendFilterHint(lines, maxWidth)
 
 	start, end := 0, len(rows)
 	if m.height > 0 {
@@ -50,6 +52,17 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	}
 	lines = append(lines, unavailable...)
 	return m.appendListLoadingMore(lines, maxWidth)
+}
+
+// appendFilterHint diz, enquanto se digita no filtro, o que Enter e Ctrl+F
+// fazem: Enter abre o item destacado, que está à vista logo abaixo, e Ctrl+F
+// leva o texto à busca da plataforma.
+func (m Model) appendFilterHint(lines []string, maxWidth int) []string {
+	if !m.list.filtering {
+		return lines
+	}
+	hint := fmt.Sprintf(m.t("filter.typing_hint"), platform.DisplayName(m.ListPlatform()))
+	return append(lines, lipgloss.NewStyle().Faint(true).Render(TruncateVisual(hint, maxWidth)))
 }
 
 // listLoadingText is the line shown while the first page of the list loads.
@@ -190,12 +203,15 @@ func listSectionHeader(title string, maxWidth int) listRow {
 // formatListItemRow draws one item, reversed when it is the highlighted one.
 func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth int) string {
 	highlighted := it.ID() == m.list.highlightedID
-	marker := listRowMarker(highlighted, it.Type == ItemTypeFavorite)
+	marker := listRowMarker(highlighted, it.Type == ItemTypeFavorite || it.Favorite)
 
 	var row string
-	if it.Type == ItemTypeCategory {
+	switch it.Type {
+	case ItemTypeMoreRecents:
+		row = fitListRow(fmt.Sprintf("%s %7s  %s", marker, "", fmt.Sprintf(m.t("recents.more"), it.Hidden)), maxWidth)
+	case ItemTypeCategory:
 		row = m.formatCategoryRow(marker, *it.Category, isSearch, maxWidth)
-	} else { // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
+	default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
 		row = m.formatChannelRow(marker, *it.Channel, it.Availability, maxWidth, tagWidth)
 	}
 	if !highlighted {

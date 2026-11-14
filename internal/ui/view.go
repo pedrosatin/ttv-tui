@@ -592,12 +592,17 @@ func formatLiveViewersCell(viewers string) string {
 }
 
 // fitChannelRow reserves a shared, left-aligned status column at the right edge.
-// The identity takes priority over the title when the panel is narrow.
+// The identity takes priority over the title when the panel is narrow. Uma
+// linha sem marca própria usa a largura inteira: a coluna das marcas fica vazia
+// nela e não corta o nome.
 func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, maxWidth, tagWidth int) string {
 	prefix := marker + " " + viewers + "  "
 	identity = normalizeScreenText(identity)
 	title = normalizeScreenText(title)
 	tag = normalizeScreenText(tag)
+	if tag == "" {
+		tagWidth = 0
+	}
 	bodyWidth := maxWidth
 	if maxWidth > 0 && tagWidth > 0 {
 		bodyWidth = max(1, maxWidth-tagWidth-1)

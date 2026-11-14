@@ -21,6 +21,10 @@ var hydrationTimeout = 10 * time.Second
 
 const defaultMaxRecents = 50
 
+// homeRecentsLimit é quantos recentes a tela inicial mostra antes da linha
+// "mais…".
+const homeRecentsLimit = 6
+
 // ListItemType identifies the typed category of a list item.
 type ListItemType string
 
@@ -32,7 +36,13 @@ const (
 	// ItemTypeExactChannel is a search hit whose login or display name equals
 	// the query. It renders in its own section, ahead of the categories.
 	ItemTypeExactChannel ListItemType = "CanalExato"
+	// ItemTypeMoreRecents é a linha "mais…" da tela inicial, depois dos
+	// primeiros recentes. Enter nela mostra o resto.
+	ItemTypeMoreRecents ListItemType = "MaisRecentes"
 )
+
+// moreRecentsID é o ID estável da linha "mais…".
+const moreRecentsID = "recentes:mais"
 
 // ListItem represents a strongly-typed item in the navigation list.
 // Availability is the honest stream state for channel items: unknown unless
@@ -42,6 +52,11 @@ type ListItem struct {
 	Category     *catalog.Category
 	Channel      *catalog.Channel
 	Availability catalog.Availability
+	// Favorite marca com ★ um canal da listagem ou da busca que está nos
+	// favoritos: ele fica no lugar dele, sem ir para a seção Favoritos.
+	Favorite bool
+	// Hidden é quantos recentes a linha "mais…" esconde.
+	Hidden int
 }
 
 // Offline reports whether there is explicit evidence that the channel is not broadcasting.
@@ -51,6 +66,9 @@ func (it ListItem) Offline() bool {
 
 // ID returns the stable identifier of the list item.
 func (it ListItem) ID() string {
+	if it.Type == ItemTypeMoreRecents {
+		return moreRecentsID
+	}
 	if it.Category != nil {
 		return it.Category.ID
 	}
@@ -158,16 +176,23 @@ func channelMatches(a, b catalog.Channel) bool {
 	return a.Matches(b)
 }
 
-// VisibleItems returns the deduplicated list of items in strict order:
-// Favorites -> Recents -> Content (Categories or Channels).
-// A channel present in Favorites is omitted from Recents and Content.
-// A channel present in Recents is omitted from Content.
+// VisibleItems returns the deduplicated list of items in strict order.
+//
+// A tela inicial mostra Favoritos, os primeiros recentes (com a linha "mais…"
+// quando sobram) e as categorias; um canal dos favoritos não se repete nos
+// recentes. A busca e os canais de uma categoria mostram só os resultados: um
+// favorito entre eles fica no lugar dele, marcado com ★, e os favoritos e
+// recentes que não são resultado ficam na tela inicial.
 func (m Model) VisibleItems() []ListItem {
 	p := itemPass{
 		query:      strings.ToLower(strings.TrimSpace(m.list.filter)),
 		prefs:      m.list.prefs,
 		seenLogins: make(map[string]struct{}),
 		seenIDs:    make(map[string]struct{}),
+	}
+	if m.Mode() != ModeCategories {
+		p.starred = m.starredListing()
+		return m.appendContent(nil, p)
 	}
 	items := m.appendFavorites(nil, p)
 	items = m.appendRecents(items, p)
@@ -181,6 +206,8 @@ type itemPass struct {
 	prefs      channelPrefs
 	seenLogins map[string]struct{}
 	seenIDs    map[string]struct{}
+	// starred são os índices de m.list.channels que são favoritos e ganham ★.
+	starred map[int]bool
 }
 
 func (p itemPass) markSeen(ch catalog.Channel) {
@@ -277,8 +304,11 @@ func (m Model) appendFavorites(items []ListItem, p itemPass) []ListItem {
 
 // appendRecents appends the recents that are not favorites. The seen check
 // runs on the stored channel and on the resolved one; the seen mark comes
-// from the resolved one.
+// from the resolved one. Sem filtro de texto e sem o usuário ter pedido o
+// resto, vão homeRecentsLimit deles e a linha "mais…" com quantos sobram.
 func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
+	limited := p.query == "" && !m.list.recentsExpanded
+	shown, hidden := 0, 0
 	for _, rec := range m.list.recents {
 		if rec.ID == "" && rec.Login == "" {
 			continue
@@ -290,8 +320,16 @@ func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 		if p.isSeen(ch) || !p.passes(ch) {
 			continue
 		}
+		if limited && shown == homeRecentsLimit {
+			hidden++
+			continue
+		}
 		items = append(items, channelItem(ItemTypeRecent, ch, avail))
 		p.markSeen(ch)
+		shown++
+	}
+	if hidden > 0 {
+		items = append(items, ListItem{Type: ItemTypeMoreRecents, Hidden: hidden})
 	}
 	return items
 }
@@ -330,7 +368,7 @@ func appendCategories(items []ListItem, cats []catalog.Category, p itemPass) []L
 // list yet and pass the filters. With ItemTypeExactChannel it takes only the
 // channels the search query names exactly.
 func (m Model) appendListed(items []ListItem, p itemPass, itemType ListItemType) []ListItem {
-	for _, ch := range m.list.channels {
+	for i, ch := range m.list.channels {
 		if itemType == ItemTypeExactChannel && !catalog.ExactChannelMatch(m.list.search.query, ch) {
 			continue
 		}
@@ -341,10 +379,37 @@ func (m Model) appendListed(items []ListItem, p itemPass, itemType ListItemType)
 		if m.player.isPlaying(ch) {
 			avail = catalog.AvailabilityLive
 		}
-		items = append(items, channelItem(itemType, ch, avail))
+		it := channelItem(itemType, ch, avail)
+		it.Favorite = p.starred[i]
+		items = append(items, it)
 		p.markSeen(ch)
 	}
 	return items
+}
+
+// starredListing devolve os índices dos canais da listagem que são favoritos.
+// Cada favorito marca um canal só: o de mesmo ID e, sem ele, o primeiro que
+// casa pelo login. Um login retomado por outro canal não leva a ★ do favorito.
+func (m Model) starredListing() map[int]bool {
+	if len(m.list.favorites) == 0 || len(m.list.channels) == 0 {
+		return nil
+	}
+	out := make(map[int]bool)
+	for _, fav := range m.list.favorites {
+		idx := -1
+		if fav.ID != "" {
+			idx = slices.IndexFunc(m.list.channels, func(ch catalog.Channel) bool {
+				return ch.ID == fav.ID && channelMatches(fav, ch)
+			})
+		}
+		if idx < 0 {
+			idx = slices.IndexFunc(m.list.channels, func(ch catalog.Channel) bool { return channelMatches(fav, ch) })
+		}
+		if idx >= 0 {
+			out[idx] = true
+		}
+	}
+	return out
 }
 
 // listingAvailability resolves the availability of a channel from the loaded
@@ -742,6 +807,13 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 	}
 
 	switch it.Type {
+	case ItemTypeMoreRecents:
+		// O destaque fica na mesma posição, agora no primeiro recente que
+		// estava escondido.
+		m.list.recentsExpanded = true
+		m.reconcileHighlight()
+		return m, nil
+
 	case ItemTypeCategory:
 		if it.Category == nil {
 			return m, nil
@@ -815,13 +887,15 @@ func stampChannelCategory(ch *catalog.Channel, cat *catalog.Category) {
 }
 
 func (m *Model) moveHighlight(delta int) {
-	// A manual move is the user's choice; a pending load must not override it.
-	m.list.focusResults = false
 	items := m.VisibleItems()
 	if len(items) == 0 {
+		// Sem linha nenhuma, a seta não escolhe nada: a carga em andamento
+		// ainda destaca o primeiro resultado.
 		m.clearHighlight()
 		return
 	}
+	// A manual move is the user's choice; a pending load must not override it.
+	m.list.focusResults = false
 	idx := m.list.indexOfHighlighted(items)
 	if idx < 0 {
 		m.setHighlightToItem(items, 0)
@@ -907,8 +981,8 @@ func (m *Model) reconcileHighlight() {
 
 // settleHighlightAfterLoad places the highlight after a channel or search page
 // arrives. Right after a category or search is opened, the highlight goes to
-// the first result of that screen, so Enter opens what the user just asked for
-// and not a favorite or recent rendered above it. Search results are preferred
+// the first result of that screen, so Enter opens what the user just asked for.
+// Search results are preferred
 // by catalog.PreferSearchChannels before this runs (exact login, then exact
 // display name), and firstResultID puts that hit ahead of the categories. Otherwise (refresh, next page) the
 // highlighted item keeps its place by identity, or the nearest neighbor when
@@ -938,12 +1012,9 @@ func (m *Model) settleHighlightAfterLoad() {
 // firstResultID returns the ID of the first visible row of the loaded listing.
 // For search, a channel named exactly by the query wins, and PreferSearchChannels
 // already put it at channels[0]. Without one, categories come first
-// (PreferSearchCategories), then channels[0]. Highlight the target wherever it
-// renders — including when it was folded into Favorites/Recents and omitted from
-// the search section. An exact hit hidden by the preference filters has no row,
-// so the categories take over. For category channels, prefer the listing's own section;
-// when every loaded channel is already shown as a favorite or recent, fall
-// back to the first loaded channel wherever it renders.
+// (PreferSearchCategories), then channels[0]. Um favorito entre os resultados
+// fica no lugar dele, com ★, e recebe o destaque como os outros. An exact hit
+// hidden by the preference filters has no row, so the categories take over.
 func (m Model) firstResultID() (string, bool) {
 	items := m.VisibleItems()
 	if m.Mode() == ModeSearch {

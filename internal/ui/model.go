@@ -306,6 +306,7 @@ type listState struct {
 	highlightedLogin string // secondary channel identity when upstream IDs churn between loads
 	highlightIndex   int    // VisibleItems index; nearest-neighbor fallback after refresh
 	focusResults     bool   // next channel/search load highlights its first result; see settleHighlightAfterLoad
+	recentsExpanded  bool   // a tela inicial mostra todos os recentes, depois de Enter em "mais…"
 	selectedCategory *catalog.Category
 	selectedChannel  *catalog.Channel
 	// enters counts Enter on a channel row; see ChannelSelectedMsg.Enter.

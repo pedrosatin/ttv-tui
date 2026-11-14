@@ -38,22 +38,23 @@ func TestFavoritesToggling_ReflectedInListAndStore(t *testing.T) {
 		}),
 	)
 
-	// Add channels in ModeChannels
+	// Add channels in ModeChannels. O favorito que está na categoria fica no
+	// lugar dele, marcado com ★, em vez de subir para uma seção Favoritos.
 	m.list.mode = ModeChannels
 	m.list.channels = []catalog.Channel{
+		{ID: "fav-1", Login: "streamer_fav", DisplayName: "Favorite Streamer", Viewers: catalog.IntPtr(900)},
 		{ID: "ch-1", Login: "streamer_normal", DisplayName: "Normal Streamer", Viewers: catalog.IntPtr(500)},
 	}
 	m.reconcileHighlight()
 
-	// Initially: 1 favorite ("streamer_fav"), 1 channel ("streamer_normal")
 	items := m.VisibleItems()
 	if len(items) != 2 {
 		t.Fatalf("expected 2 visible items, got %d", len(items))
 	}
-	if items[0].Type != ItemTypeFavorite || items[0].Login() != "streamer_fav" {
-		t.Fatalf("expected first item to be favorite 'streamer_fav', got %+v", items[0])
+	if items[0].Type != ItemTypeChannel || !items[0].Favorite || items[0].Login() != "streamer_fav" {
+		t.Fatalf("expected first item to be the starred channel 'streamer_fav', got %+v", items[0])
 	}
-	if items[1].Type != ItemTypeChannel || items[1].Login() != "streamer_normal" {
+	if items[1].Type != ItemTypeChannel || items[1].Favorite || items[1].Login() != "streamer_normal" {
 		t.Fatalf("expected second item to be channel 'streamer_normal', got %+v", items[1])
 	}
 
@@ -80,6 +81,9 @@ func TestFavoritesToggling_ReflectedInListAndStore(t *testing.T) {
 	}
 	if favs[1].Login != "streamer_normal" {
 		t.Fatalf("expected streamer_normal in favorites, got %+v", favs[1])
+	}
+	if got := m.VisibleItems(); got[1].Login() != "streamer_normal" || !got[1].Favorite || m.HighlightedID() != "ch-1" {
+		t.Fatalf("favoritar tirou streamer_normal do lugar: items %+v, destaque %q", got, m.HighlightedID())
 	}
 
 	// Now unfavorite streamer_fav
@@ -168,30 +172,35 @@ func TestNoDuplicatesAcrossSections(t *testing.T) {
 		}),
 	)
 
+	// Na tela inicial, o favorito não se repete nos recentes.
+	home := m.VisibleItems()
+	if len(home) != 2 || home[0].Type != ItemTypeFavorite || home[0].Login() != "shared_streamer" ||
+		home[1].Type != ItemTypeRecent || home[1].Login() != "recent_shared" {
+		t.Fatalf("tela inicial = %+v, quer o favorito shared_streamer e o recente recent_shared", home)
+	}
+
+	// Na categoria, cada canal aparece uma vez, na ordem da listagem: o
+	// favorito fica no lugar dele com ★, e os recentes não sobem.
 	m.list.mode = ModeChannels
 	m.list.channels = []catalog.Channel{
 		{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer", Viewers: catalog.IntPtr(1000)},
 		{ID: "ch-recent", Login: "recent_shared", DisplayName: "Recent Shared", Viewers: catalog.IntPtr(500)},
 		{ID: "ch-unique", Login: "unique_streamer", DisplayName: "Unique Streamer", Viewers: catalog.IntPtr(200)},
+		{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer", Viewers: catalog.IntPtr(1000)},
 	}
 
 	items := m.VisibleItems()
-	// Should have:
-	// 1: shared_streamer (as Favorite)
-	// 2: recent_shared (as Recent)
-	// 3: unique_streamer (as Channel)
-	if len(items) != 3 {
-		t.Fatalf("expected 3 items without duplicates, got %d", len(items))
+	want := []struct {
+		login    string
+		favorite bool
+	}{{"shared_streamer", true}, {"recent_shared", false}, {"unique_streamer", false}}
+	if len(items) != len(want) {
+		t.Fatalf("expected %d items without duplicates, got %d: %+v", len(want), len(items), items)
 	}
-
-	if items[0].Type != ItemTypeFavorite || items[0].Login() != "shared_streamer" {
-		t.Errorf("expected items[0] to be Favorite 'shared_streamer', got %+v", items[0])
-	}
-	if items[1].Type != ItemTypeRecent || items[1].Login() != "recent_shared" {
-		t.Errorf("expected items[1] to be Recent 'recent_shared', got %+v", items[1])
-	}
-	if items[2].Type != ItemTypeChannel || items[2].Login() != "unique_streamer" {
-		t.Errorf("expected items[2] to be Channel 'unique_streamer', got %+v", items[2])
+	for i, w := range want {
+		if items[i].Type != ItemTypeChannel || items[i].Login() != w.login || items[i].Favorite != w.favorite {
+			t.Errorf("items[%d] = %+v, want channel %q favorite=%v", i, items[i], w.login, w.favorite)
+		}
 	}
 }
 
@@ -325,10 +334,13 @@ func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
 		}),
 	)
 
+	// A listagem da categoria dá a evidência de fav-on; os favoritos aparecem na
+	// tela inicial, que guarda o que a listagem provou.
 	m.list.mode = ModeChannels
-	m.list.channels = []catalog.Channel{
+	m.refreshSavedAvailability([]catalog.Channel{
 		{ID: "fav-on", Login: "online_guy", DisplayName: "Online Guy", Viewers: catalog.IntPtr(1500), Title: catalog.StringPtr("Playing Game")},
-	}
+	})
+	m.list.mode = ModeCategories
 
 	items := m.VisibleItems()
 	if len(items) != 2 {
@@ -692,10 +704,11 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 			WithRecents([]catalog.Channel{recCh}),
 		)
 
-		// 1. In Search Mode:
+		// 1. In Search Mode: a busca só lista resultados, e o favorito e o
+		// recente aparecem porque são resultados.
 		m.list.mode = ModeSearch
 		m.list.search.query = "channel"
-		m.list.channels = []catalog.Channel{liveCh}
+		m.list.channels = []catalog.Channel{favCh, recCh, liveCh}
 		m.reconcileHighlight()
 
 		plainSearch := ansi.Strip(m.View())
@@ -781,7 +794,7 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 		mDualSearch := New(cat, WithFavorites([]catalog.Channel{liveFav}), WithRecents([]catalog.Channel{offCh}))
 		mDualSearch.list.mode = ModeSearch
 		mDualSearch.list.search.query = "channel"
-		mDualSearch.list.channels = []catalog.Channel{liveCh}
+		mDualSearch.list.channels = []catalog.Channel{liveFav, offCh, liveCh}
 		mDualSearch.list.highlightedID = "s-1"
 
 		plainDualCat := ansi.Strip(mDualCat.View())

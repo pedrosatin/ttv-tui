@@ -110,7 +110,8 @@ Hyprland nem a configuração do operador. `TTV_CENARIOS_BUILD` muda onde os bin
 `openWindow(t, setup{...})` monta, só para aquele teste:
 
 - `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_RUNTIME_DIR` e `HOME` num diretório
-  temporário, com o `config.toml` de partida que o cenário pedir em `setup.config`;
+  temporário, com o `config.toml` de partida que o cenário pedir em `setup.config` e o `state.json` (favoritos e
+  recentes) em `setup.state`;
 - o GQL de fixture ([`internal/fixture`](../internal/fixture/)): 60 categorias, a primeira com os canais
   `fixture_um`, `fixture_dois` e `fixture_tres`;
 - o IRC de fixture, com `setup.irc.Messages` mensagens logo depois do JOIN e, se `Every` for maior que zero, mais

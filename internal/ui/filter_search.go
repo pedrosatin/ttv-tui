@@ -114,9 +114,9 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Select):
 		// A pasted stream URL opens immediately; otherwise with no local match,
-		// Enter runs the same global search as Ctrl+F. With matches, Enter still opens
-		// the highlighted item.
-		if streamurl.IsStreamURL(strings.TrimSpace(m.list.filter)) || m.filterHasNoMatches() {
+		// Enter runs the same global search as Ctrl+F. Enter só abre o item
+		// destacado quando ele está na tela; sem ele, o texto vai à busca.
+		if streamurl.IsStreamURL(strings.TrimSpace(m.list.filter)) || m.filterHasNoMatches() || !m.highlightOnScreen() {
 			return m.startSearch(m.list.filter)
 		}
 		m.list.filtering = false
@@ -252,6 +252,17 @@ func (m Model) fetchSearchCmd(gen uint64, query string) tea.Cmd {
 			Err:        err,
 		}
 	}
+}
+
+// highlightOnScreen diz se o item destacado aparece na tela: a lista ocupa
+// colunas e o destaque é um dos itens dela. O recorte da lista (rowWindow) se
+// centra no destaque, então um item da lista destacado sempre está à vista.
+func (m Model) highlightOnScreen() bool {
+	if !m.listVisible() {
+		return false
+	}
+	_, ok := m.HighlightedItem()
+	return ok
 }
 
 // filterHasNoMatches reports whether a non-empty local filter hides every item

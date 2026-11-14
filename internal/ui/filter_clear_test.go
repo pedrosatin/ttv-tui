@@ -42,8 +42,10 @@ func filterClearFixture(t *testing.T) Model {
 	}
 	m := New(cat,
 		WithSource(src),
+		// O favorito é um canal da categoria: nela ele aparece no lugar dele,
+		// marcado com ★.
 		WithFavorites([]catalog.Channel{
-			{ID: "fav-1", Login: "favorite_one", DisplayName: "Favorite One"},
+			{ID: "ch-gaules", Login: "gaules", DisplayName: "Gaules"},
 		}),
 	)
 	m.list.mode = ModeChannels
@@ -94,7 +96,7 @@ func TestOpenChannelClearsFilterAndShowsFavorites(t *testing.T) {
 	var sawFav, sawPeere, sawAlan bool
 	for _, it := range visible {
 		switch {
-		case it.Type == ItemTypeFavorite && it.Login() == "favorite_one":
+		case it.Favorite && it.Login() == "gaules":
 			sawFav = true
 		case it.Login() == "peere":
 			sawPeere = true
@@ -109,7 +111,7 @@ func TestOpenChannelClearsFilterAndShowsFavorites(t *testing.T) {
 	if strings.Contains(view, "Filter:") {
 		t.Fatalf("view still shows filter prompt after opening channel:\n%s", view)
 	}
-	if !strings.Contains(view, "Favorite One") || !strings.Contains(view, "alanzoka") {
+	if !strings.Contains(view, "★") || !strings.Contains(view, "Gaules") || !strings.Contains(view, "alanzoka") {
 		t.Fatalf("view missing restored list rows:\n%s", view)
 	}
 }
@@ -122,7 +124,7 @@ func TestEscClearsFilterWithoutLeavingChannels(t *testing.T) {
 	if m.Mode() != ModeChannels || m.Filter() != "" || m.Filtering() {
 		t.Fatalf("after Esc: mode=%q filter=%q filtering=%v", m.Mode(), m.Filter(), m.Filtering())
 	}
-	if !hasFavoriteLogin(m.VisibleItems(), "favorite_one") {
+	if !hasFavoriteLogin(m.VisibleItems(), "gaules") {
 		t.Fatal("favorite not visible after Esc cleared the filter")
 	}
 }
@@ -240,7 +242,7 @@ func equalStringSlices(a, b []string) bool {
 
 func hasFavoriteLogin(items []ListItem, login string) bool {
 	for _, it := range items {
-		if it.Type == ItemTypeFavorite && strings.EqualFold(it.Login(), login) {
+		if (it.Type == ItemTypeFavorite || it.Favorite) && strings.EqualFold(it.Login(), login) {
 			return true
 		}
 	}

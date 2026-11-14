@@ -52,7 +52,8 @@ func seedFilterClearFavorite(statePath string) error {
 		return err
 	}
 	st := store.State{
-		Favorites: []store.Channel{{ID: "fav-1", Login: "favorite_one", DisplayName: "Favorite One"}},
+		// O favorito é um canal da categoria: lá ele aparece no lugar dele, com ★.
+		Favorites: []store.Channel{{ID: "ch-alpha", Login: "alphachan", DisplayName: "AlphaChan"}},
 		Recents:   []store.Channel{},
 	}
 	data, err := json.Marshal(st)
@@ -63,16 +64,16 @@ func seedFilterClearFavorite(statePath string) error {
 }
 
 // TestFilterClearsOnChannelOpen_PTY drives the real TUI on a PTY: filter to one
-// channel, open it, and confirm the filter is gone so favorites and the other
-// channel are visible again.
+// channel, open it, and confirm the filter is gone so the favorite and the
+// other channel are visible again.
 func TestFilterClearsOnChannelOpen_PTY(t *testing.T) {
 	p := startTUIOnPTY(t, "TTV_APP_FILTER_CLEAR=1", "LANG=en_US.UTF-8", "LC_ALL=", "LC_MESSAGES=")
 
-	p.waitScreen(0, "Favorite One", "FilterCat")
+	p.waitScreen(0, "AlphaChan", "FilterCat")
 	// Favorites render above categories; move onto FilterCat before Enter.
 	p.sendAndWait([]byte("j"), "▸")
-	p.sendAndWait([]byte("\r"), "AlphaChan")
-	p.waitScreen(0, "Peere", "Favorite O")
+	p.sendAndWait([]byte("\r"), "Peere")
+	p.waitScreen(0, "Peere", "AlphaChan")
 
 	p.sendAndWait([]byte("/"), "Filter:")
 	p.sendAndWait([]byte("peere"), "Filter: peere")
@@ -81,7 +82,7 @@ func TestFilterClearsOnChannelOpen_PTY(t *testing.T) {
 	oldPid := p.playerPid
 	p.sendAndWait([]byte("\r"), "Chat — #peere")
 	p.followPlayer(oldPid)
-	screen := p.waitScreen(openOff, "Favorite O", "Favorites", "AlphaChan", "Peere")
+	screen := p.waitScreen(openOff, "★", "AlphaChan", "Peere")
 	if strings.Contains(screen, "Filter:") {
 		t.Fatalf("after opening peere, filter prompt remains; screen since open:\n%s", screen)
 	}

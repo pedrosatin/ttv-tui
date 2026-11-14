@@ -105,7 +105,8 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
 		m.list.selectedCategory = &catalog.Category{ID: "cat-fn", Name: "Fortnite"}
-		m.list.mode = ModeChannels
+		// Favoritos e recentes abrem da tela inicial, com Fortnite ainda selecionada.
+		m.list.mode = ModeCategories
 		m.list.highlightedID = "f1"
 		m = openChannel(t, m)
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "favchan", Volume: 80, Selection: 1})
@@ -131,7 +132,8 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
 		m.list.selectedCategory = &catalog.Category{ID: "cat-fn", Name: "Fortnite"}
-		m.list.mode = ModeChannels
+		// Favoritos e recentes abrem da tela inicial, com Fortnite ainda selecionada.
+		m.list.mode = ModeCategories
 		m.list.highlightedID = "r1"
 		m = openChannel(t, m)
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "recchan", Volume: 80, Selection: 1})
@@ -191,7 +193,8 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 		)
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
 		m.list.selectedCategory = &catalog.Category{ID: "cat-fn", Name: "Fortnite"}
-		m.list.mode = ModeChannels
+		// Favoritos e recentes abrem da tela inicial, com Fortnite ainda selecionada.
+		m.list.mode = ModeCategories
 		m.list.highlightedID = "f2"
 		m = openChannel(t, m)
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "mystery", Volume: 80, Selection: 1})
@@ -214,7 +217,8 @@ func TestStatusBarCategoryUpdatesOnChannelSwitch(t *testing.T) {
 		}),
 	)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
-	m.list.mode = ModeChannels
+	// Favoritos abrem da tela inicial.
+	m.list.mode = ModeCategories
 	m.list.highlightedID = "a"
 	m = openChannel(t, m)
 	m, _ = pressKeyMsg(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "alpha", Volume: 70, Selection: 1})

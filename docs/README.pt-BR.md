@@ -111,7 +111,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `↑` `↓` ou `j` `k` | Move a seleção |
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Põe ou tira o canal dos favoritos |
-| `/` | Filtra a lista atual |
+| `/` | Filtra a lista atual; `Enter` abre o item destacado e `Ctrl+F` busca com o texto |
 | `Ctrl+F` ou `Ctrl+S` | Busca canais e categorias na plataforma que a lista mostra, ou cola a URL de uma live |
 | `p` | Troca a lista entre Twitch e Kick; o vídeo e o chat continuam |
 | `l` | Filtra canais por idioma e público |
@@ -213,7 +213,7 @@ Depois, rode `ttv-tui doctor`. Ele lista o que falta.
 <details>
 <summary><b>Como funcionam os favoritos e os canais recentes?</b></summary>
 
-Aperte `f` num canal para pô-lo nos favoritos e aperte de novo para tirar. Todo canal que você abre entra nos recentes, que guardam os últimos 50. As duas seções ficam no topo da lista.
+Aperte `f` num canal para pô-lo nos favoritos e aperte de novo para tirar. Todo canal que você abre entra nos recentes, que guardam os últimos 50. A tela inicial mostra os favoritos, os 6 recentes mais novos e uma linha `mais…` que abre o resto. Numa categoria ou numa busca, os resultados vêm primeiro, e um favorito fica no lugar dele, marcado com ★.
 
 Numa sessão nova, esses canais aparecem com `[não verificado]` até você abri-los ou eles surgirem numa lista ao vivo. Eles ficam no `state.json`, não na sua conta da Twitch.
 

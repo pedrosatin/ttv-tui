@@ -235,6 +235,54 @@ func TestJanelaEstreitaMantemChatSobreposto(t *testing.T) {
 	})
 }
 
+// savedState monta um state.json com fixture_um e mais 6 canais nos favoritos
+// e 40 canais do catálogo de fixture nos recentes.
+func savedState() string {
+	entry := func(login, name string) string {
+		return fmt.Sprintf(`{"platform":"twitch","id":"u-%s","login":"%s","display_name":"%s"}`, login, login, name)
+	}
+	favs := []string{entry("fixture_um", "FixtureUm")}
+	for n := 2; n <= 7; n++ {
+		favs = append(favs, entry(fmt.Sprintf("canal_%02d", n), fmt.Sprintf("Canal%02d", n)))
+	}
+	var recs []string
+	for n := 8; n <= 47; n++ {
+		recs = append(recs, entry(fmt.Sprintf("canal_%02d", n), fmt.Sprintf("Canal%02d", n)))
+	}
+	return fmt.Sprintf(`{"favorites":[%s],"recents":[%s]}`, strings.Join(favs, ","), strings.Join(recs, ","))
+}
+
+// A1/U4: com 7 favoritos e 40 recentes guardados, o espectador busca "fixture"
+// com Ctrl+F. A primeira tela mostra os três resultados, com o cursor no
+// primeiro; FixtureUm, que é favorito, aparece entre eles com ★.
+func TestJanelaBuscaMostraResultadosPrimeiro(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{state: savedState()})
+	w.press("ctrl+f", "f", "i", "x", "t", "u", "r", "e", "Return")
+	w.waitState("os resultados de fixture", 10*time.Second, func(s ui.StateReport) bool {
+		return s.Mode == string(ui.ModeSearch) && s.SearchQuery == "fixture" && s.Highlighted == "FixtureUm"
+	})
+
+	expect(t, func() error {
+		screen := w.screen()
+		for _, name := range []string{"FixtureUm", "FixtureDois", "FixtureTres"} {
+			if rowWith(screen, name) < 0 {
+				return fmt.Errorf("o resultado %s não está na primeira tela:\n%s", name, strings.Join(screen, "\n"))
+			}
+		}
+		first := rowWith(screen, "FixtureUm")
+		if !strings.Contains(screen[first], "★") {
+			return fmt.Errorf("o favorito FixtureUm aparece sem ★: %q", screen[first])
+		}
+		for _, section := range []string{"── Favoritos ──", "── Recentes ──"} {
+			if row := rowWith(screen, section); row >= 0 && row < first {
+				return fmt.Errorf("a seção %q (linha %d) vem antes dos resultados", section, row+1)
+			}
+		}
+		return nil
+	})
+}
+
 // rowWith devolve a linha da tela (base 0) que contém text, ou -1.
 func rowWith(screen []string, text string) int {
 	return slices.IndexFunc(screen, func(l string) bool { return strings.Contains(l, text) })

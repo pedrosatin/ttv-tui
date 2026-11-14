@@ -21,15 +21,14 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 			{ID: "2", Login: "", Viewers: catalog.IntPtr(1)},
 		}
 
+		// A categoria lista só os canais dela; o favorito de login vazio não
+		// marca com ★ o canal 2, que também não tem login.
 		items := m.VisibleItems()
-		if len(items) == 0 {
-			t.Fatalf("expected visible items, got none")
+		if len(items) != 1 {
+			t.Fatalf("expected 1 visible item, got %d", len(items))
 		}
-		if items[0].Type != ItemTypeFavorite {
-			t.Fatalf("items[0].Type = %v, want ItemTypeFavorite", items[0].Type)
-		}
-		if items[0].ID() != "1" {
-			t.Fatalf("items[0].ID() = %q, want %q", items[0].ID(), "1")
+		if items[0].ID() != "2" || items[0].Favorite {
+			t.Fatalf("items[0] = %+v, want channel 2 without ★", items[0])
 		}
 	})
 
@@ -112,10 +111,12 @@ func TestVisibleItems_ReclaimedLoginPreservesListingChannel(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
-	if items[0].Type != ItemTypeFavorite || items[0].ID() != "1" || items[0].Login() != "new" {
-		t.Fatalf("items[0] = %+v, want Favorite 1/new", items[0])
+	// O favorito é o canal 1, que trocou o login para "new": ele leva a ★.
+	// O canal 9, que pegou o login antigo, não.
+	if items[0].Type != ItemTypeChannel || !items[0].Favorite || items[0].ID() != "1" || items[0].Login() != "new" {
+		t.Fatalf("items[0] = %+v, want starred channel 1/new", items[0])
 	}
-	if items[1].Type != ItemTypeChannel || items[1].ID() != "9" || items[1].Login() != "old" {
-		t.Fatalf("items[1] = %+v, want Channel 9/old", items[1])
+	if items[1].Type != ItemTypeChannel || items[1].Favorite || items[1].ID() != "9" || items[1].Login() != "old" {
+		t.Fatalf("items[1] = %+v, want channel 9/old without ★", items[1])
 	}
 }
