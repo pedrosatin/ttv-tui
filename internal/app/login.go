@@ -14,6 +14,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/auth"
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/termtext"
 )
 
 const lowExpiryThresholdSeconds = 3600
@@ -138,7 +139,7 @@ func RunLogin(ctx context.Context, opts LoginOptions) error {
 		if scopesDesc == "" {
 			scopesDesc = cat.T("login.scopes_none")
 		}
-		_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.warn_scopes"), scopesDesc))
+		_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.warn_scopes"), termtext.Line(scopesDesc)))
 	}
 
 	if validation.ExpiresIn <= 0 || validation.ExpiresIn < lowExpiryThresholdSeconds {
@@ -168,10 +169,10 @@ func RunLogin(ctx context.Context, opts LoginOptions) error {
 	existingCfg.AccessToken = token
 
 	if err := config.SaveTo(cfgPath, existingCfg); err != nil {
-		return fmt.Errorf(cat.T("login.err_save_config"), cfgPath, err)
+		return fmt.Errorf(cat.T("login.err_save_config"), termtext.Line(cfgPath), err)
 	}
 
-	_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.success"), existingCfg.Username, cfgPath))
+	_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.success"), termtext.Line(existingCfg.Username), termtext.Line(cfgPath)))
 	return nil
 }
 
@@ -182,21 +183,25 @@ func loadTokenFromTwt(cat *i18n.Catalog, twtPath string, out io.Writer) (token s
 			return "", "", fmt.Errorf(cat.T("login.err_resolve_twt_path"), err)
 		}
 	}
+	// The path can come from XDG_CONFIG_HOME or the HOME directory name, so it
+	// is neutralized wherever it is printed. The wrapped errors keep their %w
+	// chain; the caller prints them through termtext.Line.
+	shownTwtPath := termtext.Line(twtPath)
 	twtCfg, err := config.LoadTwtFrom(twtPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", "", fmt.Errorf(cat.T("login.err_twt_not_found"), twtPath, err)
+			return "", "", fmt.Errorf(cat.T("login.err_twt_not_found"), shownTwtPath, err)
 		}
-		return "", "", fmt.Errorf(cat.T("login.err_read_twt"), twtPath, err)
+		return "", "", fmt.Errorf(cat.T("login.err_read_twt"), shownTwtPath, err)
 	}
 	if twtCfg.AccessToken == "" {
 		return "", "", formatAuthErr(cat, &auth.Error{
 			Op:      "import",
 			Err:     auth.ErrTokenInvalid,
-			Message: fmt.Sprintf(cat.T("login.err_twt_no_token"), twtPath),
+			Message: fmt.Sprintf(cat.T("login.err_twt_no_token"), shownTwtPath),
 		}, "")
 	}
-	_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.importing_twt"), twtPath))
+	_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.importing_twt"), shownTwtPath))
 	return twtCfg.AccessToken, twtCfg.Username, nil
 }
 
@@ -246,7 +251,7 @@ func extractTokenFromBrowser(
 			if i == 0 || profileFlag == "" {
 				tok, exErr := extractToken(p)
 				if exErr == nil {
-					_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.profile_selected"), p.Browser, p.Name))
+					_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.profile_selected"), p.Browser, termtext.Line(p.Name)))
 					return tok, nil
 				}
 				lastErr = exErr
@@ -269,13 +274,13 @@ func extractTokenFromBrowser(
 
 	_, _ = fmt.Fprintln(out, cat.T("login.profiles_found"))
 	for i, p := range profiles {
-		_, _ = fmt.Fprintf(out, "  [%d] %s / %s\n", i+1, p.Browser, p.Name)
+		_, _ = fmt.Fprintf(out, "  [%d] %s / %s\n", i+1, p.Browser, termtext.Line(p.Name))
 	}
 
 	var chosen auth.Profile
 	if len(profiles) == 1 {
 		chosen = profiles[0]
-		_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.profile_single"), chosen.Browser, chosen.Name))
+		_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.profile_single"), chosen.Browser, termtext.Line(chosen.Name)))
 	} else {
 		_, _ = fmt.Fprintf(out, cat.T("login.choose_profile"), len(profiles))
 		reader := bufio.NewReader(in)
@@ -289,7 +294,7 @@ func extractTokenFromBrowser(
 			return "", fmt.Errorf(cat.T("login.err_invalid_profile_choice"), choiceStr, len(profiles))
 		}
 		chosen = profiles[idx-1]
-		_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.profile_selected"), chosen.Browser, chosen.Name))
+		_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.profile_selected"), chosen.Browser, termtext.Line(chosen.Name)))
 	}
 
 	tok, err := extractToken(chosen)

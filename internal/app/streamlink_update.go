@@ -9,6 +9,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/components"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
+	"github.com/pedrosatin/ttv-tui/internal/termtext"
 )
 
 // closeWait bounds how long closing the bridge waits for background work to
@@ -197,6 +198,6 @@ func (b *playbackBridge) close() {
 // was undone: the screen only showed the failure of the playback.
 func logStreamlinkRollbacks(log io.Writer, rollbacks []streamlinkRollback, cat *i18n.Catalog) {
 	for _, r := range rollbacks {
-		_, _ = fmt.Fprintf(log, cat.T("app.warn_streamlink_rollback")+"\n", r.From, r.To)
+		_, _ = fmt.Fprintf(log, cat.T("app.warn_streamlink_rollback")+"\n", termtext.Line(r.From), termtext.Line(r.To))
 	}
 }

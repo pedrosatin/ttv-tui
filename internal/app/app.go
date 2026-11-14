@@ -24,6 +24,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/provider"
 	"github.com/pedrosatin/ttv-tui/internal/store"
+	"github.com/pedrosatin/ttv-tui/internal/termtext"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
@@ -196,7 +197,7 @@ func Run(opts Options) error {
 	final, runErr := p.Run()
 	if m, ok := final.(ui.Model); ok {
 		if err := m.FlushSaves(saveFlushTimeout); err != nil {
-			_, _ = fmt.Fprintf(logw, appCat.T("app.warn_save_on_exit")+"\n", err)
+			logSaveFlushError(logw, err, appCat)
 		}
 	}
 	// Stop the forwarders before the deferred player/chat shutdown.
@@ -210,6 +211,13 @@ func Run(opts Options) error {
 		return fmt.Errorf(appCat.T("app.err_run_tui"), runErr)
 	}
 	return nil
+}
+
+// logSaveFlushError warns that a change was not saved before exit. The error
+// carries file paths (os.PathError, the store's own messages), and a path may
+// hold control bytes, so it goes through termtext.Line.
+func logSaveFlushError(log io.Writer, err error, cat *i18n.Catalog) {
+	_, _ = fmt.Fprintf(log, cat.T("app.warn_save_on_exit")+"\n", termtext.Line(err.Error()))
 }
 
 // loadConfig reads the config from path, or from the default location when path

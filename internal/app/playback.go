@@ -14,6 +14,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/provider"
+	"github.com/pedrosatin/ttv-tui/internal/termtext"
 	"github.com/pedrosatin/ttv-tui/internal/twitch"
 	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
@@ -322,8 +323,14 @@ func mapPlayerEvent(ev player.Event) ui.PlayerStatusMsg {
 // TUI exits; the status bar already warned during playback.
 func logInputConfErr(log io.Writer, mgr *player.Manager, cat *i18n.Catalog) {
 	if err := mgr.InputConfErr(); err != nil {
-		_, _ = fmt.Fprintf(log, cat.T("app.warn_input_conf")+"\n", err)
+		writeInputConfWarning(log, err, cat)
 	}
+}
+
+// writeInputConfWarning prints the key-file failure. The error carries the
+// runtime path, so it goes through termtext.Line.
+func writeInputConfWarning(log io.Writer, err error, cat *i18n.Catalog) {
+	_, _ = fmt.Fprintf(log, cat.T("app.warn_input_conf")+"\n", termtext.Line(err.Error()))
 }
 
 // playerPlugins converts the provider's streamlink plugins for the player.
@@ -342,7 +349,7 @@ func playerPlugins(plugins []catalog.StreamlinkPlugin) []player.Plugin {
 // terminal.
 func logPlayerNotes(log io.Writer, notes []string, cat *i18n.Catalog) {
 	for _, n := range notes {
-		_, _ = fmt.Fprintf(log, cat.T("app.warn_player")+"\n", n)
+		_, _ = fmt.Fprintf(log, cat.T("app.warn_player")+"\n", termtext.Line(n))
 	}
 }
 

@@ -697,3 +697,51 @@ func TestRunLoginInvalidConfigExplainsRecoveryAndPreservesFile(t *testing.T) {
 		})
 	}
 }
+
+// A config path comes from XDG_CONFIG_HOME or from a directory name, so it may
+// hold terminal controls; the success message and the twt import notice show
+// it as visible text.
+func TestRunLoginEscapesControlsInPaths(t *testing.T) {
+	const hostile = "cfg\x1b]0;ZZ\x07\x1b[2J"
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, hostile, "config.toml")
+	twtPath := filepath.Join(dir, hostile, "twt.toml")
+	if err := os.MkdirAll(filepath.Dir(twtPath), 0o700); err != nil {
+		t.Skipf("file system refuses control bytes in names: %v", err)
+	}
+	if err := os.WriteFile(twtPath, []byte("[twitch]\nusername = \"u\"\ntoken = \"oauth:twt_secret_token_hostile_path_30\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	err := RunLogin(context.Background(), LoginOptions{
+		Import:        "twt",
+		Lang:          "en",
+		ConfigPath:    cfgPath,
+		TwtConfigPath: twtPath,
+		Output:        &out,
+		Validate: func(context.Context, string) (auth.Validation, error) {
+			return auth.Validation{Login: "u", Scopes: []string{"chat:read", "chat:edit"}, ExpiresIn: 7200}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunLogin: %v", err)
+	}
+	assertNoESCBELCSI(t, "login output", out.String())
+	if n := strings.Count(out.String(), `cfg\x1b]0;ZZ\x07\x1b[2J`); n != 2 {
+		t.Fatalf("hostile path shown escaped %d times, want 2 (import notice and success): %q", n, out.String())
+	}
+
+	// A missing twt file: the path the catalog formats is neutralized; the
+	// wrapped error keeps its chain and is printed through termtext.Line by main.
+	missing := filepath.Join(dir, hostile, "missing.toml")
+	err = RunLogin(context.Background(), LoginOptions{
+		Import: "twt", Lang: "en", ConfigPath: cfgPath, TwtConfigPath: missing, Output: &out,
+	})
+	if err == nil || !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("err = %v, want one wrapping ErrNotExist", err)
+	}
+	if !strings.Contains(err.Error(), `at `+dir+`/cfg\x1b]0;ZZ\x07\x1b[2J/missing.toml;`) {
+		t.Fatalf("error does not show the path escaped: %q", err.Error())
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
+	"github.com/pedrosatin/ttv-tui/internal/termtext"
 )
 
 // Options selects the version, language and configuration to inspect.
@@ -33,7 +34,8 @@ type Options struct {
 func Run(out io.Writer, opts Options) int {
 	cat, _ := i18n.New(opts.Lang)
 	code := 0
-	line := func(key, value string) { _, _ = fmt.Fprintf(out, "%s: %s\n", cat.T(key), value) }
+	// The values quote what streamlink, mpv and the managed manifest report.
+	line := func(key, value string) { _, _ = fmt.Fprintf(out, "%s: %s\n", cat.T(key), termtext.Line(value)) }
 	line("doctor.version", opts.Version)
 	line("doctor.platform", runtime.GOOS+"/"+runtime.GOARCH)
 	path := opts.ConfigPath
@@ -43,7 +45,7 @@ func Run(out io.Writer, opts Options) int {
 	cfg, cfgErr := config.LoadFrom(path)
 
 	streamlinkVal, streamlinkOK := streamlinkStatus(cfg.StreamlinkPath, cat)
-	_, _ = fmt.Fprintf(out, "streamlink: %s\n", streamlinkVal)
+	_, _ = fmt.Fprintf(out, "streamlink: %s\n", termtext.Line(streamlinkVal))
 	if !streamlinkOK {
 		code = 1
 	}
@@ -53,7 +55,7 @@ func Run(out io.Writer, opts Options) int {
 	}
 
 	mpvVal, mpvOK := mpvStatus(opts, cat)
-	_, _ = fmt.Fprintf(out, "mpv: %s\n", mpvVal)
+	_, _ = fmt.Fprintf(out, "mpv: %s\n", termtext.Line(mpvVal))
 	if !mpvOK {
 		code = 1
 	}

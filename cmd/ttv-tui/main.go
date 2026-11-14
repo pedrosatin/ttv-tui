@@ -13,6 +13,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/doctor"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
+	"github.com/pedrosatin/ttv-tui/internal/termtext"
 )
 
 var version = "dev"
@@ -23,6 +24,26 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	return runWithIO(args, os.Stdin, stdout, stderr, app.LoginOptions{})
+}
+
+// parseFlags parses args without letting the flag package write to the
+// terminal: it echoes the offending option and the rejected value, which come
+// from the command line and may carry ESC or OSC sequences. The diagnostic goes
+// through termtext.Line; the usage, which is catalog text, keeps its line
+// breaks. The usage follows an error as flag would print it, and also follows
+// -h when the set does not define it.
+func parseFlags(fs *flag.FlagSet, args []string, stderr io.Writer, usage func(io.Writer)) error {
+	fs.SetOutput(io.Discard)
+	fs.Usage = func() {}
+	err := fs.Parse(args)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, flag.ErrHelp) {
+		_, _ = fmt.Fprintln(stderr, termtext.Line(err.Error()))
+	}
+	usage(stderr)
+	return err
 }
 
 func findLangFlag(args []string) string {
@@ -57,7 +78,6 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 	cat, _ := i18n.New(resolvedLang)
 
 	fs := flag.NewFlagSet("ttv-tui", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 
 	var (
 		showVersion bool
@@ -78,11 +98,7 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 		fs.PrintDefaults()
 	}
 
-	fs.Usage = func() {
-		printRootUsage(stderr)
-	}
-
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args, stderr, printRootUsage); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -107,7 +123,7 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 		if rest[0] == "login" {
 			return runLoginSubcommand(rest[1:], lang, importSrc, stdin, stdout, stderr, baseLoginOpts, cfg)
 		}
-		_, _ = fmt.Fprintf(stderr, cat.T("cli.unknown_command")+"\n", rest[0])
+		_, _ = fmt.Fprintf(stderr, cat.T("cli.unknown_command")+"\n", termtext.Line(rest[0]))
 		printRootUsage(stderr)
 		return 2
 	}
@@ -126,7 +142,8 @@ func runWithIO(args []string, stdin io.Reader, stdout, stderr io.Writer, baseLog
 	}); err != nil {
 		var sigErr *app.SignalError
 		if !errors.As(err, &sigErr) {
-			_, _ = fmt.Fprintf(stderr, "ttv-tui: %v\n", err)
+			// The error may quote an API answer or a download failure.
+			_, _ = fmt.Fprintf(stderr, "ttv-tui: %v\n", termtext.Line(err.Error()))
 		}
 		return app.ExitCode(err)
 	}
@@ -153,7 +170,6 @@ func runLoginSubcommand(
 	cat, _ := i18n.New(resolved)
 
 	lfs := flag.NewFlagSet("ttv-tui login", flag.ContinueOnError)
-	lfs.SetOutput(stderr)
 
 	var (
 		fromBrowser bool
@@ -179,11 +195,7 @@ func runLoginSubcommand(
 		lfs.PrintDefaults()
 	}
 
-	lfs.Usage = func() {
-		printLoginUsage(stderr)
-	}
-
-	if err := lfs.Parse(args); err != nil {
+	if err := parseFlags(lfs, args, stderr, printLoginUsage); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -196,7 +208,7 @@ func runLoginSubcommand(
 	}
 
 	if len(lfs.Args()) > 0 {
-		_, _ = fmt.Fprintf(stderr, cat.T("cli.unexpected_argument")+"\n", lfs.Args()[0])
+		_, _ = fmt.Fprintf(stderr, cat.T("cli.unexpected_argument")+"\n", termtext.Line(lfs.Args()[0]))
 		printLoginUsage(stderr)
 		return 2
 	}
@@ -217,7 +229,7 @@ func runLoginSubcommand(
 	}
 
 	if err := app.RunLogin(context.Background(), opts); err != nil {
-		_, _ = fmt.Fprintf(stderr, "ttv-tui login: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "ttv-tui login: %v\n", termtext.Line(err.Error()))
 		return 1
 	}
 	return 0
@@ -226,18 +238,21 @@ func runLoginSubcommand(
 func runDoctorSubcommand(args []string, rootLang, configPath string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cat, _ := i18n.New(i18n.Resolve(findLangFlag(args), rootLang, i18n.EnvLocale()))
 	fs := flag.NewFlagSet("ttv-tui doctor", flag.ContinueOnError)
-	fs.SetOutput(stderr)
 	lang := rootLang
 	fs.StringVar(&lang, "lang", rootLang, cat.T("cli.flag.lang"))
-	fs.Usage = func() { _, _ = fmt.Fprint(fs.Output(), cat.T("doctor.usage")); fs.PrintDefaults() }
-	if err := fs.Parse(args); err != nil {
+	printDoctorUsage := func(w io.Writer) {
+		_, _ = fmt.Fprint(w, cat.T("doctor.usage"))
+		fs.SetOutput(w)
+		fs.PrintDefaults()
+	}
+	if err := parseFlags(fs, args, stderr, printDoctorUsage); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
 	if len(fs.Args()) != 0 {
-		fs.Usage()
+		printDoctorUsage(stderr)
 		return 2
 	}
 	return doctor.Run(stdout, doctor.Options{

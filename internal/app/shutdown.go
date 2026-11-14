@@ -12,6 +12,7 @@ import (
 
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
+	"github.com/pedrosatin/ttv-tui/internal/termtext"
 )
 
 // SignalError reports that the TUI stopped because the process received a
@@ -75,21 +76,24 @@ func handleOrphans(dir string, in io.Reader, out, log io.Writer, interactive boo
 		return
 	}
 	for _, o := range orphans {
+		// The login comes from the record, which holds whatever label the
+		// player was started with (a pasted URL included).
+		login := termtext.Line(o.Login)
 		if interactive {
-			_, _ = fmt.Fprintf(out, cat.T("app.orphan_prompt"), o.Login, o.PGID)
+			_, _ = fmt.Fprintf(out, cat.T("app.orphan_prompt"), login, o.PGID)
 			if !answerIsYes(readLine(in)) {
 				_, _ = fmt.Fprintln(out, cat.T("app.orphan_kept"))
 				continue
 			}
 		}
 		if err := o.Terminate(orphanStopWait); err != nil {
-			_, _ = fmt.Fprintf(log, cat.T("app.orphan_stop_failed")+"\n", o.PGID, err)
+			_, _ = fmt.Fprintf(log, cat.T("app.orphan_stop_failed")+"\n", o.PGID, termtext.Line(err.Error()))
 			continue
 		}
 		if interactive {
 			_, _ = fmt.Fprintln(out, cat.T("app.orphan_stopped"))
 		} else {
-			_, _ = fmt.Fprintf(log, cat.T("app.orphan_cleaned_log")+"\n", o.Login, o.PGID)
+			_, _ = fmt.Fprintf(log, cat.T("app.orphan_cleaned_log")+"\n", login, o.PGID)
 		}
 	}
 }

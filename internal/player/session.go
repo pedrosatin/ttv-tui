@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/pedrosatin/ttv-tui/internal/termtext"
 )
 
 type sessionConfig struct {
@@ -155,7 +157,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	// never the playback: streamlink then plays with its own plugins.
 	pluginDir, pluginErr := writePlugins(dir, cfg.Target.Plugins)
 	if pluginErr != nil && cfg.Note != nil {
-		cfg.Note(fmt.Sprintf("player: streamlink plugins not written, playing with streamlink's own: %v", pluginErr))
+		cfg.Note(termtext.Line(fmt.Sprintf("player: streamlink plugins not written, playing with streamlink's own: %v", pluginErr)))
 	}
 	layout.PluginDir = pluginDir
 
@@ -338,9 +340,11 @@ func (s *Session) survivorLine() string {
 	return fmt.Sprintf("player: process group %d survived SIGKILL", s.cmd.Process.Pid)
 }
 
+// note records msg for the exit log already neutralized: it may quote a
+// streamlink line, which the classification and the ad-hold detector read raw.
 func (s *Session) note(msg string) {
 	if s.cfg.Note != nil {
-		s.cfg.Note(msg)
+		s.cfg.Note(termtext.Line(msg))
 	}
 }
 
