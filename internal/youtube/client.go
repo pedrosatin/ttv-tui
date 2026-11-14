@@ -17,10 +17,10 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
+	"github.com/pedrosatin/ttv-tui/internal/streamurl"
 )
 
 const (
@@ -82,7 +82,8 @@ func NewClient(cfg ClientConfig) *Client {
 	}
 }
 
-// TargetKind distinguishes a channel handle (@channel) from a video ID.
+// TargetKind distinguishes a channel target (@handle, channel/..., c/..., user/...)
+// from a video ID.
 type TargetKind int
 
 const (
@@ -90,23 +91,33 @@ const (
 	targetHandle
 )
 
-// Target is a validated YouTube live target (video ID or @handle).
+// Target is a validated YouTube live target (video ID or channel path).
 type Target struct {
 	Kind        TargetKind
-	ID          string // "@Handle" or video ID (case-sensitive)
-	FetchPath   string // path relative to baseURL, e.g. "/@Handle/live" or "/watch?v=id"
+	ID          string // "@Handle", "channel/<id>", "c/<name>", "user/<name>", or video ID (case-sensitive)
+	FetchPath   string // path relative to baseURL, e.g. "/@Handle/live", "/channel/UC.../live", or "/watch?v=id"
 	PlaybackURL string // canonical URL handed to streamlink
 }
 
-// ParseTarget parses raw (a URL, bare @handle, or stable ID) into a validated Target.
+// ParseTarget parses raw (a URL, bare @handle, channel path, or stable ID) into a validated Target.
 func ParseTarget(raw string) (Target, error) {
 	s := strings.TrimSpace(raw)
-	if s == "" || hasSpaceOrControl(s) {
+	if s == "" || strings.ContainsAny(s, " \t\r\n\v\f") || platform.HasControl(s) {
 		return Target{}, ErrInvalidTarget
 	}
 
 	if strings.Contains(s, "://") {
-		return parseYouTubeURL(s)
+		info, ok := streamurl.Parse(s)
+		if !ok || info.Platform != platform.YouTube {
+			return Target{}, ErrInvalidTarget
+		}
+		if isYouTubeChannelID(info.Login) {
+			// Always give streamlink and the watch-page fetch the .../live route:
+			// streamlink accepts bare /@handle, /channel/..., /c/... and /user/...,
+			// but picks the first videoRenderer on the channel page, which may be a VOD.
+			return channelTarget(info.Login), nil
+		}
+		return videoTarget(info.Login, s), nil
 	}
 
 	// Strip optional "youtube:" qualifier when coming from a stored StableID/PlayerLabel.
@@ -118,23 +129,52 @@ func ParseTarget(raw string) (Target, error) {
 	}
 
 	if strings.HasPrefix(s, "@") {
-		if !validHandle(s) {
+		if !platform.ValidYouTubeHandle(s) {
 			return Target{}, ErrInvalidTarget
 		}
-		return handleTarget(s), nil
+		return channelTarget(s), nil
 	}
 
-	if !validVideoID(s) {
+	if kind, seg, ok := splitYouTubeChannelRef(s); ok {
+		return channelTarget(kind + "/" + seg), nil
+	}
+
+	if !platform.ValidYouTubeVideoID(s) {
 		return Target{}, ErrInvalidTarget
 	}
 	return videoTarget(s, DefaultBaseURL+"/watch?v="+s), nil
 }
 
-func handleTarget(handle string) Target {
-	path := "/" + handle + "/live"
+func isYouTubeChannelID(id string) bool {
+	if strings.HasPrefix(id, "@") {
+		return true
+	}
+	_, _, ok := splitYouTubeChannelRef(id)
+	return ok
+}
+
+func splitYouTubeChannelRef(s string) (kind, seg string, ok bool) {
+	parts := strings.Split(s, "/")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	kind = strings.ToLower(parts[0])
+	switch kind {
+	case "channel", "c", "user":
+	default:
+		return "", "", false
+	}
+	if !platform.ValidYouTubeChannelSegment(parts[1]) {
+		return "", "", false
+	}
+	return kind, parts[1], true
+}
+
+func channelTarget(id string) Target {
+	path := "/" + id + "/live"
 	return Target{
 		Kind:        targetHandle,
-		ID:          handle,
+		ID:          id,
 		FetchPath:   path,
 		PlaybackURL: DefaultBaseURL + path,
 	}
@@ -147,118 +187,6 @@ func videoTarget(id, playbackURL string) Target {
 		FetchPath:   "/watch?v=" + url.QueryEscape(id),
 		PlaybackURL: playbackURL,
 	}
-}
-
-func parseYouTubeURL(raw string) (Target, error) {
-	u, err := url.Parse(raw)
-	if err != nil || u.User != nil {
-		return Target{}, ErrInvalidTarget
-	}
-	if !strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https") {
-		return Target{}, ErrInvalidTarget
-	}
-	host := strings.ToLower(u.Hostname())
-	query := u.Query()
-	if platform.HasControl(u.Path) {
-		return Target{}, ErrInvalidTarget
-	}
-	for k, vs := range query {
-		if platform.HasControl(k) {
-			return Target{}, ErrInvalidTarget
-		}
-		for _, v := range vs {
-			if platform.HasControl(v) {
-				return Target{}, ErrInvalidTarget
-			}
-		}
-	}
-
-	switch host {
-	case "youtu.be":
-		segs := splitPath(u.Path)
-		if len(segs) != 1 || !validVideoID(segs[0]) {
-			return Target{}, ErrInvalidTarget
-		}
-		return videoTarget(segs[0], raw), nil
-
-	case "youtube.com", "www.youtube.com", "m.youtube.com":
-		segs := splitPath(u.Path)
-		if len(segs) == 0 {
-			return Target{}, ErrInvalidTarget
-		}
-		if strings.EqualFold(segs[0], "watch") {
-			v := query.Get("v")
-			if !validVideoID(v) {
-				return Target{}, ErrInvalidTarget
-			}
-			return videoTarget(v, raw), nil
-		}
-		if strings.EqualFold(segs[0], "live") {
-			if len(segs) < 2 || !validVideoID(segs[1]) {
-				return Target{}, ErrInvalidTarget
-			}
-			return videoTarget(segs[1], raw), nil
-		}
-		if strings.HasPrefix(segs[0], "@") {
-			if !validHandle(segs[0]) {
-				return Target{}, ErrInvalidTarget
-			}
-			if len(segs) > 1 && !strings.EqualFold(segs[1], "live") {
-				return Target{}, ErrInvalidTarget
-			}
-			// Always give streamlink and the watch-page fetch the /@handle/live route:
-			// streamlink refuses /@handle without /live.
-			return handleTarget(segs[0]), nil
-		}
-		if v := query.Get("v"); validVideoID(v) {
-			return videoTarget(v, raw), nil
-		}
-		return Target{}, ErrInvalidTarget
-
-	default:
-		return Target{}, ErrInvalidTarget
-	}
-}
-
-func splitPath(p string) []string {
-	var out []string
-	for _, seg := range strings.Split(p, "/") {
-		if seg != "" {
-			out = append(out, seg)
-		}
-	}
-	return out
-}
-
-func validHandle(h string) bool {
-	if !strings.HasPrefix(h, "@") || len(h) < 2 || len(h) > 100 {
-		return false
-	}
-	rest := h[1:]
-	if rest == "." || rest == ".." || strings.Contains(rest, "..") {
-		return false
-	}
-	if hasSpaceOrControl(h) {
-		return false
-	}
-	return !strings.ContainsAny(rest, "/\\?#:@%")
-}
-
-func validVideoID(id string) bool {
-	if id == "" || len(id) > 64 || id == "." || id == ".." {
-		return false
-	}
-	if hasSpaceOrControl(id) {
-		return false
-	}
-	return !strings.ContainsAny(id, "/\\?#:@%&=.")
-}
-
-func hasSpaceOrControl(s string) bool {
-	if strings.ContainsAny(s, " \t\r\n\v\f") {
-		return true
-	}
-	return strings.IndexFunc(s, unicode.IsControl) >= 0
 }
 
 // Resolved describes a live YouTube stream found by inspecting a watch page.

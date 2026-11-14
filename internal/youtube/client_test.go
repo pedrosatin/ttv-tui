@@ -96,6 +96,70 @@ func TestParseTarget(t *testing.T) {
 			wantPath: "/watch?v=AbCdEf12345",
 			wantPlay: "https://www.youtube.com/watch?v=AbCdEf12345",
 		},
+		{
+			name:     "/channel/id/live url",
+			input:    "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+			wantOK:   true,
+			wantID:   "channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantPath: "/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+			wantPlay: "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+		},
+		{
+			name:     "/channel/id url canonicalizes playback to /live",
+			input:    "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantOK:   true,
+			wantID:   "channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantPath: "/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+			wantPlay: "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+		},
+		{
+			name:     "/c/name/live url",
+			input:    "https://www.youtube.com/c/NomeCanal/live",
+			wantOK:   true,
+			wantID:   "c/NomeCanal",
+			wantPath: "/c/NomeCanal/live",
+			wantPlay: "https://www.youtube.com/c/NomeCanal/live",
+		},
+		{
+			name:     "/user/name/live url",
+			input:    "https://www.youtube.com/user/NomeUser/live",
+			wantOK:   true,
+			wantID:   "user/NomeUser",
+			wantPath: "/user/NomeUser/live",
+			wantPlay: "https://www.youtube.com/user/NomeUser/live",
+		},
+		{
+			name:     "/embed/video_id url",
+			input:    "https://www.youtube.com/embed/4t4AQ15yj1M",
+			wantOK:   true,
+			wantID:   "4t4AQ15yj1M",
+			wantPath: "/watch?v=4t4AQ15yj1M",
+			wantPlay: "https://www.youtube.com/embed/4t4AQ15yj1M",
+		},
+		{
+			name:     "/embed/live_stream?channel=id url",
+			input:    "https://www.youtube.com/embed/live_stream?channel=UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantOK:   true,
+			wantID:   "channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantPath: "/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+			wantPlay: "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+		},
+		{
+			name:     "/v/video_id url",
+			input:    "https://www.youtube.com/v/dQw4w9WgXcQ",
+			wantOK:   true,
+			wantID:   "dQw4w9WgXcQ",
+			wantPath: "/watch?v=dQw4w9WgXcQ",
+			wantPlay: "https://www.youtube.com/v/dQw4w9WgXcQ",
+		},
+		{
+			name:     "qualified youtube channel ref",
+			input:    "youtube:channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantOK:   true,
+			wantID:   "channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantPath: "/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+			wantPlay: "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+		},
 		{name: "empty", input: "", wantOK: false},
 		{name: "other domain", input: "https://twitch.tv/gaules", wantOK: false},
 		{name: "watch without v", input: "https://www.youtube.com/watch", wantOK: false},
@@ -103,7 +167,10 @@ func TestParseTarget(t *testing.T) {
 		{name: "bare @", input: "@", wantOK: false},
 		{name: "path traversal handle", input: "@..", wantOK: false},
 		{name: "channel subpath not live", input: "https://www.youtube.com/@LofiGirl/videos", wantOK: false},
-		{name: "credentials rejected", input: "https://u:p@www.youtube.com/watch?v=abc", wantOK: false},
+		{name: "channel id subpath not live", input: "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/videos", wantOK: false},
+		{name: "invalid 10-char video id", input: "https://www.youtube.com/watch?v=short12345", wantOK: false},
+		{name: "invalid 12-char video id", input: "https://www.youtube.com/watch?v=twelvechars1", wantOK: false},
+		{name: "credentials rejected", input: "https://u:p@www.youtube.com/watch?v=dQw4w9WgXcQ", wantOK: false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -142,7 +209,7 @@ func TestClient_ResolveWatchPageFixtures(t *testing.T) {
 			_, _ = w.Write(botCheckHTML)
 		case "/@Missing404/live":
 			http.NotFound(w, r)
-		case "/watch?v=forbidden403":
+		case "/watch?v=forbidden43":
 			w.WriteHeader(http.StatusForbidden)
 		default:
 			http.NotFound(w, r)
@@ -220,7 +287,7 @@ func TestClient_ResolveWatchPageFixtures(t *testing.T) {
 	})
 
 	t.Run("403 blocked", func(t *testing.T) {
-		_, err := client.Resolve(ctx, "https://www.youtube.com/watch?v=forbidden403")
+		_, err := client.Resolve(ctx, "https://www.youtube.com/watch?v=forbidden43")
 		if catalog.KindOf(err) != catalog.Bloqueio {
 			t.Fatalf("Kind = %v, want Bloqueio (err=%v)", catalog.KindOf(err), err)
 		}

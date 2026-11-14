@@ -125,3 +125,74 @@ func TestLowerASCII(t *testing.T) {
 		}
 	}
 }
+
+func TestValidYouTubeVideoID(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"dQw4w9WgXcQ", true},
+		{"4t4AQ15yj1M", true},
+		{"XyZ_123-abc", true},
+		{"", false},
+		{"short", false},
+		{"twelvechars1", false},
+		{"dQw4w9WgXc.", false},
+		{"dQw4w9WgXc/", false},
+		{"dQw4w9WgXc?", false},
+		{"dQw4w9WgXc ", false},
+		{"dQw4w9WgX\x07Q", false},
+		{"dQw4w9WgXçQ", false},
+	}
+	for _, tc := range tests {
+		if got := ValidYouTubeVideoID(tc.in); got != tc.want {
+			t.Errorf("ValidYouTubeVideoID(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestValidYouTubeHandleAndSegment(t *testing.T) {
+	handles := []struct {
+		in   string
+		want bool
+	}{
+		{"@LofiGirl", true},
+		{"@canalção", true},
+		{"@a.b", true},
+		{"", false},
+		{"@", false},
+		{"@@LofiGirl", false},
+		{"@..", false},
+		{"@a..b", false},
+		{"@a/b", false},
+		{"@a?b", false},
+		{"@a b", false},
+		{"@a\x1bb", false},
+		{"@" + strings.Repeat("a", 100), false},
+	}
+	for _, tc := range handles {
+		if got := ValidYouTubeHandle(tc.in); got != tc.want {
+			t.Errorf("ValidYouTubeHandle(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+
+	segs := []struct {
+		in   string
+		want bool
+	}{
+		{"UC-9-kyTW8ZkZNDHQJ6FgpwQ", true},
+		{"LofiGirl", true},
+		{"", false},
+		{".", false},
+		{"..", false},
+		{"a..b", false},
+		{"a/b", false},
+		{"a&b", false},
+		{"a\x00b", false},
+	}
+	for _, tc := range segs {
+		if got := ValidYouTubeChannelSegment(tc.in); got != tc.want {
+			t.Errorf("ValidYouTubeChannelSegment(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

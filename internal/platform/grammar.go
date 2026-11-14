@@ -7,8 +7,10 @@ import (
 
 // Tamanhos máximos dos identificadores, pela gramática de cada plataforma.
 const (
-	maxTwitchLogin = 25
-	maxKickSlug    = 64
+	maxTwitchLogin    = 25
+	maxKickSlug       = 64
+	youtubeVideoIDLen = 11
+	maxYouTubeSegment = 100
 )
 
 // ValidTwitchLogin informa se s é um login da Twitch: de 1 a 25 caracteres
@@ -24,6 +26,42 @@ func ValidTwitchLogin(s string) bool {
 // decodificado e nada é normalizado.
 func ValidKickSlug(s string) bool {
 	return validIdentifier(s, maxKickSlug, true)
+}
+
+// ValidYouTubeVideoID informa se s segue a gramática de ID de vídeo do YouTube
+// usada pelo streamlink ([\w-]{11}: 11 bytes entre A-Z, a-z, 0-9, _ e -).
+func ValidYouTubeVideoID(s string) bool {
+	if len(s) != youtubeVideoIDLen {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// ValidYouTubeHandle informa se s é um identificador @canal do YouTube válido.
+func ValidYouTubeHandle(s string) bool {
+	if !strings.HasPrefix(s, "@") || len(s) > maxYouTubeSegment {
+		return false
+	}
+	return ValidYouTubeChannelSegment(s[1:])
+}
+
+// ValidYouTubeChannelSegment informa se s é um segmento válido de identificador
+// de canal do YouTube (/channel/<id>, /c/<nome>, /user/<nome>, /@<handle>).
+func ValidYouTubeChannelSegment(s string) bool {
+	if s == "" || len(s) > maxYouTubeSegment || s == "." || s == ".." || strings.Contains(s, "..") {
+		return false
+	}
+	if strings.ContainsAny(s, " \t\r\n\v\f") || HasControl(s) {
+		return false
+	}
+	return !strings.ContainsAny(s, `/\?#:@%&`)
 }
 
 // ValidIdentifier informa se s segue a gramática do identificador de canal de

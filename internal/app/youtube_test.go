@@ -75,7 +75,7 @@ func TestChatBridgeServesYouTubeChat(t *testing.T) {
 	var polls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/watch" && r.URL.Query().Get("v") == "live123":
+		case r.URL.Path == "/watch" && r.URL.Query().Get("v") == "live1234567":
 			_, _ = w.Write(watchHTML)
 		case r.URL.Path == "/youtubei/v1/live_chat/get_live_chat":
 			if polls.Add(1) == 1 {
@@ -115,15 +115,15 @@ func TestChatBridgeServesYouTubeChat(t *testing.T) {
 
 	ch := catalog.Channel{
 		Platform: platform.YouTube,
-		ID:       "live123",
-		Login:    "live123",
-		URL:      "https://www.youtube.com/watch?v=live123",
+		ID:       "live1234567",
+		Login:    "live1234567",
+		URL:      "https://www.youtube.com/watch?v=live1234567",
 	}
 	if caps, ok := b.Capabilities(ch); !ok || caps.CanSend {
 		t.Fatalf("Capabilities(youtube) = (%+v, %v), want read-only chat", caps, ok)
 	}
 	ev := join(t, b, ch)
-	if ev.Platform != platform.YouTube || ev.Channel != "live123" || !ev.Anonymous {
+	if ev.Platform != platform.YouTube || ev.Channel != "live1234567" || !ev.Anonymous {
 		t.Fatalf("join event = %+v", ev)
 	}
 	if b.HasToken() || b.Username() != "" {
@@ -152,7 +152,7 @@ func TestChatBridgeServesYouTubeChat(t *testing.T) {
 		t.Fatalf("got %d messages from fixture, want >= 2", len(gotMsgs))
 	}
 
-	upd := b.Send(ui.ChatSendRequest{Generation: ev.Generation, Channel: "live123", Nonce: "n1", Body: "hi"})().(ui.ChatEventMsg)
+	upd := b.Send(ui.ChatSendRequest{Generation: ev.Generation, Channel: "live1234567", Nonce: "n1", Body: "hi"})().(ui.ChatEventMsg)
 	if len(upd.SendUpdates) != 1 || upd.SendUpdates[0].Status == catalog.ChatDeliveryConfirmed {
 		t.Fatalf("Send on read-only YouTube chat = %+v, want refusal", upd.SendUpdates)
 	}

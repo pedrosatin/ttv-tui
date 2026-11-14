@@ -56,9 +56,11 @@ func (p *Provider) Resolver() (catalog.Resolver, bool) {
 	return nil, false
 }
 
-// StreamTarget builds the playback target for ch. Channel handles (@channel)
-// always target /@channel/live because streamlink's youtube plugin rejects a
-// bare /@channel page; watch/youtu.be//live URLs keep their canonical video URL.
+// StreamTarget builds the playback target for ch. Channel targets (@handle,
+// channel/<id>, c/<name>, user/<name>) always target .../live because
+// streamlink accepts bare channel URLs by picking their first videoRenderer
+// (which can be a VOD) instead of the active broadcast; video URLs keep their
+// canonical URL.
 func (p *Provider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	raw := strings.TrimSpace(ch.URL)
 	if raw == "" {
