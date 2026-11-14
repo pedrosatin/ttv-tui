@@ -16,7 +16,6 @@ set -euo pipefail
 
 REPO="pedrosatin/ttv-tui"
 GITHUB_URL="https://github.com/${REPO}"
-RAW_BASE_URL="https://raw.githubusercontent.com/${REPO}"
 
 prefix="${HOME}/.local"
 dry_run=false
@@ -156,13 +155,6 @@ bin_target="${bin_dir}/ttv-tui"
 desktop_target="${app_dir}/ttv-tui.desktop"
 icon_target="${icon_dir}/ttv-tui.svg"
 
-script_dir=""
-if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-fi
-local_desktop="${script_dir:+${script_dir}/ttv-tui.desktop}"
-local_icon="${script_dir:+$(cd "${script_dir}/.." && pwd)/assets/ttv-tui.svg}"
-
 if command -v sha256sum >/dev/null 2>&1; then
   checksum_cmd=(sha256sum)
 elif command -v shasum >/dev/null 2>&1; then
@@ -175,6 +167,8 @@ warn_path() {
   case ":${PATH}:" in
     *":${bin_dir}:"*) ;;
     *) printf 'Aviso: %s não está no seu PATH atual. Adicione ao seu shell profile:\n' "$bin_dir"
+       # O PATH deve aparecer literal na instrução para o usuário.
+       # shellcheck disable=SC2016
        printf '  export PATH="%s:$PATH"\n' "$bin_dir" ;;
   esac
 }
@@ -192,16 +186,9 @@ if [[ "$dry_run" == true ]]; then
   printf '  3. Verificar SHA-256 de %s com %s -c\n' "$tarball" "${checksum_cmd[*]:-sha256sum ou shasum -a 256 (não encontrado)}"
   printf '  4. Extrair binário e instalar em: %s (modo 0755)\n' "$bin_target"
   if [[ "$os" == "linux" ]]; then
-  if [[ -n "$local_desktop" && -f "$local_desktop" ]]; then
-    printf '  5. Instalar atalho .desktop (do tarball ou %s) em: %s (modo 0644)\n' "$local_desktop" "$desktop_target"
-  else
-    printf '  5. Instalar atalho .desktop (do tarball ou %s/main/packaging/ttv-tui.desktop) em: %s (modo 0644)\n' "$RAW_BASE_URL" "$desktop_target"
-  fi
-  if [[ -n "$local_icon" && -f "$local_icon" ]]; then
-    printf '  6. Instalar ícone SVG (do tarball ou %s) em: %s (modo 0644)\n' "$local_icon" "$icon_target"
-  else
-    printf '  6. Instalar ícone SVG (do tarball ou %s/main/assets/ttv-tui.svg) em: %s (modo 0644)\n' "$RAW_BASE_URL" "$icon_target"
-  fi
+  printf '  5. Atalho .desktop: somente do tarball verificado, em %s (modo 0644)\n' "$desktop_target"
+  printf '  6. Ícone SVG: somente do tarball verificado, em %s (modo 0644)\n' "$icon_target"
+  printf '     Se faltar atalho ou ícone no tarball, como nas releases até a 0.1.7, pular ambos com aviso.\n'
   if command -v update-desktop-database >/dev/null 2>&1; then
     printf '  7. Atualizar banco de atalhos: update-desktop-database "%s"\n' "$app_dir"
   else
@@ -264,44 +251,32 @@ if [[ "$os" == "linux" && "$arch" == "amd64" ]]; then
   fi
 fi
 
+# Procura no caminho do repositório e, se faltar, na raiz do tarball.
 resolve_asset() {
   local tarball_rel="$1"
-  local local_path="$2"
-  local repo_rel="$3"
-  local dest_file="$4"
-
   if [[ -f "${tmp_dir}/${tarball_rel}" ]]; then
-    cp "${tmp_dir}/${tarball_rel}" "$dest_file"
+    printf '%s' "${tmp_dir}/${tarball_rel}"
   elif [[ -f "${tmp_dir}/$(basename "$tarball_rel")" ]]; then
-    cp "${tmp_dir}/$(basename "$tarball_rel")" "$dest_file"
-  elif [[ -n "$local_path" && -f "$local_path" ]]; then
-    cp "$local_path" "$dest_file"
-  else
-    if ! curl -fsSL -o "$dest_file" "${RAW_BASE_URL}/${tag}/${repo_rel}" 2>/dev/null; then
-      curl -fsSL -o "$dest_file" "${RAW_BASE_URL}/main/${repo_rel}"
-    fi
+    printf '%s' "${tmp_dir}/$(basename "$tarball_rel")"
   fi
 }
 
 if [[ "$os" == "linux" ]]; then
-mkdir -p "$app_dir" "$icon_dir"
-desktop_tmp="${tmp_dir}/ttv-tui.desktop.out"
-icon_tmp="${tmp_dir}/ttv-tui.svg.out"
-
-resolve_asset "packaging/ttv-tui.desktop" "$local_desktop" "packaging/ttv-tui.desktop" "$desktop_tmp"
-resolve_asset "assets/ttv-tui.svg" "$local_icon" "assets/ttv-tui.svg" "$icon_tmp"
-
-info "Instalando atalho de desktop em ${desktop_target}..."
-install -m 0644 "$desktop_tmp" "$desktop_target"
-
-info "Instalando ícone em ${icon_target}..."
-install -m 0644 "$icon_tmp" "$icon_target"
-
-if command -v update-desktop-database >/dev/null 2>&1; then
-  info "Atualizando cache de aplicativos em ${app_dir}..."
-  update-desktop-database "$app_dir" || true
-fi
-
+  desktop_source="$(resolve_asset "packaging/ttv-tui.desktop")"
+  icon_source="$(resolve_asset "assets/ttv-tui.svg")"
+  if [[ -n "$desktop_source" && -n "$icon_source" ]]; then
+    mkdir -p "$app_dir" "$icon_dir"
+    info "Instalando atalho de desktop do tarball verificado em ${desktop_target}..."
+    install -m 0644 "$desktop_source" "$desktop_target"
+    info "Instalando ícone do tarball verificado em ${icon_target}..."
+    install -m 0644 "$icon_source" "$icon_target"
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      info "Atualizando cache de aplicativos em ${app_dir}..."
+      update-desktop-database "$app_dir" || true
+    fi
+  else
+    printf 'Aviso: tarball sem atalho .desktop ou ícone SVG; atalho e ícone não serão instalados.\n' >&2
+  fi
 fi
 info "ttv-tui ${tag} instalado com sucesso!"
 warn_path

@@ -67,7 +67,7 @@ CGO_ENABLED=0 go build -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 
 **Install script options.** Pass a version such as `install.sh 0.9.0`, preview with `--dry-run`, or change the target with `--prefix`. On Windows, `install.ps1 -DryRun` previews the plan.
 
-**Desktop shortcut.** `install.sh` and the PKGBUILD install the desktop entry and the icon. After `go install` or `go build`, copy them yourself:
+**Desktop shortcut.** `install.sh` installs the desktop entry and icon only from the checksum-verified release tarball. If the tarball lacks either file, as releases up to v0.1.7 do, it warns and installs neither. The PKGBUILD also installs them. After `go install` or `go build`, copy them yourself:
 
 ```bash
 install -Dm644 packaging/ttv-tui.desktop ~/.local/share/applications/ttv-tui.desktop

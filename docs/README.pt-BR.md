@@ -67,7 +67,7 @@ CGO_ENABLED=0 go build -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 
 **Opções do script.** Informe uma versão, como `install.sh 0.9.0`, veja o plano com `--dry-run` ou mude o destino com `--prefix`. No Windows, `install.ps1 -DryRun` mostra o plano.
 
-**Atalho de desktop.** O `install.sh` e o PKGBUILD instalam o atalho e o ícone. Depois de `go install` ou `go build`, copie os dois:
+**Atalho de desktop.** O `install.sh` instala o atalho e o ícone só a partir do tarball da release, depois de conferir o SHA-256. Se faltar um deles, como nas releases até a v0.1.7, ele avisa e não instala nenhum. O PKGBUILD também instala os dois. Depois de `go install` ou `go build`, copie os dois:
 
 ```bash
 install -Dm644 packaging/ttv-tui.desktop ~/.local/share/applications/ttv-tui.desktop
