@@ -74,6 +74,9 @@ func (it ListItem) ID() string {
 		return it.Category.ID
 	}
 	if it.Channel != nil {
+		if plat := it.Channel.CanonicalPlatform(); plat != platform.Twitch {
+			return plat + ":" + it.Channel.StableID()
+		}
 		if it.Channel.ID != "" {
 			return it.Channel.ID
 		}
@@ -188,7 +191,7 @@ func (m Model) VisibleItems() []ListItem {
 	p := itemPass{
 		query:      strings.ToLower(strings.TrimSpace(m.list.filter)),
 		prefs:      m.list.prefs,
-		seenLogins: make(map[seenChannelKey]struct{}),
+		seenStable: make(map[seenChannelKey]struct{}),
 		seenIDs:    make(map[seenChannelKey]struct{}),
 	}
 	if m.Mode() != ModeCategories {
@@ -206,18 +209,19 @@ func (m Model) VisibleItems() []ListItem {
 type itemPass struct {
 	query      string // text filter, trimmed and lowercased
 	prefs      channelPrefs
-	seenLogins map[seenChannelKey]struct{}
+	seenStable map[seenChannelKey]struct{}
 	seenIDs    map[seenChannelKey]struct{}
 	// starred são os índices de m.list.channels que são favoritos e ganham ★.
 	starred map[int]bool
 }
 
-// seenChannelKey mantém cada identificador dentro da sua plataforma.
+// seenChannelKey separa os identificadores por plataforma canônica.
 type seenChannelKey struct {
 	platform string
 	id       string
 }
 
+// channelSeenKeys retorna StableID (em minúsculas fora do YouTube) e ID sem prefixo.
 func channelSeenKeys(ch catalog.Channel) (seenChannelKey, seenChannelKey) {
 	plat := ch.CanonicalPlatform()
 	stable := ch.StableID()
@@ -231,7 +235,7 @@ func channelSeenKeys(ch catalog.Channel) (seenChannelKey, seenChannelKey) {
 func (p itemPass) markSeen(ch catalog.Channel) {
 	stable, id := channelSeenKeys(ch)
 	if stable.id != "" {
-		p.seenLogins[stable] = struct{}{}
+		p.seenStable[stable] = struct{}{}
 	}
 	if id.id != "" {
 		p.seenIDs[id] = struct{}{}
@@ -241,7 +245,7 @@ func (p itemPass) markSeen(ch catalog.Channel) {
 func (p itemPass) isSeen(ch catalog.Channel) bool {
 	stable, id := channelSeenKeys(ch)
 	if stable.id != "" {
-		if _, ok := p.seenLogins[stable]; ok {
+		if _, ok := p.seenStable[stable]; ok {
 			return true
 		}
 	}
@@ -626,6 +630,7 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	if m.list.selectedCategory != nil && m.list.selectedCategory.ID != "" {
 		m.list.highlightedID = m.list.selectedCategory.ID
 		m.list.highlightedLogin = ""
+		m.list.highlightedPlatform = ""
 	}
 	m.reconcileHighlight()
 	if m.browser == nil {
@@ -657,6 +662,7 @@ func (m Model) returnToSearch() (tea.Model, tea.Cmd) {
 	m.list.hasMore = m.list.search.savedHasMore
 	m.list.highlightedID = m.list.search.savedHighlightedID
 	m.list.highlightedLogin = ""
+	m.list.highlightedPlatform = ""
 	m.list.selectedCategory = m.list.search.originCategory
 	m.list.search.savedChannels = nil
 	m.list.search.savedNextCursor = ""
@@ -992,6 +998,7 @@ func (m *Model) moveHighlight(delta int) {
 func (m *Model) clearHighlight() {
 	m.list.highlightedID = ""
 	m.list.highlightedLogin = ""
+	m.list.highlightedPlatform = ""
 	m.list.highlightIndex = 0
 }
 
@@ -1012,8 +1019,10 @@ func (m *Model) setHighlightToItem(items []ListItem, idx int) {
 	m.list.highlightedID = it.ID()
 	m.list.highlightIndex = idx
 	m.list.highlightedLogin = ""
+	m.list.highlightedPlatform = ""
 	if it.Channel != nil {
 		m.list.highlightedLogin = it.Channel.Login
+		m.list.highlightedPlatform = it.Channel.CanonicalPlatform()
 	}
 }
 
@@ -1029,7 +1038,10 @@ func (l listState) indexOfHighlighted(items []ListItem) int {
 	}
 	if l.highlightedLogin != "" {
 		for i, it := range items {
-			if it.Channel != nil && strings.EqualFold(it.Channel.Login, l.highlightedLogin) {
+			if it.Channel != nil &&
+				it.Channel.CanonicalPlatform() == platform.Normalize(l.highlightedPlatform) &&
+				(it.Channel.Login == l.highlightedLogin ||
+					(it.Channel.CanonicalPlatform() != platform.YouTube && strings.EqualFold(it.Channel.Login, l.highlightedLogin))) {
 				return i
 			}
 		}
@@ -1080,6 +1092,7 @@ func (m *Model) settleHighlightAfterLoad() {
 		}
 		m.list.highlightedID = id
 		m.list.highlightedLogin = ""
+		m.list.highlightedPlatform = ""
 		m.list.highlightIndex = 0
 		return
 	}

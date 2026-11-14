@@ -19,6 +19,8 @@ import (
 // - CLI command names, flag names, and flag prefixes.
 // - Internal model and state identifiers (e.g. category, channel, playback states).
 var allowedExceptions = map[string]bool{
+	// Separador entre plataforma e StableID na identidade de uma linha.
+	":": true,
 	// Whitespace, punctuation, borders and markers
 	"":           true,
 	" ":          true,

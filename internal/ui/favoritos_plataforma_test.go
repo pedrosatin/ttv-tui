@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
@@ -147,30 +148,46 @@ func TestSalvoSemCatalogoUsaListaInicial(t *testing.T) {
 	}
 }
 
-// O usuário encontra gaules da Twitch nos favoritos e o homônimo do Vimeo nos recentes.
+// O usuário destaca cada homônimo, chega às categorias e favorita só o recente escolhido.
 func TestCenarioSalvosHomonimosPorPlataforma(t *testing.T) {
-	eachSize(t, "salvos-homonimos-por-plataforma", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height,
-			WithFavorites([]catalog.Channel{{Platform: platform.Twitch, Login: "gaules"}}),
-			WithRecents([]catalog.Channel{{Platform: "vimeo.com", Login: "gaules"}}))
-		m = play(t, m, "down")
-		var favorites, recents int
-		for _, it := range m.VisibleItems() {
-			if it.Type == ItemTypeFavorite && it.Channel.CanonicalPlatform() == platform.Twitch {
-				favorites++
+	for _, tc := range []struct {
+		name             string
+		favorite, recent catalog.Channel
+	}{
+		{"salvos-homonimos-por-plataforma", catalog.Channel{Platform: platform.Twitch, Login: "gaules"}, catalog.Channel{Platform: "vimeo.com", Login: "gaules"}},
+		{"salvos-homonimos-id-por-plataforma", catalog.Channel{Login: "gaules", ID: "1"}, catalog.Channel{Platform: "vimeo.com", Login: "gaules", ID: "1"}},
+		{"salvos-homonimos-youtube-twitch", catalog.Channel{Platform: platform.YouTube, Login: "gaules"}, catalog.Channel{Login: "gaules"}},
+	} {
+		eachSize(t, tc.name, func(t *testing.T, width, height int) Model {
+			m, _ := newScenario(t, width, height, WithFavorites([]catalog.Channel{tc.favorite}), WithRecents([]catalog.Channel{tc.recent}))
+			assertHighlight := func(m Model, want catalog.Channel) {
+				t.Helper()
+				it, ok := m.HighlightedItem()
+				if !ok || it.Channel == nil || !catalog.SameChannel(*it.Channel, want) {
+					t.Fatalf("destaque = %+v; esperado canal %+v", it, want)
+				}
+				if n := strings.Count(m.View(), "▸"); n != 1 {
+					t.Fatalf("marcadores de destaque = %d; esperado 1", n)
+				}
 			}
-			if it.Type == ItemTypeRecent && it.Channel.CanonicalPlatform() == "vimeo.com" {
-				recents++
+			assertHighlight(m, tc.favorite)
+			m = play(t, m, "down")
+			assertHighlight(m, tc.recent)
+			recentHighlighted := m
+			m = play(t, m, "down")
+			it, ok := m.HighlightedItem()
+			if !ok || it.Category == nil || it.Category.ID != m.list.categories[0].ID {
+				t.Fatalf("down após recente não chegou à primeira categoria: %+v", it)
 			}
-		}
-		if favorites != 1 || recents != 1 {
-			t.Fatalf("favoritos Twitch = %d, recentes Vimeo = %d; esperados 1 e 1", favorites, recents)
-		}
-		if lineWith(m, "[vimeo.com] gaules") < 0 {
-			t.Fatal("recente sem marca de plataforma")
-		}
-		return m
-	})
+			m = play(t, m, "up f")
+			assertHighlight(m, tc.recent)
+			favorites := m.Favorites()
+			if len(favorites) != 2 || !catalog.SameChannel(favorites[0], tc.favorite) || !catalog.SameChannel(favorites[1], tc.recent) {
+				t.Fatalf("favoritos = %+v; esperados %+v e %+v", favorites, tc.favorite, tc.recent)
+			}
+			return recentHighlighted
+		})
+	}
 }
 
 func TestDeduplicacaoSalvosPorPlataforma(t *testing.T) {
@@ -196,6 +213,38 @@ func TestDeduplicacaoSalvosPorPlataforma(t *testing.T) {
 			}
 			if count != tc.want {
 				t.Fatalf("canais = %d; esperado %d", count, tc.want)
+			}
+		})
+	}
+}
+
+// Após a troca de ID, o destaque procura o login só na plataforma original.
+func TestDestaquePorLoginRespeitaPlataforma(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		original catalog.Channel
+		channels []catalog.Channel
+		want     int
+	}{
+		{"Twitch", catalog.Channel{ID: "antigo", Login: "Gaules"}, []catalog.Channel{{Platform: "vimeo.com", ID: "outro", Login: "gaules"}, {ID: "novo", Login: "gaules"}}, 1},
+		{"Vimeo", catalog.Channel{Platform: "vimeo.com", ID: "antigo", Login: "Gaules"}, []catalog.Channel{{Login: "gaules"}, {Platform: "vimeo.com", Login: "gaules"}}, 1},
+		{"YouTube distingue maiúsculas", catalog.Channel{Platform: platform.YouTube, Login: "Video"}, []catalog.Channel{{Platform: platform.YouTube, Login: "video"}, {Platform: platform.YouTube, Login: "Video"}}, 1},
+		{"homônimo de outra plataforma", catalog.Channel{Platform: "vimeo.com", Login: "gaules"}, []catalog.Channel{{Login: "gaules"}}, -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, _ := newScenario(t, 80, 24)
+			m.setHighlightToItem([]ListItem{{Type: ItemTypeChannel, Channel: &tc.original}}, 0)
+			m.list.highlightedID = "id-que-saiu-da-lista"
+			items := make([]ListItem, len(tc.channels))
+			for i := range tc.channels {
+				items[i] = ListItem{Type: ItemTypeChannel, Channel: &tc.channels[i]}
+			}
+			if got := m.list.indexOfHighlighted(items); got != tc.want {
+				t.Fatalf("índice = %d; esperado %d", got, tc.want)
+			}
+			m.clearHighlight()
+			if m.list.highlightedPlatform != "" {
+				t.Fatal("plataforma permaneceu após limpar destaque")
 			}
 		})
 	}
