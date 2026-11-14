@@ -669,10 +669,10 @@ def flows():
         last_a = int(t("pixel", str(col0 + chat_cols - 1), str(y)).split()[3])
         if first_a > 0:
             tried += 1
-            good += first_a >= 150 and last_a == 0
+            good += first_a >= 150 and last_a >= 150
             sample = f"linha {y}: início {first_a}, fim {last_a}"
     veil_ok = tried >= 4 and good >= 3
-    check(role, "o fundo fica só atrás do texto", veil_ok, f"{good} de {tried} amostras; {sample}")
+    check(role, "o fundo cobre o painel inteiro no padrão", veil_ok, f"{good} de {tried} amostras; {sample}")
 
     def veil_alpha():
         for y in range(3, rr - 3):
@@ -682,22 +682,33 @@ def flows():
         return 0
 
     check(role, "opacidade padrão de 70%", wait(lambda: veil_alpha() == 178, 3, 0.1), str(veil_alpha()))
-    press("alt+Up", 2)
+    press("alt+PageUp", 2)
     ok = wait(lambda: stats()["overlayOpacity"] == 80 and veil_alpha() == 204, 3, 0.1)
     bar = last_line()
-    check(role, "Alt+↑ aumenta a opacidade e a barra mostra o valor", ok and "80%" in bar, f"{stats()['overlayOpacity']}%, alfa {veil_alpha()}, {bar.strip()[:40]}")
-    press("alt+Down", 20)
+    check(role, "Alt+PgUp aumenta a opacidade e a barra mostra o valor", ok and "80%" in bar, f"{stats()['overlayOpacity']}%, alfa {veil_alpha()}, {bar.strip()[:40]}")
+    press("alt+PageDown", 20)
     ok = wait(lambda: stats()["overlayOpacity"] == 10 and veil_alpha() == 25, 3, 0.1)
-    check(role, "Alt+↓ para em 10%", ok, f"{stats()['overlayOpacity']}%, alfa {veil_alpha()}")
+    check(role, "Alt+PgDn para em 10%", ok, f"{stats()['overlayOpacity']}%, alfa {veil_alpha()}")
     time.sleep(0.4)
     grab("opacity-10.png")
-    press("alt+Up", 20)
+    press("alt+PageUp", 20)
     ok = wait(lambda: stats()["overlayOpacity"] == 100 and veil_alpha() == 255, 3, 0.1)
-    check(role, "Alt+↑ para em 100%", ok, f"{stats()['overlayOpacity']}%, alfa {veil_alpha()}")
+    check(role, "Alt+PgUp para em 100%", ok, f"{stats()['overlayOpacity']}%, alfa {veil_alpha()}")
     time.sleep(0.4)
     grab("opacity-100.png")
-    press("alt+Down", 6)
+    press("alt+PageDown", 6)
     wait(lambda: stats()["overlayOpacity"] == 70, 3, 0.1)
+    full_height = stats()["overlayRows"]
+    press("alt+Down", 2)
+    ok = wait(lambda: stats()["overlayRows"] == full_height - 4, 3, 0.1)
+    check(role, "Alt+↓ reduz a altura em quatro linhas", ok, str(stats()["overlayRows"]))
+    time.sleep(0.8)
+    cfg = open("cfg/ttv-tui/config.toml").read()
+    check(role, "altura e aviso de migração salvos", "chat_overlay_rows = " in cfg and "chat_overlay_height_keys_seen = true" in cfg, cfg)
+    press("alt+Up", 2)
+    wait(lambda: stats()["overlayRows"] == full_height, 3, 0.1)
+    press("i")
+    check(role, "escrita no overlay explica o login", wait(lambda: "login" in screen().lower(), 3, 0.1), last_line())
     press("alt+Left", 3)
     ok = wait(lambda: stats()["overlay"] == chat_cols + 6 and stats()["hole"] == s7["hole"], 3, 0.05)
     check(role, "Alt+← alarga o chat sem encolher o vídeo", ok, f"chat {stats()['overlay']}, {stats()['hole']}")
@@ -712,7 +723,7 @@ def flows():
     t("key", "ctrl+o")
     ok = wait(lambda: stats()["overlay"] == 0 and stats()["hole"] == h0, 3, 0.05)
     check(role, "Ctrl+O devolve o chat para o lado", ok, str(stats()["hole"]))
-    t("key", "alt+Up")
+    t("key", "alt+PageUp")
     ok = wait(lambda: "Ctrl+O" in last_line(), 3, 0.05)
     check(role, "com o chat ao lado, o atalho explica o que falta", ok, last_line().strip()[:50])
 
@@ -905,14 +916,36 @@ def flows():
     base = stats()["hole"][0] - 2
     press("ctrl+Right", 5)
     time.sleep(1.2)  # a gravação espera a tecla parar
+    press("ctrl+o")
+    press("alt+Down", 3)
+    press("alt+PageDown", 2)
+    saved_rows = stats()["overlayRows"]
+    saved_opacity = stats()["overlayOpacity"]
+    time.sleep(1.2)
     down()
     cfg = open("cfg/ttv-tui/config.toml").read()
+    check(role, "overlay e opacidade salvos", "chat_overlay = true" in cfg and f"chat_overlay_opacity = {saved_opacity}" in cfg, cfg)
     check(role, "largura gravada no config", f"list_columns = {base + 10}" in cfg, f"list_columns = {base + 10}")
     declare_rule()
     launch()  # sem apagar o config
     guard_monitor()
     ok = wait(lambda: stats()["hole"][0] == base + 12, 8, 0.1)
     check(role, "abre com a largura salva", ok, str(stats()["hole"]))
+    open_channel(0)
+    check(role, "overlay, altura e opacidade restaurados", wait(lambda: stats()["overlay"] > 0 and stats()["overlayRows"] == saved_rows and stats()["overlayOpacity"] == saved_opacity, 10, 0.1), str(stats()))
+    down()
+    with open("cfg/ttv-tui/config.toml", "a") as saved:
+        saved.write('\nchat_overlay_backdrop = "text"\n')
+    launch()
+    guard_monitor()
+    open_channel(0)
+    wait(lambda: stats()["holeOn"] and stats()["overlay"] > 0, 10, 0.1)
+    st = stats()
+    c, r, cc, rr = st["hole"]
+    x = c - 1 + cc - st["overlay"]
+    top = r - 1 + rr - st["overlayRows"]
+    alphas = [int(t("pixel", str(x + st["overlay"] - 1), str(y)).split()[3]) for y in range(top, r - 1 + rr)]
+    check(role, "backdrop text deixa o fim das linhas livre", st["overlayTextBackdrop"] and alphas.count(0) > len(alphas)//2, str(alphas))
     down()
 
 

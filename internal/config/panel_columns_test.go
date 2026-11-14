@@ -131,3 +131,25 @@ func TestRemovedVideoKeysAreIgnored(t *testing.T) {
 		t.Fatalf("a chave antiga voltou ao arquivo: %q", saved)
 	}
 }
+
+func TestOverlayRowsAndBackdropParsing(t *testing.T) {
+	for _, value := range []string{"60", "0", "-1", "101", "\"alto\""} {
+		t.Run(value, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			if err := os.WriteFile(path, []byte("chat_overlay_rows = "+value+"\nchat_overlay_backdrop = \"text\"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := LoadFrom(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if value == "60" {
+				want = 60
+			}
+			if cfg.ChatOverlayRows != want || cfg.ChatOverlayBackdrop != "text" {
+				t.Fatalf("altura %d, fundo %s", cfg.ChatOverlayRows, cfg.ChatOverlayBackdrop)
+			}
+		})
+	}
+}

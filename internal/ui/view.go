@@ -98,6 +98,9 @@ func padOrTruncateVisual(s string, width int) string {
 // chatHiddenByWidth reports that the list leaves the chat no room: the limit
 // belongs to the split, so it never applies once the list is out of the way.
 func (m Model) chatHiddenByWidth() bool {
+	if m.hosted.host != nil && m.hosted.chatOverlay {
+		return false
+	}
 	return m.listVisible() && m.width > 0 && m.width < minSplitColumns
 }
 

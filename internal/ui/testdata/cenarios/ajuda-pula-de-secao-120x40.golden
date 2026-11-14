@@ -1,6 +1,4 @@
 === Atalhos de Teclado ===
-    Enter             Começa a escrever
-    Esc               Devolve o foco à lista
   Escrevendo no chat:
     Enter             Envia a mensagem
     Tab               Vai à lista e guarda o rascunho
@@ -23,8 +21,10 @@
   Só na janela:
     Ctrl+O            Põe o chat sobre o vídeo ou ao lado dele
     Ctrl+P            Troca os lados da lista e do chat
-    Alt+↑             Deixa o fundo do chat mais opaco
-    Alt+↓             Deixa o fundo do chat mais transparente
+    Alt+↑             Aumenta a altura do chat sobreposto
+    Alt+↓             Diminui a altura do chat sobreposto
+    Alt+PgUp          Deixa o fundo do chat mais opaco
+    Alt+PgDn          Deixa o fundo do chat mais transparente
     Ctrl+→            Move a divisa da lista para a direita
     Ctrl+←            Move a divisa da lista para a esquerda
     Alt+←             Move a divisa do chat para a esquerda
@@ -36,5 +36,5 @@
   Sem cor: NO_COLOR desliga a cor · símbolos ▸ ★ ● ▶ ‖ ✖ ! mostram o estado
   Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito/fixada · ciano = foco · vermelho =
     erro/[offline] · magenta = sistema · menção com sublinhado
-Janela e layout · seção 6 de 7 · Tab/→ próxima                                                                     91/91
+Janela e layout · seção 6 de 7 · Tab/→ próxima                                                                     93/93
  ttv-tui | [pt-BR] Pronto                                                                       | ? ajuda · Ctrl+Q sair

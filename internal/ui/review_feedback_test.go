@@ -105,7 +105,7 @@ func TestCenarioCategoriaSobreErro(t *testing.T) {
 
 // Fora da janela única, os controles de janela explicam a limitação.
 func TestCenarioControlesSemJanela(t *testing.T) {
-	for _, key := range []string{"ctrl+o", "ctrl+p", "alt+up", "alt+down", "ctrl+left", "ctrl+right", "alt+left", "alt+right"} {
+	for _, key := range []string{"ctrl+o", "ctrl+p", "alt+up", "alt+down", "alt+pgup", "alt+pgdown", "ctrl+left", "ctrl+right", "alt+left", "alt+right"} {
 		t.Run(key, func(t *testing.T) {
 			m, _ := newScenario(t, 80, 24)
 			m = play(t, m, key)

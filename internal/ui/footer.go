@@ -18,6 +18,7 @@ const (
 	footCompose
 	footMenu
 	footFocus
+	footOverlay
 )
 
 type footerUse struct {
@@ -38,6 +39,8 @@ func (m Model) footerMode() footerMode {
 		return footFilter
 	case m.Focus() == FocusChat && m.chat.composing:
 		return footCompose
+	case m.hosted.host != nil && m.hosted.chatOverlay && m.chatColumnVisible():
+		return footOverlay
 	case m.Focus() == FocusChat:
 		return footChat
 	default:

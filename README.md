@@ -168,7 +168,8 @@ With focus on the message, the search or the filter, what you type stays in the 
 | `Ctrl+→` / `Ctrl+←` | Widen / narrow the list |
 | `Alt+←` / `Alt+→` | Widen / narrow the chat |
 | `Ctrl+O` | Put the chat beside the video or over it |
-| `Alt+↑` / `Alt+↓` | Raise / lower the opacity of the chat over the video |
+| `Alt+↑` / `Alt+↓` | Increase / decrease overlay chat height |
+| `Alt+PgUp` / `Alt+PgDn` | Raise / lower overlay chat opacity |
 | `Ctrl+P` | Swap the sides of the list and the chat |
 
 The app saves these choices in `config.toml`.
@@ -437,3 +438,7 @@ The design decisions are in [`docs/adr/`](docs/adr/).
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Overlay chat uses the full height with messages above the input. Height is saved in
+`chat_overlay_rows`, a percentage from 1 to 100, with at least six visible rows.
+Use `chat_overlay_backdrop = "text"` for background only behind text.

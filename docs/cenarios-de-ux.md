@@ -188,22 +188,9 @@ usuário vê: o texto da grade (`w.screen()`), um pixel (`w.fbpixel`), o `state`
 (`w.savedConfig()`). Os passos de preparação usam `waitState` e reprovam o teste quando falham, porque uma
 preparação quebrada aponta defeito no próprio cenário.
 
-### Bug conhecido
+### Bugs corrigidos
 
-Bug de UX entra primeiro como cenário que reprova na `main`. Para o CI não ficar vermelho até a correção, a
-verificação final usa `expectKnownBug(t, "W5", check, why)`. `check` devolve `(bugPresent bool, err error)` e é
-repetida por até três segundos:
-
-- `err` diferente de nil reprova na hora. É falha de infraestrutura (socket sem resposta, `state` ilegível, mensagem
-  de fixture que não chegou), e nunca vira `SKIP`;
-- `bugPresent` verdadeiro encerra como `SKIP`, com o ID e o texto de `why`, que descreve o que a janela mostrou;
-- `bugPresent` falso em todas as leituras até o fim do prazo reprova com "o bug conhecido W5 não aparece mais". A
-  correção troca `expectKnownBug` por `expect` no mesmo commit, e o cenário vira guarda.
-
-A ausência só conta no fim do prazo porque uma leitura cedo demais ainda pode ser o estado de antes do defeito. A
-preparação usa `waitState` e `waitScreen`, que reprovam quando falham. Um `SKIP` quer dizer que a preparação chegou
-ao ponto do bug e que a verificação leu o defeito sem erro; um defeito que se manifeste de outro jeito, fora do que
-`check` olha, continua invisível para o cenário.
-
-[`knownbug_test.go`](../tools/window-scenarios/knownbug_test.go) testa o mecanismo sem abrir janela e roda no
-`go test ./...`.
+W1 e W16 agora usam `expect` e verificam o comportamento correto. Novos bugs
+devem entrar como cenários que reprovam antes da correção. O mecanismo
+`judgeKnownBug` continua coberto em `knownbug_test.go`, para cenários de bugs
+pendentes que precisem distinguir defeito de falha de infraestrutura.

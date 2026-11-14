@@ -86,7 +86,7 @@ var (
 // Ctrl+→ followed by Ctrl+Q inside the debounce keeps the new width.
 func TestFlushSavesWritesTheWidthStillWaitingForTheKey(t *testing.T) {
 	var saved []int
-	persist := func(list, _ int, _, _ bool, _ int) error {
+	persist := func(list, _ int, _, _ bool, _ int, _ OverlayPreferences) error {
 		saved = append(saved, list)
 		return nil
 	}
@@ -108,7 +108,7 @@ func TestFlushSavesWritesTheWidthStillWaitingForTheKey(t *testing.T) {
 // With no change waiting, the exit writes nothing to the config.
 func TestFlushSavesLeavesAnUnchangedLayoutAlone(t *testing.T) {
 	calls := 0
-	persist := func(int, int, bool, bool, int) error {
+	persist := func(int, int, bool, bool, int, OverlayPreferences) error {
 		calls++
 		return nil
 	}
@@ -240,7 +240,7 @@ func TestFlushSavesRetriesTheNewestSaveThatFailed(t *testing.T) {
 // A save that fails during the exit comes back for the log.
 func TestFlushSavesReturnsTheErrorOfAFailedSave(t *testing.T) {
 	errDisk := errors.New("disk full")
-	m := hostedWithPersist(t, func(int, int, bool, bool, int) error { return errDisk })
+	m := hostedWithPersist(t, func(int, int, bool, bool, int, OverlayPreferences) error { return errDisk })
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlRight})
 	if err := m.FlushSaves(time.Second); !errors.Is(err, errDisk) {
 		t.Fatalf("FlushSaves = %v, want %v", err, errDisk)

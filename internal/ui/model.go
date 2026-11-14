@@ -433,6 +433,7 @@ type hostedState struct {
 	panelsSwapped bool
 	// chatOverlayOpacity is the percent asked for; 0 means the default.
 	chatOverlayOpacity int
+	overlayPreferences OverlayPreferences
 	// listCols and chatCols are the widths asked for; 0 means automatic.
 	listCols int
 	chatCols int

@@ -157,6 +157,10 @@ var allowedExceptions = map[string]bool{
 	"g":             true,
 	"=":             true,
 	"_":             true,
+	"alt+pgup":      true,
+	"alt+pgdown":    true,
+	"text":          true,
+	"panel":         true,
 	// Key labels: modifier prefixes and the names the screen shows as symbols
 	// (internal/ui/keynames.go). They are the same in every language.
 	"ctrl+":  true,

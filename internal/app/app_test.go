@@ -94,7 +94,7 @@ func TestConfigWriterRereadsBeforeSaving(t *testing.T) {
 
 	// A panel width change after a login in another terminal keeps that login.
 	loginElsewhere(t, path)
-	if err := w.saveColumns(30, 40, true, true, 70); err != nil {
+	if err := w.saveColumns(30, 40, true, true, 70, ui.OverlayPreferences{}); err != nil {
 		t.Fatalf("saveColumns: %v", err)
 	}
 	want := config.Config{
@@ -128,7 +128,7 @@ func TestConfigWriterReportsARemovedConfigOnce(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.saveColumns(30, 40, false, false, 70); !errors.Is(err, ui.ErrConfigRemoved) {
+	if err := w.saveColumns(30, 40, false, false, 70, ui.OverlayPreferences{}); !errors.Is(err, ui.ErrConfigRemoved) {
 		t.Fatalf("first save after the removal = %v, want ui.ErrConfigRemoved", err)
 	}
 	if err := w.saveFilters([]string{"pt"}, 0); err != nil {
@@ -240,8 +240,8 @@ func TestConfigOptionsWithPathSaveWhatTheUIChanges(t *testing.T) {
 	}
 
 	opts := configOptions(cfg, path)
-	if len(opts) != 2 {
-		t.Fatalf("got %d options, want the channel filters and the panel layout", len(opts))
+	if len(opts) != 3 {
+		t.Fatalf("got %d options, want the channel filters, panel layout and overlay preferences", len(opts))
 	}
 	loginElsewhere(t, path)
 	toggleEnglishFilter(t, opts)
@@ -314,8 +314,8 @@ func TestConfigOptionsWithoutPathNeverWrite(t *testing.T) {
 
 	t.Run("no saved filters", func(t *testing.T) {
 		opts := configOptions(config.Config{ListColumns: 30}, "")
-		if len(opts) != 1 {
-			t.Fatalf("got %d options, want only the panel layout", len(opts))
+		if len(opts) != 2 {
+			t.Fatalf("got %d options, want the panel layout and overlay preferences", len(opts))
 		}
 		if m := ui.New(nil, opts...); m.FilterLanguages() != nil || m.FilterMinViewers() != 0 {
 			t.Fatalf("filters = %v/%d, want none", m.FilterLanguages(), m.FilterMinViewers())
@@ -325,8 +325,8 @@ func TestConfigOptionsWithoutPathNeverWrite(t *testing.T) {
 
 	t.Run("saved languages", func(t *testing.T) {
 		opts := configOptions(config.Config{FilterLanguages: []string{"pt"}}, "")
-		if len(opts) != 2 {
-			t.Fatalf("got %d options, want the channel filters and the panel layout", len(opts))
+		if len(opts) != 3 {
+			t.Fatalf("got %d options, want the channel filters, panel layout and overlay preferences", len(opts))
 		}
 		if m := ui.New(nil, opts...); !slices.Equal(m.FilterLanguages(), []string{"pt"}) {
 			t.Fatalf("languages = %v, want [pt]", m.FilterLanguages())
@@ -335,8 +335,8 @@ func TestConfigOptionsWithoutPathNeverWrite(t *testing.T) {
 
 	t.Run("saved audience floor", func(t *testing.T) {
 		opts := configOptions(config.Config{MinViewers: 100}, "")
-		if len(opts) != 2 {
-			t.Fatalf("got %d options, want the channel filters and the panel layout", len(opts))
+		if len(opts) != 3 {
+			t.Fatalf("got %d options, want the channel filters, panel layout and overlay preferences", len(opts))
 		}
 		if m := ui.New(nil, opts...); m.FilterMinViewers() != 100 {
 			t.Fatalf("min viewers = %d, want 100", m.FilterMinViewers())
@@ -413,7 +413,7 @@ func TestConfigWriterLeavesAConfigItCannotReadAlone(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.toml")
 			want := breakConfig(t, path, b)
 			w := &configWriter{path: path}
-			if err := w.saveColumns(30, 40, true, true, 70); err == nil {
+			if err := w.saveColumns(30, 40, true, true, 70, ui.OverlayPreferences{}); err == nil {
 				t.Fatal("saveColumns over a config it could not read reported success")
 			}
 			if err := w.saveFilters([]string{"pt"}, 500); err == nil {
@@ -571,5 +571,24 @@ func TestLogDiscardedChannelsSaiSoComAContagem(t *testing.T) {
 	logDiscardedChannels(&log, 0, nil)
 	if log.Len() != 0 {
 		t.Fatalf("sem descarte o log fica vazio, veio %q", log.String())
+	}
+}
+
+func TestOverlayPreferencesSurviveOtherConfigWrites(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	w := &configWriter{path: path}
+	prefs := ui.OverlayPreferences{Rows: 55, TextBackdrop: true, HeightKeysSeen: true}
+	if err := w.saveColumns(30, 40, true, false, 25, prefs); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.saveFilters([]string{"pt"}, 10); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ChatOverlayRows != 55 || cfg.ChatOverlayBackdrop != "text" || !cfg.ChatOverlayHeightKeysSeen || !cfg.ChatOverlay || cfg.ChatOverlayOpacity != 25 {
+		t.Fatalf("%+v", cfg)
 	}
 }

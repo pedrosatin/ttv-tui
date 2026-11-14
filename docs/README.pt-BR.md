@@ -168,7 +168,8 @@ Com o foco na mensagem, na busca ou no filtro, o que se digita fica no campo: `S
 | `Ctrl+→` / `Ctrl+←` | Alarga / estreita a lista |
 | `Alt+←` / `Alt+→` | Alarga / estreita o chat |
 | `Ctrl+O` | Põe o chat ao lado do vídeo ou sobre ele |
-| `Alt+↑` / `Alt+↓` | Aumenta / diminui a opacidade do chat sobre o vídeo |
+| `Alt+↑` / `Alt+↓` | Aumenta / diminui a altura do chat sobreposto |
+| `Alt+PgUp` / `Alt+PgDn` | Aumenta / diminui a opacidade do chat sobre o vídeo |
 | `Ctrl+P` | Troca os lados da lista e do chat |
 
 O app guarda essas escolhas no `config.toml`.
@@ -437,3 +438,7 @@ As decisões de desenho estão em [`docs/adr/`](adr/).
 ## Licença
 
 MIT. Veja [LICENSE](../LICENSE).
+
+O chat sobreposto usa a altura toda, com mensagens junto da entrada. A altura é salva
+em `chat_overlay_rows`, uma porcentagem de 1 a 100, limitada a seis linhas na tela.
+Para fundo só atrás do texto, use `chat_overlay_backdrop = "text"` no config.

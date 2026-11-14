@@ -451,7 +451,7 @@ func logDiscardedChannels(log io.Writer, n int, cat *i18n.Catalog) {
 // config path the UI can also save them; without one they last for this run.
 func configOptions(cfg config.Config, cfgPath string) []ui.Option {
 	if cfgPath == "" {
-		var opts []ui.Option
+		opts := []ui.Option{overlayOption(cfg)}
 		if len(cfg.FilterLanguages) > 0 || cfg.MinViewers > 0 {
 			opts = append(opts, ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, nil))
 		}
@@ -460,6 +460,7 @@ func configOptions(cfg config.Config, cfgPath string) []ui.Option {
 	_, err := os.Stat(cfgPath)
 	w := &configWriter{path: cfgPath, existed: err == nil}
 	return []ui.Option{
+		overlayOption(cfg),
 		ui.WithChannelFilters(cfg.FilterLanguages, cfg.MinViewers, w.saveFilters),
 		ui.WithHostedColumns(cfg.ListColumns, cfg.ChatColumns, cfg.ChatOverlay, cfg.PanelsSwapped, cfg.ChatOverlayOpacity, w.saveColumns),
 	}
@@ -503,13 +504,19 @@ func (w *configWriter) saveFilters(languages []string, minViewers int) error {
 	})
 }
 
-func (w *configWriter) saveColumns(list, chat int, overlay, swapped bool, opacity int) error {
+func (w *configWriter) saveColumns(list, chat int, overlay, swapped bool, opacity int, prefs ui.OverlayPreferences) error {
 	return w.update(func(c *config.Config) {
 		c.ListColumns = list
 		c.ChatColumns = chat
 		c.ChatOverlay = overlay
 		c.PanelsSwapped = swapped
 		c.ChatOverlayOpacity = opacity
+		c.ChatOverlayRows = prefs.Rows
+		c.ChatOverlayBackdrop = "panel"
+		if prefs.TextBackdrop {
+			c.ChatOverlayBackdrop = "text"
+		}
+		c.ChatOverlayHeightKeysSeen = prefs.HeightKeysSeen
 	})
 }
 
@@ -530,4 +537,8 @@ func tokenCheck(validate func(ctx context.Context, token string) (auth.Validatio
 		}
 		return nil
 	}
+}
+
+func overlayOption(c config.Config) ui.Option {
+	return ui.WithHostedOverlay(ui.OverlayPreferences{Rows: c.ChatOverlayRows, TextBackdrop: c.ChatOverlayBackdrop == "text", HeightKeysSeen: c.ChatOverlayHeightKeysSeen})
 }

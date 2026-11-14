@@ -32,7 +32,10 @@ type Config struct {
 	PanelsSwapped bool
 	// ChatOverlayOpacity is the percent opacity behind the chat over the video,
 	// within MinChatOpacity..100. 0 means the default. TOML key: chat_overlay_opacity.
-	ChatOverlayOpacity int
+	ChatOverlayOpacity        int
+	ChatOverlayRows           int
+	ChatOverlayBackdrop       string
+	ChatOverlayHeightKeysSeen bool
 	// StreamlinkPath is an optional explicit path to the streamlink binary. TOML key: streamlink_path.
 	StreamlinkPath string
 	// KickPusherKey replaces the Pusher application key the Kick chat connects
@@ -272,6 +275,15 @@ func formatTOML(cfg Config) string {
 	if cfg.PanelsSwapped {
 		b.WriteString("panels_swapped = true\n")
 	}
+	if cfg.ChatOverlayRows > 0 && cfg.ChatOverlayRows <= 100 {
+		fmt.Fprintf(&b, "chat_overlay_rows = %d\n", cfg.ChatOverlayRows)
+	}
+	if cfg.ChatOverlayBackdrop == "text" {
+		b.WriteString("chat_overlay_backdrop = \"text\"\n")
+	}
+	if cfg.ChatOverlayHeightKeysSeen {
+		b.WriteString("chat_overlay_height_keys_seen = true\n")
+	}
 	if percent := normalizeChatOpacity(cfg.ChatOverlayOpacity); percent > 0 {
 		fmt.Fprintf(&b, "chat_overlay_opacity = %d\n", percent)
 	}
@@ -410,6 +422,17 @@ func parseTOML(input string) (Config, error) {
 				n = 0
 			}
 			cfg.ListColumns = normalizePanelColumns(n)
+		case "chat_overlay_rows", "ui.chat_overlay_rows":
+			n, err := parseTOMLInt(rawVal)
+			if err == nil && n > 0 && n <= 100 {
+				cfg.ChatOverlayRows = n
+			}
+		case "chat_overlay_backdrop", "ui.chat_overlay_backdrop":
+			if strings.Trim(rawVal, "\"'") == "text" {
+				cfg.ChatOverlayBackdrop = "text"
+			}
+		case "chat_overlay_height_keys_seen", "ui.chat_overlay_height_keys_seen":
+			cfg.ChatOverlayHeightKeysSeen = strings.TrimSpace(rawVal) == "true"
 		case "chat_overlay_opacity", "ui.chat_overlay_opacity":
 			n, err := parseTOMLInt(rawVal)
 			if err != nil {

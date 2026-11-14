@@ -46,11 +46,14 @@ type StateReport struct {
 
 // ReportConfig é o config que a TUI aplica agora e grava quando ele muda.
 type ReportConfig struct {
-	ChatOverlay        bool
-	ChatOverlayOpacity int
-	ListColumns        int
-	ChatColumns        int
-	PanelsSwapped      bool
+	ChatOverlay               bool
+	ChatOverlayOpacity        int
+	ChatOverlayRows           int
+	ChatOverlayBackdrop       string
+	ChatOverlayHeightKeysSeen bool
+	ListColumns               int
+	ChatColumns               int
+	PanelsSwapped             bool
 }
 
 // WithStateReport chama report depois de cada Update que muda o StateReport. A
@@ -94,6 +97,7 @@ func (m Model) stateSnapshot() StateReport {
 		ChatWarning:    m.chat.panel.sendWarning,
 		ChatVisible:    m.chatColumnVisible(),
 		Config: ReportConfig{
+			ChatOverlayRows: m.hosted.overlayPreferences.Rows, ChatOverlayHeightKeysSeen: m.hosted.overlayPreferences.HeightKeysSeen, ChatOverlayBackdrop: map[bool]string{true: "text", false: "panel"}[m.hosted.overlayPreferences.TextBackdrop],
 			ChatOverlay: m.hosted.chatOverlay, ChatOverlayOpacity: m.hosted.chatOpacity(),
 			ListColumns: m.hosted.listCols, ChatColumns: m.hosted.chatCols, PanelsSwapped: m.hosted.panelsSwapped,
 		},

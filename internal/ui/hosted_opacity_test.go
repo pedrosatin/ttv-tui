@@ -10,10 +10,10 @@ func TestHostedOpacityKeysAdjustTheOverlay(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.keys = defaultKeys()
 	m.hosted.chatOverlay = true
-	if handled, _ := m.handleHostedResizeKey(tea.KeyMsg{Type: tea.KeyUp, Alt: true}); !handled || m.hostedPanel().OverlayOpacity != 75 {
+	if handled, _ := m.handleHostedResizeKey(tea.KeyMsg{Type: tea.KeyPgUp, Alt: true}); !handled || m.hostedPanel().OverlayOpacity != 75 {
 		t.Fatalf("Alt+↑: handled %v, %+v", handled, m.hostedPanel())
 	}
-	if handled, _ := m.handleHostedResizeKey(tea.KeyMsg{Type: tea.KeyDown, Alt: true}); !handled || m.hostedPanel().OverlayOpacity != 70 {
+	if handled, _ := m.handleHostedResizeKey(tea.KeyMsg{Type: tea.KeyPgDown, Alt: true}); !handled || m.hostedPanel().OverlayOpacity != 70 {
 		t.Fatalf("Alt+↓: handled %v, %+v", handled, m.hostedPanel())
 	}
 }
@@ -46,7 +46,7 @@ func TestHostedOpacityIsSaved(t *testing.T) {
 	var got int
 	m := hostedModel(t, 212, 49, true)
 	m.hosted.chatOverlay = true
-	m.hosted.persist = func(_, _ int, _, _ bool, opacity int) error {
+	m.hosted.persist = func(_, _ int, _, _ bool, opacity int, _ OverlayPreferences) error {
 		got = opacity
 		return nil
 	}

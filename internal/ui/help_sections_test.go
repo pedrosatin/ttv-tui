@@ -103,8 +103,10 @@ func TestHelpShowsTheKeysItLackedInTheRightSection(t *testing.T) {
 				// The window keys, always.
 				{sectionWindow, "Ctrl+O", "action.chat_overlay"},
 				{sectionWindow, "Ctrl+P", "action.swap_sides"},
-				{sectionWindow, "Alt+↑", "action.chat_more_opaque"},
-				{sectionWindow, "Alt+↓", "action.chat_less_opaque"},
+				{sectionWindow, "Alt+↑", "action.chat_taller"},
+				{sectionWindow, "Alt+PgUp", "action.chat_more_opaque"},
+				{sectionWindow, "Alt+↓", "action.chat_shorter"},
+				{sectionWindow, "Alt+PgDn", "action.chat_less_opaque"},
 				{sectionWindow, "Ctrl+→", "action.list_wider"},
 				{sectionWindow, "Ctrl+←", "action.list_narrower"},
 				{sectionWindow, "Alt+←", "action.chat_wider"},

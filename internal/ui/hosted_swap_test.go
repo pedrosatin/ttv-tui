@@ -23,7 +23,7 @@ func TestHostedSwapMovesThePanels(t *testing.T) {
 func TestHostedSwapPutsTheOverlayOnTheLeft(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.hosted.chatOverlay, m.hosted.panelsSwapped = true, true
-	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 1, Rows: 47, Cols: 169, Visible: true, OverlayCols: 46, OverlayLeft: true, OverlayOpacity: 70}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 1, Rows: 47, Cols: 169, Visible: true, OverlayCols: 46, OverlayLeft: true, OverlayOpacity: 70, OverlayRows: 47}); got != want {
 		t.Fatalf("sobreposto à esquerda: %+v, quero %+v", got, want)
 	}
 }
@@ -57,7 +57,7 @@ func TestHostedSwapKeepsEveryRowInsideTheWindow(t *testing.T) {
 func TestHostedSwapIsSaved(t *testing.T) {
 	var got [2]bool
 	m := hostedModel(t, 212, 49, true)
-	m.hosted.persist = func(_, _ int, overlay, swapped bool, _ int) error {
+	m.hosted.persist = func(_, _ int, overlay, swapped bool, _ int, _ OverlayPreferences) error {
 		got = [2]bool{overlay, swapped}
 		return nil
 	}

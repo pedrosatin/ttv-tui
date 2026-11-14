@@ -43,7 +43,9 @@ type HostPanel struct {
 	// OverlayLeft puts the chat at the start of the region instead of the end.
 	OverlayLeft bool
 	// OverlayOpacity is the percent opacity of the background behind the overlaid chat.
-	OverlayOpacity int
+	OverlayOpacity      int
+	OverlayRows         int
+	OverlayTextBackdrop bool
 }
 
 // VideoHost is the window that draws the video. SetPanel runs inside Update, so it
@@ -53,8 +55,8 @@ type VideoHost interface {
 }
 
 // HostedColumnsPersist saves the panel widths (0 means automatic), the chat placement
-// and which side each panel is on.
-type HostedColumnsPersist func(list, chat int, overlay, swapped bool, opacity int) error
+// and which side each panel is on, together with overlay preferences.
+type HostedColumnsPersist func(list, chat int, overlay, swapped bool, opacity int, prefs OverlayPreferences) error
 
 // WithHostedColumns sets the saved layout and what saves it when it changes.
 func WithHostedColumns(list, chat int, overlay, swapped bool, opacity int, persist HostedColumnsPersist) Option {
@@ -220,6 +222,10 @@ func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, m.toggleChatOverlay()
 	case actSwapSides:
 		return true, m.togglePanelSides()
+	case actChatTaller:
+		return true, m.resizeHostedHeight(hostedResizeStep)
+	case actChatShorter:
+		return true, m.resizeHostedHeight(-hostedResizeStep)
 	case actChatMoreOpaque:
 		return true, m.adjustChatOpacity(hostedOpacityStep)
 	case actChatLessOpaque:
@@ -300,7 +306,7 @@ func (h hostedState) saveColumns(gen int) tea.Cmd {
 	}
 	persist, list, chat, overlay, swapped, opacity := h.persist, h.listCols, h.chatCols, h.chatOverlay, h.panelsSwapped, h.chatOverlayOpacity
 	return h.saves.cmd(func() tea.Msg {
-		return configSavedMsg{Err: persist(list, chat, overlay, swapped, opacity)}
+		return configSavedMsg{Err: persist(list, chat, overlay, swapped, opacity, h.overlayPreferences)}
 	})
 }
 
@@ -338,11 +344,14 @@ func (m Model) hostedPanel() HostPanel {
 	panel := HostPanel{Row: 1, Col: col, Rows: m.height - 1 - m.footerRows(), Cols: videoW, Visible: true}
 	if overlaid {
 		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = chatW, m.hosted.panelsSwapped, m.hosted.chatOpacity()
+		panel.OverlayRows = m.overlayHeight(panel.Rows)
+		panel.OverlayTextBackdrop = m.hosted.overlayPreferences.TextBackdrop
 	}
 	// A ajuda ocupa a coluna do vídeo inteira, com fundo opaco atrás do texto:
 	// com a opacidade do chat, o vídeo atravessa as letras e a ajuda não se lê.
 	if m.helpOpen() {
 		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = videoW, false, hostedHelpOpacity
+		panel.OverlayRows, panel.OverlayTextBackdrop = panel.Rows, false
 	}
 	return panel
 }
@@ -387,7 +396,14 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 		chatW = 0
 	}
 	if chatW > 0 {
-		chat = m.renderChatLines(available, chatW)
+		rows := available
+		if m.hosted.chatOverlay {
+			rows = m.overlayHeight(available)
+		}
+		chat = m.renderChatLines(rows, chatW)
+		if rows < available {
+			chat = append(make([]string, available-rows), chat...)
+		}
 	}
 	// With the chat over the video, its cells come out of the video column.
 	overlaid := m.hosted.chatOverlay && chatW > 0
@@ -446,4 +462,41 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 		lines = m.overlayHelpLines(lines, overlay, m.width, available)
 	}
 	return strings.Join(lines, "\n") + "\n" + status
+}
+
+// OverlayPreferences stores the geometry and the one-time shortcut notice.
+type OverlayPreferences struct {
+	Rows           int
+	TextBackdrop   bool
+	HeightKeysSeen bool
+}
+
+// WithHostedOverlay restores the overlay preferences independently of column widths.
+func WithHostedOverlay(p OverlayPreferences) Option {
+	return func(m *Model) { m.hosted.overlayPreferences = p }
+}
+
+func (m Model) overlayHeight(available int) int {
+	percent := m.hosted.overlayPreferences.Rows
+	if percent <= 0 || percent > 100 {
+		percent = 100
+	}
+	return min(available, max(6, (available*percent+50)/100))
+}
+
+func (m *Model) resizeHostedHeight(delta int) tea.Cmd {
+	if !m.hosted.chatOverlay || !m.chatColumnVisible() {
+		m.warnStatus(m.t("layout.height_needs_overlay"))
+		return nil
+	}
+	available := max(m.height-1-m.footerRows(), 1)
+	rows := min(available, max(min(6, available), m.overlayHeight(available)+delta))
+	percent := (rows*100 + available/2) / available
+	m.hosted.overlayPreferences.Rows = percent
+	notice := fmt.Sprintf(m.t("layout.chat_height"), percent)
+	if !m.hosted.overlayPreferences.HeightKeysSeen {
+		m.hosted.overlayPreferences.HeightKeysSeen = true
+		notice += " · " + m.t("layout.opacity_moved")
+	}
+	return m.announceHosted(notice)
 }

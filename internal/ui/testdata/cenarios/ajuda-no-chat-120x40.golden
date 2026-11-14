@@ -32,9 +32,9 @@
   Só na janela:
     Ctrl+O            Põe o chat sobre o vídeo ou ao lado dele
     Ctrl+P            Troca os lados da lista e do chat
-    Alt+↑             Deixa o fundo do chat mais opaco
-    Alt+↓             Deixa o fundo do chat mais transparente
-    Ctrl+→            Move a divisa da lista para a direita
-    Ctrl+←            Move a divisa da lista para a esquerda
-Chat · seção 4 de 7 · Tab/→ próxima                                                                                82/91
+    Alt+↑             Aumenta a altura do chat sobreposto
+    Alt+↓             Diminui a altura do chat sobreposto
+    Alt+PgUp          Deixa o fundo do chat mais opaco
+    Alt+PgDn          Deixa o fundo do chat mais transparente
+Chat · seção 4 de 7 · Tab/→ próxima                                                                                82/93
  ttv-tui | [pt-BR] Iniciando gaules... · vol 100 · 98.5k · Just Chatting · #gaules | Foco: chat · ? ajuda · Ctrl+Q sair

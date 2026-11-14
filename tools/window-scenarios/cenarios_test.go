@@ -65,7 +65,7 @@ func TestJanelaAbreCanalComVideoEChat(t *testing.T) {
 
 	w.press("ctrl+o")
 	w.waitState("o chat sobre o vídeo", 5*time.Second, func(s ui.StateReport) bool { return s.Config.ChatOverlay })
-	w.press("alt+Up")
+	w.press("alt+PageUp")
 	w.waitState("a opacidade em 75%", 5*time.Second, func(s ui.StateReport) bool { return s.Config.ChatOverlayOpacity == 75 })
 
 	expect(t, func() error {
@@ -96,15 +96,12 @@ func TestJanelaChatSobrepostoAncoradoEmbaixo(t *testing.T) {
 	w.waitScreen(fixture.MessageText(3), 5*time.Second)
 	rows := st.Window.Rows
 
-	row := -1
-	expectKnownBug(t, "W1", func() (bool, error) {
-		if row = rowWith(w.screen(), fixture.MessageText(3)); row < 0 {
-			return false, fmt.Errorf("a terceira mensagem sumiu da tela")
+	expect(t, func() error {
+		row := rowWith(w.screen(), fixture.MessageText(3))
+		if row < 0 || rows-1-row > 3 {
+			return fmt.Errorf("última mensagem na linha %d de %d, longe da entrada", row+1, rows)
 		}
-		// Abaixo da última mensagem cabem só a entrada e a barra de status.
-		return rows-1-row > 3, nil
-	}, func() string {
-		return fmt.Sprintf("a última mensagem está na linha %d de %d: %d linhas vazias até o fim", row+1, rows, rows-1-row)
+		return nil
 	})
 }
 
@@ -212,25 +209,21 @@ func TestJanelaEstreitaMantemChatSobreposto(t *testing.T) {
 	w.openFirstChannel()
 	w.waitState("as três mensagens no chat", 10*time.Second, func(s ui.StateReport) bool { return s.ChatMessages >= 3 })
 
-	var after ui.StateReport
-	expectKnownBug(t, "W16", func() (bool, error) {
+	expect(t, func() error {
 		st, err := w.state()
 		if err != nil {
-			return false, err
+			return err
 		}
-		after = *st.TUI
-		if !after.ChatVisible {
-			return true, nil
+		var chat strings.Builder
+		for _, line := range w.screen() {
+			runes := []rune(line)
+			start := max(0, len(runes)-st.Window.Overlay)
+			chat.WriteString(string(runes[start:]))
 		}
-		// A TUI diz que mostra o chat: a mensagem tem de chegar à grade.
-		return false, eventually(2*time.Second, func() error {
-			if rowWith(w.screen(), fixture.MessageText(3)) < 0 {
-				return fmt.Errorf("o estado diz chat visível, e a terceira mensagem não está na tela")
-			}
-			return nil
-		})
-	}, func() string {
-		return fmt.Sprintf("com 79 colunas o chat sobreposto não aparece (visível=%v, aviso %q)", after.ChatVisible, after.Notice)
+		if !st.TUI.ChatVisible || !strings.Contains(strings.Join(strings.Fields(chat.String()), ""), strings.Join(strings.Fields(fixture.MessageText(3)), "")) {
+			return fmt.Errorf("chat sobreposto oculto em 79 colunas")
+		}
+		return nil
 	})
 }
 

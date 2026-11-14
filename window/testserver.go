@@ -173,7 +173,7 @@ func (a *app) stats() map[string]any {
 		"panelPaints": a.panelPaints, "paintMs": a.paintNs / 1e6, "uploadMs": a.uploadNs / 1e6,
 		"sessions": a.sessions, "ttffMs": a.lastTtff, "ipc": a.lastIpc, "cols": a.cols,
 		"rows": a.rows, "W": a.W, "H": a.H, "cellW": a.fs.cellW, "cellH": a.fs.cellH,
-		"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "overlay": a.host.OverlayCols, "overlayLeft": a.host.OverlayLeft, "overlayOpacity": a.host.OverlayOpacity, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
+		"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn, "overlay": a.host.OverlayCols, "overlayLeft": a.host.OverlayLeft, "overlayOpacity": a.host.OverlayOpacity, "overlayRows": a.host.OverlayRows, "overlayTextBackdrop": a.host.OverlayTextBackdrop, "haveHost": a.haveHost, "tofu": a.fs.tofu, "stalls": a.stalls, "maxGapMs": a.maxMs, "active": a.sess != nil, "goroutines": runtime.NumGoroutine(),
 	}
 	out["gl"] = map[string]any{
 		"version": a.glName, "npot": a.gl.npot, "bgra": a.gl.bgra, "maxTex": a.gl.maxTex,
@@ -223,7 +223,7 @@ func (a *app) testStateView() map[string]any {
 	win := map[string]any{
 		"cols": a.cols, "rows": a.rows, "W": a.W, "H": a.H, "cellW": a.fs.cellW, "cellH": a.fs.cellH,
 		"hole": []int{a.host.Col, a.host.Row, a.host.Cols, a.host.Rows}, "holeOn": a.holeOn,
-		"overlay": a.host.OverlayCols, "overlayLeft": a.host.OverlayLeft, "overlayOpacity": a.host.OverlayOpacity,
+		"overlay": a.host.OverlayCols, "overlayLeft": a.host.OverlayLeft, "overlayOpacity": a.host.OverlayOpacity, "overlayRows": a.host.OverlayRows, "overlayTextBackdrop": a.host.OverlayTextBackdrop,
 	}
 	a.paintMu.Unlock()
 	a.mu.Lock()

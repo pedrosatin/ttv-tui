@@ -23,6 +23,8 @@ type hostPanel struct {
 	OverlayCols          int
 	OverlayLeft          bool
 	OverlayOpacity       int
+	OverlayRows          int
+	OverlayTextBackdrop  bool
 }
 
 type ctlMsg struct {

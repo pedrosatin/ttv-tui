@@ -42,7 +42,7 @@ func TestFailedFilterSaveWarnsInTheOpenMenu(t *testing.T) {
 func TestFailedColumnsSaveWarns(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.catalog = testCatalog(t, i18n.LangEN)
-	m.hosted.persist = func(int, int, bool, bool, int) error { return errConfigUnreadable }
+	m.hosted.persist = func(int, int, bool, bool, int, OverlayPreferences) error { return errConfigUnreadable }
 	m.resizeHostedList(hostedResizeStep)
 	m = runConfigSave(t, m, m.hosted.saveColumns(m.hosted.saveGen))
 	if got := ansi.Strip(m.StatusBar()); !strings.Contains(got, "! "+m.t("config.save_failed")) {
@@ -53,7 +53,7 @@ func TestFailedColumnsSaveWarns(t *testing.T) {
 func TestSuccessfulConfigSaveKeepsTheStatus(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.catalog = testCatalog(t, i18n.LangEN)
-	m.hosted.persist = func(int, int, bool, bool, int) error { return nil }
+	m.hosted.persist = func(int, int, bool, bool, int, OverlayPreferences) error { return nil }
 	m.resizeHostedList(hostedResizeStep)
 	notice := m.StatusNotice()
 	if cmd := m.hosted.saveColumns(m.hosted.saveGen); cmd != nil {

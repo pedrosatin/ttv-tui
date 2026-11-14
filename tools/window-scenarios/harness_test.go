@@ -468,21 +468,3 @@ func expect(t *testing.T, check func() error) {
 		t.Fatal(err)
 	}
 }
-
-// expectKnownBug é a verificação final de um cenário que descreve o
-// comportamento certo de um defeito que a main ainda tem (bug é o ID do achado,
-// como "W1"). check devolve se o defeito está na tela; um erro dele é falha de
-// infraestrutura e reprova. Com o defeito presente o teste pula, com o que why
-// descreve. Sem o defeito durante todo o prazo, o teste reprova pedindo que a
-// marca saia: a correção chegou e o cenário vira guarda, com expect.
-func expectKnownBug(t *testing.T, bug string, check func() (bugPresent bool, err error), why func() string) {
-	t.Helper()
-	switch v, err := judgeKnownBug(knownBugTimeout, 100*time.Millisecond, check); v {
-	case bugBroken:
-		t.Fatalf("o cenário do bug conhecido %s não chegou a verificar o defeito: %v", bug, err)
-	case bugStill:
-		t.Skipf("bug conhecido %s: %s", bug, why())
-	default:
-		t.Fatalf("o bug conhecido %s não aparece mais: troque expectKnownBug por expect para o cenário virar guarda", bug)
-	}
-}

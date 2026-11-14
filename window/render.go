@@ -42,7 +42,11 @@ func (a *app) keyAt(x, y, cx, cy int, showCur bool) cellKey {
 	if a.host.OverlayLeft {
 		inChat = x < a.host.Col-1+a.host.OverlayCols
 	}
-	glass := hole && a.host.OverlayCols > 0 && inChat
+	rows := a.host.OverlayRows
+	if rows <= 0 {
+		rows = a.host.Rows
+	}
+	glass := hole && a.host.OverlayCols > 0 && inChat && y >= a.host.Row-1+a.host.Rows-rows
 	hole = hole && !glass
 	veil := uint8(0)
 	if glass {
@@ -76,7 +80,7 @@ func (a *app) paint() (int, int) {
 		textEnd := a.glassRowEnd(y)
 		for x := 0; x < a.cols; x++ {
 			k := a.keyAt(x, y, pos.X, pos.Y, show)
-			if k.glass && (textEnd < 0 || x > textEnd+1) { // o fundo só existe atrás do texto
+			if a.host.OverlayTextBackdrop && k.glass && (textEnd < 0 || x > textEnd+1) { // o fundo só existe atrás do texto
 				k.glass, k.hole, k.veil = false, true, 0
 			}
 			i := y*a.cols + x

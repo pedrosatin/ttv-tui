@@ -31,6 +31,8 @@ const (
 	actToggleChat     actionID = "action.toggle_chat"
 	actChatOverlay    actionID = "action.chat_overlay"
 	actSwapSides      actionID = "action.swap_sides"
+	actChatTaller     actionID = "action.chat_taller"
+	actChatShorter    actionID = "action.chat_shorter"
 	actChatMoreOpaque actionID = "action.chat_more_opaque"
 	actChatLessOpaque actionID = "action.chat_less_opaque"
 	actListWider      actionID = "action.list_wider"
@@ -278,8 +280,10 @@ func defaultActions() []action {
 		// cresce na direção do vídeo.
 		{ID: actChatOverlay, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"ctrl+o"}},
 		{ID: actSwapSides, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"ctrl+p"}},
-		{ID: actChatMoreOpaque, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+up"}},
-		{ID: actChatLessOpaque, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+down"}},
+		{ID: actChatTaller, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+up"}},
+		{ID: actChatShorter, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+down"}},
+		{ID: actChatMoreOpaque, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+pgup"}},
+		{ID: actChatLessOpaque, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+pgdown"}},
 		{ID: actListWider, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"ctrl+right"}},
 		{ID: actListNarrower, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"ctrl+left"}},
 		{ID: actChatWider, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+left"}},
@@ -288,6 +292,14 @@ func defaultActions() []action {
 	for i := range actions {
 		a := &actions[i]
 		switch a.ID {
+		case actChatTaller:
+			a.Footer = []footerUse{{footOverlay, 1, "footer.height_up"}}
+		case actChatShorter:
+			a.Footer = []footerUse{{footOverlay, 2, "footer.height_down"}}
+		case actChatMoreOpaque:
+			a.Footer = []footerUse{{footOverlay, 3, "footer.opacity_up"}}
+		case actChatLessOpaque:
+			a.Footer = []footerUse{{footOverlay, 4, "footer.opacity_down"}}
 		case actCycleLayout:
 			a.Footer = []footerUse{{footFocus, 1, "footer.layouts"}}
 		case actToggleList:
