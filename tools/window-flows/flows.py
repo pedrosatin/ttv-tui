@@ -709,6 +709,9 @@ def flows():
     text("i")
     check(role, "escrita no overlay explica o login", wait(lambda: "login" in screen().lower(), 3, 0.1), last_line())
     t("key", "Escape")
+    # Um ESC sozinho logo antes de Alt+← (ESC [1;3D) se junta à sequência, e o
+    # primeiro Alt+← se perde.
+    time.sleep(0.3)
     press("alt+Left", 3)
     ok = wait(lambda: stats()["overlay"] == chat_cols + 6 and stats()["hole"] == s7["hole"], 3, 0.05)
     check(role, "Alt+← alarga o chat sem encolher o vídeo", ok, f"chat {stats()['overlay']}, {stats()['hole']}")

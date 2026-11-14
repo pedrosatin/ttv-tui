@@ -350,11 +350,12 @@ func (m Model) hostedPanel() HostPanel {
 		panel.OverlayRows = m.overlayHeight(panel.Rows)
 		panel.OverlayTextBackdrop = m.hosted.overlayPreferences.TextBackdrop
 	}
-	// A ajuda ocupa a coluna do vídeo inteira, com fundo opaco atrás do texto:
-	// com a opacidade do chat, o vídeo atravessa as letras e a ajuda não se lê.
+	// A ajuda ocupa a coluna do vídeo inteira, com fundo opaco só atrás do
+	// texto. Com a opacidade do chat, o vídeo atravessaria as letras; com o
+	// painel inteiro, que é opaco aqui, o vídeo sumiria atrás da ajuda.
 	if m.helpOpen() {
 		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = videoW, false, hostedHelpOpacity
-		panel.OverlayRows, panel.OverlayTextBackdrop = panel.Rows, false
+		panel.OverlayRows, panel.OverlayTextBackdrop = panel.Rows, true
 	}
 	return panel
 }
