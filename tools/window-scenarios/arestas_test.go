@@ -235,7 +235,23 @@ func TestJanelaFocoClaroEmColunaEstreita(t *testing.T) {
 		}
 		var err error
 		focused, err = w.cellBrightness(3, row)
-		return err
+		if err != nil {
+			return err
+		}
+		// O texto da grade chega antes da pintura: até a janela pintar a
+		// seleção, o canto da célula ainda tem o fundo do painel. Espera a
+		// seleção ficar mais clara que a linha de baixo, que não está
+		// selecionada.
+		if row+1 < len(screen) {
+			plain, err := w.cellBrightness(3, row+1)
+			if err != nil {
+				return err
+			}
+			if focused <= plain+90 {
+				return fmt.Errorf("seleção com foco ainda sem pintura: brilho %d, linha comum %d", focused, plain)
+			}
+		}
+		return nil
 	})
 
 	w.press("Tab")
