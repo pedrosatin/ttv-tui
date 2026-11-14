@@ -309,6 +309,8 @@ var allowedExceptions = map[string]bool{
 	"no_plugin":          true,
 	"blocked":            true,
 	"browser_missing":    true,
+	"vod":                true,
+	"bot_check":          true,
 	"unknown":            true,
 	"dev":                true,
 
