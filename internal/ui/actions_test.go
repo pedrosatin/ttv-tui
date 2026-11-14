@@ -245,7 +245,7 @@ func TestExpandKeys(t *testing.T) {
 	}
 }
 
-// A remapped key changes what the screen says, not only what the key does.
+// The screen names the remapped key.
 func TestRemappedKeyReachesTheText(t *testing.T) {
 	m := New(mustCatalog(t, i18n.LangEN))
 	m.keys = newKeyRegistry(defaultActions(), map[actionID][]string{actQuit: {"ctrl+g"}})

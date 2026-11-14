@@ -367,6 +367,10 @@ func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case actSelect, actPause:
 		return m.toggleChannelFilterMenuItem()
 	}
+	// O tipo KeySpace alterna com qualquer modificador, como antes do registro.
+	if msg.Type == tea.KeySpace {
+		return m.toggleChannelFilterMenuItem()
+	}
 	return m, nil
 }
 

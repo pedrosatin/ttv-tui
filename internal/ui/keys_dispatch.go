@@ -27,7 +27,12 @@ func (m *Model) clearKeyNotices() {
 
 // handleAppKey answers the two keys that outrank the help: Ctrl+Q and Ctrl+C.
 func (m Model) handleAppKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch m.keys.actionFor(modeApp, msg) {
+	id := m.keys.actionFor(modeApp, msg)
+	if msg.Type == tea.KeyCtrlC {
+		// Pelo tipo, como antes do registro: Alt+Ctrl+C também mostra a dica.
+		id = actCtrlC
+	}
+	switch id {
 	case actQuit:
 		return handled(m.quit())
 	// Ctrl+C reaches a raw-mode TUI as a key, not SIGINT. It never quits;
@@ -150,7 +155,9 @@ func (m Model) handleModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 	// Tab switches list ↔ chat in every panel state: list focus, chat focus,
 	// and composing. It never sends or clears the draft.
-	if m.keys.actionFor(mode, msg) == actSwitchFocus {
+	// O tipo KeyTab vale com qualquer modificador, como antes do registro: o
+	// terminal pode entregar Alt+Tab assim.
+	if m.keys.actionFor(mode, msg) == actSwitchFocus || msg.Type == tea.KeyTab {
 		return m.switchPanelFocus(), nil, true
 	}
 
