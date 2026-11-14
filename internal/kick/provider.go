@@ -78,7 +78,8 @@ func (p *Provider) Resolver() (catalog.Resolver, bool) {
 
 // StreamTarget builds the playback target of a Kick channel. A URL the channel
 // carries (a recording, a clip) plays as it is; a channel known only by its
-// slug plays its live page.
+// slug plays its live page. Every target carries the ad-filtering kick plugin;
+// recordings and clips go through it unchanged.
 func (p *Provider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	target := strings.TrimSpace(ch.URL)
 	id := strings.TrimSpace(ch.StableID())
@@ -92,7 +93,11 @@ func (p *Provider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	if id != "" {
 		label = platform.Kick + ":" + id
 	}
-	return catalog.Stream{URL: target, Label: label}, nil
+	return catalog.Stream{
+		URL:     target,
+		Plugins: []catalog.StreamlinkPlugin{adFilterPlugin()},
+		Label:   label,
+	}, nil
 }
 
 // Chat returns the chat of Kick.

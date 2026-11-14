@@ -17,9 +17,13 @@ import (
 //   - Endpoint is what mpv receives in --input-ipc-server and what the TUI dials.
 //     On Unix it is a socket file, which this layout puts inside Dir. On Windows
 //     it is the bare name of a named pipe, which is not a file in any directory.
+//
+// PluginDir, inside Dir, holds the streamlink plugins of the target. It is
+// empty when the target has none or they could not be written.
 type sessionLayout struct {
-	Dir      string
-	Endpoint string
+	Dir       string
+	Endpoint  string
+	PluginDir string
 }
 
 // sun_path sizes, in bytes and counting the terminating NUL, per OS.

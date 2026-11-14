@@ -151,6 +151,14 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		}
 	}
 
+	// A plugin that cannot be written costs what it adds (the Kick ad filter),
+	// never the playback: streamlink then plays with its own plugins.
+	pluginDir, pluginErr := writePlugins(dir, cfg.Target.Plugins)
+	if pluginErr != nil && cfg.Note != nil {
+		cfg.Note(fmt.Sprintf("player: streamlink plugins not written, playing with streamlink's own: %v", pluginErr))
+	}
+	layout.PluginDir = pluginDir
+
 	if cfg.WriteWait <= 0 {
 		cfg.WriteWait = ipcWriteWait
 	}
@@ -445,6 +453,13 @@ func (s *Session) consumeLines(ctx context.Context, r io.Reader) {
 }
 
 func (s *Session) handleLine(line string) {
+	if isPluginFallbackLine(line) {
+		// The plugin stepped aside and the built-in one plays: a problem for
+		// the exit log, not evidence about the stream. Its detail quotes a
+		// Python exception, which the classification would blame on streamlink.
+		s.note("player: " + line)
+		return
+	}
 	s.mu.Lock()
 	f := FailureNone
 	if strings.Contains(strings.ToLower(line), "error") {

@@ -25,7 +25,7 @@ Nenhum dos dois tem contrato. O site fica atrás do Cloudflare, que já bloqueou
 
 6. **O WebSocket é do próprio pacote.** O cliente cobre o que o chat usa da RFC 6455: handshake, texto, fragmentação, ping, pong e close, com limite de 1 MiB por mensagem. O projeto não tinha dependência de WebSocket e o chat da Kick é o único uso. A conexão é direta: o cliente não passa por `HTTPS_PROXY`, e o README registra o limite. Uma conexão confirmada só zera a espera crescente depois de 30 s, para um servidor que aceita e derruba em seguida não virar reconexão a cada 500 ms.
 
-7. **Sem estado de intervalo.** A Kick nunca produz "anúncio" na barra (regra 5): não há sinal verificável de início e fim no que o app lê hoje.
+7. **Sem estado de intervalo.** A Kick nunca produz "anúncio" na barra (regra 5): não há sinal verificável de início e fim no que o app lê hoje. O [ADR 0019](0019-kick-filtro-de-anuncio.md) reviu este item: um plugin local do `streamlink` descarta o anúncio que o Amazon IVS costura no vídeo, e o intervalo aparece com as mesmas linhas de início e fim da Twitch.
 
 ## Consequências
 

@@ -68,12 +68,16 @@ type Event struct {
 }
 
 // Target describes the stream to play: the ready stream URL, optional streamlink
-// CLI arguments, and an optional human-readable label/identity for the session
-// (used in logs, process registration, and orphan recovery).
+// CLI arguments, optional streamlink plugins to sideload, and an optional
+// human-readable label/identity for the session (used in logs, process
+// registration, and orphan recovery).
 type Target struct {
 	URL       string
 	ExtraArgs []string
-	Label     string
+	// Plugins go to a private directory of the session and reach streamlink
+	// through --plugin-dir. Only the default command passes them.
+	Plugins []Plugin
+	Label   string
 }
 
 // Identity returns the session identity: Label when non-empty, otherwise URL.
@@ -136,7 +140,13 @@ func sessionCommandOf(f CommandFunc) sessionCommand {
 // defaultSessionCommand is the production command: input.conf in the session
 // directory, IPC on the session endpoint.
 func defaultSessionCommand(target Target, layout sessionLayout) *exec.Cmd {
-	return DefaultCommand(target, layout.Endpoint, inputConfPath(layout.Dir))
+	return streamlinkCommand(target.URL, mpvArgs(layout.Endpoint, inputConfPath(layout.Dir)), sessionExtraArgs(target, layout)...)
+}
+
+// sessionExtraArgs is what goes between streamlink's own flags and the URL: the
+// session's plugin directory, when it has one, then the target's arguments.
+func sessionExtraArgs(target Target, layout sessionLayout) []string {
+	return append(pluginDirArgs(layout.PluginDir), target.ExtraArgs...)
 }
 
 // Options configures a Manager. Zero values select production defaults.
@@ -425,10 +435,10 @@ func (m *Manager) start(target Target, order uint64) (uint64, error) {
 		env := append([]string(nil), m.opts.StreamlinkEnv...)
 		m.mu.Unlock()
 		command = func(target Target, layout sessionLayout) *exec.Cmd {
-			return streamlinkCommandWithBin(bin, env, target.URL, mpvArgs(layout.Endpoint, inputConfPath(layout.Dir)), target.ExtraArgs...)
+			return streamlinkCommandWithBin(bin, env, target.URL, mpvArgs(layout.Endpoint, inputConfPath(layout.Dir)), sessionExtraArgs(target, layout)...)
 		}
 		noInputConf = func(target Target, layout sessionLayout) *exec.Cmd {
-			return streamlinkCommandWithBin(bin, env, target.URL, mpvArgs(layout.Endpoint, ""), target.ExtraArgs...)
+			return streamlinkCommandWithBin(bin, env, target.URL, mpvArgs(layout.Endpoint, ""), sessionExtraArgs(target, layout)...)
 		}
 	}
 	sess, err := startSession(sessionConfig{

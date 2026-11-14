@@ -293,7 +293,7 @@ Apagar o arquivo local não encerra a sessão na Twitch. Faça as duas coisas:
 
 Na Twitch, o `streamlink` descarta os trechos de anúncio da transmissão. Durante o intervalo, a barra de status mostra `Intervalo comercial: o vídeo volta sozinho` com uma contagem regressiva.
 
-Uma live da Kick toca como a Kick a envia. O app não filtra nem detecta intervalo comercial nela.
+Na Kick, o anúncio hoje passa no player do site, fora do vídeo, e a live chega ao app sem ele. Se a Kick passar a costurar o anúncio no vídeo (o Amazon IVS, que entrega o vídeo dela, já sabe fazer isso), o app entrega ao `streamlink` uma cópia própria do plugin da Kick, que descarta os trechos marcados como anúncio, e a barra de status mostra o intervalo como na Twitch. Se uma atualização do `streamlink` mudar o que essa cópia usa por dentro, o vídeo toca pelo plugin original da Kick, com anúncio, e o motivo aparece no terminal quando você sai do app. Veja o [ADR 0019](adr/0019-kick-filtro-de-anuncio.md).
 
 </details>
 

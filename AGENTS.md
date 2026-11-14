@@ -59,7 +59,7 @@ arquitetura.
 - `internal/ui`: modelo/update/view do bubbletea, sem I/O direto.
 - `internal/twitch`: clientes de dados (`Source`, GQL agora, Helix depois).
 - `internal/chat`: cliente IRC, parser de tags, envio de mensagens.
-- `internal/kick`: provider da Kick: JSON do site, chat só leitura pelo Pusher ([ADR 0016](docs/adr/0016-kick-sem-conta.md)) e catálogo de categorias, canais e busca ([ADR 0017](docs/adr/0017-kick-catalogo.md)).
+- `internal/kick`: provider da Kick: JSON do site, chat só leitura pelo Pusher ([ADR 0016](docs/adr/0016-kick-sem-conta.md)), catálogo de categorias, canais e busca ([ADR 0017](docs/adr/0017-kick-catalogo.md)) e o plugin do streamlink que descarta o anúncio costurado no vídeo ([ADR 0019](docs/adr/0019-kick-filtro-de-anuncio.md)).
 - `internal/player`: streamlink, mpv e o protocolo IPC.
 - `internal/config`: leitura/escrita do config e do token.
 - Erros: `fmt.Errorf("...: %w", err)`, sem `panic` fora do `main`.

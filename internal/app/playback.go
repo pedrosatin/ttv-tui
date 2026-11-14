@@ -182,6 +182,7 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 	playTarget := player.Target{
 		URL:       pTarget.URL,
 		ExtraArgs: pTarget.ExtraArgs,
+		Plugins:   playerPlugins(pTarget.Plugins),
 		Label:     pTarget.Label,
 	}
 	identity := playTarget.Identity()
@@ -329,6 +330,18 @@ func logInputConfErr(log io.Writer, mgr *player.Manager, cat *i18n.Catalog) {
 
 // logPlayerNotes records what the player sessions noted while the TUI owned the
 // terminal.
+// playerPlugins converts the provider's streamlink plugins for the player.
+func playerPlugins(plugins []catalog.StreamlinkPlugin) []player.Plugin {
+	if len(plugins) == 0 {
+		return nil
+	}
+	out := make([]player.Plugin, len(plugins))
+	for i, p := range plugins {
+		out[i] = player.Plugin{Name: p.Name, Source: p.Source}
+	}
+	return out
+}
+
 func logPlayerNotes(log io.Writer, notes []string, cat *i18n.Catalog) {
 	for _, n := range notes {
 		_, _ = fmt.Fprintf(log, cat.T("app.warn_player")+"\n", n)

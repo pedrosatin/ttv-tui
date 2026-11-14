@@ -158,11 +158,24 @@ type Page[T any] struct {
 }
 
 // Stream represents a neutral playback target: the stream URL, optional streamlink CLI
-// arguments, and an optional human-readable label/identity for the session.
+// arguments, optional streamlink plugins to sideload, and an optional
+// human-readable label/identity for the session.
 type Stream struct {
 	URL       string
 	ExtraArgs []string
-	Label     string
+	// Plugins are written to a private directory of the session and handed to
+	// streamlink with --plugin-dir, for this playback only.
+	Plugins []StreamlinkPlugin
+	Label   string
+}
+
+// StreamlinkPlugin is the source of a streamlink plugin module. A Name equal to
+// a built-in plugin's ("kick") replaces that plugin for the playback.
+type StreamlinkPlugin struct {
+	// Name is the module name, without ".py": lowercase letters, digits and
+	// underscores, starting with a letter.
+	Name   string
+	Source []byte
 }
 
 // Identity returns the session identity: Label when non-empty, otherwise URL.
