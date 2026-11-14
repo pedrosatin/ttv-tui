@@ -27,7 +27,7 @@ func readStart(c *net.UnixConn) (ctlMsg, error) {
 	if err := json.Unmarshal(line, &req); err != nil {
 		return ctlMsg{}, err
 	}
-	if !validStreamPipe(req.Pipe) || !strings.HasPrefix(req.IPC, "ttv-tui-") || strings.ContainsAny(req.IPC, `/\`) {
+	if !validStreamPipe(req.Pipe) || !validIPCName(req.IPC) {
 		return ctlMsg{}, fmt.Errorf("pipe fora do runtime esperado")
 	}
 	return ctlMsg{kind: "start", ipc: req.IPC, fd: -1, url: req.Pipe, conn: c}, nil
@@ -35,4 +35,8 @@ func readStart(c *net.UnixConn) (ctlMsg, error) {
 
 func validStreamPipe(name string) bool {
 	return strings.HasPrefix(name, `\\.\pipe\ttv-win-stream-`) && !strings.ContainsAny(strings.TrimPrefix(name, `\\.\pipe\ttv-win-stream-`), `/\`)
+}
+
+func validIPCName(name string) bool {
+	return strings.HasPrefix(name, "ttv-tui-") && !strings.ContainsAny(name, `/\`)
 }

@@ -66,19 +66,26 @@ func validIPC(ipc string) bool {
 	if base == "" {
 		base = os.TempDir()
 	}
-	base = filepath.Join(base, "ttv-tui")
+	base, err := filepath.Abs(filepath.Join(base, "ttv-tui"))
+	if err != nil {
+		return false
+	}
 	dir := filepath.Dir(ipc)
 	// The player falls back to a private temp directory when the runtime
-	// cannot hold a Unix socket. Its name carries the TUI pid and generation.
+	// cannot hold a Unix socket. Its name carries the generation and a random decimal suffix.
 	parts := strings.Split(filepath.Base(dir), "-")
 	if len(parts) == 4 && parts[0] == "ttv" && parts[1] == "tui" {
-		pid, pidErr := strconv.ParseUint(parts[2], 10, 64)
-		_, genErr := strconv.ParseUint(parts[3], 10, 64)
-		if pidErr != nil || genErr != nil || pid == 0 {
+		gen, genErr := strconv.ParseUint(parts[2], 10, 64)
+		_, suffixErr := strconv.ParseUint(parts[3], 10, 64)
+		if genErr != nil || suffixErr != nil || gen == 0 {
 			return false
 		}
 		parent := filepath.Dir(dir)
-		if parent != filepath.Clean(os.TempDir()) && parent != "/tmp" {
+		tempDir, err := filepath.Abs(os.TempDir())
+		if err != nil {
+			return false
+		}
+		if parent != tempDir && parent != "/tmp" {
 			return false
 		}
 		return privateIPCDir(dir)

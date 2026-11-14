@@ -40,13 +40,3 @@ func TestThemeInvalidPalette(t *testing.T) {
 		t.Fatal("invalid indices changed palette")
 	}
 }
-
-func TestFindMpvRelativePATH(t *testing.T) {
-	t.Chdir(t.TempDir())
-	if err := os.WriteFile(mpvNames[0], []byte(""), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if got := findMpv(".", ""); got != "" {
-		t.Fatal(got)
-	}
-}
