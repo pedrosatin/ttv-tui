@@ -209,8 +209,8 @@ func (a *app) drawCell(x, y int, k cellKey) {
 		return
 	}
 	r := []rune(k.content)[0]
-	g := a.fs.get(r, k.attrs&uv.AttrBold != 0)
-	if g == nil { // sem glifo: caixa marca a lacuna de fonte (emoji colorido, por exemplo)
+	g := a.fs.get(r, k.attrs&uv.AttrBold != 0, span)
+	if g == nil { // sem glifo: caixa marca a lacuna de fonte
 		for xx := 1; xx < cw*span-1; xx++ {
 			a.setPx(px0+xx, py0+2, fr, fg, fb)
 			a.setPx(px0+xx, py0+ch-3, fr, fg, fb)
@@ -220,6 +220,9 @@ func (a *app) drawCell(x, y int, k cellKey) {
 			a.setPx(px0+cw*span-2, py0+yy, fr, fg, fb)
 		}
 		return
+	}
+	if g.color != nil {
+		a.drawColorGlyph(g, px0, py0)
 	}
 	if g.mask != nil {
 		if k.glass {
@@ -247,6 +250,33 @@ func (a *app) drawCell(x, y int, k cellKey) {
 	if k.under {
 		for xx := 0; xx < cw*span; xx++ {
 			a.setPx(px0+xx, py0+a.fs.base+1, fr, fg, fb)
+		}
+	}
+}
+
+// drawColorGlyph compõe a imagem de um emoji sobre a célula. As duas são
+// pré-multiplicadas: o pixel novo é a fonte mais o fundo que ela deixa passar.
+func (a *app) drawColorGlyph(g *glyph, px0, py0 int) {
+	img := g.color
+	w, h := img.Rect.Dx(), img.Rect.Dy()
+	for y := range h {
+		dy := py0 + g.y + y
+		if dy < 0 || dy >= a.ph {
+			continue
+		}
+		src := img.Pix[y*img.Stride : y*img.Stride+w*4]
+		for x := range w {
+			sa := uint32(src[x*4+3])
+			dx := px0 + g.x + x
+			if sa == 0 || dx < 0 || dx >= a.pw {
+				continue
+			}
+			off := dy*a.pw*4 + dx*4
+			keep := 255 - sa
+			a.buf[off] = byte(uint32(src[x*4+2]) + uint32(a.buf[off])*keep/255)
+			a.buf[off+1] = byte(uint32(src[x*4+1]) + uint32(a.buf[off+1])*keep/255)
+			a.buf[off+2] = byte(uint32(src[x*4]) + uint32(a.buf[off+2])*keep/255)
+			a.buf[off+3] = byte(sa + uint32(a.buf[off+3])*keep/255)
 		}
 	}
 }

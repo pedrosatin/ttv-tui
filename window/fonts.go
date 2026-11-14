@@ -12,9 +12,13 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
+// glyph is a drawn rune: an alpha mask painted in the cell's colour, placed
+// from the baseline, or a colour image (an emoji), placed from the cell's top
+// left corner.
 type glyph struct {
-	mask *image.Alpha
-	x, y int
+	mask  *image.Alpha
+	color *image.RGBA
+	x, y  int
 }
 
 type fontSet struct {
@@ -28,6 +32,11 @@ type fontSet struct {
 	cache   map[uint64]*glyph
 	sfntBuf sfnt.Buffer
 	tofu    int
+	// emojiPaths are the colour emoji fonts, opened on the first rune no other
+	// font has: most screens never need the 10 MB of Noto Color Emoji.
+	emojiPaths []string
+	emoji      *colorFont
+	emojiTried bool
 }
 
 func loadFace(path string, px float64) (font.Face, *sfnt.Font, error) {
@@ -56,6 +65,8 @@ func loadFace(path string, px float64) (font.Face, *sfnt.Font, error) {
 // system font folders on Windows and macOS.
 type fontFiles struct {
 	regular, bold, fallback []string
+	// emoji are colour bitmap fonts (CBDT/CBLC), the last resort for a rune.
+	emoji []string
 }
 
 // loadFirst opens the first file in paths that parses.
@@ -72,8 +83,8 @@ func loadFirst(paths []string, px float64) (font.Face, *sfnt.Font, error) {
 }
 
 func newFontSet(px float64) (*fontSet, error) {
-	fs := &fontSet{cache: map[uint64]*glyph{}}
 	files := systemFonts()
+	fs := &fontSet{cache: map[uint64]*glyph{}, emojiPaths: files.emoji}
 	reg, regF, err := loadFirst(files.regular, px)
 	if err != nil {
 		return nil, fmt.Errorf("monospace font: %w", err)
@@ -104,10 +115,15 @@ func cellMetrics(reg font.Face) (int, int, int, error) {
 	return adv.Round(), (m.Ascent + m.Descent).Ceil(), m.Ascent.Ceil(), nil
 }
 
-func (fs *fontSet) get(r rune, bold bool) *glyph {
-	key := uint64(r) << 1
+// get returns the glyph of r for a cell span cells wide (1 or 2), or nil when no
+// font has it. Only a colour emoji depends on the span: it is scaled to the cells.
+func (fs *fontSet) get(r rune, bold bool, span int) *glyph {
+	key := uint64(r) << 2
 	if bold {
 		key |= 1
+	}
+	if span > 1 {
+		key |= 2
 	}
 	if g, ok := fs.cache[key]; ok {
 		return g
@@ -127,9 +143,12 @@ func (fs *fontSet) get(r rune, bold bool) *glyph {
 		}
 	}
 	if face == nil {
-		fs.tofu++
-		fs.cache[key] = nil
-		return nil
+		g := fs.emojiGlyph(r, span)
+		if g == nil {
+			fs.tofu++
+		}
+		fs.cache[key] = g
+		return g
 	}
 	dr, mask, mp, _, ok := face.Glyph(fixed.P(0, 0), r)
 	if !ok || dr.Empty() {
@@ -146,6 +165,18 @@ func (fs *fontSet) get(r rune, bold bool) *glyph {
 	g := &glyph{mask: a, x: dr.Min.X, y: dr.Min.Y}
 	fs.cache[key] = g
 	return g
+}
+
+// emojiGlyph draws r from the colour emoji font, sized to span cells.
+func (fs *fontSet) emojiGlyph(r rune, span int) *glyph {
+	if !fs.emojiTried {
+		fs.emojiTried = true
+		fs.emoji = loadColorFont(fs.emojiPaths)
+	}
+	if fs.emoji == nil {
+		return nil
+	}
+	return fs.emoji.glyph(&fs.sfntBuf, r, fs.cellW*max(span, 1), fs.cellH)
 }
 
 func scaledFontSet(pt, scale float64) (*fontSet, error) {

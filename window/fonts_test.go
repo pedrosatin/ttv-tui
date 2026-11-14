@@ -26,7 +26,7 @@ func TestScaledFontSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer base.close()
-	base.get('M', false)
+	base.get('M', false, 1)
 	for _, scale := range []float64{2, 1.5, 1, 0, -1} {
 		fs, err := scaledFontSet(9, scale)
 		if err != nil {
@@ -41,7 +41,7 @@ func TestScaledFontSet(t *testing.T) {
 		if scale <= 1 && (fs.cellW != base.cellW || fs.cellH != base.cellH || fs.base != base.base) {
 			t.Errorf("escala %g não restaurou métricas", scale)
 		}
-		if fs.get('M', false) == nil {
+		if fs.get('M', false, 1) == nil {
 			t.Error("fonte sem glifo M")
 		}
 		fs.close()
