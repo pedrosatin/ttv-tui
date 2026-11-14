@@ -30,11 +30,6 @@ import (
 
 func init() { runtime.LockOSThread() }
 
-func fileExists(p string) bool {
-	st, err := os.Stat(p)
-	return err == nil && !st.IsDir()
-}
-
 // calledAsMpv reports whether this binary runs as the shim. On Windows the
 // streamlink lookup (shutil.which with PATHEXT) may call it mpv.EXE or mpv.COM.
 func calledAsMpv(arg0 string) bool {
@@ -48,13 +43,13 @@ func main() {
 		shimMain()
 		return
 	}
-	tui := os.Getenv("TTV_WINDOW_TUI")
-	if tui == "" {
-		tui = filepath.Join(os.Getenv("HOME"), ".local/bin/ttv-tui")
-		if exe, err := os.Executable(); err == nil {
-			if sib := filepath.Join(filepath.Dir(exe), "ttv-tui"+exeSuffix); fileExists(sib) {
-				tui = sib
-			}
+	var tui string
+	if len(os.Args) != 2 || os.Args[1] != "--probe" {
+		var err error
+		tui, err = resolveTUI(os.Getenv, os.Executable, os.UserHomeDir, os.Stat)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
 	}
 	loadTheme()
