@@ -247,6 +247,14 @@ Kick has no public API for any of this without an account. The app reads the JSO
   kick_pusher_key = "<key>"
   ```
 
+- `Player error: no browser for Kick`: Kick answered 403, and streamlink needs a Chromium-based browser to pass the check. It looks on `PATH` for `chromium`, `chromium-browser`, `chrome`, `google-chrome` and `google-chrome-stable`. On macOS it also tries Chromium and Google Chrome in `/Applications` and `~/Applications`, and on Windows, Edge and Chrome where their installers put them. Install one of them, or put the path of another Chromium-based browser in `config.toml`:
+
+  ```toml
+  kick_browser = "/usr/bin/brave"
+  ```
+
+  A relative path is resolved from the directory you start the app in. The browser is passed to streamlink only when a Kick channel plays. `ttv-tui doctor` shows which one streamlink will use.
+
 - The Kick chat connects straight to Pusher and ignores `HTTPS_PROXY`. Behind a mandatory proxy the list still shows the channel state, but the chat keeps reconnecting.
 
 </details>
@@ -362,7 +370,7 @@ Not yet:
 <details>
 <summary><b>The video does not play, or there is no sound</b></summary>
 
-1. Run `ttv-tui doctor`. It reports missing `streamlink` or `mpv`, the paths in use and whether a token exists, without showing it.
+1. Run `ttv-tui doctor`. It reports missing `streamlink` or `mpv`, the browser Kick may need, the paths in use and whether a token exists, without showing it.
 2. `Player error: channel offline` means the stream ended. Pick another channel, or press `r` to retry.
 3. Check that the status bar does not show `vol 0`. Press `+` to raise the volume.
 4. On Linux, check that `WAYLAND_DISPLAY` or `DISPLAY` is set and that an audio server is running.

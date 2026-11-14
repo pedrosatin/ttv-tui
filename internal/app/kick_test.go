@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -302,6 +303,31 @@ func TestKickProviderFromConfig(t *testing.T) {
 	}
 	_, stopBare := kickProvider(kick.NewProvider(), config.Config{})
 	stopBare()
+}
+
+// kick_browser reaches streamlink on Kick playbacks only; a Twitch playback of
+// the same registry carries no browser argument.
+func TestKickBrowserFromConfigOnlyOnKick(t *testing.T) {
+	browser := filepath.Join(t.TempDir(), "chromium")
+	prov, stop := kickProvider(nil, config.Config{KickBrowser: browser})
+	defer stop()
+	reg := provider.NewRegistry(twitch.NewProvider(nil), prov, provider.NewURLProvider())
+	kickTarget, err := reg.StreamTarget(catalog.Channel{Platform: platform.Kick, Login: "gaules"})
+	if err != nil {
+		t.Fatalf("Kick StreamTarget: %v", err)
+	}
+	if want := []string{"--webbrowser-executable=" + browser}; !slices.Equal(kickTarget.ExtraArgs, want) {
+		t.Errorf("Kick ExtraArgs = %q, want %q", kickTarget.ExtraArgs, want)
+	}
+	twitchTarget, err := reg.StreamTarget(catalog.Channel{Platform: platform.Twitch, Login: "gaules"})
+	if err != nil {
+		t.Fatalf("Twitch StreamTarget: %v", err)
+	}
+	for _, arg := range twitchTarget.ExtraArgs {
+		if strings.Contains(arg, "webbrowser") {
+			t.Errorf("Twitch ExtraArgs = %q: the Kick browser leaked", twitchTarget.ExtraArgs)
+		}
+	}
 }
 
 // stubSource stands for a Twitch source that is never called.

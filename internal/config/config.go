@@ -39,6 +39,11 @@ type Config struct {
 	// with. Empty means the built-in one. Kick does not publish the key and may
 	// rotate it. TOML key: kick_pusher_key.
 	KickPusherKey string
+	// KickBrowser is an optional path to the Chromium-based browser streamlink
+	// opens when the Kick API answers 403 (--webbrowser-executable). A relative
+	// path is resolved against the working directory, like StreamlinkPath.
+	// Empty means streamlink's own search. TOML key: kick_browser.
+	KickBrowser string
 }
 
 // Limits of a saved panel width. The UI applies the tighter limits of the moment.
@@ -276,6 +281,9 @@ func formatTOML(cfg Config) string {
 	if cfg.KickPusherKey != "" {
 		fmt.Fprintf(&b, "kick_pusher_key = %s\n", quoteTOML(cfg.KickPusherKey))
 	}
+	if cfg.KickBrowser != "" {
+		fmt.Fprintf(&b, "kick_browser = %s\n", quoteTOML(cfg.KickBrowser))
+	}
 	return b.String()
 }
 
@@ -436,6 +444,12 @@ func parseTOML(input string) (Config, error) {
 				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
 			}
 			cfg.KickPusherKey = strings.TrimSpace(val)
+		case "kick_browser", "kick.browser":
+			val, err := unquoteTOML(rawVal)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+			}
+			cfg.KickBrowser = strings.TrimSpace(val)
 		}
 	}
 	if err := scanner.Err(); err != nil {

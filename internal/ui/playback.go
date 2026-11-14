@@ -38,6 +38,7 @@ const (
 	PlayerFailureMPVMissing        PlayerFailure = "mpv_missing"
 	PlayerFailureNoPlugin          PlayerFailure = "no_plugin"
 	PlayerFailureBlocked           PlayerFailure = "blocked"
+	PlayerFailureBrowserMissing    PlayerFailure = "browser_missing"
 	PlayerFailureUnknown           PlayerFailure = "unknown"
 )
 
@@ -247,6 +248,8 @@ func (m Model) playerFailureText() string {
 		return m.t("player.fail.no_plugin")
 	case PlayerFailureBlocked:
 		return m.t("player.fail.blocked")
+	case PlayerFailureBrowserMissing:
+		return m.t("player.fail.browser_missing")
 	default:
 		return m.t("player.fail.unknown")
 	}

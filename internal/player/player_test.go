@@ -624,6 +624,14 @@ func runPlayerHelper() {
 		fmt.Fprintln(os.Stderr, "[cli][info] Found matching plugin twitch for URL https://www.twitch.tv/"+login)
 		fmt.Fprintln(os.Stderr, "error: Unable to validate response text: ValidationError(dict): Key 'data' not found in <dict>")
 		os.Exit(1)
+	case "kick-no-browser":
+		// streamlink 8.6.2 when the Kick API answers 403 and no Chromium-based
+		// browser is found to solve the challenge, then exit 1.
+		fmt.Fprintln(os.Stderr, "[cli][info] Found matching plugin kick for URL https://kick.com/"+login)
+		fmt.Fprintln(os.Stderr, "[plugins.kick][info] Solving JS challenge")
+		fmt.Fprintln(os.Stderr, "[plugins.kick][error] Could not find Chromium-based web browser executable: Please set the path to a supported web browser using --webbrowser-executable")
+		fmt.Fprintln(os.Stderr, "error: Error while querying Kick API: 403 Client Error: Forbidden for url: https://kick.com/api/v2/channels/"+login+"/livestream")
+		os.Exit(1)
 	case "python-traceback":
 		fmt.Fprintln(os.Stderr, "Traceback (most recent call last):")
 		fmt.Fprintln(os.Stderr, "  File \"streamlink/plugins/twitch.py\", line 12, in <module>")

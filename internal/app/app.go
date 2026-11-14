@@ -373,6 +373,7 @@ func kickProvider(injected *kick.Provider, cfg config.Config) (*kick.Provider, f
 		kick.WithSearcher(client),
 		kick.WithResolver(client),
 		kick.WithChat(c),
+		kick.WithWebbrowserExecutable(cfg.KickBrowser),
 	), c.Close
 }
 

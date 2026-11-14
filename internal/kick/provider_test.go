@@ -2,6 +2,9 @@ package kick
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
@@ -81,5 +84,40 @@ func TestProvider_StreamTarget(t *testing.T) {
 	}
 	if _, err := p.StreamTarget(catalog.Channel{Platform: platform.Kick}); err == nil {
 		t.Error("empty channel: want an error")
+	}
+}
+
+// The browser of the config reaches streamlink only as one argument of the
+// Kick target, with a relative path made absolute like streamlink_path.
+func TestProvider_StreamTargetWebbrowserExecutable(t *testing.T) {
+	abs := filepath.Join(t.TempDir(), "bin", "chromium")
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		path string
+		want []string
+	}{
+		{"none", "", nil},
+		{"blank", "   ", nil},
+		{"absolute", abs, []string{"--webbrowser-executable=" + abs}},
+		{"relative", filepath.Join("bin", "chromium"), []string{"--webbrowser-executable=" + filepath.Join(cwd, "bin", "chromium")}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := NewProvider(WithWebbrowserExecutable(tc.path))
+			got, err := p.StreamTarget(catalog.Channel{Platform: platform.Kick, Login: "gaules"})
+			if err != nil {
+				t.Fatalf("StreamTarget: %v", err)
+			}
+			if !slices.Equal(got.ExtraArgs, tc.want) {
+				t.Errorf("ExtraArgs = %q, want %q", got.ExtraArgs, tc.want)
+			}
+			if len(got.Plugins) != 1 {
+				t.Errorf("Plugins = %d, want the ad filter", len(got.Plugins))
+			}
+		})
 	}
 }

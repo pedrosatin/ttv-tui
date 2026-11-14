@@ -112,6 +112,33 @@ func TestPlayerFailureMessagesPerClass(t *testing.T) {
 	}
 }
 
+// Kick answered 403 and streamlink found no browser for the challenge: the bar
+// names the config key instead of the generic refusal, and keeps the line
+// streamlink 8.6.2 printed as the detail.
+func TestPlayerFailureBrowserMissingNamesTheConfigKey(t *testing.T) {
+	const line = "[plugins.kick][error] Could not find Chromium-based web browser executable: Please set the path to a supported web browser using --webbrowser-executable"
+	for lang, want := range map[string]string{
+		i18n.LangPTBR: "Erro: Kick sem navegador · defina kick_browser · ? detalhes",
+		i18n.LangEN:   "Player error: no browser for Kick · set kick_browser · ? details",
+	} {
+		m, _ := newFailureModel(t, lang, 320, "xqc")
+		m = failWith(t, m, 1, PlayerFailureBrowserMissing, line)
+		bar := ansi.Strip(m.StatusBar())
+		if !strings.Contains(bar, want) || !strings.Contains(bar, line) {
+			t.Errorf("%s: status bar = %q, want %q and the streamlink line", lang, bar, want)
+		}
+		if strings.Contains(bar, m.t("player.fail.blocked")) {
+			t.Errorf("%s: status bar shows the generic refusal: %q", lang, bar)
+		}
+		// In 80 columns the detail goes, the key stays.
+		narrow, _ := newFailureModel(t, lang, 80, "xqc")
+		narrow = failWith(t, narrow, 1, PlayerFailureBrowserMissing, line)
+		if bar := ansi.Strip(narrow.StatusBar()); !strings.Contains(bar, "kick_browser") {
+			t.Errorf("%s: 80 columns lose the config key: %q", lang, bar)
+		}
+	}
+}
+
 func TestPlayerFailureDetailInHelp(t *testing.T) {
 	m, _ := newFailureModel(t, i18n.LangPTBR, 200, "xqc")
 	m = failWith(t, m, 1, PlayerFailureOffline, offlineLine)

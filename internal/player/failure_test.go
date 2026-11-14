@@ -30,6 +30,12 @@ func TestClassifyLine(t *testing.T) {
 		// The site refused the request (streamlink 8.6.2, real output for a playlist without its token).
 		{"error: Unable to open URL: https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.DsuAwCgUc9Bh.m3u8 (403 Client Error: Forbidden for url: https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.DsuAwCgUc9Bh.m3u8)", FailureBlocked},
 		{"error: Error while querying Kick API: 403 Client Error: Forbidden for url: https://kick.com/api/v2/channels/xqc/livestream", FailureBlocked},
+		// Kick answered 403 and streamlink 8.6.2 found no browser for the
+		// challenge (real output: webbrowser/webbrowser.py, logged by plugins/kick.py).
+		{"[plugins.kick][error] Could not find Chromium-based web browser executable: Please set the path to a supported web browser using --webbrowser-executable", FailureBrowserMissing},
+		// The same with --webbrowser-executable pointing at nothing. The path
+		// comes from the config and must not decide the class.
+		{"[plugins.kick][error] Invalid web browser executable: /home/u/timeout/no playable streams found/chromium", FailureBrowserMissing},
 		{"bash: streamlink: command not found", FailureStreamlinkMissing},
 		{"error: Unable to validate response text: ValidationError(dict): Key 'data' not found in <dict>", FailureStreamlinkBroken},
 		{"streamlink.exceptions.PluginError: Unable to parse manifest", FailureStreamlinkBroken},
@@ -85,6 +91,7 @@ func TestOnlyStreamlinkFailuresBlameTheBuild(t *testing.T) {
 		FailureMPVMissing:        false,
 		FailureNoPlugin:          false,
 		FailureBlocked:           false,
+		FailureBrowserMissing:    false,
 		FailureUnknown:           false,
 		FailureStreamlinkBroken:  true,
 	}
@@ -227,6 +234,9 @@ func TestProcessFailuresAreClassified(t *testing.T) {
 		{"exit-silent", 30 * time.Second, FailureStreamlinkBroken},
 		{"plugin-error", 30 * time.Second, FailureStreamlinkBroken},
 		{"python-traceback", 30 * time.Second, FailureStreamlinkBroken},
+		// The browser line comes before the 403 that streamlink raises next:
+		// the hint about the browser wins over the generic refusal.
+		{"kick-no-browser", 30 * time.Second, FailureBrowserMissing},
 	}
 	for _, c := range cases {
 		t.Run(c.mode, func(t *testing.T) {

@@ -247,6 +247,14 @@ A Kick não tem API pública para nada disso sem conta. O app lê o JSON que o p
   kick_pusher_key = "<chave>"
   ```
 
+- `Erro: Kick sem navegador`: a Kick respondeu 403, e o streamlink precisa de um navegador baseado no Chromium para passar pela checagem. Ele procura no `PATH` `chromium`, `chromium-browser`, `chrome`, `google-chrome` e `google-chrome-stable`. No macOS, tenta também o Chromium e o Google Chrome em `/Applications` e `~/Applications`; no Windows, o Edge e o Chrome onde os instaladores deles os põem. Instale um deles ou ponha no `config.toml` o caminho de outro navegador baseado no Chromium:
+
+  ```toml
+  kick_browser = "/usr/bin/brave"
+  ```
+
+  Um caminho relativo vale a partir do diretório em que você abre o app. O navegador só vai para o streamlink quando um canal da Kick toca. O `ttv-tui doctor` mostra qual o streamlink vai usar.
+
 - O chat da Kick conecta direto no Pusher e ignora o `HTTPS_PROXY`. Atrás de um proxy obrigatório, a lista ainda mostra o estado do canal, mas o chat fica reconectando.
 
 </details>
@@ -362,7 +370,7 @@ Ainda não:
 <details>
 <summary><b>O vídeo não toca ou não tem som</b></summary>
 
-1. Rode `ttv-tui doctor`. Ele aponta `streamlink` ou `mpv` ausentes, os caminhos em uso e se há token, sem mostrá-lo.
+1. Rode `ttv-tui doctor`. Ele aponta `streamlink` ou `mpv` ausentes, o navegador de que a Kick pode precisar, os caminhos em uso e se há token, sem mostrá-lo.
 2. `Erro: Canal offline` quer dizer que a live acabou. Escolha outro canal ou aperte `r` para tentar de novo.
 3. Confira se a barra de status não mostra `vol 0`. Aperte `+` para subir o volume.
 4. No Linux, confira se `WAYLAND_DISPLAY` ou `DISPLAY` está definido e se há um servidor de áudio rodando.

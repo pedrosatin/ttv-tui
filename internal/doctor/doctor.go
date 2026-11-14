@@ -60,6 +60,16 @@ func Run(out io.Writer, opts Options) int {
 		code = 1
 	}
 
+	goos := opts.GOOS
+	if goos == "" {
+		goos = runtime.GOOS
+	}
+	browserVal, browserOK := kickBrowserStatus(cfg.KickBrowser, goos, defaultBrowserLookup(), cat)
+	line("doctor.kick_browser", browserVal)
+	if !browserOK {
+		code = 1
+	}
+
 	if path == "" {
 		line("doctor.config", cat.T("doctor.unavailable"))
 		code = 1

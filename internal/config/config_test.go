@@ -426,3 +426,41 @@ func TestKickPusherKeyRoundTrip(t *testing.T) {
 		t.Error("unquoted kick_pusher_key: want a parse error")
 	}
 }
+
+func TestKickBrowserRoundTrip(t *testing.T) {
+	for _, browser := range []string{
+		"/usr/bin/brave",
+		`C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`,
+		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+	} {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := SaveTo(path, Config{KickBrowser: browser}); err != nil {
+			t.Fatalf("SaveTo: %v", err)
+		}
+		got, err := LoadFrom(path)
+		if err != nil {
+			t.Fatalf("LoadFrom: %v", err)
+		}
+		if got.KickBrowser != browser {
+			t.Errorf("KickBrowser = %q after a round trip, want %q", got.KickBrowser, browser)
+		}
+	}
+
+	// The sectioned form is accepted, and a config without the key leaves the
+	// search to streamlink.
+	for input, want := range map[string]string{
+		"[kick]\nbrowser = \" /opt/chromium/chrome \"\n": "/opt/chromium/chrome",
+		"language = \"pt-BR\"\n":                         "",
+	} {
+		cfg, err := parseTOML(input)
+		if err != nil {
+			t.Fatalf("parseTOML(%q): %v", input, err)
+		}
+		if cfg.KickBrowser != want {
+			t.Errorf("parseTOML(%q).KickBrowser = %q, want %q", input, cfg.KickBrowser, want)
+		}
+	}
+	if _, err := parseTOML("kick_browser = sem aspas\n"); err == nil {
+		t.Error("unquoted kick_browser: want a parse error")
+	}
+}

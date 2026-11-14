@@ -35,6 +35,11 @@ const (
 	// FailureBlocked: the site answered HTTP 403 to streamlink, as an anti-bot
 	// wall does. The connection worked; the request was refused.
 	FailureBlocked Failure = "blocked"
+	// FailureBrowserMissing: the site answered HTTP 403 and streamlink could
+	// not start the Chromium-based browser that solves the challenge: none was
+	// found, or the configured path is not an executable. The Kick plugin of
+	// streamlink 8.x does this when its API refuses the request.
+	FailureBrowserMissing Failure = "browser_missing"
 	// FailureStreamlinkBroken: this streamlink build failed on its own, not
 	// because of the channel or the network: a plugin or Python runtime error,
 	// a binary that cannot run, or an exit with an error status before any
@@ -152,6 +157,10 @@ func classifyLine(line string, afterTraceback bool) Failure {
 	switch {
 	case l == "":
 		return FailureNone
+	case isBrowserMissingLine(l):
+		// First: the "Invalid web browser executable" line repeats the
+		// configured path, which may contain any of the phrases below.
+		return FailureBrowserMissing
 	case strings.Contains(l, "no playable streams found"),
 		strings.Contains(l, "this stream is offline"),
 		strings.Contains(l, "channel is offline"),
@@ -202,6 +211,20 @@ func classifyLine(line string, afterTraceback bool) Failure {
 	default:
 		return FailureNone
 	}
+}
+
+// isBrowserMissingLine reports the error streamlink logs when the challenge of
+// a 403 needs a web browser it cannot start (webbrowser/webbrowser.py in
+// streamlink 8.6, logged by plugins/kick.py):
+//
+//	[plugins.kick][error] Could not find Chromium-based web browser executable: Please set the path to a supported web browser using --webbrowser-executable
+//	[plugins.kick][error] Invalid web browser executable: /path/from/the/config
+//
+// The first one ends with the hint about --webbrowser-executable, which the
+// generic "Could not find web browser executable" of other browsers shares.
+func isBrowserMissingLine(l string) bool {
+	return strings.Contains(l, "please set the path to a supported web browser using --webbrowser-executable") ||
+		strings.Contains(l, "invalid web browser executable:")
 }
 
 // buildExceptions são as exceções Python que indicam defeito do próprio

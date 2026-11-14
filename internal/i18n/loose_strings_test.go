@@ -274,6 +274,7 @@ var allowedExceptions = map[string]bool{
 	"mpv_missing":        true,
 	"no_plugin":          true,
 	"blocked":            true,
+	"browser_missing":    true,
 	"unknown":            true,
 	"dev":                true,
 

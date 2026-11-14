@@ -2,6 +2,8 @@ package kick
 
 import (
 	"errors"
+	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
@@ -14,6 +16,9 @@ type Provider struct {
 	searcher catalog.Searcher
 	resolver catalog.Resolver
 	chat     catalog.Chat
+	// webbrowser is the Chromium-based browser streamlink opens to solve the
+	// challenge of a 403, or "" for the one streamlink finds by itself.
+	webbrowser string
 }
 
 // ProviderOption configures a Provider.
@@ -37,6 +42,14 @@ func WithResolver(r catalog.Resolver) ProviderOption {
 // WithChat attaches the chat implementation the provider returns from Chat.
 func WithChat(c catalog.Chat) ProviderOption {
 	return func(p *Provider) { p.chat = c }
+}
+
+// WithWebbrowserExecutable hands streamlink the Chromium-based browser that
+// solves the challenge of a 403 from the Kick API (config key kick_browser).
+// A relative path is resolved against the working directory when a target is
+// built, as the streamlink path is. Empty keeps streamlink's own search.
+func WithWebbrowserExecutable(path string) ProviderOption {
+	return func(p *Provider) { p.webbrowser = strings.TrimSpace(path) }
 }
 
 // NewProvider returns a Kick provider. Without options it only builds playback
@@ -79,7 +92,8 @@ func (p *Provider) Resolver() (catalog.Resolver, bool) {
 // StreamTarget builds the playback target of a Kick channel. A URL the channel
 // carries (a recording, a clip) plays as it is; a channel known only by its
 // slug plays its live page. Every target carries the ad-filtering kick plugin;
-// recordings and clips go through it unchanged.
+// recordings and clips go through it unchanged. With a configured browser,
+// the target also carries --webbrowser-executable.
 func (p *Provider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	target := strings.TrimSpace(ch.URL)
 	id := strings.TrimSpace(ch.StableID())
@@ -93,10 +107,20 @@ func (p *Provider) StreamTarget(ch catalog.Channel) (catalog.Stream, error) {
 	if id != "" {
 		label = platform.Kick + ":" + id
 	}
+	var extra []string
+	if p.webbrowser != "" {
+		abs, err := filepath.Abs(p.webbrowser)
+		if err != nil {
+			return catalog.Stream{}, fmt.Errorf("kick: browser path: %w", err)
+		}
+		// One argument with "=": the path never reads as an option of its own.
+		extra = []string{"--webbrowser-executable=" + abs}
+	}
 	return catalog.Stream{
-		URL:     target,
-		Plugins: []catalog.StreamlinkPlugin{adFilterPlugin()},
-		Label:   label,
+		URL:       target,
+		ExtraArgs: extra,
+		Plugins:   []catalog.StreamlinkPlugin{adFilterPlugin()},
+		Label:     label,
 	}, nil
 }
 
