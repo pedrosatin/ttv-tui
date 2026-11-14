@@ -124,7 +124,7 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 
 	head := focusMarker + title
 	if showFocusChrome {
-		head += " " + m.t("focus.active_tag")
+		head = withFocusTag(head, m.t("focus.active_tag"), maxWidth)
 	}
 
 	var headerLines []string
@@ -167,7 +167,10 @@ func (m Model) renderChatHeaderLines(maxWidth int) []string {
 
 	for i, line := range headerLines {
 		line = TruncateVisual(line, maxWidth)
-		if showFocusChrome {
+		switch {
+		case showFocusChrome && i == 0:
+			line = styleFocusBar(padToWidth(line, maxWidth))
+		case showFocusChrome:
 			line = styleFocus(line)
 		}
 		headerLines[i] = line

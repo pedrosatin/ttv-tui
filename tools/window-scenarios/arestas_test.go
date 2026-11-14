@@ -5,6 +5,7 @@ package windowscenarios
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -176,6 +177,87 @@ func TestJanelaCarregandoMostraOCanal(t *testing.T) {
 		}
 		if row := rowWith(w.screen(), "Abrindo"); row >= 0 {
 			return fmt.Errorf("o aviso de abertura ficou na grade com o vídeo tocando: %q", w.screen()[row])
+		}
+		return nil
+	})
+}
+
+// cellBrightness lê o canto de uma célula do painel e soma R, G e B.
+func (w *window) cellBrightness(col, row int) (int, error) {
+	out, err := w.send("pixel", strconv.Itoa(col), strconv.Itoa(row))
+	if err != nil {
+		return 0, err
+	}
+	var b, g, r, a, top int
+	if n, _ := fmt.Sscan(out, &b, &g, &r, &a, &top); n != 5 {
+		return 0, fmt.Errorf("pixel respondeu %q", strings.TrimSpace(out))
+	}
+	return r + g + b, nil
+}
+
+// selectedListRow é a linha da grade do item destacado na lista: a primeira
+// depois do título que começa com ▸.
+func selectedListRow(screen []string) int {
+	for i := 1; i < len(screen); i++ {
+		if strings.HasPrefix(screen[i], "▸") {
+			return i
+		}
+	}
+	return -1
+}
+
+// W15: com a lista em 25 colunas, o título com foco não mostra "[fo…": o rótulo
+// entra inteiro ou fica de fora. Com o foco no chat, a marca vai para o título
+// do chat e a seleção da lista fica mais escura que com a lista em foco.
+func TestJanelaFocoClaroEmColunaEstreita(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{config: "list_columns = 25\n", irc: fixture.IRCConfig{Messages: 1}})
+	w.openFirstChannel()
+	w.press("ctrl+r")
+	w.waitState("as categorias com o chat ao lado", 10*time.Second, func(s ui.StateReport) bool {
+		return s.Mode == string(ui.ModeCategories) && s.ChatVisible && s.Focus == string(ui.FocusList)
+	})
+
+	var focused int
+	expect(t, func() error {
+		screen := w.screen()
+		head := screen[0]
+		if !strings.HasPrefix(head, "▸ ") {
+			return fmt.Errorf("título da lista com foco sem ▸: %q", head)
+		}
+		if strings.Contains(head, "[") && !strings.Contains(head, "[foco]") {
+			return fmt.Errorf("rótulo de foco cortado: %q", head)
+		}
+		row := selectedListRow(screen)
+		if row < 0 {
+			return fmt.Errorf("nenhuma linha destacada na lista:\n%s", strings.Join(screen, "\n"))
+		}
+		var err error
+		focused, err = w.cellBrightness(3, row)
+		return err
+	})
+
+	w.press("Tab")
+	w.waitState("o foco no chat", 5*time.Second, func(s ui.StateReport) bool { return s.Focus == string(ui.FocusChat) })
+	expect(t, func() error {
+		screen := w.screen()
+		if strings.HasPrefix(screen[0], "▸") {
+			return fmt.Errorf("o título da lista segue marcado com o foco no chat: %q", screen[0])
+		}
+		if rowWith(screen, "▸ Chat — #fixture_um") < 0 {
+			return fmt.Errorf("o título do chat com foco sem ▸:\n%s", strings.Join(screen, "\n"))
+		}
+		row := selectedListRow(screen)
+		if row < 0 {
+			return fmt.Errorf("a seleção da lista sumiu com o foco no chat")
+		}
+		dim, err := w.cellBrightness(3, row)
+		if err != nil {
+			return err
+		}
+		t.Logf("brilho da seleção: com foco %d, fora de foco %d", focused, dim)
+		if dim+90 > focused {
+			return fmt.Errorf("seleção fora de foco com brilho %d, com foco %d: quer bem mais escura", dim, focused)
 		}
 		return nil
 	})

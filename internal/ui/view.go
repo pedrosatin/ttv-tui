@@ -457,7 +457,7 @@ func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int
 	return lines
 }
 
-func (m Model) headerLine() string {
+func (m Model) headerLine(maxWidth int) string {
 	var title string
 	switch m.Mode() {
 	case ModeChannels:
@@ -482,14 +482,29 @@ func (m Model) headerLine() string {
 
 	if m.chatColumnVisible() && m.listVisible() {
 		if m.Focus() == FocusList {
-			// When the line is too narrow the tag is what gets cut: the ▸ and the
-			// focus colour already say the list has the focus, and the bar says it
-			// too. Cutting the title instead would hide the category name.
-			return "▸ " + title + " " + m.t("focus.active_tag")
+			return withFocusTag("▸ "+title, m.t("focus.active_tag"), maxWidth)
 		}
 		return "  " + title
 	}
 	return title
+}
+
+// withFocusTag adds the focus tag to a panel title only when it fits whole: a
+// cut "[fo…" says nothing, and the ▸ and the focus bar already mark the panel.
+// Cutting the title instead would hide the category or room name.
+func withFocusTag(head, tag string, maxWidth int) string {
+	if maxWidth > 0 && ansi.StringWidth(head)+1+ansi.StringWidth(tag) > maxWidth {
+		return head
+	}
+	return head + " " + tag
+}
+
+// padToWidth fills s with spaces up to width, so a style spans the column.
+func padToWidth(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+	return padOrTruncateVisual(s, width)
 }
 
 func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
@@ -504,9 +519,9 @@ func (m Model) appendPromptLines(lines []string, maxWidth int) []string {
 }
 
 func (m Model) renderBodyLines(maxWidth int) []string {
-	header := fitListRow(m.headerLine(), maxWidth)
+	header := fitListRow(m.headerLine(maxWidth), maxWidth)
 	if m.chatColumnVisible() && m.listVisible() && m.Focus() == FocusList {
-		header = styleFocus(header)
+		header = styleFocusBar(padToWidth(header, maxWidth))
 	}
 
 	if m.list.hardErr() {

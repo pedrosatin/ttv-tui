@@ -230,7 +230,10 @@ func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth 
 	if maxWidth > 0 {
 		row = padOrTruncateVisual(row, maxWidth)
 	}
-	// One reverse run keeps nested SGR resets from breaking selection.
+	// One run keeps nested SGR resets from breaking selection.
+	if m.listVisible() && m.chatColumnVisible() && m.Focus() == FocusChat {
+		return styleSelectedRowDim(ansi.Strip(row))
+	}
 	return styleSelectedRow(ansi.Strip(row))
 }
 

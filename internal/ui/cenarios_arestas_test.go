@@ -101,3 +101,65 @@ func TestCenarioJanelaAbrindoCanal(t *testing.T) {
 		return m
 	})
 }
+
+// listHeader é a primeira linha da tela, sem ANSI: o título da lista.
+func listHeader(m Model) string {
+	return strings.SplitN(screen(m), "\n", 2)[0]
+}
+
+// Na janela, com a lista em 25 colunas, o usuário abre gaules e volta às
+// categorias com Ctrl+R: o título com foco perde o rótulo "[foco]" inteiro em
+// vez de mostrar "[f…". Tab passa o foco ao chat, e a marca vai junto.
+func TestCenarioFocoNaoSeCortaEmColunaEstreita(t *testing.T) {
+	eachSize(t, "foco-coluna-estreita", func(t *testing.T, width, height int) Model {
+		m, _ := hostedScenario(t, width, height, WithHostedColumns(25, 0, false, false, 0, nil))
+		m = play(t, m, "ctrl+f gaules enter enter ctrl+r")
+		head := listHeader(m)
+		if !strings.HasPrefix(head, "▸ ") {
+			t.Fatalf("título da lista com foco sem ▸: %q", head)
+		}
+		if i := strings.Index(head, "["); i >= 0 && !strings.Contains(head, "[foco]") {
+			t.Fatalf("rótulo de foco cortado: %q", head)
+		}
+		m = play(t, m, "tab")
+		if m.Focus() != FocusChat || strings.HasPrefix(listHeader(m), "▸") {
+			t.Fatalf("foco %s, título da lista %q", m.Focus(), listHeader(m))
+		}
+		if !strings.Contains(screen(m), "▸ Chat — #gaules") {
+			t.Fatalf("o chat com foco sem ▸ no título:\n%s", screen(m))
+		}
+		return m
+	})
+}
+
+// A seleção da lista fica forte com a lista em foco e atenuada com o foco no
+// chat: fundo cinza em vez do vídeo reverso. O título do painel com foco é uma
+// barra ciano.
+func TestSelecaoDaListaAtenuaForaDeFoco(t *testing.T) {
+	forceOrientationColorsForTest(true)
+	defer forceOrientationColorsForTest(false)
+	m, _ := newScenario(t, 100, 24)
+	m = play(t, m, "ctrl+f gaules enter enter")
+	m = chatLines(t, m, [2]string{"Fulano", "oi"})
+	row := func(m Model) string {
+		for _, l := range strings.Split(m.View(), "\n") {
+			if strings.Contains(l, "Gaules") && strings.Contains(l, "98.5k") {
+				return l
+			}
+		}
+		t.Fatalf("linha de Gaules fora da tela:\n%s", m.View())
+		return ""
+	}
+	focused := row(m)
+	if !strings.Contains(focused, "\x1b[1;7m") || strings.Contains(focused, "100m") {
+		t.Fatalf("seleção com a lista em foco: %q", focused)
+	}
+	if head := strings.SplitN(m.View(), "\n", 2)[0]; !strings.Contains(head, "7;36m") && !strings.Contains(head, "1;7;36m") {
+		t.Fatalf("título da lista em foco sem a barra ciano: %q", head)
+	}
+	m = play(t, m, "tab")
+	dim := row(m)
+	if !strings.Contains(dim, "\x1b[100m") || strings.Contains(dim, "7m") {
+		t.Fatalf("seleção com o foco no chat: %q", dim)
+	}
+}

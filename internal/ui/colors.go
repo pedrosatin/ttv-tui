@@ -21,6 +21,7 @@ const (
 	ansiMagenta      = lipgloss.ANSIColor(5)
 	ansiCyan         = lipgloss.ANSIColor(6)
 	ansiWhite        = lipgloss.ANSIColor(7)
+	ansiBrightBlack  = lipgloss.ANSIColor(8)
 	ansiBrightYellow = lipgloss.ANSIColor(11)
 	ansiBrightBlue   = lipgloss.ANSIColor(12)
 	ansiBrightWhite  = lipgloss.ANSIColor(15)
@@ -118,12 +119,28 @@ func styleFocus(s string) string {
 	return withForeground(lipgloss.NewStyle().Bold(true), ansiCyan).Render(s)
 }
 
+// styleFocusBar is the title of the focused panel: a cyan bar across the
+// column, which no width can cut. Without color it is reversed.
+func styleFocusBar(s string) string {
+	return withForeground(lipgloss.NewStyle().Bold(true).Reverse(true), ansiCyan).Render(s)
+}
+
 func styleHighlight(s string) string {
 	return withForeground(lipgloss.NewStyle().Bold(true), ansiCyan).Render(s)
 }
 
 func styleSelectedRow(s string) string {
 	return lipgloss.NewStyle().Bold(true).Reverse(true).Render(s)
+}
+
+// styleSelectedRowDim is the selection of the list while the chat has the focus:
+// still there, but quieter than the focused panel. Gray behind the text, or an
+// underline without color.
+func styleSelectedRowDim(s string) string {
+	if !colorsEnabled() {
+		return lipgloss.NewStyle().Underline(true).Render(s)
+	}
+	return lipgloss.NewStyle().Background(ansiBrightBlack).Render(s)
 }
 
 func styleFavorite(s string) string {
