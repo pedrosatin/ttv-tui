@@ -65,6 +65,14 @@ func (m *Model) setCatalog(plat string, b catalog.Browser, s catalog.Searcher) {
 // openInitialCatalog points the list at the default platform, or at the first
 // one configured when the default has no catalog.
 func (m *Model) openInitialCatalog() {
+	active := m.initialCatalog()
+	m.list.platform = active.platform
+	m.browser, m.searcher = active.browser, active.searcher
+	m.list.loading = m.browser != nil
+}
+
+// initialCatalog escolhe Twitch quando disponível, ou o primeiro catálogo configurado.
+func (m Model) initialCatalog() platformCatalog {
 	active := platformCatalog{platform: platform.Default}
 	if len(m.catalogs) > 0 {
 		active = m.catalogs[0]
@@ -74,9 +82,30 @@ func (m *Model) openInitialCatalog() {
 			active = c
 		}
 	}
-	m.list.platform = active.platform
-	m.browser, m.searcher = active.browser, active.searcher
-	m.list.loading = m.browser != nil
+	return active
+}
+
+// savedOnList diz se o salvo aparece na lista ativa. O de plataforma com catálogo
+// aparece na lista dela, e o de plataforma sem catálogo, na lista inicial.
+func (m Model) savedOnList(ch catalog.Channel) bool {
+	plat := ch.CanonicalPlatform()
+	c := m.catalogOf(plat)
+	if c.browser != nil || c.searcher != nil {
+		return plat == m.ListPlatform()
+	}
+	return m.ListPlatform() == m.initialCatalog().platform
+}
+
+// hasSavedOnList diz se algum favorito ou recente, pendentes inclusive, aparece na lista ativa.
+func (m Model) hasSavedOnList() bool {
+	for _, channels := range [][]catalog.Channel{m.list.favorites, m.list.recents, m.list.pendingRecents} {
+		for _, ch := range channels {
+			if m.savedOnList(ch) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ListPlatform returns the canonical name of the platform the list shows.
@@ -150,6 +179,7 @@ func (m Model) switchPlatform() (tea.Model, tea.Cmd) {
 	m.list.generation++
 	m.applyPendingRecents()
 	m.list.platform = next.platform
+	m.list.recentsExpanded = false
 	m.browser, m.searcher = next.browser, next.searcher
 	m.list.mode = ModeCategories
 	m.list.search = searchState{}

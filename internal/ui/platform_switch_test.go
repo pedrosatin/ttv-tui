@@ -436,10 +436,13 @@ func TestBlockedCatalog_KeepsTheListAndSaysUnavailable(t *testing.T) {
 			m = pressP(t, m)
 
 			view := ansi.Strip(m.View())
-			for _, text := range []string{want[0], want[1], "TwitchFav", "KickFav"} {
+			for _, text := range []string{want[0], want[1], "KickFav"} {
 				if !strings.Contains(view, text) {
 					t.Errorf("list missing %q:\n%s", text, view)
 				}
+			}
+			if strings.Contains(view, "TwitchFav") {
+				t.Fatal("favorito da Twitch apareceu na Kick")
 			}
 			if strings.Contains(view, m.t("error.action_retry")) || strings.Contains(view, m.t("error.network")) {
 				t.Errorf("the refusal took the list down:\n%s", view)

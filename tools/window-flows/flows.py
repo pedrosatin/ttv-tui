@@ -133,6 +133,14 @@ def wait(pred, secs, step=0.2):
     return None
 
 
+def first_lines(n=6):
+    """As primeiras linhas da tela, para a evidência de uma verificação."""
+    try:
+        return " | ".join(screen().splitlines()[:n])
+    except (OSError, ValueError, KeyError):
+        return "?"
+
+
 def check(role, name, ok, ev=""):
     results.append((role, name, bool(ok), ev))
     print(f"{'PASS' if ok else 'FAIL'} [{role}] {name} :: {ev}", flush=True)
@@ -260,9 +268,13 @@ def launch():
     wait(lambda: os.path.exists(TEST), 5, 0.1)
 
 
-def up():
+def up(state=None):
     for d in ("cfg", "state", "cache"):  # sem recentes herdados de outra rodada
         shutil.rmtree(d, ignore_errors=True)
+    if state is not None:
+        os.makedirs("state/ttv-tui", exist_ok=True)
+        with open("state/ttv-tui/state.json", "w") as saved:
+            json.dump(state, saved)
     declare_rule()
     launch()
     guard_monitor()
@@ -359,6 +371,21 @@ def last_line():
 
 
 def flows():
+    # ---- Favoritos e recentes pertencem à plataforma da lista.
+    # Logins curtos: a lista da janela tem ~35 colunas e corta nomes longos.
+    role = "salvos por plataforma"
+    up({"favorites": [{"login": "fvux05"}], "recents": [{"login": "rcux05"}]})
+    check(role, "favorito da Twitch aparece na Twitch",
+          wait(lambda: "fvux05" in screen(), 5), first_lines())
+    check(role, "recente da Twitch aparece na Twitch",
+          wait(lambda: "rcux05" in screen(), 5), first_lines())
+    text("p")
+    switched = wait(lambda: (screen().splitlines() or [""])[0].startswith("Kick · "), 10)
+    check(role, "Kick não mostra salvos da Twitch", switched and
+          "fvux05" not in screen() and "rcux05" not in screen(), first_lines())
+    t("quit")
+    wait(exited, 5)
+
     # ---- Espectador casual: abrir, escolher, ver, sair
     role = "casual"
     t0 = time.monotonic()

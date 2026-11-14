@@ -148,7 +148,7 @@ func TestReopeningNonTwitchChannelFromRecentsPlaysURL(t *testing.T) {
 			URL:         "https://kick.com/xqc",
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
+	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)), WithPlatformCatalog(store.PlatformKick, kickCatalog(), nil))
 
 	// Highlight the recent item and press Enter
 	items := m.VisibleItems()
@@ -193,7 +193,7 @@ func TestFavoritingNonTwitchChannelWorks(t *testing.T) {
 			URL:         "https://kick.com/xqc",
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
+	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)), WithPlatformCatalog(store.PlatformKick, kickCatalog(), nil))
 
 	// Highlight the recent item and press 'f' to favorite
 	items := m.VisibleItems()
@@ -228,6 +228,98 @@ func TestFavoritingNonTwitchChannelWorks(t *testing.T) {
 	st := m.list.toStoreState()
 	if len(st.Favorites) != 1 || st.Favorites[0].Platform != store.PlatformKick || st.Favorites[0].URL != "https://kick.com/xqc" {
 		t.Fatalf("store state favorites = %+v, want platform kick and URL preserved", st.Favorites)
+	}
+}
+
+func TestReopeningYouTubeWithoutCatalogFromRecentsPlaysURL(t *testing.T) {
+	pb := &fakePlayback{}
+	fs := &fakeStore{}
+	initialRecents := []store.Channel{
+		{
+			Platform:    store.PlatformYouTube,
+			ID:          "youtube:video",
+			Login:       "video",
+			DisplayName: "video",
+			URL:         "https://youtube.com/watch?v=video",
+		},
+	}
+	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
+
+	items := m.VisibleItems()
+	var recentItem *ListItem
+	for i, it := range items {
+		if it.Type == ItemTypeRecent && it.Channel != nil && it.Channel.Login == "video" {
+			recentItem = &items[i]
+			break
+		}
+	}
+	if recentItem == nil {
+		t.Fatalf("recente do YouTube ausente nos itens visíveis %v", items)
+	}
+
+	m.list.highlightedID = recentItem.ID()
+	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		if sel, ok := cmd().(ChannelSelectedMsg); ok {
+			updated, startCmd := m.Update(sel)
+			m = updated.(Model)
+			m = drainCmd(t, m, startCmd)
+		}
+	}
+
+	if len(pb.started) != 1 || pb.started[0] != "youtube:video" {
+		t.Fatalf("playback started = %v, want [youtube:video]", pb.started)
+	}
+	if len(pb.targets) != 1 || pb.targets[0].Channel.URL != "https://youtube.com/watch?v=video" {
+		t.Fatalf("playback target = %+v, want URL https://youtube.com/watch?v=video", pb.targets)
+	}
+}
+
+func TestFavoritingYouTubeWithoutCatalogWorks(t *testing.T) {
+	pb := &fakePlayback{}
+	fs := &fakeStore{}
+	initialRecents := []store.Channel{
+		{
+			Platform:    store.PlatformYouTube,
+			ID:          "youtube:video",
+			Login:       "video",
+			DisplayName: "video",
+			URL:         "https://youtube.com/watch?v=video",
+		},
+	}
+	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
+
+	items := m.VisibleItems()
+	var recentItem *ListItem
+	for i, it := range items {
+		if it.Type == ItemTypeRecent && it.Channel != nil && it.Channel.Login == "video" {
+			recentItem = &items[i]
+			break
+		}
+	}
+	if recentItem == nil {
+		t.Fatalf("recente do YouTube ausente")
+	}
+
+	m.list.highlightedID = recentItem.ID()
+	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = drainCmd(t, m, cmd)
+
+	favs := m.Favorites()
+	found := false
+	for _, f := range favs {
+		if f.Login == "video" && f.Platform == store.PlatformYouTube {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("vídeo do YouTube ausente nos favoritos %v", favs)
+	}
+
+	st := m.list.toStoreState()
+	if len(st.Favorites) != 1 || st.Favorites[0].Platform != store.PlatformYouTube || st.Favorites[0].URL != "https://youtube.com/watch?v=video" {
+		t.Fatalf("favoritos persistidos = %+v, esperados YouTube e URL preservados", st.Favorites)
 	}
 }
 

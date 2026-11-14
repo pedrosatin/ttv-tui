@@ -138,10 +138,10 @@ type langCount struct {
 	Count int
 }
 
-// languagesInCurrentList returns language codes present among currently loaded
-// channel rows (listing + favorites + recents), with counts, sorted by code.
+// languagesInCurrentList returns language codes present among the loaded listing
+// and the favorites and recents of the active list, with counts, sorted by code.
 // Unknown-language channels are omitted from the menu counts.
-func (l listState) languagesInCurrentList() []langCount {
+func (m Model) languagesInCurrentList() []langCount {
 	counts := make(map[string]int)
 	add := func(ch catalog.Channel) {
 		if channelLanguageUnknown(ch) {
@@ -149,18 +149,22 @@ func (l listState) languagesInCurrentList() []langCount {
 		}
 		counts[catalog.NormalizeLanguage(*ch.Language)]++
 	}
-	for _, ch := range l.channels {
+	for _, ch := range m.list.channels {
 		add(ch)
 	}
-	for _, ch := range l.favorites {
-		add(ch)
+	for _, ch := range m.list.favorites {
+		if m.savedOnList(ch) {
+			add(ch)
+		}
 	}
-	baseRecents := l.recents
-	if l.pendingRecents != nil {
-		baseRecents = l.pendingRecents
+	baseRecents := m.list.recents
+	if m.list.pendingRecents != nil {
+		baseRecents = m.list.pendingRecents
 	}
 	for _, ch := range baseRecents {
-		add(ch)
+		if m.savedOnList(ch) {
+			add(ch)
+		}
 	}
 	out := make([]langCount, 0, len(counts))
 	for code, n := range counts {
@@ -184,8 +188,8 @@ type channelFilterMenuItem struct {
 	Audience int    // for filterMenuAudience
 }
 
-func (l listState) buildChannelFilterMenuItems() []channelFilterMenuItem {
-	langs := l.languagesInCurrentList()
+func (m Model) buildChannelFilterMenuItems() []channelFilterMenuItem {
+	langs := m.languagesInCurrentList()
 	items := make([]channelFilterMenuItem, 0, 1+len(langs)+len(channelAudienceThresholds))
 	items = append(items, channelFilterMenuItem{Kind: filterMenuAllLangs})
 	for _, lc := range langs {
@@ -203,7 +207,7 @@ func (m Model) openChannelFilterMenu() Model {
 	m.list.filtering = false
 	m.list.search.active = false
 	m.list.prefs.menuOpen = true
-	m.list.prefs.menuItems = m.list.buildChannelFilterMenuItems()
+	m.list.prefs.menuItems = m.buildChannelFilterMenuItems()
 	if m.list.prefs.menuIndex >= len(m.list.prefs.menuItems) {
 		m.list.prefs.menuIndex = 0
 	}
@@ -233,7 +237,7 @@ func (m Model) persistChannelFilters() tea.Cmd {
 func (m Model) toggleChannelFilterMenuItem() (Model, tea.Cmd) {
 	items := m.list.prefs.menuItems
 	if len(items) == 0 {
-		items = m.list.buildChannelFilterMenuItems()
+		items = m.buildChannelFilterMenuItems()
 		m.list.prefs.menuItems = items
 	}
 	if len(items) == 0 {
@@ -366,24 +370,24 @@ func (m Model) renderChannelFilterMenuLines(maxWidth int) []string {
 	out = append(out, head[:pinned]...)
 	out = append(out, rows[start:end]...)
 	if m.height > 2 {
-		out = append(out, positionRow(m.list.prefs.menuIndex+1, len(m.list.channelFilterMenuEntries()), maxWidth))
+		out = append(out, positionRow(m.list.prefs.menuIndex+1, len(m.channelFilterMenuEntries()), maxWidth))
 	}
 	return out
 }
 
 // channelFilterMenuEntries returns the items the open menu shows.
-func (l listState) channelFilterMenuEntries() []channelFilterMenuItem {
-	if len(l.prefs.menuItems) > 0 {
-		return l.prefs.menuItems
+func (m Model) channelFilterMenuEntries() []channelFilterMenuItem {
+	if len(m.list.prefs.menuItems) > 0 {
+		return m.list.prefs.menuItems
 	}
-	return l.buildChannelFilterMenuItems()
+	return m.buildChannelFilterMenuItems()
 }
 
 // channelFilterMenuRows returns the fixed rows of the menu, the rows that
 // scroll, and the index in rows of the one holding the cursor.
 func (m Model) channelFilterMenuRows(maxWidth int) (head, rows []string, cursor int) {
-	items := m.list.channelFilterMenuEntries()
-	langCounts := m.list.languagesInCurrentList()
+	items := m.channelFilterMenuEntries()
+	langCounts := m.languagesInCurrentList()
 	countBy := make(map[string]int, len(langCounts))
 	for _, lc := range langCounts {
 		countBy[lc.Code] = lc.Count
@@ -449,7 +453,7 @@ func (m Model) preferenceFilterHidesChannels() bool {
 	if !m.list.prefs.active() {
 		return false
 	}
-	hasChannelSource := len(m.list.channels) > 0 || len(m.list.favorites) > 0 || len(m.list.recents) > 0 || len(m.list.pendingRecents) > 0
+	hasChannelSource := len(m.list.channels) > 0 || m.hasSavedOnList()
 	if !hasChannelSource {
 		return false
 	}

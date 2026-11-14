@@ -289,7 +289,7 @@ func (m Model) resolveSaved(saved catalog.Channel) (catalog.Channel, catalog.Ava
 // favorite is not marked as seen, so it does not hide a later row.
 func (m Model) appendFavorites(items []ListItem, p itemPass) []ListItem {
 	for _, fav := range m.list.favorites {
-		if fav.ID == "" && fav.Login == "" {
+		if !m.savedOnList(fav) || (fav.ID == "" && fav.Login == "") {
 			continue
 		}
 		ch, avail := m.resolveSaved(fav)
@@ -310,7 +310,7 @@ func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 	limited := p.query == "" && !m.list.recentsExpanded
 	shown, hidden := 0, 0
 	for _, rec := range m.list.recents {
-		if rec.ID == "" && rec.Login == "" {
+		if !m.savedOnList(rec) || (rec.ID == "" && rec.Login == "") {
 			continue
 		}
 		if p.isSeen(rec) {

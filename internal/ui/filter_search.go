@@ -281,7 +281,7 @@ func (m Model) filterHasNoMatches() bool {
 	if strings.TrimSpace(m.list.filter) == "" {
 		return false
 	}
-	if len(m.list.categories) == 0 && len(m.list.channels) == 0 && len(m.list.search.categories) == 0 && len(m.list.favorites) == 0 && len(m.list.recents) == 0 {
+	if !m.hasData() {
 		return false
 	}
 	return len(m.VisibleItems()) == 0

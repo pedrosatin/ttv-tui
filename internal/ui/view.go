@@ -6,9 +6,12 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 const (
+	// platformMarkWidth limita a marca de plataforma de um salvo sem catálogo.
+	platformMarkWidth = 16
 	// minSplitColumns is the narrowest terminal that fits list and chat side by
 	// side. Chat-only has the whole width and no such limit.
 	minSplitColumns = 80
@@ -565,6 +568,12 @@ func (m Model) formatChannelRow(marker string, ch catalog.Channel, avail catalog
 		identity = login
 	} else if login != "" && !strings.EqualFold(displayName, login) {
 		identity += " (" + login + ")"
+	}
+	c := m.catalogOf(ch.CanonicalPlatform())
+	if c.browser == nil && c.searcher == nil && ch.CanonicalPlatform() != m.ListPlatform() {
+		// O teto deixa espaço para o nome mesmo com host longo em 80 colunas.
+		mark := TruncateVisual(sanitizeScreenText(platform.DisplayName(ch.CanonicalPlatform())), platformMarkWidth)
+		identity = "[" + mark + "] " + identity
 	}
 	title := ""
 	if ch.Title != nil {

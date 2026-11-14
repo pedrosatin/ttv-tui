@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sync"
 	"testing"
@@ -1286,5 +1287,34 @@ func TestStore_ChannelWithURLRoundTripAndLegacyCompat(t *testing.T) {
 	}
 	if !ytUpper.Matches(ytWatch) {
 		t.Fatalf("expected YouTube youtu.be/AbC to match youtube.com/watch?v=AbC")
+	}
+}
+
+// O estado atual e as entradas antigas sem plataforma sobrevivem à gravação.
+func TestEstadoMistoSemPerda(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	raw := []byte(`{"favorites":[{"login":"gaules","display_name":"Gaules"},{"platform":"kick","id":"42","login":"xqc","url":"https://kick.com/xqc"}],"recents":[{"login":"antigo"},{"platform":"kick","login":"recente"}]}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	state, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Favorites) != 2 || len(state.Recents) != 2 {
+		t.Fatalf("estado incompleto: %+v", state)
+	}
+	if state.Favorites[0].ToChannel().CanonicalPlatform() != PlatformTwitch || state.Recents[0].ToChannel().CanonicalPlatform() != PlatformTwitch {
+		t.Fatal("entrada antiga não é Twitch")
+	}
+	if err := SaveTo(path, state); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, state) {
+		t.Fatalf("estado mudou: %+v != %+v", got, state)
 	}
 }

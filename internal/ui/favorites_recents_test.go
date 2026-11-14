@@ -535,7 +535,7 @@ func TestReturnToCategoriesDropsListing(t *testing.T) {
 	}
 
 	// The language menu counts only what is on screen: the favorite.
-	langs := m.list.languagesInCurrentList()
+	langs := m.languagesInCurrentList()
 	if len(langs) != 1 || langs[0].Code != "pt" || langs[0].Count != 1 {
 		t.Errorf("language counts outside the screen: %+v", langs)
 	}

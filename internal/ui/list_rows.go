@@ -103,7 +103,7 @@ func (m Model) listEmptyText() string {
 	if m.list.loadFailed {
 		return m.t("list.not_loaded")
 	}
-	if m.list.hasData() && m.list.filter != "" {
+	if m.hasData() && m.list.filter != "" {
 		return m.t("filter.empty")
 	}
 	switch m.Mode() {
@@ -116,9 +116,9 @@ func (m Model) listEmptyText() string {
 	}
 }
 
-// hasData reports whether anything was loaded or saved, shown or not.
-func (l listState) hasData() bool {
-	return len(l.categories) > 0 || len(l.channels) > 0 || len(l.search.categories) > 0 || len(l.favorites) > 0 || len(l.recents) > 0
+// hasData reports whether anything was loaded, or saved for the active list, shown or not.
+func (m Model) hasData() bool {
+	return len(m.list.categories) > 0 || len(m.list.channels) > 0 || len(m.list.search.categories) > 0 || m.hasSavedOnList()
 }
 
 // listRows formats every visible item, with a header where the section changes.
