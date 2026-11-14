@@ -199,7 +199,10 @@ func openWindow(t *testing.T, s setup) *window {
 }
 
 // cleanEnv é o ambiente do teste sem nada que leve a janela ao compositor, ao
-// config do operador ou a outra execução.
+// config do operador ou a outra execução. Sai também o CI: com ele definido, o
+// termenv trata a saída como não-TTY e a TUI desenha sem cor, e os cenários que
+// medem cor em pixel (W15) veriam no GitHub Actions uma tela que o usuário
+// nunca vê.
 func cleanEnv() []string {
 	var out []string
 	for _, kv := range os.Environ() {
@@ -207,7 +210,7 @@ func cleanEnv() []string {
 		switch {
 		case strings.HasPrefix(k, "TTV_"), strings.HasPrefix(k, "XDG_"), strings.HasPrefix(k, "SDL_"),
 			strings.HasPrefix(k, "WAYLAND_"), strings.HasPrefix(k, "HYPRLAND_"),
-			k == "DISPLAY", k == "HOME", k == "PATH", k == "TMPDIR":
+			k == "DISPLAY", k == "HOME", k == "PATH", k == "TMPDIR", k == "CI":
 			continue
 		}
 		out = append(out, kv)
