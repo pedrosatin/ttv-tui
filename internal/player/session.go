@@ -408,13 +408,34 @@ func closeFiles(files ...*os.File) {
 	}
 }
 
+const streamlinkLineLimit = 1024 * 1024
+const truncatedLineSuffix = " […]"
+
 func (s *Session) consumeLines(ctx context.Context, r io.Reader) {
 	defer s.readers.Done()
-	sc := bufio.NewScanner(r)
-	// streamlink lines can be long when dumping playlist metadata
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for sc.Scan() {
-		s.handleLine(sc.Text())
+	reader := bufio.NewReaderSize(r, 64*1024)
+	var line []byte
+	truncated := false
+	for {
+		fragment, prefix, err := reader.ReadLine()
+		if err != nil && (!errors.Is(err, io.EOF) || len(line) == 0) {
+			return
+		}
+		remaining := streamlinkLineLimit - len(line)
+		if len(fragment) > remaining {
+			fragment = fragment[:remaining]
+			truncated = true
+		}
+		line = append(line, fragment...)
+		if !prefix {
+			if truncated {
+				// A marca ocupa parte do limite; o restante da linha já foi drenado.
+				line = append(line[:streamlinkLineLimit-len(truncatedLineSuffix)], truncatedLineSuffix...)
+			}
+			s.handleLine(string(line))
+			line = line[:0]
+			truncated = false
+		}
 		select {
 		case <-ctx.Done():
 			return

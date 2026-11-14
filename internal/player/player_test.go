@@ -597,6 +597,10 @@ func runPlayerHelper() {
 		fmt.Fprintln(os.Stderr, "error: NO_PLAYABLE_STREAMS for channel")
 		time.Sleep(50 * time.Millisecond)
 		os.Exit(1)
+	case "long-line-offline":
+		fmt.Fprintln(os.Stderr, strings.Repeat("x", 2*1024*1024))
+		fmt.Fprintln(os.Stderr, "error: No playable streams found on this URL")
+		time.Sleep(60 * time.Second)
 	case "offline-hang":
 		// streamlink's offline line, then a process that would linger: the
 		// session must end it instead of waiting.
