@@ -10,11 +10,11 @@ import (
 func TestHostedOverlayGivesTheVideoTheChatColumns(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.toggleChatOverlay()
-	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 169, Visible: true, OverlayCols: 46, OverlayOpacity: 70}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 44, Rows: 47, Cols: 169, Visible: true, OverlayCols: 46, OverlayOpacity: 70}); got != want {
 		t.Fatalf("sobreposto: %+v, quero %+v", got, want)
 	}
 	m.toggleChatOverlay()
-	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true}); got != want {
+	if got, want := m.hostedPanel(), (HostPanel{Row: 1, Col: 44, Rows: 47, Cols: 122, Visible: true}); got != want {
 		t.Fatalf("de volta ao lado: %+v, quero %+v", got, want)
 	}
 }

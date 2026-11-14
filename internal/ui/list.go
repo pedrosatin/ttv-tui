@@ -846,7 +846,11 @@ func (m Model) saveStoreCmd(notice ...string) tea.Cmd {
 		confirmation = notice[0]
 	}
 	return m.storeSaves.cmd(func() tea.Msg {
-		return storeSavedMsg{Err: s.Save(st), Notice: confirmation}
+		name := ""
+		if len(notice) > 1 {
+			name = notice[1]
+		}
+		return storeSavedMsg{Err: s.Save(st), Notice: confirmation, Name: name}
 	})
 }
 
@@ -863,12 +867,16 @@ func (m Model) toggleFavoriteHighlighted() (tea.Model, tea.Cmd) {
 	}
 	ch := *it.Channel
 	added := m.ToggleFavorite(ch)
-	notice := "favorites.removed"
+	notice := "favorites.removed_named"
 	if added {
-		notice = "favorites.added"
+		notice = "favorites.added_named"
 	}
 	m.clearStatusNotice()
-	cmd := m.saveStoreCmd(notice)
+	name := ch.DisplayName
+	if name == "" {
+		name = ch.Login
+	}
+	cmd := m.saveStoreCmd(notice, name)
 	m.reconcileHighlight()
 	return m, cmd
 }

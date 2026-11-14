@@ -452,7 +452,8 @@ type noticeState struct {
 	componentProgress bool
 	// gen rises on every status write; a notice timer clears only the
 	// instance that scheduled it.
-	gen uint64
+	gen      uint64
+	favorite bool
 	// ctrlC is the transient "To quit use Ctrl+Q" status after Ctrl+C. It
 	// outranks filter/search prompts so the hint stays visible in every mode.
 	ctrlC string
@@ -696,6 +697,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // warnStatus leads the bar with a warning until the next key.
 func (m *Model) warnStatus(notice string) {
 	m.notices.gen++
+	m.notices.favorite = false
 	m.notices.status = notice
 	m.notices.statusWarns = true
 	m.notices.componentProgress = false
@@ -703,6 +705,7 @@ func (m *Model) warnStatus(notice string) {
 
 func (m *Model) clearStatusNotice() {
 	m.notices.gen++
+	m.notices.favorite = false
 	m.notices.status = ""
 	m.notices.statusWarns = false
 	m.notices.componentProgress = false

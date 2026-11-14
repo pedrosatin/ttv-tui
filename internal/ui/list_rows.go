@@ -240,7 +240,7 @@ func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth 
 // listRowBudget is how many rows fit once the used lines, the status bar, the
 // loading line and the narrow-chat notice have their room. Never below one.
 func (m Model) listRowBudget(used int, isSearch bool, maxWidth int) int {
-	budget := m.height - 1 - used
+	budget := m.height - 1 - m.footerRows() - used
 	if m.list.loading && !isSearch {
 		budget--
 	}

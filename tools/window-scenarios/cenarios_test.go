@@ -195,7 +195,8 @@ func TestJanelaPgDnNaLista(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if st.TUI.HighlightIndex < st.Window.Rows-2 {
+		// O título, o rodapé de ações e a barra de status reservam três linhas.
+		if st.TUI.HighlightIndex != st.Window.Rows-3 {
 			return fmt.Errorf("PgDn deixou o destaque no item %d", st.TUI.HighlightIndex)
 		}
 		return nil

@@ -61,6 +61,9 @@ func (m Model) statusParts() statusContent {
 // statusLead picks the lead by priority: what blocks the screen, one-shot
 // notices, the player and loading, then what is selected.
 func (m Model) statusLead() statusLead {
+	if m.notices.favorite && m.notices.status != "" && !m.notices.statusWarns {
+		return statusLead{primary: m.notices.status}
+	}
 	if lead, ok := m.blockingStatusLead(); ok {
 		return lead
 	}
@@ -180,14 +183,6 @@ func (m Model) selectionStatusLead() statusLead {
 	switch {
 	case !m.list.loading && len(m.VisibleItems()) == 0:
 		lead.primary = m.t("list.empty_action")
-	case m.list.selectedChannel != nil:
-		lead.primary = fmt.Sprintf(m.t("channels.selected"), m.list.selectedChannel.DisplayName, m.list.selectedChannel.Login)
-		if m.list.selectedChannel.Viewers != nil {
-			lead.primary += " " + m.formatChannelViewers(m.list.selectedChannel.Viewers)
-		}
-		if cat := channelCategoryName(m.list.selectedChannel); cat != "" {
-			lead.context = append(lead.context, cat)
-		}
 	case m.Mode() == ModeSearch && m.list.search.query != "":
 		lead.primary = fmt.Sprintf(m.t("search.title_query"), m.list.search.query)
 	case m.list.selectedCategory != nil:

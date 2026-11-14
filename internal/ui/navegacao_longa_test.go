@@ -19,8 +19,8 @@ func TestCenarioPaginaCategorias(t *testing.T) {
 		}
 		m.reconcileHighlight()
 		m = play(t, m, "pgdown")
-		if m.list.highlightIndex != height-2 {
-			t.Fatalf("PgDn: índice %d, quer %d", m.list.highlightIndex, height-2)
+		if m.list.highlightIndex != height-3 {
+			t.Fatalf("PgDn: índice %d, quer %d", m.list.highlightIndex, height-3)
 		}
 		return m
 	})
@@ -109,8 +109,8 @@ func TestPaginaSaltaCabecalho(t *testing.T) {
 		tecla       string
 		inicio, fim int
 	}{
-		{"pgdown", 8, 30},
-		{"pgup", 51, 29},
+		{"pgdown", 9, 30},
+		{"pgup", 50, 29},
 	} {
 		t.Run(tc.tecla, func(t *testing.T) {
 			m, _ := newScenario(t, 80, 24, WithFavorites(favoritos))

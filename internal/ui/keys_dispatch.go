@@ -96,7 +96,12 @@ func (m Model) keyStopVideo() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) keyReconnectChat() (tea.Model, tea.Cmd) {
-	if m.chat.session == nil || m.chat.panel.channel == "" {
+	if m.chat.panel.channel == "" {
+		m.warnStatus(m.t("feedback.open_channel"))
+		return m, nil
+	}
+	if m.chat.session == nil {
+		m.warnStatus(m.t("layout.no_chat"))
 		return m, nil
 	}
 	m.chat.panel.state = ChatStateConnecting
@@ -207,6 +212,7 @@ func (m Model) handleCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 func (m Model) keyFavorite() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
+		m.warnStatus(m.t("feedback.favorite_list"))
 		return m, nil
 	}
 	return m.toggleFavoriteHighlighted()

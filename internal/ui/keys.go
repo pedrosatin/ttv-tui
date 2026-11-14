@@ -116,7 +116,7 @@ func (m Model) typingField() bool {
 // says so.
 func (m Model) switchPanelFocus() Model {
 	if !m.listVisible() || !m.chatColumnVisible() {
-		m.warnChatHiddenByWidth()
+		m.warnChatUnavailable()
 		return m
 	}
 	if m.layout.focus == FocusChat {
@@ -130,7 +130,12 @@ func (m Model) switchPanelFocus() Model {
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {
+	if m.chat.panel.channel == "" {
+		m.warnStatus(m.t("feedback.open_channel"))
+		return m, nil
+	}
 	if m.chat.panel.unsupported || !m.chat.panel.caps.CanSend {
+		m.warnStatus(m.t("feedback.read_only"))
 		return m, nil
 	}
 	if m.warnChatHiddenByWidth() || !m.layout.showChat || m.chatHiddenByWidth() {

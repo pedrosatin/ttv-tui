@@ -197,13 +197,17 @@ func (m *Model) warnChatUnavailable() {
 	if m.chat.hasPanel() {
 		m.warnStatus(m.t("layout.hidden_chat_key"))
 	} else {
-		m.warnStatus(m.t("layout.no_chat"))
+		m.warnStatus(m.t("feedback.open_channel"))
 	}
 }
 
 // handleHostedResizeKey moves a divider. It reports whether msg was one of its keys.
 func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.hosted.host == nil {
+		if m.keys.actionFor(modeWindow, msg) == actChatOverlay {
+			m.warnStatus(m.t("feedback.window_only"))
+			return true, nil
+		}
 		return false, nil
 	}
 	// The arrow moves the divider, so with the sides swapped each key does the opposite.
@@ -331,7 +335,7 @@ func (m Model) hostedPanel() HostPanel {
 	if leftW > 0 && (!overlaid || !m.hosted.panelsSwapped) {
 		col += leftW + hostedSepWidth
 	}
-	panel := HostPanel{Row: 1, Col: col, Rows: m.height - 1, Cols: videoW, Visible: true}
+	panel := HostPanel{Row: 1, Col: col, Rows: m.height - 1 - m.footerRows(), Cols: videoW, Visible: true}
 	if overlaid {
 		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = chatW, m.hosted.panelsSwapped, m.hosted.chatOpacity()
 	}

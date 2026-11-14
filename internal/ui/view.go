@@ -156,6 +156,9 @@ func (m Model) frame() string {
 	if m.height == 1 {
 		return status
 	}
+	if m.footerRows() > 0 {
+		status = m.Footer() + "\n" + status
+	}
 
 	// Help is modal, so it wins over the filter menu it may have opened on.
 	overlayLines := m.helpViewLines()
@@ -164,13 +167,13 @@ func (m Model) frame() string {
 	}
 
 	if m.hosted.host != nil && m.width > 0 && m.height > 1 {
-		return m.hostedView(m.height-1, overlayLines, status)
+		return m.hostedView(m.height-1-m.footerRows(), overlayLines, status)
 	}
 	if m.width <= 0 && m.height <= 0 {
 		return m.unsizedFrame(overlayLines, status)
 	}
 
-	available := m.height - 1
+	available := m.height - 1 - m.footerRows()
 	if m.height <= 0 {
 		available = 20
 	}

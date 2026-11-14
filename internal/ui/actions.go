@@ -157,6 +157,7 @@ type action struct {
 	Context helpContext
 	Default []string
 	Also    []helpUse
+	Footer  []footerUse
 }
 
 // helpUses são as linhas da ajuda da ação: a principal e as de Also.
@@ -185,7 +186,7 @@ func defaultActions() []action {
 		}
 		return uses
 	}
-	return []action{
+	actions := []action{
 		// Ctrl+Q é a única tecla que sai. Ctrl+C chega como tecla (o terminal
 		// está em modo raw, sem SIGINT) e só explica como sair.
 		{ID: actQuit, Modes: []keyMode{modeApp}, Section: sectionGlobal, Default: []string{"ctrl+q"}},
@@ -284,6 +285,30 @@ func defaultActions() []action {
 		{ID: actChatWider, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+left"}},
 		{ID: actChatNarrower, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+right"}},
 	}
+	for i := range actions {
+		a := &actions[i]
+		switch a.ID {
+		case actSelect:
+			a.Footer = []footerUse{{footList, 1, "footer.open"}, {footSearch, 1, "footer.search"}, {footFilter, 1, "footer.open"}, {footCompose, 1, "footer.send"}, {footMenu, 1, "footer.choose"}}
+		case actFavorite:
+			a.Footer = []footerUse{{footList, 2, "footer.favorite"}}
+		case actFilter:
+			a.Footer = []footerUse{{footList, 3, "footer.filter"}}
+		case actSearch:
+			a.Footer = []footerUse{{footList, 4, "footer.search"}, {footFilter, 2, "footer.search"}}
+		case actSwitchPlatform:
+			a.Footer = []footerUse{{footList, 5, "footer.platform"}}
+		case actBack:
+			a.Footer = []footerUse{{footSearch, 2, "footer.cancel"}, {footFilter, 3, "footer.clear"}, {footCompose, 2, "footer.cancel"}, {footMenu, 2, "footer.close"}}
+		case actCompose:
+			a.Footer = []footerUse{{footChat, 1, "footer.compose"}}
+		case actCopyMessage:
+			a.Footer = []footerUse{{footChat, 2, "footer.copy"}}
+		case actSwitchFocus:
+			a.Footer = []footerUse{{footChat, 3, "footer.list"}, {footCompose, 3, "footer.list"}}
+		}
+	}
+	return actions
 }
 
 // keyRegistry responde que ação uma tecla dispara num modo e que teclas uma ação

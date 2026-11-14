@@ -28,6 +28,8 @@ func TestTextInputSanitizesPaste(t *testing.T) {
 				case "filter":
 					m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 				case "compose":
+					m.chat.panel.channel = "demo"
+					m.chat.session = &fakeChat{hasToken: true}
 					m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 				}
 				m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.input), Paste: true})

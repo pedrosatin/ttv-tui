@@ -73,7 +73,7 @@ func TestFeedbackFavoriteSave(t *testing.T) {
 					if removed {
 						key = "favorites.removed"
 					}
-					if !strings.Contains(bar, m.t(key)) {
+					if !strings.Contains(bar, fmt.Sprintf(m.t(key+"_named"), "Demo")) {
 						t.Errorf("missing confirmation after save: %q", bar)
 					}
 				}

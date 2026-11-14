@@ -60,7 +60,7 @@ func assertRowsFit(t *testing.T, m Model) {
 		if w := ansi.StringWidth(row); w > m.width {
 			t.Fatalf("row %d overflows %d cols (%d): %q", i, m.width, w, row)
 		}
-		if chatW == 0 || i == m.height-1 {
+		if chatW == 0 || i >= m.height-1-m.footerRows() {
 			continue
 		}
 		left, right, ok := strings.Cut(row, panelSeparator)

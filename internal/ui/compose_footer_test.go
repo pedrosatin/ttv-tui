@@ -21,7 +21,7 @@ func chatColumn(t *testing.T, m Model) []string {
 		t.Fatalf("View has %d rows, want %d", len(rows), m.height)
 	}
 	out := make([]string, 0, len(rows)-1)
-	for i, row := range rows[:len(rows)-1] {
+	for i, row := range rows[:len(rows)-2] {
 		_, right, ok := strings.Cut(row, panelSeparator)
 		if !ok {
 			t.Fatalf("row %d has no panel separator: %q", i, row)

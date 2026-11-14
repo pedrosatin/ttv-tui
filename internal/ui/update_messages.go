@@ -256,6 +256,7 @@ func (m Model) applyStoreSaved(msg storeSavedMsg) (tea.Model, tea.Cmd) {
 		m.warnStatus(m.t("store.save_failed"))
 	} else if msg.Notice != "" {
 		m.clearStatusNotice()
+		m.notices.favorite = msg.Notice == "favorites.added_named" || msg.Notice == "favorites.removed_named"
 		m.notices.status = m.t(msg.Notice)
 		if msg.Name != "" {
 			m.notices.status = fmt.Sprintf(m.notices.status, sanitizeScreenText(msg.Name))

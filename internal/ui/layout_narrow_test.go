@@ -371,7 +371,11 @@ func TestChatKeysStayQuietWhenLayoutHidesTheChat(t *testing.T) {
 			m = sendKeys(m, keyCtrlL)
 			m = resize(m, 60, 24)
 			m = sendKeys(m, k)
-			if m.StatusNotice() != "" {
+			if k.Type == tea.KeyTab {
+				if m.StatusNotice() != m.t("layout.hidden_chat_key") {
+					t.Fatalf("missing hidden chat feedback: %q", m.StatusNotice())
+				}
+			} else if m.StatusNotice() != "" {
 				t.Fatalf("notice for a chat the user hid: %q", m.StatusNotice())
 			}
 		})
