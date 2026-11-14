@@ -144,50 +144,15 @@ func Parse(raw string) (Info, bool) {
 		}, true
 
 	case "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be":
-		var slug string
-		segs := pathSegments(u.Path)
-		if host == "youtu.be" {
-			if len(segs) != 1 || !validYouTubeVideoID(segs[0]) {
-				return Info{}, false
-			}
-			slug = segs[0]
-		} else {
-			if len(segs) == 0 {
-				return Info{}, false
-			}
-			switch {
-			case strings.EqualFold(segs[0], "watch"):
-				v := query.Get("v")
-				if !validYouTubeVideoID(v) {
-					return Info{}, false
-				}
-				slug = v
-			case strings.EqualFold(segs[0], "live"):
-				if len(segs) < 2 || !validYouTubeVideoID(segs[1]) {
-					return Info{}, false
-				}
-				slug = segs[1]
-			case strings.HasPrefix(segs[0], "@"):
-				if !validYouTubeHandle(segs[0]) {
-					return Info{}, false
-				}
-				if len(segs) > 1 && (len(segs) != 2 || !strings.EqualFold(segs[1], "live")) {
-					return Info{}, false
-				}
-				slug = segs[0]
-			default:
-				v := query.Get("v")
-				if !validYouTubeVideoID(v) {
-					return Info{}, false
-				}
-				slug = v
-			}
+		slug, display, ok := parseYouTubeURL(host, u.Path, query)
+		if !ok {
+			return Info{}, false
 		}
 		return Info{
 			URL:         raw,
 			Platform:    platform.YouTube,
 			Login:       slug,
-			DisplayName: slug,
+			DisplayName: display,
 			Label:       fmt.Sprintf("%s:%s", platform.YouTube, slug),
 			IsTwitch:    false,
 		}, true
@@ -220,6 +185,69 @@ func Parse(raw string) (Info, bool) {
 	}
 }
 
+func parseYouTubeURL(host, rawPath string, query url.Values) (slug, display string, ok bool) {
+	segs := pathSegments(rawPath)
+	if host == "youtu.be" {
+		if len(segs) != 1 || !platform.ValidYouTubeVideoID(segs[0]) {
+			return "", "", false
+		}
+		return segs[0], segs[0], true
+	}
+	if len(segs) == 0 {
+		return "", "", false
+	}
+	switch kind := strings.ToLower(segs[0]); {
+	case kind == "watch":
+		v := query.Get("v")
+		if !platform.ValidYouTubeVideoID(v) {
+			return "", "", false
+		}
+		return v, v, true
+	case kind == "live", kind == "v":
+		if len(segs) < 2 || !platform.ValidYouTubeVideoID(segs[1]) {
+			return "", "", false
+		}
+		return segs[1], segs[1], true
+	case kind == "embed":
+		if len(segs) < 2 {
+			return "", "", false
+		}
+		if strings.EqualFold(segs[1], "live_stream") {
+			ch := query.Get("channel")
+			if !platform.ValidYouTubeChannelSegment(ch) {
+				return "", "", false
+			}
+			return "channel/" + ch, ch, true
+		}
+		if !platform.ValidYouTubeVideoID(segs[1]) {
+			return "", "", false
+		}
+		return segs[1], segs[1], true
+	case strings.HasPrefix(segs[0], "@"):
+		if !platform.ValidYouTubeHandle(segs[0]) {
+			return "", "", false
+		}
+		if len(segs) > 1 && (len(segs) != 2 || !strings.EqualFold(segs[1], "live")) {
+			return "", "", false
+		}
+		return segs[0], segs[0], true
+	case kind == "channel", kind == "c", kind == "user":
+		if len(segs) < 2 || !platform.ValidYouTubeChannelSegment(segs[1]) {
+			return "", "", false
+		}
+		if len(segs) > 2 && (len(segs) != 3 || !strings.EqualFold(segs[2], "live")) {
+			return "", "", false
+		}
+		return kind + "/" + segs[1], segs[1], true
+	default:
+		v := query.Get("v")
+		if !platform.ValidYouTubeVideoID(v) {
+			return "", "", false
+		}
+		return v, v, true
+	}
+}
+
 // ParseInput parses a pasted stream URL (via Parse) or a bare YouTube @channel
 // handle. Leading/trailing spaces are NOT trimmed; callers normalize whitespace
 // before invoking it, matching Parse.
@@ -227,7 +255,7 @@ func ParseInput(raw string) (Info, bool) {
 	if info, ok := Parse(raw); ok {
 		return info, true
 	}
-	if validYouTubeHandle(raw) {
+	if platform.ValidYouTubeHandle(raw) {
 		return Info{
 			URL:         "https://www.youtube.com/" + raw + "/live",
 			Platform:    platform.YouTube,
@@ -244,30 +272,6 @@ func ParseInput(raw string) (Info, bool) {
 func IsStreamURL(raw string) bool {
 	_, ok := Parse(raw)
 	return ok
-}
-
-func validYouTubeHandle(h string) bool {
-	if !strings.HasPrefix(h, "@") || len(h) < 2 || len(h) > 100 {
-		return false
-	}
-	rest := h[1:]
-	if rest == "." || rest == ".." || strings.Contains(rest, "..") {
-		return false
-	}
-	if strings.ContainsAny(h, " \t\r\n\v\f") || platform.HasControl(h) {
-		return false
-	}
-	return !strings.ContainsAny(rest, "/\\?#:@%")
-}
-
-func validYouTubeVideoID(id string) bool {
-	if id == "" || len(id) > 64 || id == "." || id == ".." {
-		return false
-	}
-	if strings.ContainsAny(id, " \t\r\n\v\f") || platform.HasControl(id) {
-		return false
-	}
-	return !strings.ContainsAny(id, "/\\?#:@%&=.")
 }
 
 // decodedHasControl informa se o caminho ou algum parâmetro da query, já
