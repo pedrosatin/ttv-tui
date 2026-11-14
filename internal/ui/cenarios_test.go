@@ -12,6 +12,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
 // eachSize roda o cenário em cada tamanho de terminal e grava o golden
@@ -69,18 +70,81 @@ func TestCenarioFiltroComFavorito(t *testing.T) {
 	})
 }
 
-// O usuário aperta ? na tela inicial: a ajuda abre embaixo da lista, com o
-// título e as teclas da lista à vista.
+// O usuário aperta ? na tela inicial: a ajuda cobre a tela com o título fixo
+// no topo e abre nas teclas da lista, onde está o foco. A última linha diz a
+// seção, a posição dela entre as sete e a linha.
 func TestCenarioAjudaAberta(t *testing.T) {
-	eachSize(t, "ajuda-aberta", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
-		m = play(t, m, "?")
+	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
+		name := "ajuda-aberta"
+		if lang != i18n.LangPTBR {
+			name += "-" + lang
+		}
+		eachSize(t, name, func(t *testing.T, width, height int) Model {
+			m, _ := newScenario(t, width, height)
+			m.catalog = mustCatalog(t, lang)
+			m = play(t, m, "?")
+			assertHelpAt(t, m, sectionNav)
+			return m
+		})
+	}
+}
 
-		view := ansi.Strip(m.View())
-		if !strings.Contains(view, m.t("help.title")) {
-			t.Fatalf("a ajuda não mostra o título %q:\n%s", m.t("help.title"), view)
+// assertHelpAt confere que a ajuda está aberta na seção: o título dela logo
+// abaixo do título fixo, ou à vista na última página, e o nome dela na linha de
+// posição.
+func assertHelpAt(t *testing.T, m Model, s helpSection) {
+	t.Helper()
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, m.t("help.title")) {
+		t.Fatalf("a ajuda não mostra o título %q:\n%s", m.t("help.title"), view)
+	}
+	want := helpSectionHeader(m, s)
+	cur, total, _ := helpPosition(m)
+	if got := helpTopRow(m); got != want && (cur < total || !strings.Contains(view, want)) {
+		t.Fatalf("a ajuda abriu em %q, quer %q:\n%s", got, want, view)
+	}
+	rows := helpBody(m)
+	if last := rows[len(rows)-1]; !strings.HasPrefix(last, m.helpSectionName(s)+statusSep) {
+		t.Fatalf("a linha de posição %q não diz a seção %q", last, m.helpSectionName(s))
+	}
+}
+
+// Com um canal aberto, o usuário passa o foco ao chat com Tab e aperta ?: a
+// ajuda abre na seção do chat, com as teclas de rolar e de escrever.
+func TestCenarioAjudaNoChat(t *testing.T) {
+	eachSize(t, "ajuda-no-chat", func(t *testing.T, width, height int) Model {
+		m, _ := newScenario(t, width, height)
+		m = play(t, m, "enter enter tab ?")
+		assertHelpAt(t, m, sectionChat)
+		return m
+	})
+}
+
+// Com o filtro aberto e "ga" digitado, o usuário aperta F1: a ajuda abre em
+// Busca e filtros, e fechá-la devolve o filtro como estava.
+func TestCenarioAjudaNoFiltro(t *testing.T) {
+	eachSize(t, "ajuda-no-filtro", func(t *testing.T, width, height int) Model {
+		m, _ := newScenario(t, width, height)
+		m = play(t, m, "/ g a f1")
+		assertHelpAt(t, m, sectionSearch)
+		if closed := play(t, m, "f1"); !closed.Filtering() || closed.list.filter != "ga" {
+			t.Fatalf("fechar a ajuda mudou o filtro: filtrando=%v texto=%q", closed.Filtering(), closed.list.filter)
 		}
 		return m
+	})
+}
+
+// Na ajuda, o usuário aperta Tab quatro vezes, da lista à janela e layout: lá
+// estão as teclas da janela, com a marca de que só valem nela.
+func TestCenarioAjudaPulaDeSecao(t *testing.T) {
+	eachSize(t, "ajuda-pula-de-secao", func(t *testing.T, width, height int) Model {
+		m, _ := newScenario(t, width, height)
+		m = play(t, m, "? tab tab tab tab")
+		assertHelpAt(t, m, sectionWindow)
+		if view := ansi.Strip(m.View()); !strings.Contains(view, m.t("help.ctx.window_only")) || !strings.Contains(view, "Ctrl+O") {
+			t.Fatalf("a seção da janela não mostra Ctrl+O sob %q:\n%s", m.t("help.ctx.window_only"), view)
+		}
+		return play(t, m, "shift+tab right")
 	})
 }
 

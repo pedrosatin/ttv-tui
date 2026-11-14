@@ -31,11 +31,20 @@ func TestHostedHelpLiesInTheVideoColumn(t *testing.T) {
 	}
 }
 
-func TestHostedHelpFollowsTheChatOpacity(t *testing.T) {
-	m := hostedModel(t, 212, 49, true)
-	m.layout.helpVisible, m.hosted.chatOverlayOpacity = true, 40
-	if got := m.hostedPanel().OverlayOpacity; got != 40 {
-		t.Fatalf("opacidade da ajuda: %d", got)
+// W13: sobre o vídeo, a ajuda tem fundo opaco atrás do texto, seja qual for a
+// opacidade do chat, para o vídeo não atravessar as letras.
+func TestHostedHelpIsOpaqueOverTheVideo(t *testing.T) {
+	for _, opacity := range []int{10, 40, 70} {
+		m := hostedModel(t, 212, 49, true)
+		m.layout.helpVisible, m.hosted.chatOverlayOpacity = true, opacity
+		if got := m.hostedPanel().OverlayOpacity; got != 100 {
+			t.Fatalf("chat em %d%%: opacidade da ajuda %d, quer 100", opacity, got)
+		}
+		m.layout.helpVisible = false
+		m.hosted.chatOverlay = true
+		if got := m.hostedPanel().OverlayOpacity; got != opacity {
+			t.Fatalf("a ajuda fechada mudou a opacidade do chat: %d, quer %d", got, opacity)
+		}
 	}
 }
 

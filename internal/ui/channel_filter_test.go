@@ -230,7 +230,7 @@ func TestChannelFilterI18nAndWidths(t *testing.T) {
 			help := strings.Join(m.renderHelpLines(width), "\n")
 			m.list.prefs.menuOpen = true
 			m.layout.helpVisible = false
-			if !strings.Contains(help, m.t("help.channel_filter")) {
+			if !strings.Contains(help, m.t("action.channel_filter")) {
 				t.Fatalf("lang=%s help missing channel_filter key", lang)
 			}
 			for _, line := range strings.Split(view, "\n") {

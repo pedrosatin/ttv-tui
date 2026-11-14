@@ -224,7 +224,8 @@ func TestOrientationColorsDisabledNoForegroundSGR(t *testing.T) {
 			{ID: "f2", Login: "offline_guy", DisplayName: "Offline", Availability: catalog.AvailabilityOffline},
 		}),
 	)
-	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
+	// Tall enough for the whole help to sit under the list.
+	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 150})
 	m.player.state = PlayerStatePlaying
 	m.player.login = "gaules"
 	m.layout.helpVisible = true
@@ -426,7 +427,8 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 			{ID: "f2", Login: "off", DisplayName: "Off", Availability: catalog.AvailabilityOffline},
 		}),
 	)
-	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
+	// Tall enough for the whole help to sit under the list.
+	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 150})
 	m.player.state = PlayerStatePlaying
 	m.player.login = "gaules"
 	m.layout.helpVisible = true

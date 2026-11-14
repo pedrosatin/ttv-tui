@@ -22,6 +22,26 @@ import (
 //
 // O Tab, mesmo como runa, continua sendo a ação de trocar o painel.
 
+// fieldKey é uma primitiva de edição como a ajuda a mostra: as teclas, que o
+// mapa do config não troca, e as linhas da ajuda onde ela aparece.
+type fieldKey struct {
+	Keys []string
+	Uses []helpUse
+}
+
+// fieldKeys são as primitivas que a ajuda cita. As runas, o texto colado e o
+// espaço são a própria digitação e ficam de fora.
+var fieldKeys = []fieldKey{
+	{Keys: []string{"up", "down"}, Uses: []helpUse{{sectionSearch, ctxFilter, "help.use.filter_move"}}},
+	{Keys: []string{"backspace", "delete"}, Uses: []helpUse{
+		{sectionSearch, ctxField, "help.field.erase"}, {sectionChat, ctxCompose, "help.field.erase"},
+	}},
+	{Keys: []string{"alt+backspace", "ctrl+w"}, Uses: []helpUse{
+		{sectionSearch, ctxField, "help.field.erase_word"}, {sectionChat, ctxCompose, "help.field.erase_word"},
+	}},
+	{Keys: []string{"ctrl+h"}, Uses: []helpUse{{sectionWindow, ctxField, "help.field.ctrl_h"}}},
+}
+
 // isFieldEditKey diz se a tecla é uma primitiva do campo de texto, a que passa
 // na frente dos atalhos globais e de layout.
 func isFieldEditKey(msg tea.KeyMsg) bool {

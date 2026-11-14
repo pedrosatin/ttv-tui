@@ -16,9 +16,7 @@ import (
 
 // notInHelp lists the actions the help leaves out, with the reason. A new
 // hidden action has to be added here on purpose.
-var notInHelp = map[actionID]string{
-	actCtrlC: "Ctrl+C não é atalho: só avisa que a tecla de sair é outra, e o aviso cita essa tecla",
-}
+var notInHelp = map[actionID]string{}
 
 // Every action has its description in both languages: the help by sections and
 // the config read it from there.

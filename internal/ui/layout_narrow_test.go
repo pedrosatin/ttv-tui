@@ -401,12 +401,9 @@ func TestEscLeavesFocusModeAloneAndHelpNamesTheWayBack(t *testing.T) {
 		help.layout.helpVisible = true
 		help = resize(help, 120, 40)
 		rows := strings.Join(help.renderHelpLines(120), "\n")
-		wants := map[string]string{
-			i18n.LangEN:   "Esc keeps the layout",
-			i18n.LangPTBR: "Esc mantém o layout",
-		}
-		if !strings.Contains(rows, wants[lang]) {
-			t.Fatalf("%s help does not explain Esc and the layout:\n%s", lang, rows)
+		section := strings.Join(helpSectionRows(t, help)[sectionWindow], "\n")
+		if helpRowWith(strings.Split(section, "\n"), "Esc", help.t("help.use.back_layout")) == "" {
+			t.Fatalf("%s help does not explain Esc and the layout:\n%s", lang, section)
 		}
 		for _, want := range []string{"Ctrl+W", "Ctrl+H", "Ctrl+L", "80"} {
 			if !strings.Contains(rows, want) {

@@ -414,7 +414,10 @@ type chatState struct {
 type layoutState struct {
 	focus       Focus
 	helpVisible bool
-	helpScroll  int // first help row on screen; clamped by helpOffset
+	// helpSection is the section the help is at, and helpScroll how far past its
+	// first row the help has scrolled; helpOffset clamps the sum.
+	helpSection helpSection
+	helpScroll  int
 	// showList / showChat are the session layout flags (ticket 02). Both start true.
 	// Ctrl+W cycles named modes; Ctrl+H / Ctrl+L toggle each flag independently.
 	// Layout is not persisted to disk.

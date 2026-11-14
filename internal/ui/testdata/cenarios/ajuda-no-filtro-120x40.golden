@@ -1,0 +1,40 @@
+=== Atalhos de Teclado ===
+── Busca e filtros ──
+  /                   Filtra a lista
+  Ctrl+F/S            Busca categorias e canais
+  l                   Abre os filtros de idioma e audiência
+  No prompt de busca:
+    Enter Ctrl+F/S    Busca o texto digitado
+    Esc               Cancela a busca
+  No filtro /:
+    ↑/↓ PgUp PgDn     Anda pela lista enquanto se digita
+    Enter             Abre o item destacado ou, se nada casa, busca o texto
+    Esc               Limpa e fecha o filtro
+    Ctrl+F/S          Leva o texto do filtro à busca
+  No menu de filtros:
+    ↑/k ↓/j PgUp PgDn Home/g End/G
+                      Anda pelas opções
+    Enter Espaço      Liga ou desliga a opção
+    Esc l             Fecha o menu
+  Num campo de texto:
+    Backspace/Delete  Apaga o caractere anterior
+    Alt+Backspace/Ctrl+W
+                      Apaga a palavra anterior
+── Chat ──
+  i                   Escreve uma mensagem no chat
+  y                   Copia a mensagem do chat
+  Ctrl+T              Reconecta o chat
+  Com o foco no chat:
+    ↑/k ↓/j           Rola o chat
+    PgUp PgDn         Rola o chat uma página
+    Home/g            Vai à mensagem mais antiga
+    End/G             Volta às mensagens ao vivo
+    Enter             Começa a escrever
+    Esc               Devolve o foco à lista
+  Escrevendo no chat:
+    Enter             Envia a mensagem
+    Tab               Vai à lista e guarda o rascunho
+    Esc               Sai da escrita e guarda o rascunho
+    Backspace/Delete  Apaga o caractere anterior
+Busca e filtros · seção 3 de 7 · Tab/→ próxima                                                                     61/91
+ ttv-tui | [pt-BR] Enter ou Ctrl+F busca na Twitch: ga                                          | ? ajuda · Ctrl+Q sair

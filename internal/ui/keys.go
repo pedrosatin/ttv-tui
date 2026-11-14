@@ -127,39 +127,6 @@ func (m Model) switchPanelFocus() Model {
 	return m
 }
 
-// toggleHelp opens or closes the help, always at the top.
-func (m *Model) toggleHelp() {
-	m.layout.helpVisible = !m.layout.helpVisible
-	m.layout.helpScroll = 0
-}
-
-// updateHelpKey consumes every key while the help is open: it closes, scrolls,
-// or does nothing. Nothing here may touch the state behind the help.
-func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	total := len(m.renderHelpLines(m.helpTextWidth()))
-	page := max(m.helpPageRows(total)-1, 1)
-	offset := m.helpOffset(total)
-	switch m.keys.actionFor(modeHelp, msg) {
-	case actHelp, actHelpAnywhere, actBack, actCloseHelp:
-		m.toggleHelp()
-		return m, nil
-	case actUp:
-		offset--
-	case actDown:
-		offset++
-	case actPageUp:
-		offset -= page
-	case actPageDown:
-		offset += page
-	case actHome:
-		offset = 0
-	case actEnd:
-		offset = total
-	}
-	m.layout.helpScroll = offset
-	return m, nil
-}
-
 // enterCompose focuses the chat panel and opens the message input when sending
 // is available. The existing draft, if any, stays in the input.
 func (m Model) enterCompose() (tea.Model, tea.Cmd) {

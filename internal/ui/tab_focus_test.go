@@ -229,12 +229,11 @@ func TestHelpAndStatusShowFocusedPanel(t *testing.T) {
 		t.Fatalf("status bar missing chat focus label:\n%s", bar)
 	}
 
+	// The help opens at the chat section, the panel with the focus.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyF1})
 	m = updated.(Model)
-	view := ansi.Strip(m.View())
-	want := "Focused: chat — after closing help, Tab switches panels and keeps draft"
-	if !strings.Contains(view, want) {
-		t.Fatalf("help missing current focus line %q:\n%s", want, view)
+	if top := helpTopRow(m); top != helpSectionHeader(m, sectionChat) {
+		t.Fatalf("help opened at %q, want the chat section:\n%s", top, ansi.Strip(m.View()))
 	}
 
 	// Esc still only closes help; focus stays on chat.

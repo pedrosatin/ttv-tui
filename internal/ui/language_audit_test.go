@@ -215,12 +215,32 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 }
 
 // TestHelpResolvesSameKeysInBothLanguages renders the help overlay in both
-// languages and ties its layout line to the labels the status bar uses.
+// languages: every text the registry and the edit primitives point at, every
+// section and situation, and the layout line named as the status bar names it.
 func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
-	helpKeys := []string{
-		"help.title", "help.close", "help.nav", "help.esc", "help.categories", "help.search",
-		"help.channel_filter", "help.layout", "help.player", "help.chat", "help.app",
-		"help.nocolor", "help.colors",
+	helpKeys := []string{"help.title", "help.nocolor", "help.colors", "help.ctx.window_only"}
+	for _, s := range []string{"global", "nav", "search", "chat", "video", "window", "settings"} {
+		helpKeys = append(helpKeys, "help.section."+s)
+	}
+	for _, c := range []string{"help", "search_prompt", "filter", "menu", "chat_panel", "compose", "field"} {
+		helpKeys = append(helpKeys, "help.ctx."+c)
+	}
+	seen := map[string]bool{}
+	for _, a := range defaultActions() {
+		for _, use := range a.helpUses() {
+			if !seen[use.Text] && use.Text != string(actSwitchPlatform) {
+				seen[use.Text] = true
+				helpKeys = append(helpKeys, use.Text)
+			}
+		}
+	}
+	for _, f := range fieldKeys {
+		for _, use := range f.Uses {
+			if !seen[use.Text] {
+				seen[use.Text] = true
+				helpKeys = append(helpKeys, use.Text)
+			}
+		}
 	}
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		t.Run(lang, func(t *testing.T) {
@@ -232,20 +252,20 @@ func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 			}
 			screen := ansi.Strip(strings.Join(m.renderHelpLines(400), "\n"))
 
-			want := []expectKey{ek("help.focus_now", cat.T("help.panel_list")), ek("help.panel_list")}
+			want := []expectKey{ek("help.language", cat.Lang())}
 			for _, k := range helpKeys {
 				want = append(want, ek(k))
 			}
 			assertResolved(t, cat, "help", screen, want)
 
-			// The help line and the status bar name the layout modes the same way.
+			// The layout line and the status bar name the layout modes the same way.
 			for _, mode := range []string{"split", "chat", "list", "focus"} {
 				label := cat.T("layout.mode." + mode)
 				if !cat.Has("layout.mode." + mode) {
 					t.Errorf("layout.mode.%s has no %s text", mode, lang)
 				}
-				if !strings.Contains(cat.T("help.layout"), label) {
-					t.Errorf("help.layout (%s) does not name mode %q as %q: %s", lang, mode, label, cat.T("help.layout"))
+				if !strings.Contains(cat.T("action.cycle_layout"), label) {
+					t.Errorf("action.cycle_layout (%s) does not name mode %q as %q: %s", lang, mode, label, cat.T("action.cycle_layout"))
 				}
 			}
 		})

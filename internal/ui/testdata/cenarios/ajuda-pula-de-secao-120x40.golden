@@ -1,0 +1,40 @@
+=== Atalhos de Teclado ===
+    Enter             Começa a escrever
+    Esc               Devolve o foco à lista
+  Escrevendo no chat:
+    Enter             Envia a mensagem
+    Tab               Vai à lista e guarda o rascunho
+    Esc               Sai da escrita e guarda o rascunho
+    Backspace/Delete  Apaga o caractere anterior
+    Alt+Backspace/Ctrl+W
+                      Apaga a palavra anterior
+── Vídeo ──
+  Espaço              Pausa ou retoma o vídeo
+  +/=                 Aumenta o volume
+  -/_                 Diminui o volume
+  m                   Liga ou desliga o mudo
+  Ctrl+X              Encerra o vídeo
+  r                   Tenta de novo o vídeo que falhou ou, sem ele, a lista
+── Janela e layout ──
+  Ctrl+W              Cicla os layouts: dividido, chat, lista e foco
+  Ctrl+H              Mostra ou esconde a lista
+  Ctrl+L              Mostra ou esconde o chat; abaixo de 80 colunas, abre só o chat
+  Esc                 Não muda o layout; para trocá-lo, use Ctrl+W, Ctrl+H ou Ctrl+L
+  Só na janela:
+    Ctrl+O            Põe o chat sobre o vídeo ou ao lado dele
+    Ctrl+P            Troca os lados da lista e do chat
+    Alt+↑             Deixa o fundo do chat mais opaco
+    Alt+↓             Deixa o fundo do chat mais transparente
+    Ctrl+→            Move a divisa da lista para a direita
+    Ctrl+←            Move a divisa da lista para a esquerda
+    Alt+←             Move a divisa do chat para a esquerda
+    Alt+→             Move a divisa do chat para a direita
+  Num campo de texto:
+    Ctrl+H            Não faz nada, para a lista não sumir no meio da frase
+── Configurações ──
+  Idioma: pt-BR · troque com --lang en ou --lang pt-BR
+  Sem cor: NO_COLOR desliga a cor · símbolos ▸ ★ ● ▶ ‖ ✖ ! mostram o estado
+  Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito/fixada · ciano = foco · vermelho =
+    erro/[offline] · magenta = sistema · menção com sublinhado
+Janela e layout · seção 6 de 7 · Tab/→ próxima                                                                     91/91
+ ttv-tui | [pt-BR] Pronto                                                                       | ? ajuda · Ctrl+Q sair

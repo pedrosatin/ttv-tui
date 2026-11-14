@@ -252,10 +252,11 @@ func TestHelpDocumentsLayoutKeys(t *testing.T) {
 	}
 	m := New(catEN)
 	m.layout.helpVisible = true
+	m.layout.helpSection = sectionWindow
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
 	plain := ansi.Strip(m.View())
-	for _, want := range []string{"Ctrl+W", "Ctrl+H", "Ctrl+L", "Layout:"} {
+	for _, want := range []string{"Ctrl+W", "Ctrl+H", "Ctrl+L", m.helpSectionName(sectionWindow)} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("help/status missing %q:\n%s", want, plain)
 		}

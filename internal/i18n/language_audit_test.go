@@ -36,8 +36,11 @@ var identicalInBothLanguages = map[string]string{
 	"player.vol": "abreviação de volume, igual em pt-BR",
 	// Loanwords the whole pt-BR catalog already uses: "Chat", "chat", "offline",
 	// "[mod]". Twitch's own pt-BR interface uses the same words.
-	"chat.title":           "chat é o termo usado em todo o catálogo pt-BR",
-	"help.panel_chat":      "chat é o termo usado em todo o catálogo pt-BR",
+	"chat.title":        "chat é o termo usado em todo o catálogo pt-BR",
+	"help.section.chat": "chat é o termo usado em todo o catálogo pt-BR",
+	// Seção da ajuda com as teclas que valem em qualquer tela; a palavra é a
+	// mesma nos dois idiomas.
+	"help.section.global":  "global é a mesma palavra em pt-BR",
 	"chat.mod_prefix":      "[mod] abrevia moderador nas duas línguas",
 	"chat.raid_prefix":     "raid é o termo da Twitch em pt-BR",
 	"channels.offline":     "offline é o termo usado pela Twitch em pt-BR",

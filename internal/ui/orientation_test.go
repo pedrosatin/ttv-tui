@@ -109,8 +109,9 @@ func TestFilterWithMatchesDoesNotSuggestSearch(t *testing.T) {
 	}
 }
 
+// The help opens at the list keys, where Esc (one level back) and Ctrl+R (the
+// categories from anywhere) sit on rows of their own, whole at 80 columns.
 func TestHelpExplainsEscAndCtrlRWithoutTruncation(t *testing.T) {
-	keys := []string{"help.close", "help.nav", "help.esc", "help.categories", "help.search", "help.channel_filter", "help.player", "help.chat", "help.app", "help.nocolor", "help.colors"}
 	for _, lang := range orientationLangs {
 		for _, width := range []int{80, 120} {
 			t.Run(fmt.Sprintf("%s/%d", lang, width), func(t *testing.T) {
@@ -123,38 +124,19 @@ func TestHelpExplainsEscAndCtrlRWithoutTruncation(t *testing.T) {
 				if !strings.Contains(view, title) {
 					t.Fatalf("help title truncated or missing:\n%s", view)
 				}
-				focusNow := fmt.Sprintf(m.t("help.focus_now"), m.t("help.panel_list"))
-				if w := ansi.StringWidth("  " + focusNow); w > 80 {
-					t.Errorf("help.focus_now is %d cells, must fit 80 columns", w)
-				}
-				if !strings.Contains(view, focusNow) {
-					t.Errorf("help focus line missing: %q\n%s", focusNow, view)
-				}
-				for _, k := range keys {
-					line := m.t(k)
-					if k == "help.colors" {
-						// Legend may wrap across lines; the full phrase must survive.
-						help := ansi.Strip(strings.Join(m.renderHelpLines(width), "\n"))
-						if !helpContainsLegend(help, line) {
-							t.Errorf("help line %s missing from wrapped legend: %q\n%s", k, line, help)
-						}
-						for _, hl := range strings.Split(help, "\n") {
-							if w := ansi.StringWidth(hl); w > width {
-								t.Errorf("wrapped help line wider than %d: %d %q", width, w, hl)
-							}
-						}
-						continue
-					}
-					if w := ansi.StringWidth("  " + line); w > 80 {
-						t.Errorf("%s is %d cells, must fit 80 columns", k, w)
-					}
-					if !strings.Contains(view, line) {
-						t.Errorf("help line %s truncated or missing: %q\n%s", k, line, view)
+				rows := helpBody(m)
+				for _, want := range []struct{ keys, text string }{
+					{"Esc", m.t("action.back")},
+					{"Ctrl+R", m.t("action.categories")},
+				} {
+					if helpRowWith(rows, want.keys, want.text) == "" {
+						t.Errorf("help row %s %q truncated or missing:\n%s", want.keys, want.text, view)
 					}
 				}
-				esc, cats := m.t("help.esc"), m.t("help.categories")
-				if !strings.Contains(esc, "Esc") || !strings.Contains(cats, "Esc") || !strings.Contains(cats, "Ctrl+R") {
-					t.Fatalf("help must tell Esc from Ctrl+R: %q / %q", esc, cats)
+				for _, row := range strings.Split(ansi.Strip(strings.Join(m.renderHelpLines(width), "\n")), "\n") {
+					if w := ansi.StringWidth(row); w > width {
+						t.Errorf("help row wider than %d: %d %q", width, w, row)
+					}
 				}
 			})
 		}

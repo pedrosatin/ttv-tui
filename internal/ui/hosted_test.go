@@ -84,7 +84,7 @@ func TestHostedPanelFollowsTheToggles(t *testing.T) {
 func TestHostedPanelCarriesTheHelpOverTheVideo(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	m.layout.helpVisible = true
-	want := HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true, OverlayCols: 122, OverlayOpacity: 70}
+	want := HostPanel{Row: 1, Col: 44, Rows: 48, Cols: 122, Visible: true, OverlayCols: 122, OverlayOpacity: 100}
 	if got := m.hostedPanel(); got != want {
 		t.Fatalf("com a ajuda aberta: %+v, quero %+v", got, want)
 	}

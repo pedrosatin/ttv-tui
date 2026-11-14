@@ -194,12 +194,11 @@ func TestQIsTextWhileComposingAndNotAQuitKey(t *testing.T) {
 
 func TestHelpAndStatusBarCiteOnlyCtrlQAt80Cols(t *testing.T) {
 	for _, tc := range []struct {
-		lang     string
-		helpQuit string
-		barQuit  string
+		lang    string
+		barQuit string
 	}{
-		{i18n.LangEN, "Ctrl+Q quit", "Ctrl+Q quit"},
-		{i18n.LangPTBR, "Ctrl+Q sair", "Ctrl+Q sair"},
+		{i18n.LangEN, "Ctrl+Q quit"},
+		{i18n.LangPTBR, "Ctrl+Q sair"},
 	} {
 		t.Run(tc.lang, func(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
@@ -211,29 +210,23 @@ func TestHelpAndStatusBarCiteOnlyCtrlQAt80Cols(t *testing.T) {
 			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 			updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 			m = updated.(Model)
-			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyF1})
+			// Shift+Tab takes the help from the list keys to the global ones.
+			m = sendKeys(m, tea.KeyMsg{Type: tea.KeyF1}, tea.KeyMsg{Type: tea.KeyShiftTab})
 			if !m.HelpVisible() {
 				t.Fatal("help not visible")
 			}
 			lines := strings.Split(ansi.Strip(m.View()), "\n")
-			var appLine string
 			for _, l := range lines {
 				if ansi.StringWidth(l) > 80 {
 					t.Errorf("line wider than 80 cols: %q", l)
 				}
-				if strings.Contains(l, "App:") {
-					appLine = l
-				}
 			}
-			want := "  " + CatalogText(cat, "help.app")
-			if strings.TrimRight(appLine, " ") != want {
-				t.Errorf("help app line = %q, want untruncated %q", appLine, want)
+			// Ctrl+Q is the key that quits; Ctrl+C has a row that says it does not.
+			if helpRowWith(lines, "Ctrl+Q", m.t("action.quit")) == "" {
+				t.Errorf("help has no whole Ctrl+Q row:\n%s", strings.Join(lines, "\n"))
 			}
-			if !strings.Contains(appLine, tc.helpQuit) {
-				t.Errorf("help app line %q does not cite %q", appLine, tc.helpQuit)
-			}
-			if strings.Contains(appLine, "Ctrl+C") {
-				t.Errorf("help app line still cites Ctrl+C: %q", appLine)
+			if helpRowWith(lines, "Ctrl+C", m.t("action.ctrl_c")) == "" {
+				t.Errorf("help has no Ctrl+C row saying it does not quit:\n%s", strings.Join(lines, "\n"))
 			}
 			status := lines[len(lines)-1]
 			if !strings.Contains(status, tc.barQuit) {

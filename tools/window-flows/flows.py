@@ -783,7 +783,10 @@ def flows():
     shutil.copyfile("m-help-b.png", "help.png")
     hc = stats()["hole"][0] - 1
     alphas = [int(t("pixel", str(hc), str(y)).split()[3]) for y in range(stats()["hole"][3])]
-    check(role, "a ajuda usa a opacidade do chat", 178 in alphas and 0 in alphas, f"alfas {sorted(set(alphas))}")
+    # W13: atrás do texto o fundo é opaco (255), seja qual for a opacidade do
+    # chat; uma linha sem texto deixa o vídeo à vista (0). Nada fica no meio.
+    ok = 255 in alphas and all(a in (0, 255) for a in alphas)
+    check(role, "a ajuda tem fundo opaco atrás do texto", ok, f"alfas {sorted(set(alphas))}")
     text("?")
     on = wait(lambda: stats()["holeOn"] and stats()["overlay"] == 0, 3, 0.1)
     time.sleep(0.5)

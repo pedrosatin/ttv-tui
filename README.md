@@ -151,7 +151,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | `Ctrl+X` | Stop the video and stay in the app |
 | `Ctrl+W` | Cycle layouts: split (list + chat), chat, list, focus (no panel) |
 | `Ctrl+H` / `Ctrl+L` | Show or hide the list / the chat |
-| `?` or `F1` | Show or hide the shortcut help |
+| `?` or `F1` | Show or hide the shortcut help. It opens at the section you are using; `Tab` / `→` and `Shift+Tab` / `←` move between sections |
 | `Ctrl+Q` | Quit |
 
 With focus on the message, the search or the filter, what you type stays in the field: `Space`, `=` and `_` go in as text, `Ctrl+W` deletes a word and `Ctrl+H` does nothing. Outside the field they are shortcuts again.

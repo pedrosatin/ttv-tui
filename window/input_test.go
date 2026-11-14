@@ -121,8 +121,12 @@ func TestBoundKeysHaveWindowTranslation(t *testing.T) {
 			seen[name] = true
 			t.Run(name, func(t *testing.T) {
 				base := name
-				// SDL_KMOD_LCTRL e SDL_KMOD_LALT.
+				// SDL_KMOD_LSHIFT, SDL_KMOD_LCTRL e SDL_KMOD_LALT.
 				mod := keyModifier(keyBytes, 0)
+				if strings.HasPrefix(base, "shift+") {
+					mod = 0x1
+					base = strings.TrimPrefix(base, "shift+")
+				}
 				if strings.HasPrefix(base, "ctrl+") {
 					mod = 0x40
 					base = strings.TrimPrefix(base, "ctrl+")

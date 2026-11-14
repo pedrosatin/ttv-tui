@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
 func TestHostedStatusHidesRawPlayerLog(t *testing.T) {
@@ -18,15 +19,17 @@ func TestHostedStatusHidesRawPlayerLog(t *testing.T) {
 
 func TestHostedHelpDoesNotOfferTheTerminalVideo(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
+	m.catalog, m.keys = mustCatalog(t, i18n.LangPTBR), defaultKeys()
 	m.layout.helpVisible = true
 	help := strings.Join(m.renderHelpLines(400), "\n")
 	if strings.Contains(help, m.t("help.video_enable")) {
 		t.Fatal("a ajuda diz que o vídeo está desligado com o vídeo na janela")
 	}
-	layout := strings.Index(help, m.t("help.layout"))
-	resize := strings.Index(help, m.t("help.hosted_resize"))
-	if layout < 0 || resize != layout+len(m.t("help.layout"))+3 {
-		t.Fatalf("os atalhos da janela devem vir logo depois do layout: %d, %d", layout, resize)
+	// Na janela, as teclas dela vêm logo depois das de layout, sem a marca de
+	// que só valem nela.
+	toggleChat, overlay := strings.Index(help, m.t("action.toggle_chat")), strings.Index(help, m.t("action.chat_overlay"))
+	if toggleChat < 0 || overlay < toggleChat || strings.Contains(help, m.t("help.ctx.window_only")) {
+		t.Fatalf("os atalhos da janela devem vir depois dos de layout, sem marca: %d, %d\n%s", toggleChat, overlay, help)
 	}
 }
 

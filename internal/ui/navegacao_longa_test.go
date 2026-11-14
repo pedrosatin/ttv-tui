@@ -155,11 +155,10 @@ func TestAjudaNavegacaoCabeEm80Colunas(t *testing.T) {
 	for _, lang := range []string{"pt-BR", "en"} {
 		m, _ := newScenario(t, 80, 24)
 		m.catalog = testCatalog(t, lang)
-		for _, k := range []string{"help.nav", "help.chat"} {
-			largura := ansi.StringWidth("  " + m.t(k))
-			t.Logf("%s %s: %d colunas", lang, k, largura)
-			if largura > 80 {
-				t.Fatalf("%s: %d colunas", k, largura)
+		m.layout.helpVisible = true
+		for _, row := range m.renderHelpLines(80) {
+			if largura := ansi.StringWidth(row); largura > 80 {
+				t.Fatalf("%s: linha da ajuda com %d colunas: %q", lang, largura, ansi.Strip(row))
 			}
 		}
 	}

@@ -22,7 +22,10 @@ var (
 	keyHome    = tea.KeyMsg{Type: tea.KeyHome}
 	keyEnd     = tea.KeyMsg{Type: tea.KeyEnd}
 
-	helpIndicatorRow = regexp.MustCompile(`^\s*(\d+)/(\d+)\s*$`)
+	keyHelpTab      = tea.KeyMsg{Type: tea.KeyTab}
+	keyHelpShiftTab = tea.KeyMsg{Type: tea.KeyShiftTab}
+
+	helpIndicatorRow = regexp.MustCompile(`(?:^|\s)(\d+)/(\d+)\s*$`)
 )
 
 // helpBody returns the plain rows above the status bar.
@@ -32,15 +35,35 @@ func helpBody(m Model) []string {
 }
 
 // helpPosition returns the indicator numbers, and false when none is drawn.
+// The indicator is the last row of the help, which lies over the bottom rows.
 func helpPosition(m Model) (cur, total int, ok bool) {
-	for _, row := range helpBody(m) {
-		if match := helpIndicatorRow.FindStringSubmatch(row); match != nil {
-			cur, _ = strconv.Atoi(match[1])
-			total, _ = strconv.Atoi(match[2])
-			return cur, total, true
-		}
+	rows := helpBody(m)
+	if len(rows) == 0 || !m.HelpVisible() {
+		return 0, 0, false
+	}
+	if match := helpIndicatorRow.FindStringSubmatch(rows[len(rows)-1]); match != nil {
+		cur, _ = strconv.Atoi(match[1])
+		total, _ = strconv.Atoi(match[2])
+		return cur, total, true
 	}
 	return 0, 0, false
+}
+
+// helpSectionHeader is the row that opens a section of the help.
+func helpSectionHeader(m Model, s helpSection) string {
+	return "── " + m.helpSectionName(s) + " ──"
+}
+
+// helpTopSection is the section whose header is the first row under the fixed
+// title, or "" when the top row is not a header.
+func helpTopRow(m Model) string {
+	rows := helpBody(m)
+	for i, row := range rows {
+		if strings.Contains(row, helpTitleRow(m)) && i+1 < len(rows) {
+			return strings.TrimSpace(rows[i+1])
+		}
+	}
+	return ""
 }
 
 func helpTitleRow(m Model) string {
@@ -51,22 +74,10 @@ func helpTitleShown(m Model) bool {
 	return strings.Contains(strings.Join(helpBody(m), "\n"), helpTitleRow(m))
 }
 
-// helpEntries lists every line of help copy, as the catalog holds it.
-func helpEntries(m Model) []string {
-	entries := []string{helpTitleRow(m), fmt.Sprintf(m.t("help.focus_now"), m.t("help.panel_list"))}
-	for _, k := range []string{
-		"help.close", "help.nav", "help.esc", "help.categories", "help.search",
-		"help.channel_filter", "help.layout", "help.player", "help.chat",
-		"help.app", "help.nocolor", "help.colors",
-	} {
-		entries = append(entries, m.t(k))
-	}
-	return entries
-}
-
 // walkHelp scrolls one row at a time from the top and returns every row shown.
 func walkHelp(t *testing.T, m Model) []string {
 	t.Helper()
+	m = sendKeys(m, keyHome)
 	seen := append([]string(nil), helpBody(m)...)
 	for range 200 {
 		m = sendKeys(m, keyDown)
@@ -200,16 +211,14 @@ func TestHelpReachesAllContent(t *testing.T) {
 						t.Errorf("help row was truncated: %q", row)
 					}
 				}
-				joined := "\n" + strings.Join(seen, "\n") + "\n"
-				for _, entry := range helpEntries(m) {
-					for _, token := range strings.Fields(entry) {
-						if !strings.Contains(joined, token) {
-							t.Errorf("token %q from %q never shown intact", token, entry)
-						}
-					}
+				shown := map[string]bool{}
+				for _, row := range seen {
+					shown[strings.TrimRight(row, " ")] = true
 				}
-				if !strings.Contains(joined, "Ctrl+L") {
-					t.Error("Ctrl+L never shown")
+				for _, row := range m.renderHelpLines(w) {
+					if plain := strings.TrimRight(ansi.Strip(row), " "); !shown[plain] {
+						t.Errorf("help row never shown: %q", plain)
+					}
 				}
 
 				// End lands on the same last page the row-by-row walk reaches.
@@ -229,7 +238,7 @@ func lastWords(s string, n int) string {
 
 func TestHelpNoIndicatorWhenEverythingFits(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
-	m = resize(m, 120, 40)
+	m = resize(m, 120, 150)
 	m = sendKeys(m, keyHelpAsk)
 	if !helpTitleShown(m) {
 		t.Fatal("help not shown")
@@ -238,7 +247,7 @@ func TestHelpNoIndicatorWhenEverythingFits(t *testing.T) {
 	if _, _, ok := helpPosition(m); ok {
 		t.Fatalf("indicator drawn although help fits:\n%s", before)
 	}
-	m = sendKeys(m, keyDown, keyPgDown, keyEnd)
+	m = sendKeys(m, keyDown, keyPgDown, keyEnd, keyHelpTab)
 	if got := strings.Join(helpBody(m), "\n"); got != before {
 		t.Fatalf("help scrolled although it fits:\n%s", got)
 	}
@@ -257,7 +266,7 @@ func TestHelpIndicatorTracksPosition(t *testing.T) {
 		t.Fatalf("top position %d/%d", first, total)
 	}
 	if !helpTitleShown(m) {
-		t.Fatal("help does not open at the top")
+		t.Fatal("the title left the screen")
 	}
 
 	m = sendKeys(m, keyEnd)
@@ -268,14 +277,19 @@ func TestHelpIndicatorTracksPosition(t *testing.T) {
 	if cur, _, _ := helpPosition(m); cur != total {
 		t.Fatalf("Down past the end at %d, want %d", cur, total)
 	}
+	if !helpTitleShown(m) {
+		t.Fatal("the title left the screen at the end")
+	}
 	m = sendKeys(m, keyHome)
-	if cur, _, _ := helpPosition(m); cur != first {
-		t.Fatalf("Home at %d, want %d", cur, first)
+	top, _, _ := helpPosition(m)
+	if top >= first {
+		t.Fatalf("Home at %d, want above the section the help opened at (%d)", top, first)
 	}
 	m = sendKeys(m, keyUp)
-	if cur, _, _ := helpPosition(m); cur != first {
-		t.Fatalf("Up past the top at %d, want %d", cur, first)
+	if cur, _, _ := helpPosition(m); cur != top {
+		t.Fatalf("Up past the top at %d, want %d", cur, top)
 	}
+	first = top
 
 	m = sendKeys(m, keyPgDown)
 	paged, _, _ := helpPosition(m)
@@ -288,7 +302,7 @@ func TestHelpIndicatorTracksPosition(t *testing.T) {
 	}
 }
 
-func TestHelpReopensAtTheTop(t *testing.T) {
+func TestHelpReopensAtTheFocusSection(t *testing.T) {
 	for name, closeKey := range map[string]tea.KeyMsg{
 		"question": keyHelpAsk, "esc": keyEsc, "f1": keyHelpF1, "q": keyHelpQ,
 	} {
@@ -296,12 +310,13 @@ func TestHelpReopensAtTheTop(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
 			m = resize(m, 40, 15)
 			m = sendKeys(m, keyHelpAsk, keyEnd)
-			if helpTitleShown(m) {
-				t.Fatal("End left the title on screen; this test proves nothing")
+			nav := helpSectionHeader(m, sectionNav)
+			if helpTopRow(m) == nav {
+				t.Fatal("End left the list section on top; this test proves nothing")
 			}
 			m = sendKeys(m, closeKey, keyHelpAsk)
-			if !m.HelpVisible() || !helpTitleShown(m) {
-				t.Fatalf("reopened help is not at the top:\n%s", strings.Join(helpBody(m), "\n"))
+			if !m.HelpVisible() || helpTopRow(m) != nav {
+				t.Fatalf("reopened help is not at the list section:\n%s", strings.Join(helpBody(m), "\n"))
 			}
 		})
 	}
@@ -312,7 +327,7 @@ func TestHelpShrinkingTheTerminalKeepsThePositionValid(t *testing.T) {
 	m = resize(m, 40, 15)
 	m = sendKeys(m, keyHelpAsk, keyEnd)
 
-	m = resize(m, 80, 24)
+	m = resize(m, 120, 150)
 	if _, _, ok := helpPosition(m); ok {
 		t.Fatalf("indicator kept after growing to fit:\n%s", strings.Join(helpBody(m), "\n"))
 	}
@@ -374,6 +389,7 @@ func TestHelpKeysNeverLeakBehindIt(t *testing.T) {
 		"ctrl+x": {Type: tea.KeyCtrlX}, "ctrl+t": {Type: tea.KeyCtrlT},
 		"up": keyUp, "down": keyDown, "pgup": keyPgUp, "pgdown": keyPgDown,
 		"home": keyHome, "end": keyEnd, "j": r('j'), "k": r('k'), "G": r('G'),
+		"shift+tab": keyHelpShiftTab, "left": {Type: tea.KeyLeft}, "right": {Type: tea.KeyRight},
 		"paste-q":    {Type: tea.KeyRunes, Runes: []rune{'q'}, Paste: true},
 		"paste-text": {Type: tea.KeyRunes, Runes: []rune("texto colado"), Paste: true},
 	}
@@ -503,7 +519,7 @@ func TestHelpTwoRowsStillScrollsToTheEnd(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
 	m = resize(m, 80, 2)
 	m = sendKeys(m, keyHelpAsk)
-	if rows := helpBody(m); len(rows) != 1 || !strings.Contains(rows[0], helpTitleRow(m)) {
+	if rows := helpBody(m); len(rows) != 1 || !strings.Contains(rows[0], helpSectionHeader(m, sectionNav)) {
 		t.Fatalf("top row = %q", rows)
 	}
 	m = sendKeys(m, keyEnd)
@@ -536,11 +552,17 @@ func TestHelpWrapsWithConsistentIndent(t *testing.T) {
 			if !strings.HasPrefix(rows[0], "===") {
 				t.Fatalf("title row = %q", rows[0])
 			}
+			// Headers start the row; keys sit at 2 or, under a situation, 4; the
+			// text and its continuation start at the text column.
+			textCol := helpKeyColumn(m.helpEntries(), 40)
 			for _, row := range rows[1:] {
 				plain := ansi.Strip(row)
 				indent := len(plain) - len(strings.TrimLeft(plain, " "))
-				if indent != 2 && indent != 4 {
-					t.Errorf("indent %d on %q", indent, plain)
+				if indent == 0 && strings.HasPrefix(plain, "── ") {
+					continue
+				}
+				if indent != 2 && indent != 4 && indent != textCol {
+					t.Errorf("indent %d on %q (text column %d)", indent, plain, textCol)
 				}
 			}
 		})
@@ -549,7 +571,7 @@ func TestHelpWrapsWithConsistentIndent(t *testing.T) {
 
 func TestBlankRowSeparatesOverlaysFromTheBackground(t *testing.T) {
 	m, _, _ := setupTwoPanelModel(t)
-	m = resize(m, 100, 30)
+	m = resize(m, 100, 150)
 	m = sendKeys(m, keyEsc)
 
 	assertBlankAbove := func(m Model, marker string) {

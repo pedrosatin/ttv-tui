@@ -21,6 +21,8 @@ const (
 	actCloseHelp      actionID = "action.close_help"
 	actHelp           actionID = "action.help"
 	actHelpAnywhere   actionID = "action.help_anywhere"
+	actHelpNext       actionID = "action.help_next_section"
+	actHelpPrev       actionID = "action.help_prev_section"
 	actCategories     actionID = "action.categories"
 	actStopVideo      actionID = "action.stop_video"
 	actReconnectChat  actionID = "action.reconnect_chat"
@@ -94,56 +96,181 @@ var keyContexts = [][]keyMode{
 	{modeApp, modeGlobal, modeWindow, modeNormal},
 }
 
-// helpSection agrupa as ações na ajuda. sectionHidden fica fora dela.
+// helpSection agrupa as ações na ajuda, na ordem em que ela as mostra.
+// sectionHidden fica fora dela.
 type helpSection int
 
 const (
 	sectionHidden helpSection = iota
-	sectionHelp
+	sectionGlobal
 	sectionNav
 	sectionSearch
-	sectionChannelFilter
-	sectionLayout
-	sectionWindow
-	sectionPlayer
 	sectionChat
-	sectionApp
+	sectionVideo
+	sectionWindow
+	sectionSettings
 )
+
+// helpSections são as seções da ajuda, na ordem da tela.
+var helpSections = []helpSection{
+	sectionGlobal, sectionNav, sectionSearch, sectionChat, sectionVideo, sectionWindow, sectionSettings,
+}
+
+// helpContext é a situação em que uma linha da ajuda vale dentro da seção: no
+// prompt de busca, no filtro, escrevendo. ctxAny é a seção inteira.
+type helpContext int
+
+const (
+	ctxAny helpContext = iota
+	ctxHelp
+	ctxSearchPrompt
+	ctxFilter
+	ctxMenu
+	ctxChatPanel
+	ctxCompose
+	ctxField
+	// ctxWindowOnly agrupa as ações que só a janela única tem. A ajuda o deduz
+	// dos modos da ação; nenhuma o declara.
+	ctxWindowOnly
+)
+
+// helpUse é uma linha da ajuda: a seção, a situação e a chave do texto no
+// catálogo. Linhas da mesma seção e situação com o mesmo texto se juntam numa
+// só, com as teclas de todas: "q Esc  Fecha a ajuda".
+type helpUse struct {
+	Section helpSection
+	Context helpContext
+	Text    string
+}
 
 // action é uma entrada do registro: em que modos a ação vale, em que seção da
 // ajuda aparece e as teclas padrão, no formato de tea.KeyMsg.String(). A
 // primeira tecla é a principal, a que os textos curtos citam.
+//
+// A linha principal da ação fica em Section e Context, com o texto de ID. Also
+// lista o que a mesma tecla faz em outras situações, como Enter no filtro ou
+// Esc na escrita, para a ajuda mostrar cada uso na seção dele.
 type action struct {
 	ID      actionID
 	Modes   []keyMode
 	Section helpSection
+	Context helpContext
 	Default []string
+	Also    []helpUse
 }
 
-// defaultActions é o mapa de teclas da TUI. As primitivas de edição dos campos
-// de texto ficam fora dele, em field_keys.go.
+// helpUses são as linhas da ajuda da ação: a principal e as de Also.
+func (a action) helpUses() []helpUse {
+	if a.Section == sectionHidden {
+		return nil
+	}
+	return append([]helpUse{{Section: a.Section, Context: a.Context, Text: string(a.ID)}}, a.Also...)
+}
+
+// windowOnly diz se a ação só vale na janela única.
+func (a action) windowOnly() bool {
+	return len(a.Modes) > 0 && !slices.ContainsFunc(a.Modes, func(m keyMode) bool { return m != modeWindow })
+}
+
+// defaultActions é o mapa de teclas da TUI, na ordem em que a ajuda mostra as
+// linhas de cada seção. As primitivas de edição dos campos de texto ficam fora
+// dele, em field_keys.go.
 func defaultActions() []action {
 	nav := []keyMode{modeNormal, modeHelp, modeMenu}
+	// O movimento rola a ajuda e o chat e anda pelo menu de filtros.
+	also := func(help, menu, chat string) []helpUse {
+		uses := []helpUse{{sectionGlobal, ctxHelp, help}, {sectionSearch, ctxMenu, menu}}
+		if chat != "" {
+			uses = append(uses, helpUse{sectionChat, ctxChatPanel, chat})
+		}
+		return uses
+	}
 	return []action{
 		// Ctrl+Q é a única tecla que sai. Ctrl+C chega como tecla (o terminal
 		// está em modo raw, sem SIGINT) e só explica como sair.
-		{ID: actQuit, Modes: []keyMode{modeApp}, Section: sectionApp, Default: []string{"ctrl+q"}},
-		{ID: actCtrlC, Modes: []keyMode{modeApp}, Section: sectionHidden, Default: []string{"ctrl+c"}},
+		{ID: actQuit, Modes: []keyMode{modeApp}, Section: sectionGlobal, Default: []string{"ctrl+q"}},
+		{ID: actCtrlC, Modes: []keyMode{modeApp}, Section: sectionGlobal, Default: []string{"ctrl+c"}},
+		{ID: actHelp, Modes: []keyMode{modeNormal, modeHelp}, Section: sectionGlobal, Default: []string{"?"}},
+		{ID: actHelpAnywhere, Modes: []keyMode{modeGlobal, modeHelp}, Section: sectionGlobal, Default: []string{"f1"}},
 
-		// q só fecha a ajuda; fora dela não faz nada.
-		{ID: actCloseHelp, Modes: []keyMode{modeHelp}, Section: sectionHelp, Default: []string{"q"}},
-		{ID: actHelp, Modes: []keyMode{modeNormal, modeHelp}, Section: sectionApp, Default: []string{"?"}},
-		{ID: actHelpAnywhere, Modes: []keyMode{modeGlobal, modeHelp}, Section: sectionApp, Default: []string{"f1"}},
+		// q só fecha a ajuda; fora dela não faz nada. Tab e as setas laterais
+		// pulam de seção, porque ↑ e ↓ rolam linha a linha.
+		{ID: actCloseHelp, Modes: []keyMode{modeHelp}, Section: sectionGlobal, Context: ctxHelp, Default: []string{"q"}},
+		{ID: actHelpNext, Modes: []keyMode{modeHelp}, Section: sectionGlobal, Context: ctxHelp, Default: []string{"tab", "right"}},
+		{ID: actHelpPrev, Modes: []keyMode{modeHelp}, Section: sectionGlobal, Context: ctxHelp, Default: []string{"shift+tab", "left"}},
 
+		// O movimento vale na lista, no chat, na ajuda e no menu. No filtro, só
+		// as setas andam, e elas são primitivas do campo.
+		{ID: actUp, Modes: nav, Section: sectionNav, Default: []string{"up", "k"},
+			Also: also("help.use.scroll_line", "help.use.menu_move", "help.use.chat_scroll")},
+		{ID: actDown, Modes: nav, Section: sectionNav, Default: []string{"down", "j"},
+			Also: also("help.use.scroll_line", "help.use.menu_move", "help.use.chat_scroll")},
+		{ID: actPageUp, Modes: []keyMode{modeNormal, modeHelp, modeMenu, modeFilter}, Section: sectionNav, Default: []string{"pgup"},
+			Also: append(also("help.use.scroll_page", "help.use.menu_move", "help.use.chat_page"), helpUse{sectionSearch, ctxFilter, "help.use.filter_move"})},
+		{ID: actPageDown, Modes: []keyMode{modeNormal, modeHelp, modeMenu, modeFilter}, Section: sectionNav, Default: []string{"pgdown"},
+			Also: append(also("help.use.scroll_page", "help.use.menu_move", "help.use.chat_page"), helpUse{sectionSearch, ctxFilter, "help.use.filter_move"})},
+		{ID: actHome, Modes: nav, Section: sectionNav, Default: []string{"home", "g"},
+			Also: also("help.use.scroll_ends", "help.use.menu_move", "help.use.chat_top")},
+		// End/G vão ao fim da lista ou retomam o ao vivo no chat.
+		{ID: actEnd, Modes: nav, Section: sectionNav, Default: []string{"end", "G"},
+			Also: also("help.use.scroll_ends", "help.use.menu_move", "help.use.chat_live")},
+		{ID: actSelect, Modes: []keyMode{modeNormal, modeSearch, modeFilter, modeMenu, modeCompose}, Section: sectionNav, Default: []string{"enter"},
+			Also: []helpUse{
+				{sectionSearch, ctxSearchPrompt, "help.use.search_confirm"},
+				{sectionSearch, ctxFilter, "help.use.filter_enter"},
+				{sectionSearch, ctxMenu, "help.use.menu_toggle"},
+				{sectionChat, ctxChatPanel, "help.use.chat_enter"},
+				{sectionChat, ctxCompose, "help.use.compose_send"},
+			}},
+		{ID: actSwitchFocus, Modes: []keyMode{modeNormal, modeCompose}, Section: sectionNav, Default: []string{"tab"},
+			Also: []helpUse{{sectionChat, ctxCompose, "help.use.compose_tab"}}},
+		{ID: actBack, Modes: []keyMode{modeNormal, modeHelp, modeSearch, modeFilter, modeMenu, modeCompose}, Section: sectionNav, Default: []string{"esc"},
+			Also: []helpUse{
+				{sectionGlobal, ctxHelp, string(actCloseHelp)},
+				{sectionSearch, ctxSearchPrompt, "help.use.search_cancel"},
+				{sectionSearch, ctxFilter, "help.use.filter_clear"},
+				{sectionSearch, ctxMenu, "help.use.menu_close"},
+				{sectionChat, ctxChatPanel, "help.use.chat_leave"},
+				{sectionChat, ctxCompose, "help.use.compose_leave"},
+				{sectionWindow, ctxAny, "help.use.back_layout"},
+			}},
 		{ID: actCategories, Modes: []keyMode{modeGlobal}, Section: sectionNav, Default: []string{"ctrl+r"}},
-		{ID: actStopVideo, Modes: []keyMode{modeGlobal}, Section: sectionPlayer, Default: []string{"ctrl+x"}},
+		// p troca a lista para a próxima plataforma; o vídeo e o chat ficam.
+		{ID: actSwitchPlatform, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"p"}},
+		{ID: actFavorite, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"f"}},
+
+		{ID: actFilter, Modes: []keyMode{modeNormal}, Section: sectionSearch, Default: []string{"/"}},
+		// Ctrl+F é a tecla da busca; Ctrl+S, um apelido. O modo raw desliga o
+		// controle de fluxo, e o terminal entrega o Ctrl+S em vez de pausar a saída.
+		{ID: actSearch, Modes: []keyMode{modeNormal, modeSearch, modeFilter}, Section: sectionSearch, Default: []string{"ctrl+f", "ctrl+s"},
+			Also: []helpUse{
+				{sectionSearch, ctxSearchPrompt, "help.use.search_confirm"},
+				{sectionSearch, ctxFilter, "help.use.filter_search"},
+			}},
+		{ID: actChannelFilter, Modes: []keyMode{modeNormal, modeMenu}, Section: sectionSearch, Default: []string{"l"},
+			Also: []helpUse{{sectionSearch, ctxMenu, "help.use.menu_close"}}},
+
+		{ID: actCompose, Modes: []keyMode{modeNormal}, Section: sectionChat, Default: []string{"i"}},
+		// y copia a mensagem marcada (ou a última, ao vivo) pelo wl-copy, xclip ou
+		// OSC 52 (veja writeClipboard).
+		{ID: actCopyMessage, Modes: []keyMode{modeNormal}, Section: sectionChat, Default: []string{"y"}},
 		{ID: actReconnectChat, Modes: []keyMode{modeGlobal}, Section: sectionChat, Default: []string{"ctrl+t"}},
+
+		{ID: actPause, Modes: []keyMode{modeNormal, modeMenu}, Section: sectionVideo, Default: []string{" ", "space"},
+			Also: []helpUse{{sectionSearch, ctxMenu, "help.use.menu_toggle"}}},
+		{ID: actVolumeUp, Modes: []keyMode{modeNormal}, Section: sectionVideo, Default: []string{"+", "="}},
+		{ID: actVolumeDown, Modes: []keyMode{modeNormal}, Section: sectionVideo, Default: []string{"-", "_"}},
+		// m liga e desliga o mudo, como no mpv e no player da Twitch.
+		{ID: actMute, Modes: []keyMode{modeNormal}, Section: sectionVideo, Default: []string{"m"}},
+		{ID: actStopVideo, Modes: []keyMode{modeGlobal}, Section: sectionVideo, Default: []string{"ctrl+x"}},
+		// r tenta de novo o vídeo que falhou; sem ele, a lista.
+		{ID: actRetry, Modes: []keyMode{modeNormal}, Section: sectionVideo, Default: []string{"r"}},
 
 		// Ctrl+W cicla os layouts; Ctrl+H e Ctrl+L ligam a lista e o chat. O
 		// bubbletea entrega Ctrl+H (BS) e Backspace (DEL) como teclas distintas.
-		{ID: actCycleLayout, Modes: []keyMode{modeGlobal}, Section: sectionLayout, Default: []string{"ctrl+w"}},
-		{ID: actToggleList, Modes: []keyMode{modeGlobal}, Section: sectionLayout, Default: []string{"ctrl+h"}},
-		{ID: actToggleChat, Modes: []keyMode{modeGlobal}, Section: sectionLayout, Default: []string{"ctrl+l"}},
+		{ID: actCycleLayout, Modes: []keyMode{modeGlobal}, Section: sectionWindow, Default: []string{"ctrl+w"}},
+		{ID: actToggleList, Modes: []keyMode{modeGlobal}, Section: sectionWindow, Default: []string{"ctrl+h"}},
+		{ID: actToggleChat, Modes: []keyMode{modeGlobal}, Section: sectionWindow, Default: []string{"ctrl+l"}},
 
 		// Só a janela única tem vídeo ao lado dos painéis. A seta move a divisa:
 		// a da lista fica à direita dela, a do chat à esquerda, e cada painel
@@ -156,40 +283,6 @@ func defaultActions() []action {
 		{ID: actListNarrower, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"ctrl+left"}},
 		{ID: actChatWider, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+left"}},
 		{ID: actChatNarrower, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"alt+right"}},
-
-		// O movimento vale na lista, no chat, na ajuda e no menu. No filtro, só
-		// as setas andam, e elas são primitivas do campo.
-		{ID: actUp, Modes: nav, Section: sectionNav, Default: []string{"up", "k"}},
-		{ID: actDown, Modes: nav, Section: sectionNav, Default: []string{"down", "j"}},
-		{ID: actPageUp, Modes: []keyMode{modeNormal, modeHelp, modeMenu, modeFilter}, Section: sectionNav, Default: []string{"pgup"}},
-		{ID: actPageDown, Modes: []keyMode{modeNormal, modeHelp, modeMenu, modeFilter}, Section: sectionNav, Default: []string{"pgdown"}},
-		{ID: actHome, Modes: nav, Section: sectionNav, Default: []string{"home", "g"}},
-		// End/G vão ao fim da lista ou retomam o ao vivo no chat.
-		{ID: actEnd, Modes: nav, Section: sectionNav, Default: []string{"end", "G"}},
-		{ID: actSelect, Modes: []keyMode{modeNormal, modeSearch, modeFilter, modeMenu, modeCompose}, Section: sectionNav, Default: []string{"enter"}},
-		{ID: actSwitchFocus, Modes: []keyMode{modeNormal, modeCompose}, Section: sectionNav, Default: []string{"tab"}},
-
-		{ID: actFilter, Modes: []keyMode{modeNormal}, Section: sectionSearch, Default: []string{"/"}},
-		// Ctrl+F é a tecla da busca; Ctrl+S, um apelido. O modo raw desliga o
-		// controle de fluxo, e o terminal entrega o Ctrl+S em vez de pausar a saída.
-		{ID: actSearch, Modes: []keyMode{modeNormal, modeSearch, modeFilter}, Section: sectionSearch, Default: []string{"ctrl+f", "ctrl+s"}},
-		{ID: actRetry, Modes: []keyMode{modeNormal}, Section: sectionSearch, Default: []string{"r"}},
-		{ID: actChannelFilter, Modes: []keyMode{modeNormal, modeMenu}, Section: sectionChannelFilter, Default: []string{"l"}},
-		// p troca a lista para a próxima plataforma; o vídeo e o chat ficam.
-		{ID: actSwitchPlatform, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"p"}},
-		{ID: actFavorite, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"f"}},
-		{ID: actBack, Modes: []keyMode{modeNormal, modeHelp, modeSearch, modeFilter, modeMenu, modeCompose}, Section: sectionNav, Default: []string{"esc"}},
-
-		{ID: actPause, Modes: []keyMode{modeNormal, modeMenu}, Section: sectionPlayer, Default: []string{" ", "space"}},
-		{ID: actVolumeUp, Modes: []keyMode{modeNormal}, Section: sectionPlayer, Default: []string{"+", "="}},
-		{ID: actVolumeDown, Modes: []keyMode{modeNormal}, Section: sectionPlayer, Default: []string{"-", "_"}},
-		// m liga e desliga o mudo, como no mpv e no player da Twitch.
-		{ID: actMute, Modes: []keyMode{modeNormal}, Section: sectionPlayer, Default: []string{"m"}},
-
-		{ID: actCompose, Modes: []keyMode{modeNormal}, Section: sectionChat, Default: []string{"i"}},
-		// y copia a mensagem marcada (ou a última, ao vivo) pelo wl-copy, xclip ou
-		// OSC 52 (veja writeClipboard).
-		{ID: actCopyMessage, Modes: []keyMode{modeNormal}, Section: sectionChat, Default: []string{"y"}},
 	}
 }
 

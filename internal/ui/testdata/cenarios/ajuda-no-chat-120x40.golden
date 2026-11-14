@@ -1,0 +1,40 @@
+=== Atalhos de Teclado ===
+── Chat ──
+  i                   Escreve uma mensagem no chat
+  y                   Copia a mensagem do chat
+  Ctrl+T              Reconecta o chat
+  Com o foco no chat:
+    ↑/k ↓/j           Rola o chat
+    PgUp PgDn         Rola o chat uma página
+    Home/g            Vai à mensagem mais antiga
+    End/G             Volta às mensagens ao vivo
+    Enter             Começa a escrever
+    Esc               Devolve o foco à lista
+  Escrevendo no chat:
+    Enter             Envia a mensagem
+    Tab               Vai à lista e guarda o rascunho
+    Esc               Sai da escrita e guarda o rascunho
+    Backspace/Delete  Apaga o caractere anterior
+    Alt+Backspace/Ctrl+W
+                      Apaga a palavra anterior
+── Vídeo ──
+  Espaço              Pausa ou retoma o vídeo
+  +/=                 Aumenta o volume
+  -/_                 Diminui o volume
+  m                   Liga ou desliga o mudo
+  Ctrl+X              Encerra o vídeo
+  r                   Tenta de novo o vídeo que falhou ou, sem ele, a lista
+── Janela e layout ──
+  Ctrl+W              Cicla os layouts: dividido, chat, lista e foco
+  Ctrl+H              Mostra ou esconde a lista
+  Ctrl+L              Mostra ou esconde o chat; abaixo de 80 colunas, abre só o chat
+  Esc                 Não muda o layout; para trocá-lo, use Ctrl+W, Ctrl+H ou Ctrl+L
+  Só na janela:
+    Ctrl+O            Põe o chat sobre o vídeo ou ao lado dele
+    Ctrl+P            Troca os lados da lista e do chat
+    Alt+↑             Deixa o fundo do chat mais opaco
+    Alt+↓             Deixa o fundo do chat mais transparente
+    Ctrl+→            Move a divisa da lista para a direita
+    Ctrl+←            Move a divisa da lista para a esquerda
+Chat · seção 4 de 7 · Tab/→ próxima                                                                                82/91
+ ttv-tui | [pt-BR] Iniciando gaules... · vol 100 · 98.5k · Just Chatting · #gaules | Foco: chat · ? ajuda · Ctrl+Q sair

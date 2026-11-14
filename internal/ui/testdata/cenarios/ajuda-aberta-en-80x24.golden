@@ -1,0 +1,24 @@
+=== Keyboard Shortcuts ===
+── Navigation ──
+  ↑/k                 Move up in the list, chat, menu or help
+  ↓/j                 Move down in the list, chat, menu or help
+  PgUp                Move up one page
+  PgDn                Move down one page
+  Home/g              Go to the top
+  End/G               Go to the end; in the chat, back to live
+  Enter               Open the highlighted item
+  Tab                 Switch between the list and the chat
+  Esc                 Go back one level; from a search, to where it began
+  Ctrl+R              Back to categories from anywhere
+  f                   Favorite the channel or pin the category; again to undo
+── Search and filters ──
+  /                   Filter the list
+  Ctrl+F/S            Search categories and channels
+  l                   Open the language and audience filters
+  In the search prompt:
+    Enter Ctrl+F/S    Search for what you typed
+    Esc               Cancel the search
+  In the / filter:
+    ↑/↓ PgUp PgDn     Move through the list while typing
+Navigation · section 2 of 7 · Tab/→ next                                   33/95
+ ttv-tui | [en] Ready                                    | ? help · Ctrl+Q quit

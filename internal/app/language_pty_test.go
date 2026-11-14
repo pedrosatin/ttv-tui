@@ -54,13 +54,18 @@ func TestLanguageConsistency_PTY(t *testing.T) {
 			p.sendAndWait([]byte{0x17}, "layout: "+cat.T("layout.mode.list"))
 			t.Logf("PTY capture (%s) — layout list:\n%s", tc.lang, p.screenSince(listOff))
 
+			// The help opens at the list keys; four → reach the window and layout
+			// section, whose line names the layouts as the status bar does.
 			helpOff := p.mark()
 			p.sendAndWait([]byte("?"), cat.T("help.title"))
-			modes := strings.Join([]string{
-				cat.T("layout.mode.split"), cat.T("layout.mode.chat"),
-				cat.T("layout.mode.list"), cat.T("layout.mode.focus"),
-			}, "/")
-			help := p.waitScreen(helpOff, modes)
+			p.send([]byte(strings.Repeat("\x1b[C", 4)))
+			cycle := ui.CatalogText(cat, "action.cycle_layout")
+			help := p.waitScreen(helpOff, cycle)
+			for _, mode := range []string{"split", "chat", "list", "focus"} {
+				if label := cat.T("layout.mode." + mode); !strings.Contains(cycle, label) {
+					t.Errorf("the help line %q does not name the layout %q", cycle, label)
+				}
+			}
 			t.Logf("PTY capture (%s) — help:\n%s", tc.lang, help)
 			p.send([]byte("?"))
 

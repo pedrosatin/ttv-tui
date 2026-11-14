@@ -91,7 +91,10 @@ func TestPlayerOfflineDetailSurvivesInHelpAfterNavigation(t *testing.T) {
 		t.Fatalf("status still shows offline after navigation:\n%s", ansi.Strip(m.StatusBar()))
 	}
 
+	// The bar no longer offers the details, so the help opens at the list keys;
+	// End reaches the settings, where the last error stays.
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	view := ansi.Strip(m.View())
 	if !strings.Contains(view, "Último erro do player: "+offlineLine) {
 		t.Fatalf("help must keep the technical detail after navigation:\n%s", view)

@@ -26,6 +26,7 @@ const (
 	hostedHelpPadding = 2
 
 	hostedDefaultOpacity = 70
+	hostedHelpOpacity    = 100
 	hostedMinOpacity     = 10
 	hostedOpacityStep    = 5
 	hostedSaveDelay      = 400 * time.Millisecond
@@ -334,8 +335,10 @@ func (m Model) hostedPanel() HostPanel {
 	if overlaid {
 		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = chatW, m.hosted.panelsSwapped, m.hosted.chatOpacity()
 	}
-	if m.helpOpen() { // a ajuda ocupa a coluna do vídeo inteira, com a opacidade do chat
-		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = videoW, false, m.hosted.chatOpacity()
+	// A ajuda ocupa a coluna do vídeo inteira, com fundo opaco atrás do texto:
+	// com a opacidade do chat, o vídeo atravessa as letras e a ajuda não se lê.
+	if m.helpOpen() {
+		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = videoW, false, hostedHelpOpacity
 	}
 	return panel
 }

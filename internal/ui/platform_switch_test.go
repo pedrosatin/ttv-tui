@@ -355,20 +355,16 @@ func TestPlatformKey_OnlyActsOnTheList(t *testing.T) {
 
 func TestHelp_NamesThePlatformKey(t *testing.T) {
 	tests := map[string]string{
-		i18n.LangEN:   "  Platform: p switches the list to the next (Twitch, Kick) · video and chat stay",
-		i18n.LangPTBR: "  Plataforma: p troca a lista para a próxima (Twitch, Kick) · vídeo e chat ficam",
+		i18n.LangEN:   "Switch the list to the next platform (Twitch, Kick); video and chat stay",
+		i18n.LangPTBR: "Troca a lista para a próxima plataforma (Twitch, Kick); o vídeo e o chat ficam",
 	}
 	for lang, want := range tests {
 		m := twoPlatforms(t, lang, twitchCatalog(), kickCatalog())
-		// One row at 80 columns, like the rows around it.
+		// In the list keys the help opens at.
 		m = resize(m, 80, 60)
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-		found := false
-		for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
-			found = found || strings.TrimRight(line, " ") == want
-		}
-		if !found {
-			t.Errorf("%s: help has no row %q:\n%s", lang, want, ansi.Strip(m.View()))
+		if helpRowWith(helpBody(m), "p", want) == "" {
+			t.Errorf("%s: help has no row p %q:\n%s", lang, want, ansi.Strip(m.View()))
 		}
 	}
 }

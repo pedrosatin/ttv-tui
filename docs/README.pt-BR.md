@@ -151,7 +151,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `Ctrl+X` | Para o vídeo sem sair do app |
 | `Ctrl+W` | Troca o layout: dividido (lista + chat), chat, lista, foco (nenhum painel) |
 | `Ctrl+H` / `Ctrl+L` | Mostra ou esconde a lista / o chat |
-| `?` ou `F1` | Mostra ou esconde a ajuda de atalhos |
+| `?` ou `F1` | Mostra ou esconde a ajuda de atalhos. Ela abre na seção do que você está usando; `Tab` / `→` e `Shift+Tab` / `←` passam de uma seção a outra |
 | `Ctrl+Q` | Sai |
 
 Com o foco na mensagem, na busca ou no filtro, o que se digita fica no campo: `Space`, `=` e `_` entram como texto, `Ctrl+W` apaga a palavra e `Ctrl+H` não faz nada. Fora do campo, voltam a ser atalhos.

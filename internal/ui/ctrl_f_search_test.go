@@ -128,14 +128,11 @@ func TestFilterEmptyHintAndHelpCiteCtrlF(t *testing.T) {
 				t.Fatalf("empty filter hint must not lead with Ctrl+S:\n%s", view)
 			}
 
+			// F1 from the filter opens the help at the search section, whose
+			// search row leads with Ctrl+F.
 			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyF1})
-			help := ansi.Strip(m.View())
-			helpLine := m.t("help.search")
-			if !strings.Contains(helpLine, "Ctrl+F") {
-				t.Fatalf("help.search must cite Ctrl+F: %q", helpLine)
-			}
-			if !strings.Contains(help, helpLine) {
-				t.Fatalf("help overlay missing %q:\n%s", helpLine, help)
+			if helpRowWith(helpBody(m), "Ctrl+F/S", m.t("action.search")) == "" {
+				t.Fatalf("help overlay missing the Ctrl+F row:\n%s", strings.Join(helpBody(m), "\n"))
 			}
 		})
 	}
