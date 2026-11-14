@@ -3,6 +3,8 @@ package youtube
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"sync"
 	"testing"
@@ -237,6 +239,9 @@ func TestChat_NextPollWaitBounds(t *testing.T) {
 	})
 	defer chat.Close()
 
+	if got := chat.nextPollWait(1 * time.Millisecond); got != 2*time.Second {
+		t.Errorf("1ms -> %v, want floor 2s", got)
+	}
 	if got := chat.nextPollWait(10 * time.Second); got != 10*time.Second {
 		t.Errorf("10s -> %v, want 10s", got)
 	}
@@ -245,5 +250,138 @@ func TestChat_NextPollWaitBounds(t *testing.T) {
 	}
 	if got := chat.nextPollWait(0); got != 5*time.Second {
 		t.Errorf("0 -> %v, want default 5s", got)
+	}
+}
+
+func TestChat_PollErrorRecoveryEmitsConnected(t *testing.T) {
+	rc := newFakeRoomClient()
+	rc.queue <- pollResponse{res: PollResult{
+		NextContinuation: "CONT_1",
+		Timeout:          time.Millisecond,
+		Messages: []catalog.ChatMessage{
+			{ID: "m1", DisplayName: "@Alice", User: "@Alice", Body: "before", Kind: catalog.ChatMessageChat},
+		},
+	}}
+	rc.queue <- pollResponse{err: &catalog.Error{Platform: platform.YouTube, Kind: catalog.Rede}}
+	rc.queue <- pollResponse{res: PollResult{
+		NextContinuation: "CONT_2",
+		Timeout:          time.Millisecond,
+		Messages: []catalog.ChatMessage{
+			{ID: "m2", DisplayName: "@Bob", User: "@Bob", Body: "after", Kind: catalog.ChatMessageChat},
+		},
+	}}
+
+	chat := NewChat(ChatOptions{
+		Client:          rc,
+		MinPollInterval: time.Millisecond,
+		PollInterval:    time.Millisecond,
+		MaxPollInterval: 10 * time.Millisecond,
+		InitialBackoff:  5 * time.Millisecond,
+		MaxBackoff:      20 * time.Millisecond,
+	})
+	defer chat.Close()
+
+	if _, err := chat.Join(context.Background(), catalog.Channel{Platform: platform.YouTube, Login: "@LofiGirl"}); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+
+	if ev := nextChatEvent(t, chat.Events()); ev.State != catalog.ChatStateConnecting {
+		t.Fatalf("ev1 = %+v, want Connecting", ev)
+	}
+	if ev := nextChatEvent(t, chat.Events()); ev.State != catalog.ChatStateConnected {
+		t.Fatalf("ev2 = %+v, want Connected", ev)
+	}
+	if ev := nextChatEvent(t, chat.Events()); len(ev.Messages) != 1 || ev.Messages[0].ID != "m1" {
+		t.Fatalf("ev3 = %+v, want m1", ev)
+	}
+	if ev := nextChatEvent(t, chat.Events()); ev.State != catalog.ChatStateReconnecting || ev.Attempt != 1 {
+		t.Fatalf("ev4 = %+v, want Reconnecting attempt 1", ev)
+	}
+	if ev := nextChatEvent(t, chat.Events()); ev.State != catalog.ChatStateConnected {
+		t.Fatalf("ev5 = %+v, want Connected after transient poll error", ev)
+	}
+	if ev := nextChatEvent(t, chat.Events()); len(ev.Messages) != 1 || ev.Messages[0].ID != "m2" {
+		t.Fatalf("ev6 = %+v, want m2", ev)
+	}
+}
+
+func TestChat_PersistentPollErrorsGrowBackoffAcrossResolveCycles(t *testing.T) {
+	rc := newFakeRoomClient()
+	var resolves int
+	rc.resolveFunc = func(context.Context, string) (Resolved, error) {
+		resolves++
+		return Resolved{
+			VideoID:          "4t4AQ15yj1M",
+			APIKey:           "KEY",
+			ChatContinuation: "CONT",
+			Availability:     catalog.AvailabilityLive,
+		}, nil
+	}
+	// Enqueue 6 persistent 5xx errors across two Resolve -> 3-poll cycles.
+	for range 6 {
+		rc.queue <- pollResponse{err: &catalog.Error{Platform: platform.YouTube, Kind: catalog.Servidor, StatusCode: 503}}
+	}
+	// Keep the 7th poll waiting until closed.
+
+	chat := NewChat(ChatOptions{
+		Client:          rc,
+		MinPollInterval: time.Millisecond,
+		PollInterval:    time.Millisecond,
+		MaxPollInterval: 10 * time.Millisecond,
+		InitialBackoff:  5 * time.Millisecond,
+		MaxBackoff:      25 * time.Millisecond,
+	})
+	defer chat.Close()
+
+	if _, err := chat.Join(context.Background(), catalog.Channel{Platform: platform.YouTube, Login: "@LofiGirl"}); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	if ev := nextChatEvent(t, chat.Events()); ev.State != catalog.ChatStateConnecting {
+		t.Fatalf("ev1 = %+v, want Connecting", ev)
+	}
+
+	// Expect exactly 6 Reconnecting events (one per error wait, no duplicate on the 3rd poll error),
+	// with monotonically growing backoff up to MaxBackoff=25ms across Resolve cycles.
+	wantBackoffs := []time.Duration{
+		5 * time.Millisecond,
+		10 * time.Millisecond,
+		20 * time.Millisecond,
+		25 * time.Millisecond,
+		25 * time.Millisecond,
+		25 * time.Millisecond,
+	}
+	for i, wantWait := range wantBackoffs {
+		ev := nextChatEvent(t, chat.Events())
+		if ev.State != catalog.ChatStateReconnecting {
+			t.Fatalf("event %d = %+v, want Reconnecting", i+1, ev)
+		}
+		if ev.Attempt != i+1 || ev.NextBackoff != wantWait {
+			t.Fatalf("event %d: Attempt=%d NextBackoff=%v, want Attempt=%d NextBackoff=%v",
+				i+1, ev.Attempt, ev.NextBackoff, i+1, wantWait)
+		}
+	}
+}
+
+func TestChat_429RetryAfterRespected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "7")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	chat := NewChat(ChatOptions{
+		Client:         NewClient(ClientConfig{BaseURL: srv.URL, HTTPClient: srv.Client()}),
+		InitialBackoff: 5 * time.Millisecond,
+		MaxBackoff:     30 * time.Second,
+	})
+	defer chat.Close()
+
+	if _, err := chat.Join(context.Background(), catalog.Channel{Platform: platform.YouTube, Login: "@LofiGirl"}); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	_ = nextChatEvent(t, chat.Events()) // Connecting
+	ev := nextChatEvent(t, chat.Events())
+	if ev.State != catalog.ChatStateReconnecting || ev.NextBackoff != 7*time.Second {
+		t.Fatalf("429 reconnect = %+v, want NextBackoff=7s", ev)
 	}
 }

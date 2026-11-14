@@ -235,7 +235,7 @@ func (c *Client) getHTML(ctx context.Context, op, path string) ([]byte, error) {
 
 	body, readErr := io.ReadAll(io.LimitReader(res.Body, maxHTMLBytes))
 	if res.StatusCode != http.StatusOK {
-		return nil, statusError(op, res.StatusCode, ErrChannelNotFound)
+		return nil, statusError(op, res.StatusCode, res.Header, time.Now(), ErrChannelNotFound)
 	}
 	if readErr != nil {
 		return nil, &catalog.Error{Platform: platform.YouTube, Kind: catalog.Rede, Op: op, Err: fmt.Errorf("read response: %w", readErr)}
@@ -676,7 +676,7 @@ func extractJSONVar(src []byte, varName string) ([]byte, bool) {
 	return nil, false
 }
 
-func statusError(op string, status int, notFound error) error {
+func statusError(op string, status int, header http.Header, now time.Time, notFound error) error {
 	e := &catalog.Error{
 		Platform:   platform.YouTube,
 		Op:         op,
@@ -689,8 +689,42 @@ func statusError(op string, status int, notFound error) error {
 		e.Err = errors.New("request refused by YouTube")
 	case http.StatusNotFound:
 		e.Err = notFound
+	case http.StatusTooManyRequests:
+		if resetAfter, resetAt, ok := parseRetryAfter(header, now); ok {
+			e.ResetAfter = resetAfter
+			e.ResetAt = resetAt
+		}
 	}
 	return e
+}
+
+func parseRetryAfter(header http.Header, now time.Time) (time.Duration, time.Time, bool) {
+	if header == nil {
+		return 0, time.Time{}, false
+	}
+	raw := strings.TrimSpace(header.Get("Retry-After"))
+	if raw == "" {
+		return 0, time.Time{}, false
+	}
+	if secs, err := strconv.Atoi(raw); err == nil {
+		if secs <= 0 {
+			return 0, time.Time{}, false
+		}
+		d := time.Duration(secs) * time.Second
+		if now.IsZero() {
+			now = time.Now()
+		}
+		return d, now.Add(d), true
+	}
+	if at, err := http.ParseTime(raw); err == nil {
+		if now.IsZero() {
+			now = time.Now()
+		}
+		if d := at.Sub(now); d > 0 {
+			return d, at, true
+		}
+	}
+	return 0, time.Time{}, false
 }
 
 func contractError(op string, err error) error {
