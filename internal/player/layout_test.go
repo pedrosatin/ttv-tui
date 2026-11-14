@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -189,5 +191,95 @@ func TestSessionKeepsDirAndEndpointSeparate(t *testing.T) {
 	}
 	if _, err := os.Stat(epRoot); err != nil {
 		t.Fatalf("endpoint's parent must not be removed: %v", err)
+	}
+}
+
+// O streamlink roda dentro da sessão, então o que ele recebe tem de ser absoluto:
+// com um RuntimeDir ou $TMPDIR relativo, o MkdirTemp devolveria um diretório
+// relativo e o input.conf, o plugin e o socket do mpv seriam lidos de dentro da
+// própria sessão. Vale também para o fallback e para a sessão com plugin da Kick.
+func TestSessionPathsAreAbsoluteWithRelativeBase(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, launch string) (runtimeDir string)
+	}{
+		{"runtime dir", func(t *testing.T, launch string) string {
+			return "rt"
+		}},
+		{"fallback base", func(t *testing.T, launch string) string {
+			if err := os.Mkdir(filepath.Join(launch, "fb"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(setFallbackBaseDirForTest("fb"))
+			return ""
+		}},
+	}
+	if runtime.GOOS != "windows" {
+		cases = append(cases, struct {
+			name  string
+			setup func(t *testing.T, launch string) (runtimeDir string)
+		}{"relative TMPDIR", func(t *testing.T, launch string) string {
+			if err := os.Mkdir(filepath.Join(launch, "tmp"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("TMPDIR", "tmp")
+			return ""
+		}})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			launch, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Chdir(launch)
+			runtimeDir := tc.setup(t, launch)
+
+			l, err := prepareSession(runtimeDir, 1)
+			if err != nil {
+				t.Fatalf("prepareSession: %v", err)
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(l.Dir) })
+			pluginDir, err := writePlugins(l.Dir, []Plugin{{Name: "kick", Source: []byte("__plugin__ = None\n")}})
+			if err != nil {
+				t.Fatalf("writePlugins: %v", err)
+			}
+			l.PluginDir = pluginDir
+
+			real, err := filepath.EvalSymlinks(l.Dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(real, launch+string(filepath.Separator)) {
+				t.Fatalf("Dir %q is not under the base inside %q", real, launch)
+			}
+			paths := map[string]string{
+				"Dir":        l.Dir,
+				"input.conf": inputConfPath(l.Dir),
+				"PluginDir":  l.PluginDir,
+			}
+			if runtime.GOOS != "windows" {
+				paths["Endpoint"] = l.Endpoint
+			}
+			for what, path := range paths {
+				if !filepath.IsAbs(path) {
+					t.Errorf("%s = %q, want an absolute path", what, path)
+				}
+			}
+
+			cmd := testInvocation.command(testTarget("gaules"), l)
+			if cmd.Dir != l.Dir || !filepath.IsAbs(cmd.Dir) {
+				t.Errorf("cmd.Dir = %q, want the absolute session directory %q", cmd.Dir, l.Dir)
+			}
+			if i := slices.Index(cmd.Args, "--plugin-dir"); i < 0 || cmd.Args[i+1] != l.PluginDir {
+				t.Errorf("args %q: want --plugin-dir %q", cmd.Args, l.PluginDir)
+			}
+			joined := strings.Join(cmd.Args, " ")
+			for _, want := range []string{"--input-ipc-server=" + l.Endpoint, "--input-conf=" + inputConfPath(l.Dir)} {
+				if !strings.Contains(joined, want) {
+					t.Errorf("args %q missing %q", joined, want)
+				}
+			}
+		})
 	}
 }

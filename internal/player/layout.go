@@ -146,11 +146,16 @@ const mkdirTempSuffixMax = "4294967295"
 // fallbackBase escolhe onde criar o diretório de fallback: o diretório temporário
 // do sistema ou, quando um $TMPDIR longo não comporta o socket, o
 // shortFallbackBaseDir. A conta usa o maior sufixo possível, então qualquer nome
-// que o MkdirTemp sortear cabe no sun_path. Não toca no disco.
+// que o MkdirTemp sortear cabe no sun_path. A base sai absoluta: um $TMPDIR
+// relativo apontaria para onde o app foi aberto, e o streamlink roda na sessão.
+// Não toca no disco.
 func fallbackBase(gen uint64) (string, error) {
 	worst := fallbackPrefix(gen) + mkdirTempSuffixMax
-	base := getFallbackBaseDir()
-	_, err := endpointInDir(filepath.Join(base, worst))
+	base, err := filepath.Abs(getFallbackBaseDir())
+	if err != nil {
+		return "", fmt.Errorf("fallback base directory: %w", err)
+	}
+	_, err = endpointInDir(filepath.Join(base, worst))
 	if err == nil {
 		return base, nil
 	}
@@ -189,8 +194,15 @@ func prepareFallback(gen uint64) (sessionLayout, error) {
 }
 
 // prepareIn builds the preferred layout under runtimeDir. Any error means "use
-// the fallback"; nothing is left on disk when it fails.
+// the fallback"; nothing is left on disk when it fails. runtimeDir is made
+// absolute first: the session directory, the endpoint, input.conf and the plugin
+// directory are handed to streamlink, which runs inside the session and would
+// read a relative one from there.
 func prepareIn(runtimeDir string, gen uint64) (sessionLayout, error) {
+	runtimeDir, err := filepath.Abs(runtimeDir)
+	if err != nil {
+		return sessionLayout{}, err
+	}
 	if err := checkRuntimeDirFits(runtimeDir, gen); err != nil {
 		return sessionLayout{}, err
 	}

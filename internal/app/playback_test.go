@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -142,6 +143,44 @@ func TestPlaybackBridge_EnsureStreamlink_Configured(t *testing.T) {
 	}
 	if mgr.StreamlinkPath() != bin {
 		t.Fatalf("mgr streamlink path = %q, want %q", mgr.StreamlinkPath(), bin)
+	}
+}
+
+// O streamlink do PATH vem só das entradas absolutas: um falso na pasta de onde
+// o app foi aberto, com uma entrada relativa à frente do PATH, não para a
+// reprodução (exec.ErrDot) nem vira o escolhido; o Manager recebe o absoluto.
+func TestPlaybackBridge_EnsureStreamlink_PathSkipsRelativeEntries(t *testing.T) {
+	name := "streamlink"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	write := func(dir string) string {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	launch := t.TempDir()
+	write(filepath.Join(launch, "rel"))
+	write(launch)
+	want := write(t.TempDir())
+	t.Chdir(launch)
+	sep := string(os.PathListSeparator)
+	t.Setenv("PATH", "rel"+sep+"."+sep+filepath.Dir(want))
+
+	mgr := player.New(player.Options{})
+	t.Cleanup(mgr.Close)
+	bridge := newPlaybackBridge(mgr, "", t.TempDir())
+	if err := bridge.ensureStreamlink(context.Background()); err != nil {
+		t.Fatalf("ensureStreamlink: %v", err)
+	}
+	if got := mgr.StreamlinkPath(); !strings.EqualFold(got, want) {
+		t.Fatalf("mgr streamlink path = %q, want the absolute entry %q", got, want)
 	}
 }
 

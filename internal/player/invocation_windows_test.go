@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pedrosatin/ttv-tui/internal/pathlookup"
 )
 
 // No modo janela, a janela põe as cópias do shim (mpv.exe e mpv.com) num bin à
@@ -35,9 +37,9 @@ func TestInvocationUsesWindowShimByAbsolutePath(t *testing.T) {
 	sep := string(os.PathListSeparator)
 	path := "." + sep + binDir + sep + exeDir + sep + os.Getenv("PATH")
 
-	mpv, err := lookAbsPathIn("mpv", path)
+	mpv, err := pathlookup.AbsIn("mpv", path)
 	if err != nil {
-		t.Fatalf("lookAbsPathIn: %v", err)
+		t.Fatalf("pathlookup.AbsIn: %v", err)
 	}
 	if !filepath.IsAbs(mpv) || !strings.EqualFold(filepath.Dir(mpv), binDir) {
 		t.Fatalf("mpv = %q, want the shim copy in %q", mpv, binDir)

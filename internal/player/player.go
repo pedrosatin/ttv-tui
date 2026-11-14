@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/pathlookup"
 )
 
 // State is a playback lifecycle state. Values match the product vocabulary.
@@ -319,7 +320,7 @@ func New(opts Options) *Manager {
 		opts.WriteInputConf = writeInputConf
 	}
 	if opts.LookPath == nil {
-		opts.LookPath = lookAbsPath
+		opts.LookPath = pathlookup.Abs
 	}
 	if opts.RuntimeDir == "" {
 		opts.RuntimeDir = defaultRuntimeDir()

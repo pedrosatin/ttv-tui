@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -102,7 +101,6 @@ func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
 	if dataDir != "" {
 		resolver.DataDir = dataDir
 	}
-	resolver.LookPath = exec.LookPath
 	res, err := resolver.ResolveStreamlink(cfgPath)
 	if err == nil {
 		b.adopt(res)

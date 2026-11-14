@@ -1,7 +1,6 @@
 package player
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/pedrosatin/ttv-tui/internal/pathlookup"
 )
 
 // testInvocation builds the production argv for the tests that only read its
@@ -51,40 +52,13 @@ func playerFlag(t *testing.T, argv []string) string {
 	return argv[i+1]
 }
 
-// Um mpv plantado no diretório de onde o app foi aberto não entra: o PATH
-// vazio, "." ou relativo aponta para lá e fica de fora.
-func TestLookAbsPathSkipsRelativeEntries(t *testing.T) {
-	launch, real := t.TempDir(), t.TempDir()
-	writeExecutable(t, launch, mpvFileName())
-	if err := os.Mkdir(filepath.Join(launch, "rel"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeExecutable(t, filepath.Join(launch, "rel"), mpvFileName())
-	want := writeExecutable(t, real, mpvFileName())
-	t.Chdir(launch)
-
-	sep := string(os.PathListSeparator)
-	got, err := lookAbsPathIn("mpv", sep+"."+sep+"rel"+sep+real)
-	if err != nil {
-		t.Fatalf("lookAbsPathIn: %v", err)
-	}
-	if !strings.EqualFold(got, want) {
-		t.Fatalf("lookAbsPathIn = %q, want %q", got, want)
-	}
-
-	_, err = lookAbsPathIn("mpv", sep+"."+sep+"rel")
-	if !errors.Is(err, exec.ErrNotFound) {
-		t.Fatalf("only relative entries: err = %v, want ErrNotFound", err)
-	}
-}
-
 // O comando roda no diretório privado da sessão e recebe o mpv por caminho
 // absoluto, igual em todos os sistemas.
 func TestInvocationRunsInSessionDirWithAbsolutePlayer(t *testing.T) {
 	bin := t.TempDir()
-	mpv, err := lookAbsPathIn("mpv", filepath.Dir(writeExecutable(t, bin, mpvFileName())))
+	mpv, err := pathlookup.AbsIn("mpv", filepath.Dir(writeExecutable(t, bin, mpvFileName())))
 	if err != nil {
-		t.Fatalf("lookAbsPathIn: %v", err)
+		t.Fatalf("pathlookup.AbsIn: %v", err)
 	}
 	streamlink := filepath.Join(bin, "streamlink")
 	sess := privateSessionDir(t)

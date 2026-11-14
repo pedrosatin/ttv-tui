@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
 	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/components"
@@ -69,7 +68,6 @@ func (b *playbackBridge) checkStreamlinkUpdate(ctx context.Context) (components.
 	if b.dataDir != "" {
 		resolver.DataDir = b.dataDir
 	}
-	resolver.LookPath = exec.LookPath
 	res, err := resolver.ResolveStreamlink(b.cfgStreamlink)
 	if err != nil || res.Origin != components.OriginManaged {
 		return components.UpdateResult{}, nil

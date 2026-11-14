@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/pedrosatin/ttv-tui/internal/config"
+	"github.com/pedrosatin/ttv-tui/internal/pathlookup"
 )
 
 // Origin indicates how a component binary was located.
@@ -63,8 +64,10 @@ func NewResolver() *Resolver {
 	}
 }
 
+// defaultLookPath searches PATH only in absolute directories: a streamlink
+// planted in the directory the app was started from never becomes the one in use.
 func defaultLookPath(file string) (string, error) {
-	return exec.LookPath(file)
+	return pathlookup.Abs(file)
 }
 
 // DefaultHasFUSE reports whether the Linux FUSE device /dev/fuse is available.
