@@ -199,7 +199,7 @@
   "help.focus_now": "Foco: %s — fechada a ajuda, Tab troca painel e guarda rascunho",
   "help.panel_list": "lista",
   "help.panel_chat": "chat",
-  "help.nav": "Lista: ↑/↓ ou j/k mover · Enter abrir · f favoritar · Tab trocar painel",
+  "help.nav": "Lista: ↑/↓ j/k mover · Enter abrir · f favorita/fixa · Tab trocar painel",
   "help.esc": "Esc: sai da escrita, do chat, do filtro ou da busca",
   "help.categories": "Voltar às categorias: Esc na lista · Ctrl+R de qualquer lugar, até digitando",
   "help.platform": "Plataforma: p troca a lista para a próxima (%s) · vídeo e chat ficam",
@@ -212,7 +212,7 @@
   "help.app": "App: Ctrl+Q sair · ? ou F1 alternar ajuda",
   "help.nocolor": "Sem cor: NO_COLOR desliga a cor · símbolos ▸ ★ ● ▶ ‖ ✖ ! mostram o estado",
   "layout.focus_hint": "Modo foco — Ctrl+H lista · Ctrl+L chat · Ctrl+W cicla layouts",
-  "help.colors": "Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito · ciano = foco · vermelho = erro/[offline] · magenta = sistema · menção com sublinhado",
+  "help.colors": "Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito/fixada · ciano = foco · vermelho = erro/[offline] · magenta = sistema · menção com sublinhado",
   "section.favorites": "Favoritos",
   "section.recents": "Recentes",
   "recents.more": "mais… (+%d)",
@@ -223,7 +223,7 @@
   "channels.unverified_tag": "[não verificado]",
   "favorites.added": "Canal adicionado aos favoritos",
   "favorites.removed": "Canal removido dos favoritos",
-  "store.corrupt_notice": "Arquivo de estado corrompido e salvo em .bak — iniciado com favoritos e recentes vazios",
+  "store.corrupt_notice": "Arquivo de estado corrompido e salvo em .bak — iniciado com favoritos, recentes e categorias fixadas vazios",
   "store.load_failed_notice": "Não foi possível ler o arquivo de estado; iniciado com favoritos e recentes vazios",
   "config.save_failed": "Ajuste não salvo: verifique o config.toml",
   "config.removed": "Sessão encerrada: config.toml apagado. Rode ttv-tui login",
@@ -347,5 +347,8 @@
   "chat.copy.context": "canal %s · %s · %s",
   "chat.copy.focus_chat": "Nada para copiar; foque o chat.",
   "cli.flag.terminal": "Fica no terminal em vez de abrir a janela",
-  "video.hosted_idle": "Escolha um canal: Enter abre o selecionado · ? ajuda"
+  "video.hosted_idle": "Escolha um canal: Enter abre o selecionado · ? ajuda",
+  "section.pinned_categories": "Categorias fixadas",
+  "categories.pinned": "★ %s fixada",
+  "categories.unpinned": "☆ %s desfixada"
 }

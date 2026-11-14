@@ -279,7 +279,8 @@ def up(state=None):
     launch()
     guard_monitor()
     # o título aparece antes das linhas: espera a primeira categoria selecionável
-    return wait(lambda: re.search(r"▸\s+[\d.]+[kKmM]?\s+\S", screen()), 20)
+    return wait(lambda: re.search(r"▸\s+[\d.]+[kKmM]?\s+\S", screen()) or
+                "Pinned categories" in first_lines(), 20)
 
 
 def pixels(label):
@@ -371,6 +372,22 @@ def last_line():
 
 
 def flows():
+    # ---- Categoria fixada sem contagem fresca; remoção pela seção inicial.
+    role = "categorias fixadas"
+    up({"favorite_categories": [{"platform": "twitch", "id": "ux06", "name": "Cat06"}]})
+    check(role, "categoria salva no topo com [unverified]",
+          wait(lambda: "Cat06" in first_lines() and "unverified" in first_lines(), 5), first_lines())
+    text("p")
+    switched = wait(lambda: (screen().splitlines() or [""])[0].startswith("Kick · "), 10)
+    check(role, "Kick não mostra categoria da Twitch",
+          switched and "Cat06" not in first_lines(), first_lines())
+    text("p")
+    check(role, "Twitch recupera categoria fixada", wait(lambda: "Cat06" in first_lines(), 10), first_lines())
+    text("f")
+    check(role, "f desfixa pela seção", wait(lambda: "Cat06" not in first_lines(), 5), first_lines())
+    t("quit")
+    wait(exited, 5)
+
     # ---- Favoritos e recentes pertencem à plataforma da lista.
     # Logins curtos: a lista da janela tem ~35 colunas e corta nomes longos.
     role = "salvos por plataforma"
@@ -383,6 +400,30 @@ def flows():
     switched = wait(lambda: (screen().splitlines() or [""])[0].startswith("Kick · "), 10)
     check(role, "Kick não mostra salvos da Twitch", switched and
           "fvux05" not in screen() and "rcux05" not in screen(), first_lines())
+    t("quit")
+    wait(exited, 5)
+
+    # ---- Fixar a primeira categoria do catálogo e abrir seus canais.
+    role = "fixar categoria ao vivo"
+    up()
+    text("f")
+    pinned = wait(lambda: "Pinned categories" in first_lines(), 5)
+    check(role, "f fixa categoria carregada", pinned, first_lines())
+    pinned_row = next((line for line in screen().splitlines() if "★" in line), "")
+    # A coluna de audiência termina antes do nome; basta um prefixo sem reticências.
+    name_match = re.search(r"★\s+\S+\s+(.+)", pinned_row)
+    category_name = name_match.group(1).strip().rstrip("…") if name_match else ""
+
+    def opened_pinned():
+        # O cabeçalho também corta o nome ("Live Channels — Just …"): compara o que sobrou visível.
+        head = (screen().splitlines() or [""])[0]
+        shown = re.search(r"Live Channels — (.+?)…?\s*(?:│|$)", head)
+        part = shown.group(1).strip().rstrip("…").strip() if shown else ""
+        return len(part) >= 3 and category_name.startswith(part)
+
+    t("key", "Return")
+    check(role, "Enter abre canais da categoria fixada",
+          bool(category_name) and wait(opened_pinned, 25), first_lines())
     t("quit")
     wait(exited, 5)
 

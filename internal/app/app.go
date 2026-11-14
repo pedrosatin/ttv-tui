@@ -168,6 +168,7 @@ func Run(opts Options) error {
 		ui.WithChat(chats),
 		ui.WithStore(appStore),
 		ui.WithFavorites(store.ToChannels(st.Favorites)),
+		ui.WithFavoriteCategories(st.FavoriteCategories),
 		ui.WithRecents(store.ToChannels(st.Recents)),
 	}
 	uiOpts = append(uiOpts, catalogOptions(providerRegistry)...)

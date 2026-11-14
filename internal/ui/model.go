@@ -312,8 +312,9 @@ type listState struct {
 	// enters counts Enter on a channel row; see ChannelSelectedMsg.Enter.
 	enters uint64
 
-	favorites []catalog.Channel
-	recents   []catalog.Channel
+	favoriteCategories []store.Category
+	favorites          []catalog.Channel
+	recents            []catalog.Channel
 	// pendingRecents is the store-ordered recent list after a channel is opened.
 	// VisibleItems keeps using recents until the next list load (refresh, back
 	// to categories, reopen) applies this slice, so selection does not jump rows.

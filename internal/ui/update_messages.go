@@ -256,6 +256,9 @@ func (m Model) applyStoreSaved(msg storeSavedMsg) (tea.Model, tea.Cmd) {
 	} else if msg.Notice != "" {
 		m.clearStatusNotice()
 		m.notices.status = m.t(msg.Notice)
+		if msg.Name != "" {
+			m.notices.status = fmt.Sprintf(m.notices.status, sanitizeScreenText(msg.Name))
+		}
 	}
 	return m, nil
 }

@@ -114,8 +114,9 @@ func FromChannels(channels []catalog.Channel) []Channel {
 
 // State represents the persistent application state containing favorites and recents.
 type State struct {
-	Favorites []Channel `json:"favorites"`
-	Recents   []Channel `json:"recents"`
+	Favorites          []Channel  `json:"favorites"`
+	FavoriteCategories []Category `json:"favorite_categories"`
+	Recents            []Channel  `json:"recents"`
 	// snapshot is local bookkeeping, never serialized. Copies share successful-save
 	// acknowledgements because SaveTo accepts State by value.
 	snapshot *favoriteSnapshot
@@ -131,8 +132,9 @@ func (s State) Discarded() int {
 }
 
 type favoriteSnapshot struct {
-	mu        sync.Mutex
-	favorites []Channel
+	mu         sync.Mutex
+	favorites  []Channel
+	categories []Category
 }
 
 // AddRecent prepends ch to recents, removing any prior duplicate, and clamps to maxRecents.
@@ -245,7 +247,8 @@ func loadFrom(path string) (State, error) {
 	st.Favorites, dropFav = validChannels(normalizeChannels(st.Favorites))
 	st.Recents, dropRec = validChannels(normalizeChannels(st.Recents))
 	st.discarded = dropFav + dropRec
-	st.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), st.Favorites...)}
+	st.FavoriteCategories = normalizeCategories(st.FavoriteCategories)
+	st.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), st.Favorites...), categories: append([]Category(nil), st.FavoriteCategories...)}
 	return st, nil
 }
 
@@ -259,7 +262,7 @@ func SaveTo(path string, st State) error {
 
 func saveTo(path string, st State, maxRecents int) error {
 	if st.snapshot == nil {
-		return mergeTo(path, st, maxRecents, st.Favorites, nil)
+		return mergeTo(path, st, maxRecents, st.Favorites, nil, st.FavoriteCategories, nil)
 	}
 	st.snapshot.mu.Lock()
 	defer st.snapshot.mu.Unlock()
@@ -272,14 +275,15 @@ func saveTo(path string, st State, maxRecents int) error {
 func saveSnapshot(path string, st State, maxRecents int, snapshot *favoriteSnapshot) error {
 	added := withoutChannels(st.Favorites, snapshot.favorites)
 	removed := withoutChannels(snapshot.favorites, st.Favorites)
-	if err := mergeTo(path, st, maxRecents, added, removed); err != nil {
+	if err := mergeTo(path, st, maxRecents, added, removed, withoutCategories(st.FavoriteCategories, snapshot.categories), withoutCategories(snapshot.categories, st.FavoriteCategories)); err != nil {
 		return err
 	}
 	snapshot.favorites = append([]Channel(nil), st.Favorites...)
+	snapshot.categories = append([]Category(nil), st.FavoriteCategories...)
 	return nil
 }
 
-func mergeTo(path string, st State, maxRecents int, added, removed []Channel) (err error) {
+func mergeTo(path string, st State, maxRecents int, added, removed []Channel, addedCategories, removedCategories []Category) (err error) {
 	release, err := lockState(path)
 	if err != nil {
 		return err
@@ -293,8 +297,10 @@ func mergeTo(path string, st State, maxRecents int, added, removed []Channel) (e
 		// The file went to .bak; the session state is the only source left.
 		// Another pane's changes since our load stay in .bak only.
 		added = st.Favorites
+		addedCategories = st.FavoriteCategories
 	}
 	st.Favorites = unionChannels(withoutChannels(disk.Favorites, removed), added)
+	st.FavoriteCategories = unionCategories(withoutCategories(disk.FavoriteCategories, removedCategories), addedCategories)
 	st.Recents = unionChannels(st.Recents, disk.Recents)
 	if len(st.Recents) > maxRecents {
 		st.Recents = st.Recents[:maxRecents]
@@ -416,6 +422,7 @@ func writeState(path string, st State) error {
 	st.Recents, dropRec = validChannels(normalizeChannels(st.Recents))
 	st.discarded = dropFav + dropRec
 
+	st.FavoriteCategories = normalizeCategories(st.FavoriteCategories)
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		_ = tmp.Close()
@@ -483,6 +490,7 @@ func (s *Store) Load() (State, error) {
 	st, err := LoadFrom(s.path)
 	if err == nil || errors.Is(err, ErrCorrupt) {
 		s.snapshot.favorites = append([]Channel(nil), st.Favorites...)
+		s.snapshot.categories = append([]Category(nil), st.FavoriteCategories...)
 	}
 	return st, err
 }

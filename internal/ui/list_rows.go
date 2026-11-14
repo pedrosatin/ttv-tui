@@ -146,7 +146,7 @@ func (m Model) listRows(items []ListItem, isSearch bool, maxWidth int) []listRow
 func listHasSections(items []ListItem, isSearch bool) bool {
 	for _, it := range items {
 		switch it.Type {
-		case ItemTypeFavorite, ItemTypeRecent:
+		case ItemTypePinnedCategory, ItemTypeFavorite, ItemTypeRecent:
 			return true
 		case ItemTypeCategory, ItemTypeChannel, ItemTypeExactChannel:
 			if isSearch {
@@ -172,6 +172,8 @@ func (m Model) listTagWidth(items []ListItem) int {
 // a section without a header.
 func (m Model) listSectionTitle(itemType ListItemType, isSearch bool) (string, bool) {
 	switch itemType {
+	case ItemTypePinnedCategory:
+		return m.t("section.pinned_categories"), true
 	case ItemTypeFavorite:
 		return m.t("section.favorites"), true
 	case ItemTypeRecent:
@@ -209,8 +211,13 @@ func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth 
 	switch it.Type {
 	case ItemTypeMoreRecents:
 		row = fitListRow(fmt.Sprintf("%s %7s  %s", marker, "", fmt.Sprintf(m.t("recents.more"), it.Hidden)), maxWidth)
-	case ItemTypeCategory:
-		row = m.formatCategoryRow(marker, *it.Category, isSearch, maxWidth)
+	case ItemTypeCategory, ItemTypePinnedCategory:
+		if it.Type == ItemTypePinnedCategory && it.Category.Viewers == nil {
+			tag := m.t("channels.unverified_tag")
+			row = fitChannelRow(marker, fmt.Sprintf("%7s", m.t("categories.viewers_unknown")), sanitizeScreenText(it.Category.Name), tag, "", false, maxWidth, ansi.StringWidth(tag))
+		} else {
+			row = m.formatCategoryRow(marker, *it.Category, isSearch, maxWidth)
+		}
 	default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
 		row = m.formatChannelRow(marker, *it.Channel, it.Availability, maxWidth, tagWidth)
 	}

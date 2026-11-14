@@ -23,7 +23,7 @@ Categorias ao vivo
 === Atalhos de Teclado ===
   Ajuda: ?/Esc/F1/q fecha · ↑/↓ PgUp/PgDn Home/End rola
   Foco: lista — fechada a ajuda, Tab troca painel e guarda rascunho
-  Lista: ↑/↓ ou j/k mover · Enter abrir · f favoritar · Tab trocar painel
+  Lista: ↑/↓ j/k mover · Enter abrir · f favorita/fixa · Tab trocar painel
   Esc: sai da escrita, do chat, do filtro ou da busca
   Voltar às categorias: Esc na lista · Ctrl+R de qualquer lugar, até digitando
   Busca: / filtra · Ctrl+F categorias e canais (Ctrl+S alt) · r tenta de novo
@@ -35,6 +35,6 @@ Categorias ao vivo
   Chat: ↑/PgUp/Home rola · End/G vivo · y copia · i escreve · Ctrl+T reconecta
   App: Ctrl+Q sair · ? ou F1 alternar ajuda
   Sem cor: NO_COLOR desliga a cor · símbolos ▸ ★ ● ▶ ‖ ✖ ! mostram o estado
-  Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito · ciano = foco · vermelho = erro/[offline]
-    · magenta = sistema · menção com sublinhado
+  Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito/fixada · ciano = foco · vermelho =
+    erro/[offline] · magenta = sistema · menção com sublinhado
  ttv-tui | [pt-BR] Pronto                                                                       | ? ajuda · Ctrl+Q sair

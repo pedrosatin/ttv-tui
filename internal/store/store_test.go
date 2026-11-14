@@ -654,7 +654,7 @@ func TestStore_RemovalOperationsAcknowledged(t *testing.T) {
 	if err := json.Unmarshal(data, &fields); err != nil {
 		t.Fatal(err)
 	}
-	if len(fields) != 2 {
+	if len(fields) != 3 || fields["favorites"] == nil || fields["recents"] == nil || fields["favorite_categories"] == nil {
 		t.Fatalf("bookkeeping serialized: %s", data)
 	}
 }

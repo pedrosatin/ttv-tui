@@ -98,6 +98,11 @@ func (m Model) savedOnList(ch catalog.Channel) bool {
 
 // hasSavedOnList diz se algum favorito ou recente, pendentes inclusive, aparece na lista ativa.
 func (m Model) hasSavedOnList() bool {
+	for _, c := range m.list.favoriteCategories {
+		if platform.Normalize(c.Platform) == m.ListPlatform() {
+			return true
+		}
+	}
 	for _, channels := range [][]catalog.Channel{m.list.favorites, m.list.recents, m.list.pendingRecents} {
 		for _, ch := range channels {
 			if m.savedOnList(ch) {

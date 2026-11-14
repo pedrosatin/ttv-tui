@@ -199,7 +199,7 @@
   "help.focus_now": "Focused: %s — after closing help, Tab switches panels and keeps draft",
   "help.panel_list": "list",
   "help.panel_chat": "chat",
-  "help.nav": "List: ↑/↓ or j/k move · Enter open · f favorite · Tab switch panel",
+  "help.nav": "List: ↑/↓ j/k move · Enter open · f favorite/pin · Tab switch panel",
   "help.esc": "Esc: leaves typing, chat, filter or search",
   "help.categories": "Back to categories: Esc in the list · Ctrl+R anywhere, even while typing",
   "help.platform": "Platform: p switches the list to the next (%s) · video and chat stay",
@@ -212,7 +212,7 @@
   "help.app": "App: Ctrl+Q quit · ? or F1 toggle help",
   "help.nocolor": "No color: NO_COLOR disables color · symbols ▸ ★ ● ▶ ‖ ✖ ! still show state",
   "layout.focus_hint": "Focus mode — Ctrl+H list · Ctrl+L chat · Ctrl+W cycle layouts",
-  "help.colors": "Colors: green = ●/[live] and viewers · yellow = pause and ★ favorite · cyan = focus · red = error/[offline] · magenta = system · mention with underline",
+  "help.colors": "Colors: green = ●/[live] and viewers · yellow = pause and ★ favorite/pinned · cyan = focus · red = error/[offline] · magenta = system · mention with underline",
   "section.favorites": "Favorites",
   "section.recents": "Recent",
   "recents.more": "more… (+%d)",
@@ -223,7 +223,7 @@
   "channels.unverified_tag": "[unverified]",
   "favorites.added": "Channel added to favorites",
   "favorites.removed": "Channel removed from favorites",
-  "store.corrupt_notice": "State file corrupted and backed up to .bak — started with empty favorites and recents",
+  "store.corrupt_notice": "State file corrupted and backed up to .bak — started with empty favorites, recents and pinned categories",
   "store.load_failed_notice": "State file could not be read; started with empty favorites and recents",
   "config.save_failed": "Setting not saved: check config.toml",
   "config.removed": "Signed out: config.toml was deleted. Run ttv-tui login",
@@ -347,5 +347,8 @@
   "chat.copy.context": "channel %s · %s · %s",
   "chat.copy.focus_chat": "Nothing to copy; focus the chat.",
   "cli.flag.terminal": "Stay in the terminal instead of opening the window",
-  "video.hosted_idle": "Pick a channel: Enter opens the highlighted one · ? help"
+  "video.hosted_idle": "Pick a channel: Enter opens the highlighted one · ? help",
+  "section.pinned_categories": "Pinned categories",
+  "categories.pinned": "★ %s pinned",
+  "categories.unpinned": "☆ %s unpinned"
 }

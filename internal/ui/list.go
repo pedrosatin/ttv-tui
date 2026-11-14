@@ -29,10 +29,11 @@ const homeRecentsLimit = 6
 type ListItemType string
 
 const (
-	ItemTypeCategory ListItemType = "Categoria"
-	ItemTypeChannel  ListItemType = "Canal"
-	ItemTypeFavorite ListItemType = "CanalFavorito"
-	ItemTypeRecent   ListItemType = "CanalRecente"
+	ItemTypePinnedCategory ListItemType = "CategoriaFixada"
+	ItemTypeCategory       ListItemType = "Categoria"
+	ItemTypeChannel        ListItemType = "Canal"
+	ItemTypeFavorite       ListItemType = "CanalFavorito"
+	ItemTypeRecent         ListItemType = "CanalRecente"
 	// ItemTypeExactChannel is a search hit whose login or display name equals
 	// the query. It renders in its own section, ahead of the categories.
 	ItemTypeExactChannel ListItemType = "CanalExato"
@@ -194,7 +195,8 @@ func (m Model) VisibleItems() []ListItem {
 		p.starred = m.starredListing()
 		return m.appendContent(nil, p)
 	}
-	items := m.appendFavorites(nil, p)
+	items := m.appendPinnedCategories(nil, p)
+	items = m.appendFavorites(items, p)
 	items = m.appendRecents(items, p)
 	return m.appendContent(items, p)
 }
@@ -339,12 +341,12 @@ func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 func (m Model) appendContent(items []ListItem, p itemPass) []ListItem {
 	switch m.Mode() {
 	case ModeCategories:
-		items = appendCategories(items, m.list.categories, p)
+		items = m.appendCategories(items, m.list.categories, p)
 	case ModeSearch:
 		// An exact channel hit first (v1.9 ticket 11), then categories, then the
 		// other channels (ticket 09).
 		items = m.appendListed(items, p, ItemTypeExactChannel)
-		items = appendCategories(items, m.list.search.categories, p)
+		items = m.appendCategories(items, m.list.search.categories, p)
 		items = m.appendListed(items, p, ItemTypeChannel)
 	case ModeChannels:
 		items = m.appendListed(items, p, ItemTypeChannel)
@@ -352,14 +354,18 @@ func (m Model) appendContent(items []ListItem, p itemPass) []ListItem {
 	return items
 }
 
-// appendCategories appends the categories that match the text filter.
-// Categories are not deduplicated.
-func appendCategories(items []ListItem, cats []catalog.Category, p itemPass) []ListItem {
+// appendCategories aplica o filtro e marca as fixadas na busca. Na tela
+// inicial, elas já aparecem na seção própria e não se repetem no catálogo.
+func (m Model) appendCategories(items []ListItem, cats []catalog.Category, p itemPass) []ListItem {
 	for _, cat := range cats {
 		if !p.matchesFilter(cat.Name, "", "") {
 			continue
 		}
-		items = append(items, ListItem{Type: ItemTypeCategory, Category: &cat})
+		pinned := m.categoryPinned(cat.ID)
+		if m.Mode() == ModeCategories && pinned {
+			continue
+		}
+		items = append(items, ListItem{Type: ItemTypeCategory, Category: &cat, Favorite: pinned})
 	}
 	return items
 }
@@ -546,7 +552,7 @@ func (m Model) HighlightedItem() (ListItem, bool) {
 // HighlightedCategory returns the currently highlighted category by ID.
 func (m Model) HighlightedCategory() (catalog.Category, bool) {
 	it, ok := m.HighlightedItem()
-	if !ok || it.Type != ItemTypeCategory || it.Category == nil {
+	if !ok || (it.Type != ItemTypeCategory && it.Type != ItemTypePinnedCategory) || it.Category == nil {
 		return catalog.Category{}, false
 	}
 	return *it.Category, true
@@ -788,14 +794,16 @@ func (l listState) toStoreState() store.State {
 		recs = l.pendingRecents
 	}
 	return store.State{
-		Favorites: store.FromChannels(l.favorites),
-		Recents:   store.FromChannels(recs),
+		Favorites:          store.FromChannels(l.favorites),
+		FavoriteCategories: append([]store.Category(nil), l.favoriteCategories...),
+		Recents:            store.FromChannels(recs),
 	}
 }
 
 type storeSavedMsg struct {
 	Err    error
 	Notice string
+	Name   string
 }
 
 func (m Model) saveStoreCmd(notice ...string) tea.Cmd {
@@ -815,7 +823,13 @@ func (m Model) saveStoreCmd(notice ...string) tea.Cmd {
 
 func (m Model) toggleFavoriteHighlighted() (tea.Model, tea.Cmd) {
 	it, ok := m.HighlightedItem()
-	if !ok || it.Channel == nil {
+	if !ok {
+		return m, nil
+	}
+	if it.Category != nil {
+		return m.toggleCategory(*it.Category)
+	}
+	if it.Channel == nil {
 		return m, nil
 	}
 	ch := *it.Channel
@@ -844,7 +858,7 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		m.reconcileHighlight()
 		return m, nil
 
-	case ItemTypeCategory:
+	case ItemTypeCategory, ItemTypePinnedCategory:
 		if it.Category == nil {
 			return m, nil
 		}
