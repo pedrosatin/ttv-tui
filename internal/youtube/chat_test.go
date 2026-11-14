@@ -171,6 +171,7 @@ func TestChat_ErrorClassificationsAndBackoff(t *testing.T) {
 		{"not found", ErrChannelNotFound, catalog.ChatErrorNoRoom},
 		{"chat disabled", ErrChatDisabled, catalog.ChatErrorNoRoom},
 		{"bot check", ErrBotCheck, catalog.ChatErrorBotCheck},
+		{"login required", ErrLoginRequired, catalog.ChatErrorLoginRequired},
 		{"HTTP 403 block", &catalog.Error{Platform: platform.YouTube, Kind: catalog.Bloqueio, StatusCode: 403}, catalog.ChatErrorBlocked},
 	}
 

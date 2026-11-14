@@ -489,6 +489,8 @@ func classifyResolveError(err error) error {
 	switch {
 	case errors.Is(err, ErrBotCheck):
 		return final(catalog.ChatErrorBotCheck, err)
+	case errors.Is(err, ErrLoginRequired):
+		return final(catalog.ChatErrorLoginRequired, err)
 	case errors.Is(err, ErrNotLive):
 		return final(catalog.ChatErrorVOD, err)
 	case errors.Is(err, ErrOffline), errors.Is(err, ErrChannelNotFound), errors.Is(err, ErrInvalidTarget), errors.Is(err, ErrChatDisabled):

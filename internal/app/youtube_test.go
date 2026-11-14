@@ -249,6 +249,9 @@ func TestPlaybackBridgeUsesYouTubeProviderTarget(t *testing.T) {
 	if started.Label != "youtube:@LofiGirl" {
 		t.Errorf("started.Label = %q, want youtube:@LofiGirl", started.Label)
 	}
+	if !started.NoAdSignal {
+		t.Error("started.NoAdSignal = false, want true")
+	}
 }
 
 func TestMapPlayerEventYouTubeFailures(t *testing.T) {
@@ -258,6 +261,7 @@ func TestMapPlayerEventYouTubeFailures(t *testing.T) {
 	}{
 		{player.FailureVOD, ui.PlayerFailureVOD},
 		{player.FailureBotCheck, ui.PlayerFailureBotCheck},
+		{player.FailureLoginRequired, ui.PlayerFailureLoginRequired},
 	} {
 		msg := mapPlayerEvent(player.Event{
 			Generation: 2,
@@ -278,5 +282,12 @@ func TestMapPlayerEventYouTubeFailures(t *testing.T) {
 	})
 	if ce.ErrReason != catalog.ChatErrorBotCheck || ce.ErrText != "bot" {
 		t.Fatalf("mapChatEvent = %+v", ce)
+	}
+	ceLogin := mapChatEvent(platform.YouTube, catalog.ChatEvent{
+		State: catalog.ChatStateError,
+		Err:   &catalog.ChatError{Reason: catalog.ChatErrorLoginRequired, Err: errors.New("age")},
+	})
+	if ceLogin.ErrReason != catalog.ChatErrorLoginRequired || ceLogin.ErrText != "age" {
+		t.Fatalf("mapChatEvent(login_required) = %+v", ceLogin)
 	}
 }

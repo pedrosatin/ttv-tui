@@ -50,6 +50,9 @@ var (
 	ErrNotLive = errors.New("youtube: video is not live")
 	// ErrBotCheck reports an anti-bot verification challenge ("Sign in to confirm you're not a bot").
 	ErrBotCheck = errors.New("youtube: bot verification requested")
+	// ErrLoginRequired reports a stream that requires a YouTube account sign-in
+	// (age-restricted, members-only, or private) rather than a bot check.
+	ErrLoginRequired = errors.New("youtube: sign-in required")
 	// ErrChatDisabled reports an active live stream that has no live chat continuation.
 	ErrChatDisabled = errors.New("youtube: live chat is unavailable for this stream")
 )
@@ -276,7 +279,7 @@ func (c *Client) ChannelsByIDs(ctx context.Context, ids []string) ([]catalog.Cha
 			switch {
 			case err == nil:
 				results[i] = &ch
-			case errors.Is(err, ErrChannelNotFound), errors.Is(err, ErrInvalidTarget), catalog.KindOf(err) == catalog.Contrato:
+			case errors.Is(err, ErrChannelNotFound), errors.Is(err, ErrInvalidTarget), errors.Is(err, ErrLoginRequired), catalog.KindOf(err) == catalog.Contrato:
 				// No verifiable state for this entry; keep checking the others.
 			default:
 				mu.Lock()
@@ -477,11 +480,15 @@ func parseWatchPage(target Target, body []byte) (Resolved, error) {
 				Err:      fmt.Errorf("%w: %s", ErrBotCheck, reason),
 			}
 		}
+		err := ErrLoginRequired
+		if reason != "" {
+			err = fmt.Errorf("%w: %s", ErrLoginRequired, reason)
+		}
 		return res, &catalog.Error{
 			Platform: platform.YouTube,
 			Kind:     catalog.Bloqueio,
 			Op:       op,
-			Err:      errors.New(reason),
+			Err:      err,
 		}
 	case "LIVE_STREAM_OFFLINE":
 		res.Availability = catalog.AvailabilityOffline

@@ -41,6 +41,7 @@ const (
 	PlayerFailureBrowserMissing    PlayerFailure = "browser_missing"
 	PlayerFailureVOD               PlayerFailure = "vod"
 	PlayerFailureBotCheck          PlayerFailure = "bot_check"
+	PlayerFailureLoginRequired     PlayerFailure = "login_required"
 	PlayerFailureUnknown           PlayerFailure = "unknown"
 )
 
@@ -275,6 +276,8 @@ func (m Model) playerFailureText() string {
 		return m.t("player.fail.vod")
 	case PlayerFailureBotCheck:
 		return m.t("player.fail.bot_check")
+	case PlayerFailureLoginRequired:
+		return m.t("player.fail.login_required")
 	default:
 		return m.t("player.fail.unknown")
 	}

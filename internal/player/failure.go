@@ -46,6 +46,9 @@ const (
 	// FailureBotCheck: the site presented a bot verification challenge
 	// (YouTube LOGIN_REQUIRED: "Sign in to confirm you're not a bot").
 	FailureBotCheck Failure = "bot_check"
+	// FailureLoginRequired: the stream requires a platform account sign-in
+	// (age-restricted, members-only, or private) rather than a bot check.
+	FailureLoginRequired Failure = "login_required"
 	// FailureStreamlinkBroken: this streamlink build failed on its own, not
 	// because of the channel or the network: a plugin or Python runtime error,
 	// a binary that cannot run, or an exit with an error status before any
@@ -169,6 +172,8 @@ func classifyLine(line string, afterTraceback bool) Failure {
 		return FailureBrowserMissing
 	case isYouTubeBotCheckLine(l):
 		return FailureBotCheck
+	case isYouTubeLoginRequiredLine(l):
+		return FailureLoginRequired
 	case strings.Contains(l, "this plugin does not support vod content"):
 		return FailureVOD
 	case strings.Contains(l, "no playable streams found"),
@@ -252,6 +257,11 @@ func isYouTubeBotCheckLine(l string) bool {
 	}
 	return strings.Contains(l, "sign in to confirm you're not a bot") ||
 		strings.Contains(l, "sign in to confirm you\u2019re not a bot")
+}
+
+func isYouTubeLoginRequiredLine(l string) bool {
+	return strings.Contains(l, "[plugins.youtube][error]") &&
+		strings.Contains(l, "login_required")
 }
 
 // buildExceptions são as exceções Python que indicam defeito do próprio
@@ -377,7 +387,7 @@ func isPerSegmentLine(l string) bool {
 // process or the IPC socket deadline.
 func isFatalLine(f Failure) bool {
 	switch f {
-	case FailureOffline, FailureMPVMissing, FailureStreamlinkMissing, FailureNoPlugin, FailureVOD, FailureBotCheck:
+	case FailureOffline, FailureMPVMissing, FailureStreamlinkMissing, FailureNoPlugin, FailureVOD, FailureBotCheck, FailureLoginRequired:
 		return true
 	default:
 		return false

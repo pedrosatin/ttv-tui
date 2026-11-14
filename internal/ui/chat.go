@@ -203,6 +203,8 @@ func (m Model) chatErrorReasonText(reason catalog.ChatErrorReason) string {
 		return fmt.Sprintf(m.t("chat.err.vod"), name)
 	case catalog.ChatErrorBotCheck:
 		return fmt.Sprintf(m.t("chat.err.bot_check"), name)
+	case catalog.ChatErrorLoginRequired:
+		return fmt.Sprintf(m.t("chat.err.login_required"), name)
 	default:
 		return ""
 	}
