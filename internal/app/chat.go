@@ -350,6 +350,7 @@ func mapChatEvent(plat string, ev catalog.ChatEvent) ui.ChatEventMsg {
 		Generation:  ev.Generation,
 		Platform:    plat,
 		Channel:     ev.Channel,
+		ChannelName: ev.ChannelName,
 		State:       ui.ChatState(ev.State),
 		Anonymous:   ev.Anonymous,
 		Messages:    ev.Messages,

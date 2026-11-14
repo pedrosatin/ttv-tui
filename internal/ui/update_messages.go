@@ -160,6 +160,12 @@ func (m Model) applySavedAvailability(msg SavedAvailabilityMsg) (tea.Model, tea.
 		if m.player.login != "" && samePlayerLabel(updated.Platform, m.player.login, updated.PlayerLabel()) {
 			m.player.target.Channel = updated
 		}
+		if m.chat.panel.channel != "" && platform.Normalize(m.chat.panel.platform) == platform.Normalize(updated.Platform) &&
+			sameChatChannel(updated.Platform, chatChannelName(updated), m.chat.panel.channel) {
+			if name := chatDisplayChannelName(updated.Platform, m.chat.panel.channel, updated.DisplayName); name != "" {
+				m.chat.panel.channelName = name
+			}
+		}
 	}
 	m.reconcileHighlight()
 	return m, nil

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -317,5 +318,109 @@ func TestYouTubeChatNeutralizesBidiAndControlChars(t *testing.T) {
 	}
 	if !strings.Contains(view, "helloworld!") {
 		t.Fatalf("chat view missing sanitized body:\n%s", view)
+	}
+}
+
+func TestYouTubeChatHeaderShowsChannelName(t *testing.T) {
+	fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{
+		platform.YouTube: catalog.ReadOnlyChatCapabilities,
+	}}
+	m := New(mustCatalog(t, i18n.LangPTBR), WithChat(fc))
+	m = resize(m, 120, 24)
+
+	// Without DisplayName, header falls back to video ID and keeps panelKey exact.
+	m = selectChannel(t, m, catalog.Channel{
+		Platform: platform.YouTube,
+		Login:    "jfKfPfyJRdk",
+		URL:      "https://www.youtube.com/watch?v=jfKfPfyJRdk",
+	})
+	if got := m.chat.chatRoomLabel(); got != "jfKfPfyJRdk" {
+		t.Fatalf("initial chatRoomLabel() = %q, want jfKfPfyJRdk", got)
+	}
+	key, ok := m.chat.panelKey()
+	if !ok || key.channel != "jfKfPfyJRdk" {
+		t.Fatalf("panelKey() = (%+v, %v), want jfKfPfyJRdk", key, ok)
+	}
+
+	// ChatEventMsg carrying ChannelName updates header without breaking panelKey.
+	updated, _ := m.Update(ChatEventMsg{
+		Generation:  1,
+		Platform:    platform.YouTube,
+		Channel:     "jfKfPfyJRdk",
+		ChannelName: "Lofi Girl",
+		State:       ChatStateConnected,
+	})
+	m = updated.(Model)
+	if got := m.chat.chatRoomLabel(); got != "Lofi Girl" {
+		t.Fatalf("chatRoomLabel() after ChatEventMsg = %q, want Lofi Girl", got)
+	}
+	if key2, ok := m.chat.panelKey(); !ok || key2.channel != "jfKfPfyJRdk" {
+		t.Fatalf("panelKey() mutated to (%+v, %v), want jfKfPfyJRdk", key2, ok)
+	}
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "Chat — Lofi Girl") {
+		t.Fatalf("header did not show channel display name:\n%s", view)
+	}
+	if strings.Contains(view, "Chat — jfKfPfyJRdk") {
+		t.Fatalf("header still showed raw video ID:\n%s", view)
+	}
+
+	// SavedAvailabilityMsg also populates channelName when lookup resolves DisplayName.
+	m = selectChannel(t, m, catalog.Channel{
+		Platform: platform.YouTube,
+		Login:    "AbCdEfGhIjK",
+		URL:      "https://www.youtube.com/watch?v=AbCdEfGhIjK",
+	})
+	updated, _ = m.Update(SavedAvailabilityMsg{
+		ChannelLookup: true,
+		Channels: []catalog.Channel{{
+			Platform:     platform.YouTube,
+			ID:           "AbCdEfGhIjK",
+			Login:        "AbCdEfGhIjK",
+			DisplayName:  "Chill Beats",
+			URL:          "https://www.youtube.com/watch?v=AbCdEfGhIjK",
+			Availability: catalog.AvailabilityLive,
+		}},
+	})
+	m = updated.(Model)
+	if got := m.chat.chatRoomLabel(); got != "Chill Beats" {
+		t.Fatalf("chatRoomLabel() after SavedAvailabilityMsg = %q, want Chill Beats", got)
+	}
+}
+
+func TestPlainTextSearchStaysOnTwitch(t *testing.T) {
+	pb := &fakePlayback{}
+	fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{
+		platform.Twitch:  catalog.TwitchChatCapabilities,
+		platform.YouTube: catalog.ReadOnlyChatCapabilities,
+	}}
+	var searched []string
+	src := &fakeSource{
+		searchFn: func(_ context.Context, q string) (catalog.Page[catalog.Channel], error) {
+			searched = append(searched, q)
+			return catalog.Page[catalog.Channel]{Items: []catalog.Channel{{
+				ID:           "ch-lofi",
+				Login:        "lofigirl",
+				DisplayName:  "LofiGirl",
+				Availability: catalog.AvailabilityLive,
+			}}}, nil
+		},
+	}
+	m := New(mustCatalog(t, i18n.LangEN), WithSource(src), WithPlayback(pb), WithChat(fc))
+	m = resize(m, 120, 24)
+
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
+	m = typeRunes(m, "LofiGirl")
+	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = drainAll(t, m, cmd)
+
+	if !slices.Equal(searched, []string{"LofiGirl"}) {
+		t.Fatalf("Twitch searched = %v, want [LofiGirl]", searched)
+	}
+	if len(pb.started) != 0 {
+		t.Fatalf("plain search unexpectedly started YouTube playback: %v", pb.started)
+	}
+	if m.ListPlatform() != platform.Twitch {
+		t.Fatalf("ListPlatform = %q, want twitch", m.ListPlatform())
 	}
 }

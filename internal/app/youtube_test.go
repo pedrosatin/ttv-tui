@@ -141,6 +141,9 @@ func TestChatBridgeServesYouTubeChat(t *testing.T) {
 				t.Fatalf("event platform = %q, want youtube", ce.Platform)
 			}
 			if ce.State == ui.ChatStateConnected {
+				if ce.ChannelName != "Lofi Girl" {
+					t.Fatalf("Connected ChannelName = %q, want %q", ce.ChannelName, "Lofi Girl")
+				}
 				connected = true
 			}
 			gotMsgs = append(gotMsgs, ce.Messages...)

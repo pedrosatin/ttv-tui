@@ -386,3 +386,49 @@ func TestChat_429RetryAfterRespected(t *testing.T) {
 		t.Fatalf("429 reconnect = %+v, want NextBackoff=7s", ev)
 	}
 }
+
+func TestChat_EventsIncludeResolvedAuthor(t *testing.T) {
+	rc := newFakeRoomClient()
+	rc.resolveFunc = func(context.Context, string) (Resolved, error) {
+		return Resolved{
+			Target:           Target{Kind: targetVideo, ID: "jfKfPfyJRdk", PlaybackURL: "https://www.youtube.com/watch?v=jfKfPfyJRdk"},
+			VideoID:          "jfKfPfyJRdk",
+			Author:           "Lofi Girl",
+			APIKey:           "PUBLIC_TEST_API_KEY",
+			ClientVersion:    "2.20261112.10.00",
+			ChatContinuation: "CONT_0",
+			Availability:     catalog.AvailabilityLive,
+		}, nil
+	}
+	rc.queue <- pollResponse{res: PollResult{NextContinuation: "CONT_1", Timeout: time.Millisecond}}
+	rc.queue <- pollResponse{err: &catalog.Error{Platform: platform.YouTube, Kind: catalog.Rede}}
+	rc.queue <- pollResponse{res: PollResult{NextContinuation: "CONT_2", Timeout: 50 * time.Millisecond}}
+
+	chat := NewChat(ChatOptions{
+		Client:          rc,
+		MinPollInterval: time.Millisecond,
+		PollInterval:    time.Millisecond,
+		MaxPollInterval: 10 * time.Millisecond,
+		InitialBackoff:  5 * time.Millisecond,
+		MaxBackoff:      20 * time.Millisecond,
+	})
+	defer chat.Close()
+
+	if _, err := chat.Join(context.Background(), catalog.Channel{Platform: platform.YouTube, Login: "jfKfPfyJRdk"}); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	_ = nextChatEvent(t, chat.Events()) // Connecting
+
+	conn1 := nextChatEvent(t, chat.Events())
+	if conn1.State != catalog.ChatStateConnected || conn1.ChannelName != "Lofi Girl" {
+		t.Fatalf("initial Connected = %+v, want ChannelName=%q", conn1, "Lofi Girl")
+	}
+	reconn := nextChatEvent(t, chat.Events())
+	if reconn.State != catalog.ChatStateReconnecting || reconn.ChannelName != "Lofi Girl" {
+		t.Fatalf("Reconnecting = %+v, want ChannelName=%q", reconn, "Lofi Girl")
+	}
+	conn2 := nextChatEvent(t, chat.Events())
+	if conn2.State != catalog.ChatStateConnected || conn2.ChannelName != "Lofi Girl" {
+		t.Fatalf("recovered Connected = %+v, want ChannelName=%q", conn2, "Lofi Girl")
+	}
+}

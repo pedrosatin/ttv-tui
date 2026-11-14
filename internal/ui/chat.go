@@ -47,6 +47,7 @@ type ChatEventMsg struct {
 	// stale and dropped.
 	Platform    string
 	Channel     string
+	ChannelName string
 	State       ChatState
 	Anonymous   bool
 	Messages    []ChatMessage
@@ -105,9 +106,11 @@ type chatPanel struct {
 	switching bool
 	state     ChatState
 	// platform and channel name the room: channel alone is ambiguous, since
-	// twitch:foo and kick:foo are different rooms.
+	// twitch:foo and kick:foo are different rooms. channelName carries an
+	// optional display name (e.g. YouTube channel Author) for opaque IDs.
 	platform    string
 	channel     string
+	channelName string
 	anonymous   bool
 	username    string
 	roomState   ChatRoomState
@@ -151,6 +154,7 @@ func (m *Model) setChatUnsupported(ch catalog.Channel) {
 	m.chat.panel.buf.Clear()
 	m.chat.panel.platform = plat
 	m.chat.panel.channel = normalizeChatChannel(plat, chatChannelName(ch))
+	m.chat.panel.channelName = chatDisplayChannelName(plat, m.chat.panel.channel, ch.DisplayName)
 	m.chat.panel.unsupported = true
 	m.chat.panel.hasChat = false
 	m.chat.panel.caps = catalog.ChatCapabilities{}
@@ -211,14 +215,35 @@ func (m Model) chatErrorReasonText(reason catalog.ChatErrorReason) string {
 }
 
 // chatRoomLabel is the room as the panel names it: "#login" on Twitch, where
-// the "#" of IRC is how a channel is written, and the plain name elsewhere.
+// the "#" of IRC is how a channel is written, and the plain name elsewhere
+// (preferring the resolved channel display name on YouTube when available).
 func (c chatState) chatRoomLabel() string {
-	return roomLabel(c.panel.platform, sanitizeScreenText(c.panel.channel))
+	return roomLabel(c.panel.platform, sanitizeScreenText(c.chatDisplayRoom()))
 }
 
 // copyRoomLabel is chatRoomLabel for text that goes to the clipboard.
 func (c chatState) copyRoomLabel() string {
-	return roomLabel(c.panel.platform, sanitizeChatText(c.panel.channel))
+	return roomLabel(c.panel.platform, sanitizeChatText(c.chatDisplayRoom()))
+}
+
+func (c chatState) chatDisplayRoom() string {
+	if platform.Normalize(c.panel.platform) == platform.YouTube {
+		if name := strings.TrimSpace(c.panel.channelName); name != "" {
+			return name
+		}
+	}
+	return c.panel.channel
+}
+
+func chatDisplayChannelName(plat, channel, displayName string) string {
+	if platform.Normalize(plat) != platform.YouTube {
+		return ""
+	}
+	disp := strings.TrimSpace(displayName)
+	if disp == "" || disp == channel {
+		return ""
+	}
+	return disp
 }
 
 func roomLabel(plat, name string) string {
@@ -315,6 +340,7 @@ func (m *Model) startChatChannel(ch catalog.Channel) tea.Cmd {
 	m.chat.panel.buf.Clear()
 	m.chat.panel.platform = plat
 	m.chat.panel.channel = name
+	m.chat.panel.channelName = chatDisplayChannelName(plat, name, ch.DisplayName)
 	m.chat.panel.unsupported = false
 	m.chat.panel.hasChat = true
 	if m.chat.session != nil {
@@ -454,7 +480,14 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if msg.Channel != "" {
-		m.chat.panel.channel = normalizeChatChannel(m.chat.panel.platform, msg.Channel)
+		next := normalizeChatChannel(m.chat.panel.platform, msg.Channel)
+		if !sameChatChannel(m.chat.panel.platform, m.chat.panel.channel, next) {
+			m.chat.panel.channelName = ""
+		}
+		m.chat.panel.channel = next
+	}
+	if name := chatDisplayChannelName(m.chat.panel.platform, m.chat.panel.channel, msg.ChannelName); name != "" {
+		m.chat.panel.channelName = name
 	}
 	if msg.State != ChatStateNone {
 		m.chat.panel.state = msg.State
