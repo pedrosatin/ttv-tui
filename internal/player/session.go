@@ -501,17 +501,28 @@ func (s *Session) handleLine(line string) {
 		go s.failFast()
 	}
 
-	switch classifyAdLine(line) {
-	case adSignalHoldStart:
-		s.startAdHold()
-	case adSignalHoldEnd:
-		s.endAdHold()
-	case adSignalUnknown:
-		// Neither start nor end can be verified from here on: drop any hold
-		// instead of waiting for BreakMaxHold.
-		s.note("player: unrecognized streamlink ad-hold line: " + line)
-		s.endAdHold()
+	if !isYouTubeTarget(s.cfg.Target) {
+		switch classifyAdLine(line) {
+		case adSignalHoldStart:
+			s.startAdHold()
+		case adSignalHoldEnd:
+			s.endAdHold()
+		case adSignalUnknown:
+			// Neither start nor end can be verified from here on: drop any hold
+			// instead of waiting for BreakMaxHold.
+			s.note("player: unrecognized streamlink ad-hold line: " + line)
+			s.endAdHold()
+		}
 	}
+}
+
+func isYouTubeTarget(t Target) bool {
+	if strings.HasPrefix(strings.ToLower(t.Label), "youtube:") {
+		return true
+	}
+	u := strings.ToLower(t.URL)
+	return strings.Contains(u, "://youtube.com/") || strings.Contains(u, "://www.youtube.com/") ||
+		strings.Contains(u, "://m.youtube.com/") || strings.Contains(u, "://youtu.be/")
 }
 
 func (s *Session) superviseIPC(ctx context.Context) {

@@ -51,6 +51,9 @@ func TestClassifyLine(t *testing.T) {
 		// A plugin failure that names a network or offline cause keeps that cause.
 		{"error: Unable to validate response text: Max retries exceeded with url: /gql", FailureNetwork},
 		{"error: PluginError: No playable streams found on this URL", FailureOffline},
+		{"[plugins.youtube][error] Could not get video info - LOGIN_REQUIRED: Sign in to confirm you're not a bot", FailureBotCheck},
+		{"[plugins.youtube][error] Could not get video info - LIVE_STREAM_OFFLINE: This live stream recording is not available.", FailureOffline},
+		{"error: This plugin does not support VOD content, try yt-dlp instead", FailureVOD},
 		{"[cli][info] Found matching plugin twitch for URL https://www.twitch.tv/xqc", FailureNone},
 		{"", FailureNone},
 	}
@@ -99,6 +102,8 @@ func TestOnlyStreamlinkFailuresBlameTheBuild(t *testing.T) {
 		FailureNoPlugin:          false,
 		FailureBlocked:           false,
 		FailureBrowserMissing:    false,
+		FailureVOD:               false,
+		FailureBotCheck:          false,
 		FailureUnknown:           false,
 		FailureStreamlinkBroken:  true,
 	}
@@ -402,5 +407,29 @@ func TestBrowserPhraseInsidePlayerPathIsNotBrowserMissing(t *testing.T) {
 	line := "error: Failed to start player: /home/u/invalid web browser executable: mpv (Permission denied)"
 	if got := classifyLine(line, false); got == FailureBrowserMissing {
 		t.Fatalf("classifyLine(%q) = %v, want a player failure", line, got)
+	}
+}
+
+func TestYouTubeTargetNeverEntersBreak(t *testing.T) {
+	var emitted []Event
+	s := &Session{
+		cfg: sessionConfig{
+			Generation: 1,
+			Target: Target{
+				URL:   "https://www.youtube.com/@LofiGirl/live",
+				Label: "youtube:@LofiGirl",
+			},
+			Emit: func(ev Event) { emitted = append(emitted, ev) },
+		},
+		state: StatePlaying,
+	}
+	s.handleLine("[stream.hls][info] Filtering out segments and pausing stream output")
+	if s.state != StatePlaying || s.adHold {
+		t.Fatalf("YouTube target entered state=%s adHold=%v, must never enter break", s.state, s.adHold)
+	}
+	for _, ev := range emitted {
+		if ev.State == StateBreak {
+			t.Fatalf("emitted StateBreak for YouTube: %+v", ev)
+		}
 	}
 }
