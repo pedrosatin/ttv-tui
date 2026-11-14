@@ -133,13 +133,13 @@ func TestWritePluginsRefusesSharedSessionDir(t *testing.T) {
 
 func TestDefaultSessionCommandPluginDir(t *testing.T) {
 	target := Target{URL: "https://kick.com/xqc", Label: "kick:xqc", ExtraArgs: []string{"--kick-low-latency"}}
-	cmd := defaultSessionCommand(target, sessionLayout{Dir: "/data/sess", Endpoint: "/data/sess/i", PluginDir: "/data/sess/streamlink-plugins"})
+	cmd := testInvocation.command(target, sessionLayout{Dir: "/data/sess", Endpoint: "/data/sess/i", PluginDir: "/data/sess/streamlink-plugins"})
 	want := []string{"streamlink", "--no-config", "--loglevel", "info", "--plugin-dir", "/data/sess/streamlink-plugins", "--kick-low-latency", "https://kick.com/xqc"}
 	if !slices.Equal(cmd.Args[:len(want)], want) {
 		t.Fatalf("argv = %q, want it to start with %q", cmd.Args, want)
 	}
 
-	plain := defaultSessionCommand(testTarget("gaules"), sessionLayout{Dir: "/data/sess", Endpoint: "/data/sess/i"})
+	plain := testInvocation.command(testTarget("gaules"), sessionLayout{Dir: "/data/sess", Endpoint: "/data/sess/i"})
 	if slices.Contains(plain.Args, "--plugin-dir") {
 		t.Fatalf("a session without plugins got --plugin-dir: %q", plain.Args)
 	}

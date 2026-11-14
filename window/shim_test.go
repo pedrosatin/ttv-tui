@@ -22,6 +22,25 @@ func TestFindMpvSkipsTheShim(t *testing.T) {
 	}
 }
 
+// Um mpv no diretório atual não é o real: entradas vazias, "." ou relativas do
+// PATH apontam para lá e ficam de fora.
+func TestFindMpvSkipsRelativeEntries(t *testing.T) {
+	launch, real := t.TempDir(), t.TempDir()
+	for _, dir := range []string{launch, real} {
+		if err := os.WriteFile(filepath.Join(dir, mpvNames[0]), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(launch)
+	sep := string(os.PathListSeparator)
+	if got, want := findMpv(sep+"."+sep+real, ""), filepath.Join(real, mpvNames[0]); got != want {
+		t.Fatalf("achou %q, quero %q", got, want)
+	}
+	if got := findMpv("."+sep, ""); got != "" {
+		t.Fatalf("só entradas relativas no PATH: achou %q", got)
+	}
+}
+
 // O streamlink acha o shim pelo PATHEXT no Windows e o chama de mpv.EXE ou mpv.COM.
 func TestCalledAsMpv(t *testing.T) {
 	for arg0, want := range map[string]bool{

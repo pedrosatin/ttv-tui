@@ -10,7 +10,7 @@ import (
 )
 
 func TestDefaultSessionCommandTakesInputConfFromDirNotEndpoint(t *testing.T) {
-	cmd := defaultSessionCommand(testTarget("gaules"), sessionLayout{Dir: "/data/sess", Endpoint: "ttv-tui-pipe"})
+	cmd := testInvocation.command(testTarget("gaules"), sessionLayout{Dir: "/data/sess", Endpoint: "ttv-tui-pipe"})
 	joined := strings.Join(cmd.Args, " ")
 	for _, want := range []string{
 		"--input-ipc-server=ttv-tui-pipe",

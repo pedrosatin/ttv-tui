@@ -254,12 +254,8 @@ func TestFallbackOutsideProfile(t *testing.T) {
 }
 
 func TestDefaultFallbackDropsOnlyInputConf(t *testing.T) {
-	mgr := New(Options{})
-	t.Cleanup(mgr.Close)
-	if mgr.opts.CommandNoInputConf == nil {
-		t.Fatal("default Manager has no CommandNoInputConf")
-	}
-	joined := strings.Join(mgr.opts.CommandNoInputConf(testTarget("gaules"), "/run/user/1000/ttv-tui/1/i").Args, " ")
+	layout := sessionLayout{Dir: "/run/user/1000/ttv-tui/1", Endpoint: "/run/user/1000/ttv-tui/1/i"}
+	joined := strings.Join(testInvocation.commandNoInputConf(testTarget("gaules"), layout).Args, " ")
 	if strings.Contains(joined, "--input-conf") {
 		t.Fatalf("fallback still passes --input-conf: %q", joined)
 	}

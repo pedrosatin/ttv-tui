@@ -64,6 +64,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
+	// The TUI looks up mpv only in absolute PATH entries, so a relative TMPDIR
+	// would hide the shim.
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
 	binDir := filepath.Join(dir, "bin")
 	_ = os.Mkdir(binDir, 0o755)
 	exe, _ := os.Executable()

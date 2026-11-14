@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -137,10 +138,51 @@ func sessionCommandOf(f CommandFunc) sessionCommand {
 	}
 }
 
-// defaultSessionCommand is the production command: input.conf in the session
-// directory, IPC on the session endpoint.
-func defaultSessionCommand(target Target, layout sessionLayout) *exec.Cmd {
-	return streamlinkCommand(target.URL, mpvArgs(layout.Endpoint, inputConfPath(layout.Dir)), sessionExtraArgs(target, layout)...)
+// streamlinkInvocation is the production command. bin and mpv are absolute
+// paths resolved before the session starts, and the process runs in the
+// session's private directory: on Windows, CreateProcess and the DLL loader
+// look in the working directory first, so nothing of the player chain may be
+// looked up by name or run from where the user started the app.
+type streamlinkInvocation struct {
+	bin string
+	mpv string
+	env []string
+}
+
+// command builds: streamlink [plugin-dir] [extra...] <url> best --player <mpv>
+// with mpv IPC/window/hwdec flags, input.conf in the session directory and IPC
+// on the session endpoint. --no-config ignores user configs but keeps the
+// bindings compiled into mpv, so --no-input-default-bindings drops those and the
+// session's input.conf provides the only keys. --volume-max=100 holds the window
+// to the 0..100 range the TUI shows; mpv's default ceiling is 130. --no-osc drops
+// the on-screen controller: it answers clicks outside our bindings and speaks English.
+func (s streamlinkInvocation) command(target Target, layout sessionLayout) *exec.Cmd {
+	return s.build(target, layout, inputConfPath(layout.Dir))
+}
+
+// commandNoInputConf is command for a session without an input.conf. The
+// built-in bindings stay off: the window ignores keys and the TUI keeps working,
+// which beats going back to bindings the user cannot see or undo.
+func (s streamlinkInvocation) commandNoInputConf(target Target, layout sessionLayout) *exec.Cmd {
+	return s.build(target, layout, "")
+}
+
+// build omits --input-conf when inputConf is empty. The endpoint goes to
+// --input-ipc-server; it is not a path inside the directory (it can be a pipe name).
+func (s streamlinkInvocation) build(target Target, layout sessionLayout, inputConf string) *exec.Cmd {
+	args := append([]string{"--no-config", "--loglevel", "info"}, sessionExtraArgs(target, layout)...)
+	args = append(args,
+		target.URL,
+		"best",
+		"--player", s.mpv,
+		"--player-args", buildPlayerArgs(mpvArgs(layout.Endpoint, inputConf)),
+	)
+	cmd := exec.Command(s.bin, args...)
+	cmd.Dir = layout.Dir
+	if len(s.env) > 0 {
+		cmd.Env = append(os.Environ(), s.env...)
+	}
+	return cmd
 }
 
 // sessionExtraArgs is what goes between streamlink's own flags and the URL: the
@@ -183,7 +225,9 @@ type Options struct {
 	// Nil with the default Command checks streamlink and mpv; nil with a
 	// custom Command checks nothing.
 	RequiredTools []string
-	// LookPath resolves RequiredTools. Nil uses exec.LookPath.
+	// LookPath resolves RequiredTools and, for the default Command, the
+	// streamlink and mpv it runs; those must come back absolute. Nil searches
+	// only the absolute directories of PATH.
 	LookPath func(file string) (string, error)
 	// RegistryDir records each live player (owner pid, process group, socket) so
 	// a later run can find a player orphaned by an abrupt exit. Empty disables it.
@@ -268,19 +312,14 @@ func New(opts Options) *Manager {
 		opts.EventsBuffer = defaultEventsBuffer
 	}
 	defaultCommand := opts.Command == nil
-	if defaultCommand {
-		if opts.CommandNoInputConf == nil {
-			opts.CommandNoInputConf = commandNoInputConf
-		}
-		if opts.RequiredTools == nil {
-			opts.RequiredTools = []string{"streamlink", "mpv"}
-		}
+	if defaultCommand && opts.RequiredTools == nil {
+		opts.RequiredTools = []string{"streamlink", "mpv"}
 	}
 	if opts.WriteInputConf == nil {
 		opts.WriteInputConf = writeInputConf
 	}
 	if opts.LookPath == nil {
-		opts.LookPath = exec.LookPath
+		opts.LookPath = lookAbsPath
 	}
 	if opts.RuntimeDir == "" {
 		opts.RuntimeDir = defaultRuntimeDir()
@@ -412,7 +451,20 @@ func (m *Manager) start(target Target, order uint64) (uint64, error) {
 	m.mu.Unlock()
 	defer m.doneStarting()
 
-	if err := m.checkTools(); err != nil {
+	m.mu.Lock()
+	streamlinkPath := m.opts.StreamlinkPath
+	streamlinkEnv := append([]string(nil), m.opts.StreamlinkEnv...)
+	m.mu.Unlock()
+
+	command := sessionCommandOf(m.opts.Command)
+	noInputConf := sessionCommandOf(m.opts.CommandNoInputConf)
+	found, err := m.checkTools(streamlinkPath)
+	if err == nil && m.defaultCommand {
+		var inv streamlinkInvocation
+		inv, err = m.invocation(found, streamlinkPath, streamlinkEnv)
+		command, noInputConf = inv.command, inv.commandNoInputConf
+	}
+	if err != nil {
 		m.emit(Event{
 			Generation: gen,
 			State:      StateError,
@@ -422,24 +474,6 @@ func (m *Manager) start(target Target, order uint64) (uint64, error) {
 			Failure:    FailureOf(err),
 		})
 		return gen, err
-	}
-
-	command := sessionCommandOf(m.opts.Command)
-	noInputConf := sessionCommandOf(m.opts.CommandNoInputConf)
-	if m.defaultCommand {
-		m.mu.Lock()
-		bin := "streamlink"
-		if m.opts.StreamlinkPath != "" {
-			bin = m.opts.StreamlinkPath
-		}
-		env := append([]string(nil), m.opts.StreamlinkEnv...)
-		m.mu.Unlock()
-		command = func(target Target, layout sessionLayout) *exec.Cmd {
-			return streamlinkCommandWithBin(bin, env, target.URL, mpvArgs(layout.Endpoint, inputConfPath(layout.Dir)), sessionExtraArgs(target, layout)...)
-		}
-		noInputConf = func(target Target, layout sessionLayout) *exec.Cmd {
-			return streamlinkCommandWithBin(bin, env, target.URL, mpvArgs(layout.Endpoint, ""), sessionExtraArgs(target, layout)...)
-		}
 	}
 	sess, err := startSession(sessionConfig{
 		Generation:         gen,
@@ -525,23 +559,67 @@ func (m *Manager) startVolume(target Target) int {
 	return baselineVolume
 }
 
-// checkTools reports the first RequiredTools entry that LookPath cannot find.
-func (m *Manager) checkTools() error {
-	m.mu.Lock()
-	streamlinkPath := m.opts.StreamlinkPath
-	m.mu.Unlock()
+// checkTools reports the first RequiredTools entry that LookPath cannot find,
+// or else where each one was found. A configured streamlinkPath replaces the
+// lookup of streamlink.
+func (m *Manager) checkTools(streamlinkPath string) (map[string]string, error) {
+	found := make(map[string]string, len(m.opts.RequiredTools))
 	for _, tool := range m.opts.RequiredTools {
 		if tool == "streamlink" && streamlinkPath != "" {
 			if fi, err := os.Stat(streamlinkPath); err != nil || fi.IsDir() {
-				return &MissingToolError{Tool: streamlinkPath, Err: err}
+				return nil, &MissingToolError{Tool: streamlinkPath, Err: err}
 			}
+			found[tool] = streamlinkPath
 			continue
 		}
-		if _, err := m.opts.LookPath(tool); err != nil {
-			return &MissingToolError{Tool: tool, Err: err}
+		path, err := m.opts.LookPath(tool)
+		if err != nil {
+			return nil, &MissingToolError{Tool: tool, Err: err}
 		}
+		found[tool] = path
 	}
-	return nil
+	return found, nil
+}
+
+// invocation resolves the executables of the default command to absolute
+// paths, reusing what checkTools found. A configured streamlinkPath that is
+// relative keeps meaning what it always did, relative to where the app
+// started: the session runs elsewhere. A lookup that comes back relative is
+// refused, since it would name the directory the user started the app from.
+func (m *Manager) invocation(found map[string]string, streamlinkPath string, env []string) (streamlinkInvocation, error) {
+	resolve := func(tool string) (string, error) {
+		path, ok := found[tool]
+		if !ok {
+			var err error
+			if path, err = m.opts.LookPath(tool); err != nil {
+				return "", &MissingToolError{Tool: tool, Err: err}
+			}
+		}
+		if !filepath.IsAbs(path) {
+			return "", &MissingToolError{Tool: tool, Err: fmt.Errorf("found at relative path %q", path)}
+		}
+		return path, nil
+	}
+	inv := streamlinkInvocation{env: env}
+	if streamlinkPath != "" {
+		abs, err := filepath.Abs(streamlinkPath)
+		if err != nil {
+			return inv, &MissingToolError{Tool: streamlinkPath, Err: err}
+		}
+		inv.bin = abs
+	} else {
+		bin, err := resolve("streamlink")
+		if err != nil {
+			return inv, err
+		}
+		inv.bin = bin
+	}
+	mpv, err := resolve("mpv")
+	if err != nil {
+		return inv, err
+	}
+	inv.mpv = mpv
+	return inv, nil
 }
 
 // SetStreamlink updates the executable path and extra environment used for streamlink.
@@ -722,31 +800,6 @@ func (m *Manager) emit(ev Event) {
 	}
 }
 
-// DefaultCommand builds: streamlink [extra...] <url> best --player mpv
-// with mpv IPC/window/hwdec flags. --no-config ignores user configs but keeps the
-// bindings compiled into mpv, so --no-input-default-bindings drops those and the
-// session's input.conf provides the only keys. --volume-max=100 holds the window
-// to the 0..100 range the TUI shows; mpv's default ceiling is 130. --no-osc drops
-// the on-screen controller: it answers clicks outside our bindings and speaks English.
-//
-// endpoint goes to --input-ipc-server and inputConf to --input-conf; they are
-// independent paths (the endpoint can be a pipe name).
-func DefaultCommand(target Target, endpoint, inputConf string) *exec.Cmd {
-	return playerCommand(target, endpoint, inputConf)
-}
-
-// commandNoInputConf is DefaultCommand for a session without an input.conf. The
-// built-in bindings stay off: the window ignores keys and the TUI keeps working,
-// which beats going back to bindings the user cannot see or undo.
-func commandNoInputConf(target Target, endpoint string) *exec.Cmd {
-	return playerCommand(target, endpoint, "")
-}
-
-// playerCommand omits --input-conf when inputConf is empty.
-func playerCommand(target Target, endpoint, inputConf string) *exec.Cmd {
-	return streamlinkCommand(target.URL, mpvArgs(endpoint, inputConf), target.ExtraArgs...)
-}
-
 func mpvArgs(endpoint, inputConf string) []string {
 	args := []string{
 		"--no-config",
@@ -763,25 +816,6 @@ func mpvArgs(endpoint, inputConf string) []string {
 		args = append(args, "--input-conf="+inputConf)
 	}
 	return args
-}
-
-func streamlinkCommand(streamURL string, mpv []string, extra ...string) *exec.Cmd {
-	return streamlinkCommandWithBin("streamlink", nil, streamURL, mpv, extra...)
-}
-
-func streamlinkCommandWithBin(bin string, env []string, streamURL string, mpv []string, extra ...string) *exec.Cmd {
-	args := append([]string{"--no-config", "--loglevel", "info"}, extra...)
-	args = append(args,
-		streamURL,
-		"best",
-		"--player", "mpv",
-		"--player-args", buildPlayerArgs(mpv),
-	)
-	cmd := exec.Command(bin, args...)
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
-	}
-	return cmd
 }
 
 // buildPlayerArgs joins an mpv argv into the single string --player-args takes.

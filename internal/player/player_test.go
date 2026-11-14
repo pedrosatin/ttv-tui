@@ -1528,7 +1528,7 @@ func TestPausePropertyChangeFromMPVWindow(t *testing.T) {
 }
 
 func TestDefaultCommandShape(t *testing.T) {
-	cmd := DefaultCommand(testTarget("gaules"), "/run/user/1000/ttv-tui/1/i", "/run/user/1000/ttv-tui/1/mpv-input.conf")
+	cmd := testCommand(testTarget("gaules"), "/run/user/1000/ttv-tui/1/i", "/run/user/1000/ttv-tui/1/mpv-input.conf")
 	if filepath.Base(cmd.Path) != "streamlink" && !strings.HasSuffix(cmd.Path, "streamlink") {
 		// exec.Command may leave Path empty until LookPath; check Args[0].
 		if cmd.Args[0] != "streamlink" {
@@ -1954,7 +1954,7 @@ func TestCustomStreamlinkPathAndEnv(t *testing.T) {
 	}
 
 	// checkTools should report missing custom streamlink when file does not exist
-	err := mgr.checkTools()
+	_, err := mgr.checkTools(mgr.StreamlinkPath())
 	if err == nil {
 		t.Fatal("expected checkTools to fail for non-existent streamlink path")
 	}
@@ -1990,8 +1990,12 @@ func TestCheckTools_WindowShimWithoutRealMpv(t *testing.T) {
 		mgr := New(Options{})
 		defer mgr.Close()
 
-		if err := mgr.checkTools(); err != nil {
+		found, err := mgr.checkTools("")
+		if err != nil {
 			t.Fatalf("checkTools with window shim on PATH failed: %v", err)
+		}
+		if got := found["mpv"]; !filepath.IsAbs(got) || !strings.EqualFold(filepath.Dir(got), shimDir) {
+			t.Fatalf("mpv found at %q, want the shim in %q", got, shimDir)
 		}
 	})
 
@@ -2002,7 +2006,7 @@ func TestCheckTools_WindowShimWithoutRealMpv(t *testing.T) {
 		mgr := New(Options{})
 		defer mgr.Close()
 
-		err := mgr.checkTools()
+		_, err := mgr.checkTools("")
 		if err == nil {
 			t.Fatal("expected checkTools to fail when mpv is not on PATH")
 		}

@@ -8,10 +8,12 @@ import (
 	"strings"
 )
 
-// findMpv looks for the real mpv on path, skipping the directory of this shim.
+// findMpv looks for the real mpv on path, skipping the directory of this shim
+// and every relative entry: "", "." and the like name the working directory,
+// where nothing of the player chain is looked up.
 func findMpv(path, skip string) string {
 	for _, dir := range filepath.SplitList(path) {
-		if dir == "" || sameDir(dir, skip) {
+		if !filepath.IsAbs(dir) || sameDir(dir, skip) {
 			continue
 		}
 		for _, name := range mpvNames {
