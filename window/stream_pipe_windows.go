@@ -27,6 +27,10 @@ type streamPipeListener struct {
 	next      windows.Handle
 	accepting bool
 	closed    bool
+	// ov lives in the listener, on the heap, because the kernel keeps its
+	// address while ConnectNamedPipe is pending: a stack variable could move
+	// when the goroutine stack grows. acceptMu serializes its use.
+	ov windows.Overlapped
 }
 
 // listenStreamPipe grants only the process user's SID full access. The
@@ -75,16 +79,20 @@ func (l *streamPipeListener) Accept() (*streamPipeConn, error) {
 	}
 	defer func() { _ = windows.CloseHandle(event) }()
 	h := l.next
-	ov := windows.Overlapped{HEvent: event}
+	l.ov = windows.Overlapped{HEvent: event}
 	// Issue the operation while holding mu, so Close cannot miss cancellation.
-	err = windows.ConnectNamedPipe(h, &ov)
+	err = windows.ConnectNamedPipe(h, &l.ov)
 	l.accepting = true
 	l.mu.Unlock()
 	if errors.Is(err, windows.ERROR_IO_PENDING) {
 		var n uint32
 		// Always reap the operation before releasing ov or its event, even on Close.
-		err = windows.GetOverlappedResult(h, &ov, &n, true)
-	} else if errors.Is(err, windows.ERROR_PIPE_CONNECTED) || errors.Is(err, windows.ERROR_NO_DATA) {
+		err = windows.GetOverlappedResult(h, &l.ov, &n, true)
+	}
+	// A client that connected before ConnectNamedPipe, or that already left,
+	// is still a connection: the PID check refuses it and counts the refusal.
+	// Both can come straight from ConnectNamedPipe or from the pending result.
+	if errors.Is(err, windows.ERROR_PIPE_CONNECTED) || errors.Is(err, windows.ERROR_NO_DATA) {
 		err = nil
 	}
 	l.mu.Lock()
