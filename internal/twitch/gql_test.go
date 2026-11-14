@@ -1440,3 +1440,103 @@ func TestChannelsByLoginsFailure(t *testing.T) {
 		t.Fatalf("got = %+v, want nil on failure", got)
 	}
 }
+
+func TestGQLResponseBodyLimit9MiB(t *testing.T) {
+	chunk := make([]byte, 64*1024)
+	for i := range chunk {
+		chunk[i] = 'a'
+	}
+	const totalBytes = 9 << 20
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		var written int
+		for written < totalBytes {
+			toWrite := len(chunk)
+			if written+toWrite > totalBytes {
+				toWrite = totalBytes - written
+			}
+			n, err := w.Write(chunk[:toWrite])
+			written += n
+			if err != nil {
+				return
+			}
+		}
+	}))
+	defer srv.Close()
+
+	src := NewGQLSource(GQLConfig{
+		Endpoint:   srv.URL,
+		HTTPClient: srv.Client(),
+	})
+
+	_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 10})
+	if err == nil {
+		t.Fatal("esperava erro em resposta acima de 8 MiB, retornou nil")
+	}
+	if KindOf(err) != Contrato {
+		t.Fatalf("KindOf(err) = %q, esperava %q (err=%v)", KindOf(err), Contrato, err)
+	}
+	if !errors.Is(err, ErrResponseTooLarge) {
+		t.Fatalf("esperava erro envolvendo ErrResponseTooLarge, obteve: %v", err)
+	}
+}
+
+func TestGQLRateLimitResetExtremoRetornaEmMenosDeUmSegundo(t *testing.T) {
+	var attempts int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		w.Header().Set("Ratelimit-Reset", "999999999")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	t.Run("sem sleep personalizado retorna erro em menos de 1 s", func(t *testing.T) {
+		src := NewGQLSource(GQLConfig{
+			Endpoint:   srv.URL,
+			HTTPClient: srv.Client(),
+		})
+
+		start := time.Now()
+		_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 10})
+		elapsed := time.Since(start)
+
+		if KindOf(err) != RateLimit {
+			t.Fatalf("KindOf(err) = %q, esperava %q (err=%v)", KindOf(err), RateLimit, err)
+		}
+		if elapsed >= time.Second {
+			t.Fatalf("chamada demorou %v, esperava menos de 1 s", elapsed)
+		}
+	})
+
+	t.Run("nao invoca funcao de sleep quando reset excede 60 s", func(t *testing.T) {
+		atomic.StoreInt32(&attempts, 0)
+		slept := false
+		src := NewGQLSource(GQLConfig{
+			Endpoint:   srv.URL,
+			HTTPClient: srv.Client(),
+			Sleep: func(_ context.Context, _ time.Duration) error {
+				slept = true
+				return nil
+			},
+		})
+
+		start := time.Now()
+		_, err := src.Categories(context.Background(), catalog.PageRequest{Limit: 10})
+		elapsed := time.Since(start)
+
+		if KindOf(err) != RateLimit {
+			t.Fatalf("KindOf(err) = %q, esperava %q (err=%v)", KindOf(err), RateLimit, err)
+		}
+		if elapsed >= time.Second {
+			t.Fatalf("chamada demorou %v, esperava menos de 1 s", elapsed)
+		}
+		if slept {
+			t.Fatal("funcao sleep nao deveria ter sido chamada para espera acima de 60 s")
+		}
+		if got := atomic.LoadInt32(&attempts); got != 1 {
+			t.Fatalf("tentativas = %d, esperava 1", got)
+		}
+	})
+}

@@ -5,12 +5,19 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
 	"github.com/pedrosatin/ttv-tui/internal/store"
 )
+
+// hydrationTimeout limita a espera pela disponibilidade dos canais salvos
+// (favoritos e recentes). Fica no mesmo valor do prazo de uma requisição da
+// Twitch: vencido o prazo, a busca é cancelada e os itens seguem como não
+// verificados, com a lista usável. É variável só para o teste encurtá-lo.
+var hydrationTimeout = 10 * time.Second
 
 const defaultMaxRecents = 50
 
@@ -1185,6 +1192,9 @@ func resolveCmd(gen uint64, resolvers map[string]catalog.Resolver, ids map[strin
 		return nil
 	}
 	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), hydrationTimeout)
+		defer cancel()
+
 		results := make([][]catalog.Channel, len(lookups))
 		errs := make([]error, len(lookups))
 		var wg sync.WaitGroup
@@ -1192,7 +1202,7 @@ func resolveCmd(gen uint64, resolvers map[string]catalog.Resolver, ids map[strin
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				channels, err := l.resolver.ChannelsByIDs(context.Background(), l.ids)
+				channels, err := l.resolver.ChannelsByIDs(ctx, l.ids)
 				if err != nil {
 					errs[i] = err
 					return

@@ -36,6 +36,15 @@ const (
 	DefaultRequestTimeout = 10 * time.Second
 	// DefaultRetryBackoff is the delay before the single retry on network or 5xx errors.
 	DefaultRetryBackoff = 200 * time.Millisecond
+	// maxGQLResponseBytes limita o tamanho do corpo da resposta GQL a 8 MiB.
+	// Respostas normais consomem menos de 500 KiB. O teto evita estouro de memória.
+	maxGQLResponseBytes = 8 << 20
+	// maxRateLimitReset limita a espera aceita em HTTP 429 com Ratelimit-Reset a 60 segundos.
+	// Esperas maiores são devolvidas imediatamente como erro para não travar a TUI.
+	maxRateLimitReset = 60 * time.Second
+	// maxDrainBytes limita o que se lê de um corpo já tratado, só para devolver a
+	// conexão ao pool.
+	maxDrainBytes = 64 << 10
 )
 
 const categoriesQuery = `query($n: Int!, $after: Cursor) {
@@ -266,6 +275,9 @@ type gqlErrorItem struct {
 	Path       []any               `json:"path,omitempty"`
 	Extensions *gqlErrorExtensions `json:"extensions,omitempty"`
 }
+
+// ErrResponseTooLarge indica que o corpo da resposta HTTP ultrapassou o teto de 8 MiB.
+var ErrResponseTooLarge = errors.New("graphql response body exceeds 8 MiB limit")
 
 // errIntegrityCheck marks a request refused for lacking an integrity token.
 var errIntegrityCheck = errors.New("graphql integrity check failed")
@@ -836,6 +848,9 @@ func executeWithRetry[T any](
 			if lastErr.ResetAfter <= 0 && lastErr.ResetAt.IsZero() {
 				return catalog.Page[T]{}, lastErr
 			}
+			if lastErr.ResetAfter > maxRateLimitReset {
+				return catalog.Page[T]{}, lastErr
+			}
 			if sleepErr := s.sleep(ctx, lastErr.ResetAfter); sleepErr != nil {
 				return catalog.Page[T]{}, &Error{
 					Platform:   platform.Twitch,
@@ -888,7 +903,8 @@ func doAttempt[T any](
 		}
 	}
 	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
+		// O dreno também tem teto: um corpo sem fim não pode prender a conexão.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDrainBytes))
 		_ = resp.Body.Close()
 	}()
 
@@ -928,13 +944,21 @@ func doAttempt[T any](
 		}
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxGQLResponseBytes+1))
 	if err != nil {
 		return catalog.Page[T]{}, &Error{
 			Platform: platform.Twitch,
 			Kind:     Rede,
 			Op:       op,
 			Err:      fmt.Errorf("read response body: %w", err),
+		}
+	}
+	if int64(len(body)) > maxGQLResponseBytes {
+		return catalog.Page[T]{}, &Error{
+			Platform: platform.Twitch,
+			Kind:     Contrato,
+			Op:       op,
+			Err:      fmt.Errorf("read response body: %w", ErrResponseTooLarge),
 		}
 	}
 
