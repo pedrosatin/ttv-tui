@@ -120,7 +120,10 @@ func ParseTarget(raw string) (Target, error) {
 			// but picks the first videoRenderer on the channel page, which may be a VOD.
 			return channelTarget(info.Login), nil
 		}
-		return videoTarget(info.Login, s), nil
+		// The canonical watch URL, as streamlink's own _url_canonical does: a
+		// pasted /attribution_link?v=... or /playlist?list=...&v=... names the same
+		// video but no streamlink matcher accepts it.
+		return videoTarget(info.Login, DefaultBaseURL+"/watch?v="+info.Login), nil
 	}
 
 	// Strip optional "youtube:" qualifier when coming from a stored StableID/PlayerLabel.
@@ -717,6 +720,9 @@ func parseRetryAfter(header http.Header, now time.Time) (time.Duration, time.Tim
 		if secs <= 0 {
 			return 0, time.Time{}, false
 		}
+		// A day is far above any backoff ceiling; capping here keeps the
+		// multiplication from overflowing into a negative or random duration.
+		secs = min(secs, 86400)
 		d := time.Duration(secs) * time.Second
 		if now.IsZero() {
 			now = time.Now()
