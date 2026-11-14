@@ -78,7 +78,7 @@ func TestJanelaAjudaLegivelSobreOVideo(t *testing.T) {
 	}
 
 	var problems []string
-	sawWindowKeys := false
+	sawWindowKeys := map[string]bool{}
 	for _, page := range pages {
 		header := -1
 		for i, line := range page {
@@ -100,13 +100,15 @@ func TestJanelaAjudaLegivelSobreOVideo(t *testing.T) {
 				if !strings.HasPrefix(text, key+" ") || header < 0 || header > i {
 					problems = append(problems, fmt.Sprintf("%s fora de uma linha própria na seção Janela e layout: %q", key, text))
 				} else {
-					sawWindowKeys = true
+					sawWindowKeys[key] = true
 				}
 			}
 		}
 	}
-	if !sawWindowKeys {
-		problems = append(problems, "nenhuma página mostrou Ctrl+O e Ctrl+P na seção Janela e layout")
+	for _, key := range []string{"Ctrl+O", "Ctrl+P"} {
+		if !sawWindowKeys[key] {
+			problems = append(problems, fmt.Sprintf("nenhuma página mostrou %s na seção Janela e layout", key))
+		}
 	}
 	if len(problems) > 0 {
 		var dump strings.Builder

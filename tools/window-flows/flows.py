@@ -784,9 +784,13 @@ def flows():
     hc = stats()["hole"][0] - 1
     alphas = [int(t("pixel", str(hc), str(y)).split()[3]) for y in range(stats()["hole"][3])]
     # W13: atrás do texto o fundo é opaco (255), seja qual for a opacidade do
-    # chat; uma linha sem texto deixa o vídeo à vista (0). Nada fica no meio.
-    ok = 255 in alphas and all(a in (0, 255) for a in alphas)
-    check(role, "a ajuda tem fundo opaco atrás do texto", ok, f"alfas {sorted(set(alphas))}")
+    # chat, e nada fica no meio. A última coluna do vídeo fica à direita do
+    # texto da ajuda, e ali o vídeo segue à vista (0) em ao menos uma linha.
+    right = hc + stats()["hole"][2] - 1
+    ralphas = [int(t("pixel", str(right), str(y)).split()[3]) for y in range(stats()["hole"][3])]
+    ok = 255 in alphas and all(a in (0, 255) for a in alphas + ralphas) and 0 in ralphas
+    check(role, "a ajuda tem fundo opaco atrás do texto e o vídeo à vista fora dele", ok,
+          f"alfas na 1ª coluna {sorted(set(alphas))}, na última {sorted(set(ralphas))}")
     text("?")
     on = wait(lambda: stats()["holeOn"] and stats()["overlay"] == 0, 3, 0.1)
     time.sleep(0.5)
