@@ -81,23 +81,32 @@ func TestWaitTUIKillsAndReapsAfterDeadline(t *testing.T) {
 }
 
 // As teclas imprimíveis chegam por TEXT_INPUT; as demais passam por keyBytes.
+// As teclas são as padrão do registro de ações da TUI (o campo Default).
 func TestBoundKeysHaveWindowTranslation(t *testing.T) {
-	file, err := parser.ParseFile(token.NewFileSet(), "../internal/ui/keys.go", nil, 0)
+	file, err := parser.ParseFile(token.NewFileSet(), "../internal/ui/actions.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	aliases := map[string]string{"enter": "Return", "esc": "Escape", "tab": "Tab", "up": "Up", "down": "Down", "left": "Left", "right": "Right", "home": "Home", "end": "End", "pgup": "PageUp", "pgdown": "PageDown", "space": " "}
 	seen := map[string]bool{}
+	defer func() {
+		if len(seen) == 0 {
+			t.Fatal("nenhuma tecla padrão encontrada no registro de ações")
+		}
+	}()
 	ast.Inspect(file, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
+		field, ok := n.(*ast.KeyValueExpr)
 		if !ok {
 			return true
 		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != "WithKeys" {
+		if name, ok := field.Key.(*ast.Ident); !ok || name.Name != "Default" {
 			return true
 		}
-		for _, arg := range call.Args {
+		keys, ok := field.Value.(*ast.CompositeLit)
+		if !ok {
+			t.Fatal("teclas padrão fora de uma lista literal")
+		}
+		for _, arg := range keys.Elts {
 			lit, ok := arg.(*ast.BasicLit)
 			if !ok {
 				t.Fatal("binding não literal")

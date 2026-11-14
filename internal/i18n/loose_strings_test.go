@@ -126,6 +126,7 @@ var allowedExceptions = map[string]bool{
 	"alt+right":  true,
 	"alt+":       true,
 	"ctrl+l":     true,
+	"ctrl+c":     true,
 	"space":      true,
 	"+":          true,
 	"-":          true,
@@ -144,6 +145,18 @@ var allowedExceptions = map[string]bool{
 	"g":          true,
 	"=":          true,
 	"_":          true,
+	// Key labels: modifier prefixes and the names the screen shows as symbols
+	// (internal/ui/keynames.go). They are the same in every language.
+	"ctrl+":  true,
+	"shift+": true,
+	"left":   true,
+	"right":  true,
+	"↑":      true,
+	"↓":      true,
+	"←":      true,
+	"→":      true,
+	"PgUp":   true,
+	"PgDn":   true,
 	// LayoutMode identifiers (internal; the screen shows layout.mode.* labels)
 	"split": true,
 	"focus": true,

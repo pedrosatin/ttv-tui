@@ -105,7 +105,7 @@ func TestListErrorIn80And120Columns(t *testing.T) {
 					}
 
 					// In list body, both error message and retry prompt appear without truncation
-					if !strings.Contains(plain, cat.T("error.action_retry")) &&
+					if !strings.Contains(plain, CatalogText(cat, "error.action_retry")) &&
 						!strings.Contains(plain, "Pressione r para tentar novamente") &&
 						!strings.Contains(plain, "Press r to retry") {
 						t.Fatalf("list body missing actionable retry prompt:\n%s", plain)

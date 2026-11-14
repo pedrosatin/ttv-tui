@@ -8,7 +8,7 @@ import (
 
 func TestHostedOpacityKeysAdjustTheOverlay(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.keys = defaultKeyMap()
+	m.keys = defaultKeys()
 	m.hosted.chatOverlay = true
 	if handled, _ := m.handleHostedResizeKey(tea.KeyMsg{Type: tea.KeyUp, Alt: true}); !handled || m.hostedPanel().OverlayOpacity != 75 {
 		t.Fatalf("Alt+↑: handled %v, %+v", handled, m.hostedPanel())

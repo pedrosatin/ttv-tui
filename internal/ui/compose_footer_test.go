@@ -242,8 +242,8 @@ func TestComposeHintAndCursorFitAt80Columns(t *testing.T) {
 			draft := "uma mensagem bem comprida que passa da largura do painel"
 			m = sendKeys(m, runes(draft)...)
 
-			hint := cat.T("chat.input.compose_hint")
-			draftLabel := strings.TrimSuffix(cat.T("chat.input.draft"), "%s")
+			hint := CatalogText(cat, "chat.input.compose_hint")
+			draftLabel := strings.TrimSuffix(CatalogText(cat, "chat.input.draft"), "%s")
 			if hint == "chat.input.compose_hint" || draftLabel == "chat.input.draft" {
 				t.Fatalf("missing catalog keys for %s", lang)
 			}

@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
@@ -303,31 +302,32 @@ func (m Model) toggleChannelFilterMenuItem() (Model, tea.Cmd) {
 }
 
 func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Clear), key.Matches(msg, m.keys.ChannelFilter):
+	id := m.keys.actionFor(modeMenu, msg)
+	switch id {
+	case actBack, actChannelFilter:
 		return m.closeChannelFilterMenu(), nil
 
-	case key.Matches(msg, m.keys.Up):
+	case actUp:
 		if m.list.prefs.menuIndex > 0 {
 			m.list.prefs.menuIndex--
 		}
 		return m, nil
 
-	case key.Matches(msg, m.keys.Down):
+	case actDown:
 		if m.list.prefs.menuIndex+1 < len(m.list.prefs.menuItems) {
 			m.list.prefs.menuIndex++
 		}
 		return m, nil
 
-	case key.Matches(msg, m.keys.Home):
+	case actHome:
 		m.list.prefs.menuIndex = 0
 		return m, nil
 
-	case key.Matches(msg, m.keys.GoLive):
+	case actEnd:
 		m.list.prefs.menuIndex = max(len(m.list.prefs.menuItems)-1, 0)
 		return m, nil
 
-	case key.Matches(msg, m.keys.PageUp), key.Matches(msg, m.keys.PageDown):
+	case actPageUp, actPageDown:
 		head, rows, cursor := m.channelFilterMenuRows(m.width)
 		available := m.height - 1
 		window := len(rows)
@@ -340,7 +340,7 @@ func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		step := max(window-1, 1)
 		direction := 1
-		if key.Matches(msg, m.keys.PageUp) {
+		if id == actPageUp {
 			direction = -1
 		}
 		target := cursor + direction*step
@@ -364,7 +364,7 @@ func (m Model) updateChannelFilterMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case key.Matches(msg, m.keys.Select), key.Matches(msg, m.keys.Pause), msg.Type == tea.KeySpace:
+	case actSelect, actPause:
 		return m.toggleChannelFilterMenuItem()
 	}
 	return m, nil

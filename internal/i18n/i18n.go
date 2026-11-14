@@ -4,6 +4,9 @@
 // How to add a new key to the catalog:
 //  1. Add the key and its translated string to both locales/en.json and locales/pt-BR.json.
 //  2. Preserve identical placeholders (%s, %d, %w, %q, etc.) across both catalogs.
+//     A key the user presses is never written in the text: it is a reference to
+//     the action in internal/ui's key registry, such as {action.quit}, that the UI
+//     replaces with the effective key. Both catalogs cite the same references.
 //  3. Retrieve translated strings with Catalog.T(key) or formatted strings with Catalog.TF(key, args...).
 //  4. Run `go test ./internal/i18n/` to verify key parity, placeholder consistency, and absence of loose strings.
 package i18n

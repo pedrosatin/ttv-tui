@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -211,22 +210,22 @@ func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.hosted.panelsSwapped {
 		step = -step
 	}
-	switch {
-	case key.Matches(msg, m.keys.ToggleChatOverlay):
+	switch m.keys.actionFor(modeWindow, msg) {
+	case actChatOverlay:
 		return true, m.toggleChatOverlay()
-	case key.Matches(msg, m.keys.SwapSides):
+	case actSwapSides:
 		return true, m.togglePanelSides()
-	case key.Matches(msg, m.keys.ChatMoreOpaque):
+	case actChatMoreOpaque:
 		return true, m.adjustChatOpacity(hostedOpacityStep)
-	case key.Matches(msg, m.keys.ChatLessOpaque):
+	case actChatLessOpaque:
 		return true, m.adjustChatOpacity(-hostedOpacityStep)
-	case key.Matches(msg, m.keys.ListWider):
+	case actListWider:
 		return true, m.resizeHostedList(step)
-	case key.Matches(msg, m.keys.ListNarrower):
+	case actListNarrower:
 		return true, m.resizeHostedList(-step)
-	case key.Matches(msg, m.keys.ChatWider):
+	case actChatWider:
 		return true, m.resizeHostedChat(step)
-	case key.Matches(msg, m.keys.ChatNarrower):
+	case actChatNarrower:
 		return true, m.resizeHostedChat(-step)
 	}
 	return false, nil

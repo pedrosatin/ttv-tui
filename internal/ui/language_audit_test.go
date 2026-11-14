@@ -23,7 +23,7 @@ func ek(key string, args ...any) expectKey { return expectKey{key: key, args: ar
 
 // rawCatalogKey matches a catalog key that leaked to the screen instead of its
 // text (what Model.t returns when a key is missing from every catalog).
-var rawCatalogKey = regexp.MustCompile(`\b(?:status|player|help|layout|chat|channels|categories|error|channel_filter|search|filter|auth|app|section|favorites|focus|store)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*\b`)
+var rawCatalogKey = regexp.MustCompile(`\b(?:status|player|help|layout|chat|channels|categories|error|channel_filter|search|filter|auth|app|section|favorites|focus|store|action|key)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*\b`)
 
 func auditCatalog(t *testing.T, lang string) *i18n.Catalog {
 	t.Helper()
@@ -80,7 +80,7 @@ func assertResolved(t *testing.T, cat *i18n.Catalog, surface, screen string, wan
 			t.Errorf("%s: key %q has no %s text (would fall back to English)", surface, w.key, cat.Lang())
 			continue
 		}
-		text := cat.T(w.key)
+		text := CatalogText(cat, w.key)
 		if len(w.args) > 0 {
 			text = fmt.Sprintf(text, w.args...)
 		}

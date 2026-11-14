@@ -1,6 +1,11 @@
 package i18n
 
-import "testing"
+import (
+	"regexp"
+	"slices"
+	"strings"
+	"testing"
+)
 
 func TestResolvePrecedenceAndNormalize(t *testing.T) {
 	cases := []struct {
@@ -152,6 +157,53 @@ func TestCatalogKeyAndPlaceholderParity(t *testing.T) {
 	for k := range ptKeys {
 		if _, ok := enKeys[k]; !ok {
 			t.Errorf("pt-BR key %q orphan (missing from mandatory en catalog)", k)
+		}
+	}
+}
+
+// keyRef matches a key reference such as {action.quit} or {action.search:2}: the
+// UI replaces it with the effective key of that action.
+var keyRef = regexp.MustCompile(`\{[^{}]*\}`)
+
+// citedKeys lists, sorted, the keys a text cites. A group such as
+// {action.page_up/action.page_down} cites the same two keys as two references.
+func citedKeys(s string) []string {
+	var keys []string
+	for _, ref := range keyRef.FindAllString(s, -1) {
+		keys = append(keys, strings.Split(strings.Trim(ref, "{}"), "/")...)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// Both catalogs cite the same keys: a reference missing from one language would
+// show the key in one and hide it in the other.
+func TestCatalogKeyReferenceParity(t *testing.T) {
+	cat, err := New(LangEN)
+	if err != nil {
+		t.Fatalf("New(en): %v", err)
+	}
+	for k, enVal := range cat.messages[LangEN] {
+		enRefs, ptRefs := citedKeys(enVal), citedKeys(cat.messages[LangPTBR][k])
+		if !slices.Equal(enRefs, ptRefs) {
+			t.Errorf("key %q cites different keys: en=%v pt-BR=%v", k, enRefs, ptRefs)
+		}
+	}
+}
+
+// A key name is never written into the text: Ctrl+ and Alt+ come from the key
+// registry through a reference, so a remapped key shows up everywhere.
+func TestCatalogHasNoLiteralModifierKeys(t *testing.T) {
+	cat, err := New(LangEN)
+	if err != nil {
+		t.Fatalf("New(en): %v", err)
+	}
+	for _, lang := range []string{LangEN, LangPTBR} {
+		for k, v := range cat.messages[lang] {
+			lower := strings.ToLower(v)
+			if strings.Contains(lower, "ctrl+") || strings.Contains(lower, "alt+") {
+				t.Errorf("%s %s: %q names a key with Ctrl+ or Alt+; cite the action, as in {action.quit}", lang, k, v)
+			}
 		}
 	}
 }

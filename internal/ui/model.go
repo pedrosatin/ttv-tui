@@ -249,7 +249,7 @@ type Model struct {
 	// resolvers holds the live-state lookup of each platform that has one,
 	// keyed by canonical platform name.
 	resolvers  map[string]catalog.Resolver
-	keys       keyMap
+	keys       keyRegistry
 	tokenCheck TokenCheckFunc
 	store      Store
 	storeSaves *saveSlot
@@ -468,7 +468,7 @@ func New(cat *i18n.Catalog, opts ...Option) Model {
 	}
 	m := Model{
 		catalog: cat,
-		keys:    defaultKeyMap(),
+		keys:    defaultKeys(),
 		list: listState{
 			tracker:    &requestTracker{},
 			pageSize:   defaultCategoryPageSize,
@@ -711,9 +711,11 @@ func (m *Model) clearVolumeLimitNotice() {
 	}
 }
 
+// t is the catalog text of key, with each key reference ({action.quit}) replaced
+// by that action's effective key.
 func (m Model) t(key string) string {
 	if m.catalog == nil {
 		return key
 	}
-	return m.catalog.T(key)
+	return m.keys.expandKeys(m.catalog.T(key), m.catalog)
 }

@@ -30,7 +30,7 @@ func TestHostedSwapPutsTheOverlayOnTheLeft(t *testing.T) {
 
 func TestHostedSwapKeepsTheArrowOnTheDivider(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.keys = defaultKeyMap()
+	m.keys = defaultKeys()
 	m.hosted.panelsSwapped = true
 	if handled, _ := m.handleHostedResizeKey(tea.KeyMsg{Type: tea.KeyCtrlLeft}); !handled || m.hosted.listCols != 44 {
 		t.Fatalf("lista à direita: Ctrl+← alarga, cols %d", m.hosted.listCols)

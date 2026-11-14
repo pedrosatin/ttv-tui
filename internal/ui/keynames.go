@@ -2,9 +2,11 @@ package ui
 
 import (
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
 // keyTypesByName inverte os nomes que o bubbletea dá às teclas em
@@ -62,4 +64,63 @@ func keyMsgOf(t tea.KeyType, alt bool) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}, Alt: alt}
 	}
 	return tea.KeyMsg{Type: t, Alt: alt}
+}
+
+// keyName é o nome de msg no formato de tea.KeyMsg.String(), o mesmo do registro
+// de ações. Alguns terminais mandam o Tab como a runa '\t'; ela se chama "tab".
+func keyName(msg tea.KeyMsg) string {
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == '\t' {
+		return tea.KeyTab.String()
+	}
+	return msg.String()
+}
+
+// keyModifiers são os prefixos que o bubbletea põe no nome de uma tecla, na
+// ordem em que ele os escreve: "alt+ctrl+left", "ctrl+shift+up".
+var keyModifiers = []string{"alt+", "ctrl+", "shift+"}
+
+// keySymbols são as teclas que a tela mostra por símbolo ou abreviação.
+var keySymbols = map[string]string{
+	"up":     "↑",
+	"down":   "↓",
+	"left":   "←",
+	"right":  "→",
+	"pgup":   "PgUp",
+	"pgdown": "PgDn",
+}
+
+// keyLabel é o nome de tecla como a tela o mostra: "ctrl+q" vira Ctrl+Q,
+// "alt+up" vira Alt+↑, "pgdown" vira PgDn e "enter" vira Enter. Um caractere sai
+// como é, e o espaço, único nome traduzido, vem do catálogo.
+func keyLabel(name string, cat *i18n.Catalog) string {
+	if name == " " || name == "space" {
+		return cat.T("key.space")
+	}
+	var b strings.Builder
+	rest, ctrl := name, false
+	for _, mod := range keyModifiers {
+		if after, ok := strings.CutPrefix(rest, mod); ok && after != "" {
+			b.WriteString(capitalize(mod))
+			ctrl = ctrl || mod == "ctrl+"
+			rest = after
+		}
+	}
+	switch {
+	case keySymbols[rest] != "":
+		b.WriteString(keySymbols[rest])
+	case utf8.RuneCountInString(rest) == 1 && ctrl:
+		// Ctrl não distingue maiúscula: Ctrl+Q, como no teclado.
+		b.WriteString(strings.ToUpper(rest))
+	case utf8.RuneCountInString(rest) == 1:
+		b.WriteString(rest)
+	default:
+		b.WriteString(capitalize(rest))
+	}
+	return b.String()
+}
+
+// capitalize põe em maiúscula a primeira letra de um nome de tecla.
+func capitalize(s string) string {
+	r, size := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[size:]
 }

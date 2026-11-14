@@ -3,11 +3,11 @@ package ui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// The stages below are the steps of handleKeyMsg, in its order. Each reports
+// The stages below are the steps of handleKeyMsg, in its order. Each asks the
+// registry (actions.go) which action the key fires in its mode and reports
 // whether it consumed the key; one that did not leaves the model untouched.
 
 // handled marks a key as consumed by the handler whose result it wraps.
@@ -27,12 +27,12 @@ func (m *Model) clearKeyNotices() {
 
 // handleAppKey answers the two keys that outrank the help: Ctrl+Q and Ctrl+C.
 func (m Model) handleAppKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	if key.Matches(msg, m.keys.Quit) {
+	switch m.keys.actionFor(modeApp, msg) {
+	case actQuit:
 		return handled(m.quit())
-	}
 	// Ctrl+C reaches a raw-mode TUI as a key, not SIGINT. It never quits;
 	// only Ctrl+Q takes the shutdown path. Show a localized hint instead.
-	if msg.Type == tea.KeyCtrlC {
+	case actCtrlC:
 		m.notices.ctrlC = m.t("status.ctrl_c_hint")
 		return m, nil, true
 	}
@@ -58,21 +58,21 @@ func (m Model) quit() (tea.Model, tea.Cmd) {
 
 // handleGlobalKey answers the keys that work from any mode, even while typing.
 func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch {
+	switch m.keys.actionFor(modeGlobal, msg) {
 	// F1 opens keyboard help at any time, even while typing.
-	case key.Matches(msg, m.keys.HelpGlobal):
+	case actHelpAnywhere:
 		m.toggleHelp()
 		return m, nil, true
 
 	// Ctrl+R returns to categories from anywhere, including compose.
-	case key.Matches(msg, m.keys.Categories):
+	case actCategories:
 		return handled(m.returnToCategories())
 
 	// Ctrl+X ends video without leaving the app (works while composing).
-	case key.Matches(msg, m.keys.StopVideo):
+	case actStopVideo:
 		return handled(m.keyStopVideo())
 
-	case key.Matches(msg, m.keys.ReconnectChat):
+	case actReconnectChat:
 		return handled(m.keyReconnectChat())
 	}
 	return m, nil, false
@@ -101,19 +101,17 @@ func (m Model) keyReconnectChat() (tea.Model, tea.Cmd) {
 // handleLayoutKey answers the layout controls, which work from any mode
 // (compose, search, filter), and the hosted window's own.
 func (m Model) handleLayoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	if key.Matches(msg, m.keys.CycleLayout, m.keys.ToggleList, m.keys.ToggleChat) && !m.chat.hasPanel() {
+	switch id := m.keys.actionFor(modeGlobal, msg); {
+	case (id == actCycleLayout || id == actToggleList || id == actToggleChat) && !m.chat.hasPanel():
 		m.keepListWithoutChat()
 		return m, nil, true
-	}
-	if key.Matches(msg, m.keys.CycleLayout) {
+	case id == actCycleLayout:
 		m.cycleLayout()
 		return m, nil, true
-	}
-	if key.Matches(msg, m.keys.ToggleList) {
+	case id == actToggleList:
 		m.toggleListPanel()
 		return m, nil, true
-	}
-	if key.Matches(msg, m.keys.ToggleChat) {
+	case id == actToggleChat:
 		m.toggleChatPanel()
 		return m, nil, true
 	}
@@ -145,13 +143,18 @@ func (m Model) handleModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return handled(m.updateChannelFilterMenuKey(msg))
 	}
 
+	composing := m.chat.composing && m.Focus() == FocusChat && m.layout.showChat && !m.chatHiddenByWidth()
+	mode := modeNormal
+	if composing {
+		mode = modeCompose
+	}
 	// Tab switches list ↔ chat in every panel state: list focus, chat focus,
 	// and composing. It never sends or clears the draft.
-	if isSwitchFocusKey(msg, m.keys) {
+	if m.keys.actionFor(mode, msg) == actSwitchFocus {
 		return m.switchPanelFocus(), nil, true
 	}
 
-	if m.chat.composing && m.Focus() == FocusChat && m.layout.showChat && !m.chatHiddenByWidth() {
+	if composing {
 		return handled(m.updateComposingKey(msg))
 	}
 	return m, nil, false
@@ -159,36 +162,36 @@ func (m Model) handleModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 // handleCommandKey answers the keys that start an action on the list or chat.
 func (m Model) handleCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch {
-	case key.Matches(msg, m.keys.Favorite):
+	switch m.keys.actionFor(modeNormal, msg) {
+	case actFavorite:
 		return handled(m.keyFavorite())
 
-	case key.Matches(msg, m.keys.ChannelFilter):
+	case actChannelFilter:
 		return handled(m.keyChannelFilter())
 
-	case key.Matches(msg, m.keys.SwitchPlatform):
+	case actSwitchPlatform:
 		return handled(m.keySwitchPlatform())
 
-	case key.Matches(msg, m.keys.Help):
+	case actHelp:
 		m.toggleHelp()
 		return m, nil, true
 
-	case key.Matches(msg, m.keys.Clear):
+	case actBack:
 		return handled(m.keyClear())
 
-	case key.Matches(msg, m.keys.Compose):
+	case actCompose:
 		return handled(m.enterCompose())
 
-	case key.Matches(msg, m.keys.CopyMessage):
+	case actCopyMessage:
 		return handled(m.keyCopyMessage())
 
-	case key.Matches(msg, m.keys.Filter):
+	case actFilter:
 		return handled(m.keyFilter())
 
-	case key.Matches(msg, m.keys.Search):
+	case actSearch:
 		return handled(m.keySearch())
 
-	case key.Matches(msg, m.keys.Retry):
+	case actRetry:
 		return handled(m.keyRetry())
 	}
 	return m, nil, false
@@ -276,14 +279,14 @@ func (m Model) keyRetry() (tea.Model, tea.Cmd) {
 
 // handlePlayerKey answers pause and volume.
 func (m Model) handlePlayerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch {
-	case key.Matches(msg, m.keys.Pause):
+	switch m.keys.actionFor(modeNormal, msg) {
+	case actPause:
 		return handled(m.keyPause())
 
-	case key.Matches(msg, m.keys.VolUp):
+	case actVolumeUp:
 		return handled(m.adjustVolume(5))
 
-	case key.Matches(msg, m.keys.VolDown):
+	case actVolumeDown:
 		return handled(m.adjustVolume(-5))
 	}
 	return m, nil, false
@@ -298,26 +301,26 @@ func (m Model) keyPause() (tea.Model, tea.Cmd) {
 
 // handleMoveKey answers movement and Enter, in the list or in the chat.
 func (m Model) handleMoveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch {
-	case key.Matches(msg, m.keys.Up):
+	switch m.keys.actionFor(modeNormal, msg) {
+	case actUp:
 		return handled(m.keyUp())
 
-	case key.Matches(msg, m.keys.Down):
+	case actDown:
 		return handled(m.keyDown())
 
-	case key.Matches(msg, m.keys.PageUp):
+	case actPageUp:
 		return handled(m.keyPageUp())
 
-	case key.Matches(msg, m.keys.PageDown):
+	case actPageDown:
 		return handled(m.keyPageDown())
 
-	case key.Matches(msg, m.keys.Home):
+	case actHome:
 		return handled(m.keyHome())
 
-	case key.Matches(msg, m.keys.GoLive):
+	case actEnd:
 		return handled(m.keyGoLive())
 
-	case key.Matches(msg, m.keys.Select):
+	case actSelect:
 		return handled(m.keySelect())
 	}
 	return m, nil, false

@@ -225,7 +225,7 @@ func TestHelpAndStatusBarCiteOnlyCtrlQAt80Cols(t *testing.T) {
 					appLine = l
 				}
 			}
-			want := "  " + cat.T("help.app")
+			want := "  " + CatalogText(cat, "help.app")
 			if strings.TrimRight(appLine, " ") != want {
 				t.Errorf("help app line = %q, want untruncated %q", appLine, want)
 			}

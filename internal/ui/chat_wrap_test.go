@@ -244,7 +244,7 @@ func TestNarrowChatNoticeReadableInBothLanguages(t *testing.T) {
 					notice = append(notice, row)
 				}
 				got := squash(strings.TrimPrefix(strings.Join(notice, " "), "  ! "))
-				if want := squash(cat.T("chat.hidden_narrow")); got != want {
+				if want := squash(CatalogText(cat, "chat.hidden_narrow")); got != want {
 					t.Fatalf("notice cut:\n got %q\nwant %q\n%s", got, want, plain)
 				}
 				for i, row := range rows {

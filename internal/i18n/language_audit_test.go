@@ -95,9 +95,11 @@ var (
 
 // ptBRWords returns the plain words of a pt-BR value: format verbs, quoted
 // commands and any token with a symbol (flags, key chords, identifiers,
-// numbers, paths, hosts) and upper-case names are dropped; what is left is Portuguese copy.
+// numbers, paths, hosts), key references and upper-case names are dropped; what
+// is left is Portuguese copy.
 func ptBRWords(value string) []string {
 	value = formatVerb.ReplaceAllString(value, " ")
+	value = keyRef.ReplaceAllString(value, " ")
 	value = quotedLiteral.ReplaceAllString(value, " ")
 	var words []string
 	var tokens []string
@@ -234,10 +236,10 @@ func TestPTBRAuditRejectsEnglish(t *testing.T) {
 	})
 }
 
-// Portuguese and English quoted commands, key chords and placeholders are not
-// copy: they must not trip the word check.
+// Portuguese and English quoted commands, key chords, key references and
+// placeholders are not copy: they must not trip the word check.
 func TestPTBRWordsIgnoresCommandsKeysAndPlaceholders(t *testing.T) {
-	got := ptBRWords("Rode 'ttv-tui login --from-browser' ou Ctrl+W, veja %s e chat:read em id.twitch.tv (500)")
+	got := ptBRWords("Rode 'ttv-tui login --from-browser' ou Ctrl+W, veja %s e chat:read em id.twitch.tv (500) {action.quit}")
 	want := []string{"rode", "ou", "veja", "e", "em"}
 	if slash := ptBRWords("cicla split/chat/lista"); strings.Join(slash, " ") != "cicla split chat lista" {
 		t.Fatalf("slash-separated words = %v", slash)

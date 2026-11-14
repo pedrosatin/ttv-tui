@@ -311,7 +311,7 @@ func TestChatErrorReasons_AreExplained(t *testing.T) {
 				ErrText: "kick channel [Bloqueio] (HTTP 403): request refused by the site", ErrReason: reason,
 			})
 			m = updated.(Model)
-			want := fmt.Sprintf(cat.T(key), "Kick")
+			want := fmt.Sprintf(CatalogText(cat, key), "Kick")
 			view := ansi.Strip(m.View())
 			// The panel wraps a long reason; the header state holds it whole.
 			if got := m.chatHeaderState(); !strings.Contains(got, want) {
@@ -367,7 +367,7 @@ func TestBlockedErrorsHaveTheirOwnText(t *testing.T) {
 		cat := mustCatalog(t, lang)
 		m := New(cat)
 		m.player.state, m.player.failure = PlayerStateError, PlayerFailureBlocked
-		if got := m.playerFailureText(); got != cat.T("player.fail.blocked") || strings.Contains(got, cat.T("player.fail.network")) {
+		if got := m.playerFailureText(); got != CatalogText(cat, "player.fail.blocked") || strings.Contains(got, CatalogText(cat, "player.fail.network")) {
 			t.Errorf("%s: playerFailureText = %q, want the blocked text", lang, got)
 		}
 	}

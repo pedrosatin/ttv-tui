@@ -1,181 +1,13 @@
 package ui
 
 import (
-	"strings"
-	"unicode"
-	"unicode/utf8"
-
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 )
 
-type keyMap struct {
-	Up            key.Binding
-	Down          key.Binding
-	PageUp        key.Binding
-	PageDown      key.Binding
-	Home          key.Binding
-	GoLive        key.Binding
-	Select        key.Binding
-	SwitchFocus   key.Binding
-	Filter        key.Binding
-	Search        key.Binding
-	ChannelFilter key.Binding
-	// SwitchPlatform shows the list of the next platform that has a catalog.
-	SwitchPlatform key.Binding
-	Categories     key.Binding
-	Retry          key.Binding
-	Clear          key.Binding
-	Quit           key.Binding
-	Pause          key.Binding
-	VolUp          key.Binding
-	VolDown        key.Binding
-	StopVideo      key.Binding
-	ReconnectChat  key.Binding
-	Compose        key.Binding
-	CopyMessage    key.Binding
-	Help           key.Binding
-	HelpGlobal     key.Binding
-	CloseHelp      key.Binding
-	Favorite       key.Binding
-	CycleLayout    key.Binding
-	ToggleList     key.Binding
-	ToggleChat     key.Binding
-	ListWider      key.Binding
-	ListNarrower   key.Binding
-	ChatWider      key.Binding
-	ChatNarrower   key.Binding
-	// ToggleChatOverlay only acts in the hosted window.
-	ToggleChatOverlay key.Binding
-	SwapSides         key.Binding
-	ChatMoreOpaque    key.Binding
-	ChatLessOpaque    key.Binding
-}
-
-func defaultKeyMap() keyMap {
-	return keyMap{
-		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-		),
-		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-		),
-		PageUp: key.NewBinding(
-			key.WithKeys("pgup"),
-		),
-		PageDown: key.NewBinding(
-			key.WithKeys("pgdown"),
-		),
-		Home: key.NewBinding(
-			key.WithKeys("home", "g"),
-		),
-		// End/G vão ao fim da lista ou retomam o ao vivo no chat.
-		GoLive: key.NewBinding(
-			key.WithKeys("end", "G"),
-		),
-		Select: key.NewBinding(
-			key.WithKeys("enter"),
-		),
-		SwitchFocus: key.NewBinding(
-			key.WithKeys("tab"),
-		),
-		Filter: key.NewBinding(
-			key.WithKeys("/"),
-		),
-		// Ctrl+F is the primary search key; Ctrl+S is an alias. The app runs
-		// the terminal in raw mode, which disables software flow control, so
-		// the terminal forwards Ctrl+S instead of using it to pause output.
-		Search: key.NewBinding(
-			key.WithKeys("ctrl+f", "ctrl+s"),
-		),
-		// l opens the channel language/audience filter menu (ticket 01).
-		ChannelFilter: key.NewBinding(
-			key.WithKeys("l"),
-		),
-		// p switches the list to the next platform (Twitch, Kick). What plays and
-		// the chat stay.
-		SwitchPlatform: key.NewBinding(
-			key.WithKeys("p"),
-		),
-		Categories: key.NewBinding(
-			key.WithKeys("ctrl+r"),
-		),
-		Retry: key.NewBinding(
-			key.WithKeys("r"),
-		),
-		Clear: key.NewBinding(
-			key.WithKeys("esc"),
-		),
-		// Ctrl+Q is the only in-app quit key. Ctrl+C is handled separately so
-		// it never exits (raw mode delivers it as a key, not SIGINT).
-		Quit: key.NewBinding(
-			key.WithKeys("ctrl+q"),
-		),
-		Pause: key.NewBinding(
-			key.WithKeys(" ", "space"),
-		),
-		VolUp: key.NewBinding(
-			key.WithKeys("+", "="),
-		),
-		VolDown: key.NewBinding(
-			key.WithKeys("-", "_"),
-		),
-		StopVideo: key.NewBinding(
-			key.WithKeys("ctrl+x"),
-		),
-		ReconnectChat: key.NewBinding(
-			key.WithKeys("ctrl+t"),
-		),
-		Compose: key.NewBinding(
-			key.WithKeys("i"),
-		),
-		// y yanks the selected chat message (or the latest while live) via
-		// wl-copy, xclip, or OSC 52 (see writeClipboard).
-		CopyMessage: key.NewBinding(
-			key.WithKeys("y"),
-		),
-		Help: key.NewBinding(
-			key.WithKeys("?", "f1"),
-		),
-		HelpGlobal: key.NewBinding(
-			key.WithKeys("f1"),
-		),
-		// q only means something inside the help; quitting stays on Ctrl+Q.
-		CloseHelp: key.NewBinding(
-			key.WithKeys("q"),
-		),
-		Favorite: key.NewBinding(
-			key.WithKeys("f"),
-		),
-		// Layout keys (ticket 02): Ctrl+W cycles named modes; Ctrl+H / Ctrl+L
-		// toggle list and chat independently. Bubble Tea maps these to distinct
-		// KeyCtrl* types (Ctrl+H is BS, Backspace is DEL).
-		CycleLayout: key.NewBinding(
-			key.WithKeys("ctrl+w"),
-		),
-		ToggleList: key.NewBinding(
-			key.WithKeys("ctrl+h"),
-		),
-		ToggleChat: key.NewBinding(
-			key.WithKeys("ctrl+l"),
-		),
-		// The arrow moves the divider: the list's is to the right of it, the
-		// chat's to the left, so each panel grows toward the video.
-		ListWider:         key.NewBinding(key.WithKeys("ctrl+right")),
-		ListNarrower:      key.NewBinding(key.WithKeys("ctrl+left")),
-		ChatWider:         key.NewBinding(key.WithKeys("alt+left")),
-		ChatNarrower:      key.NewBinding(key.WithKeys("alt+right")),
-		ToggleChatOverlay: key.NewBinding(key.WithKeys("ctrl+o")),
-		SwapSides:         key.NewBinding(key.WithKeys("ctrl+p")),
-		ChatMoreOpaque:    key.NewBinding(key.WithKeys("alt+up")),
-		ChatLessOpaque:    key.NewBinding(key.WithKeys("alt+down")),
-	}
-}
-
 // expandBatchedKeyMsg splits a KeyMsg that carries several runes into one
 // KeyMsg per rune, in order. Bubble Tea can deliver a burst such as "jjj" as a
-// single KeyRunes message; without splitting, key.Matches never sees "j" and
+// single KeyRunes message; without splitting, the registry never sees "j" and
 // the movement is dropped. Paste events stay as one message so pasted text
 // never fires navigation shortcuts rune-by-rune. Single-rune and non-rune
 // keys are returned unchanged.
@@ -259,13 +91,15 @@ func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
 	if m.listVisible() || m.list.prefs.menuOpen || (m.chat.composing && m.chatColumnVisible()) {
 		return false
 	}
-	if key.Matches(msg, m.keys.Filter, m.keys.Search, m.keys.Favorite, m.keys.ChannelFilter, m.keys.SwitchPlatform) ||
-		key.Matches(msg, m.keys.Retry) && !m.canRetryPlayer() {
+	switch m.keys.actionFor(modeNormal, msg) {
+	case actFilter, actSearch, actFavorite, actChannelFilter, actSwitchPlatform:
 		return true
+	case actRetry:
+		return !m.canRetryPlayer()
+	case actUp, actDown, actPageUp, actPageDown, actHome, actEnd, actSelect, actBack, actCopyMessage:
+		return !m.chatColumnVisible()
 	}
-	return !m.chatColumnVisible() && key.Matches(msg,
-		m.keys.Up, m.keys.Down, m.keys.PageUp, m.keys.PageDown, m.keys.Home, m.keys.GoLive,
-		m.keys.Select, m.keys.Clear, m.keys.CopyMessage)
+	return false
 }
 
 // typingField diz se o foco está num campo de texto à vista: o prompt de busca,
@@ -275,28 +109,6 @@ func (m Model) typingField() bool {
 		return true
 	}
 	return m.chat.composing && m.Focus() == FocusChat && m.chatColumnVisible()
-}
-
-// isFieldEditKey diz se a tecla pertence ao campo de texto: o que se digita
-// (runas e espaço) e as teclas de edição, Backspace, Delete, Ctrl+H, Ctrl+W e
-// Alt+Backspace. O Tab, mesmo como runa, continua trocando o painel.
-func isFieldEditKey(msg tea.KeyMsg) bool {
-	switch msg.Type {
-	case tea.KeyRunes:
-		return len(msg.Runes) != 1 || msg.Runes[0] != '\t'
-	case tea.KeySpace, tea.KeyBackspace, tea.KeyDelete, tea.KeyCtrlH, tea.KeyCtrlW:
-		return true
-	}
-	return false
-}
-
-// isSwitchFocusKey reports whether msg is Tab, including a lone '\t' rune some
-// terminals deliver instead of tea.KeyTab.
-func isSwitchFocusKey(msg tea.KeyMsg, keys keyMap) bool {
-	if key.Matches(msg, keys.SwitchFocus) || msg.Type == tea.KeyTab {
-		return true
-	}
-	return msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == '\t'
 }
 
 // switchPanelFocus toggles list ↔ chat. It leaves composition without clearing
@@ -327,21 +139,21 @@ func (m Model) updateHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	total := len(m.renderHelpLines(m.helpTextWidth()))
 	page := max(m.helpPageRows(total)-1, 1)
 	offset := m.helpOffset(total)
-	switch {
-	case key.Matches(msg, m.keys.Help, m.keys.Clear, m.keys.CloseHelp):
+	switch m.keys.actionFor(modeHelp, msg) {
+	case actHelp, actHelpAnywhere, actBack, actCloseHelp:
 		m.toggleHelp()
 		return m, nil
-	case key.Matches(msg, m.keys.Up):
+	case actUp:
 		offset--
-	case key.Matches(msg, m.keys.Down):
+	case actDown:
 		offset++
-	case key.Matches(msg, m.keys.PageUp):
+	case actPageUp:
 		offset -= page
-	case key.Matches(msg, m.keys.PageDown):
+	case actPageDown:
 		offset += page
-	case key.Matches(msg, m.keys.Home):
+	case actHome:
 		offset = 0
-	case key.Matches(msg, m.keys.GoLive):
+	case actEnd:
 		offset = total
 	}
 	m.layout.helpScroll = offset
@@ -392,34 +204,19 @@ func (m Model) adjustVolume(delta int) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateComposingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Clear):
+	if draft, ok := editText(m.chat.composeDraft, msg); ok {
+		m.chat.composeDraft = draft
+		m.clearResolvedComposeWarning()
+		return m, nil
+	}
+	switch m.keys.actionFor(modeCompose, msg) {
+	case actBack:
 		// Esc leaves composition and stays on the chat panel; draft is kept.
 		m.chat.composing = false
 		return m, nil
 
-	case key.Matches(msg, m.keys.Select):
+	case actSelect:
 		return m.submitComposeMessage()
-
-	case isWordBackspace(msg):
-		m.chat.composeDraft = trimLastWord(m.chat.composeDraft)
-		m.clearResolvedComposeWarning()
-		return m, nil
-
-	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
-		m.chat.composeDraft = trimLastRune(m.chat.composeDraft)
-		m.clearResolvedComposeWarning()
-		return m, nil
-
-	case msg.Type == tea.KeySpace:
-		m.chat.composeDraft += " "
-		m.clearResolvedComposeWarning()
-		return m, nil
-
-	case msg.Type == tea.KeyRunes:
-		m.chat.composeDraft += sanitizeChatText(string(msg.Runes))
-		m.clearResolvedComposeWarning()
-		return m, nil
 	}
 	return m, nil
 }
@@ -438,26 +235,4 @@ func (m *Model) clearResolvedComposeWarning() {
 			m.chat.panel.sendWarning = ""
 		}
 	}
-}
-
-// isWordBackspace é a tecla que apaga a palavra anterior: Alt+Backspace (os
-// bytes ESC DEL que a janela também manda para Ctrl+Backspace) e Ctrl+W, como
-// no shell.
-func isWordBackspace(msg tea.KeyMsg) bool {
-	return (msg.Type == tea.KeyBackspace && msg.Alt) || msg.Type == tea.KeyCtrlW
-}
-
-// trimLastWord apaga a palavra antes do fim e os espaços depois dela, e mantém
-// o espaço que a separa da anterior: "fix ab " vira "fix ".
-func trimLastWord(s string) string {
-	s = strings.TrimRightFunc(s, unicode.IsSpace)
-	return s[:strings.LastIndexFunc(s, unicode.IsSpace)+1]
-}
-
-func trimLastRune(s string) string {
-	if s == "" {
-		return ""
-	}
-	_, size := utf8.DecodeLastRuneInString(s)
-	return s[:len(s)-size]
 }

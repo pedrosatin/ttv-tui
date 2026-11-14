@@ -228,7 +228,7 @@ func TestHostedSaveKeepsOnlyTheLastChange(t *testing.T) {
 
 func TestHostedResizeKeysOnlyInTheHostedWindow(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
-	m.keys = defaultKeyMap()
+	m.keys = defaultKeys()
 	right := tea.KeyMsg{Type: tea.KeyCtrlRight}
 	if handled, _ := m.handleHostedResizeKey(right); !handled || m.hosted.listCols != 44 {
 		t.Fatalf("Ctrl+→ na janela: handled %v, cols %d", handled, m.hosted.listCols)

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
@@ -42,48 +41,51 @@ func (m Model) SetFilter(filter string) Model {
 }
 
 func (m Model) updateSearchingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Clear):
+	if input, ok := editText(m.list.search.input, msg); ok {
+		m.list.search.input = input
+		return m, nil
+	}
+	switch m.keys.actionFor(modeSearch, msg) {
+	case actBack:
 		m.list.search.active = false
 		m.list.search.input = ""
 		return m, nil
 
-	case key.Matches(msg, m.keys.Select), key.Matches(msg, m.keys.Search):
+	case actSelect, actSearch:
 		q := strings.TrimSpace(m.list.search.input)
 		if q == "" {
 			m.list.search.active = false
 			return m, nil
 		}
 		return m.startSearch(q)
-
-	case isWordBackspace(msg):
-		m.list.search.input = trimLastWord(m.list.search.input)
-		return m, nil
-
-	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
-		m.list.search.input = trimLastRune(m.list.search.input)
-		return m, nil
-
-	case msg.Type == tea.KeySpace:
-		m.list.search.input += " "
-		return m, nil
-
-	case msg.Type == tea.KeyRunes:
-		m.list.search.input += sanitizeChatText(string(msg.Runes))
-		return m, nil
 	}
 	return m, nil
 }
 
 func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Clear):
+	if filter, ok := editText(m.list.filter, msg); ok {
+		m.list.filter = filter
+		m.reconcileHighlight()
+		return m, nil
+	}
+	if step := fieldArrow(msg); step != 0 {
+		if m.list.hardErr() {
+			return m, nil
+		}
+		m.moveHighlight(step)
+		if step < 0 {
+			return m, nil
+		}
+		return m.loadNextPageIfNeeded()
+	}
+	switch m.keys.actionFor(modeFilter, msg) {
+	case actBack:
 		m.list.filtering = false
 		m.list.filter = ""
 		m.reconcileHighlight()
 		return m, nil
 
-	case key.Matches(msg, m.keys.Search):
+	case actSearch:
 		if q := strings.TrimSpace(m.list.filter); q != "" {
 			return m.startSearch(q)
 		}
@@ -93,24 +95,13 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.list.search.input = ""
 		return m, nil
 
-	case msg.Type == tea.KeyUp, msg.Type == tea.KeyDown:
-		if m.list.hardErr() {
-			return m, nil
-		}
-		if msg.Type == tea.KeyUp {
-			m.moveHighlight(-1)
-			return m, nil
-		}
-		m.moveHighlight(1)
-		return m.loadNextPageIfNeeded()
-
-	case key.Matches(msg, m.keys.PageUp):
+	case actPageUp:
 		return m.moveListPage(-1)
 
-	case key.Matches(msg, m.keys.PageDown):
+	case actPageDown:
 		return m.moveListPage(1)
 
-	case key.Matches(msg, m.keys.Select):
+	case actSelect:
 		// A pasted stream URL opens immediately; otherwise with no local match,
 		// Enter runs the same global search as Ctrl+F. Enter só abre o item
 		// destacado quando ele está na tela; sem ele, o texto vai à busca.
@@ -119,26 +110,6 @@ func (m Model) updateFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.list.filtering = false
 		return m.selectHighlighted()
-
-	case isWordBackspace(msg):
-		m.list.filter = trimLastWord(m.list.filter)
-		m.reconcileHighlight()
-		return m, nil
-
-	case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
-		m.list.filter = trimLastRune(m.list.filter)
-		m.reconcileHighlight()
-		return m, nil
-
-	case msg.Type == tea.KeySpace:
-		m.list.filter += " "
-		m.reconcileHighlight()
-		return m, nil
-
-	case msg.Type == tea.KeyRunes:
-		m.list.filter += sanitizeChatText(string(msg.Runes))
-		m.reconcileHighlight()
-		return m, nil
 	}
 	return m, nil
 }
