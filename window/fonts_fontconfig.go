@@ -32,7 +32,7 @@ func systemFonts() fontFiles {
 			"/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf",
 			"/usr/share/fonts/noto/NotoSansMath-Regular.ttf",
 		},
-		// fc-match always answers; a non-colour font in its answer is skipped.
+		// fc-match always answers; a non-color font in its answer is skipped.
 		emoji: []string{
 			fcMatch("emoji"),
 			"/usr/share/fonts/noto/NotoColorEmoji.ttf",

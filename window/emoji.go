@@ -134,74 +134,99 @@ func parseColorFont(b []byte) (*colorFont, error) {
 	if best < 0 {
 		return nil, errNoColorBitmaps
 	}
-	arrayOff, _ := be32(cblc, best)
-	count, _ := be32(cblc, best+8)
-	cf := &colorFont{f: f, cbdt: cbdt}
-	for i := range int(count) {
-		entry := int(arrayOff) + 8*i
-		first, ok1 := be16(cblc, entry)
-		last, ok2 := be16(cblc, entry+2)
-		add, ok3 := be32(cblc, entry+4)
-		head := int(arrayOff) + int(add)
-		indexFormat, ok4 := be16(cblc, head)
-		imageFormat, ok5 := be16(cblc, head+2)
-		imageOffset, ok6 := be32(cblc, head+4)
-		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 || last < first || head+8 > len(cblc) {
-			continue
-		}
-		cf.subs = append(cf.subs, bitmapSub{
-			first: first, last: last, indexFormat: indexFormat, imageFormat: imageFormat,
-			imageOffset: imageOffset, index: cblc[head+8:],
-		})
-	}
+	cf := &colorFont{f: f, cbdt: cbdt, subs: strikeSubtables(cblc, best)}
 	if len(cf.subs) == 0 {
 		return nil, errNoColorBitmaps
 	}
 	return cf, nil
 }
 
-// glyphData returns the bytes of glyph gi in CBDT and the image format.
+// strikeSubtables reads the index subtables of the strike whose record starts at
+// rec in CBLC.
+func strikeSubtables(cblc []byte, rec int) []bitmapSub {
+	arrayOff, _ := be32(cblc, rec)
+	count, _ := be32(cblc, rec+8)
+	var subs []bitmapSub
+	// count comes from the file: the loop stops at the end of CBLC, not at count.
+	// Offsets are summed in uint64 so a 32-bit int cannot wrap them.
+	for i := uint64(0); i < uint64(count); i++ {
+		entry := uint64(arrayOff) + 8*i
+		if entry+8 > uint64(len(cblc)) {
+			break
+		}
+		first, _ := be16(cblc, int(entry))
+		last, _ := be16(cblc, int(entry)+2)
+		add, _ := be32(cblc, int(entry)+4)
+		head := uint64(arrayOff) + uint64(add)
+		if last < first || head+8 > uint64(len(cblc)) {
+			continue
+		}
+		h := int(head)
+		indexFormat, _ := be16(cblc, h)
+		imageFormat, _ := be16(cblc, h+2)
+		imageOffset, _ := be32(cblc, h+4)
+		subs = append(subs, bitmapSub{
+			first: first, last: last, indexFormat: indexFormat, imageFormat: imageFormat,
+			imageOffset: imageOffset, index: cblc[h+8:],
+		})
+	}
+	return subs
+}
+
+// glyphData returns the CBDT record bytes for glyph gi, or false if absent.
 func (s bitmapSub) glyphData(gi uint16, cbdt []byte) ([]byte, bool) {
+	if gi < s.first || gi > s.last {
+		return nil, false
+	}
 	i := int(gi - s.first)
-	var start, end uint32
-	var ok1, ok2 bool
+	// start and end are uint64: a size read from the file times the glyph's
+	// position must not wrap before it is checked against CBDT.
+	var start, end uint64
+	ok := false
 	switch s.indexFormat {
 	case 1:
-		start, ok1 = be32(s.index, 4*i)
-		end, ok2 = be32(s.index, 4*i+4)
+		a, okA := be32(s.index, 4*i)
+		b, okB := be32(s.index, 4*i+4)
+		start, end, ok = uint64(a), uint64(b), okA && okB
 	case 2:
-		var size uint32
-		size, ok1 = be32(s.index, 0)
-		start, end, ok2 = size*uint32(i), size*uint32(i+1), true
+		size, okS := be32(s.index, 0)
+		start, end, ok = uint64(size)*uint64(i), uint64(size)*uint64(i+1), okS
 	case 3:
-		var a, b uint16
-		a, ok1 = be16(s.index, 2*i)
-		b, ok2 = be16(s.index, 2*i+2)
-		start, end = uint32(a), uint32(b)
+		a, okA := be16(s.index, 2*i)
+		b, okB := be16(s.index, 2*i+2)
+		start, end, ok = uint64(a), uint64(b), okA && okB
 	case 4:
-		n, ok := be32(s.index, 0)
-		for j := 0; ok && j < int(n); j++ {
-			id, _ := be16(s.index, 4+4*j)
-			if id != gi {
+		// n comes from the file: the loop stops where the index ends.
+		n, okN := be32(s.index, 0)
+		for j := 0; okN && j < int(min(uint64(n), uint64(len(s.index)))); j++ {
+			rec := 4 + 4*j
+			if rec+4 > len(s.index) {
+				break
+			}
+			if id, _ := be16(s.index, rec); id != gi {
 				continue
 			}
-			a, okA := be16(s.index, 4+4*j+2)
-			b, okB := be16(s.index, 4+4*(j+1)+2)
-			start, end, ok1, ok2 = uint32(a), uint32(b), okA, okB
+			a, _ := be16(s.index, rec+2)
+			b, okB := be16(s.index, rec+6)
+			start, end, ok = uint64(a), uint64(b), okB
 			break
 		}
 	case 5:
-		size, ok := be32(s.index, 0)
+		size, okS := be32(s.index, 0)
 		n, okN := be32(s.index, 12)
-		for j := 0; ok && okN && j < int(n); j++ {
-			if id, _ := be16(s.index, 16+2*j); id == gi {
-				start, end, ok1, ok2 = size*uint32(j), size*uint32(j+1), true, true
+		for j := 0; okS && okN && j < int(min(uint64(n), uint64(len(s.index)))); j++ {
+			rec := 16 + 2*j
+			if rec+2 > len(s.index) {
+				break
+			}
+			if id, _ := be16(s.index, rec); id == gi {
+				start, end, ok = uint64(size)*uint64(j), uint64(size)*uint64(j+1), true
 				break
 			}
 		}
 	}
-	lo, hi := uint64(s.imageOffset)+uint64(start), uint64(s.imageOffset)+uint64(end)
-	if !ok1 || !ok2 || end <= start || hi > uint64(len(cbdt)) {
+	lo, hi := uint64(s.imageOffset)+start, uint64(s.imageOffset)+end
+	if !ok || end <= start || hi > uint64(len(cbdt)) {
 		return nil, false
 	}
 	return cbdt[lo:hi], true
@@ -226,46 +251,76 @@ func pngOf(format uint16, rec []byte) []byte {
 	return rec[skip+4 : skip+4+int(size)]
 }
 
-// glyph draws rune r to fit w×h pixels, centred, or returns nil when the font
+// maxGlyphSide and maxGlyphPixels cap the PNG a glyph may declare. The font is
+// read from the system and not trusted: its IHDR could ask for 100000×100000
+// pixels, and png.Decode would try to allocate them.
+const (
+	maxGlyphSide   = 4096
+	maxGlyphPixels = 16 << 20
+)
+
+// decodeGlyphPNG decodes data after checking the size its header declares.
+func decodeGlyphPNG(data []byte) image.Image {
+	cfg, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 ||
+		cfg.Width > maxGlyphSide || cfg.Height > maxGlyphSide ||
+		uint64(cfg.Width)*uint64(cfg.Height) > maxGlyphPixels {
+		return nil
+	}
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil
+	}
+	return img
+}
+
+// glyph draws rune r to fit w×h pixels, centered, or returns nil when the font
 // has no bitmap for it. buf is the caller's sfnt scratch buffer.
 func (cf *colorFont) glyph(buf *sfnt.Buffer, r rune, w, h int) *glyph {
 	gi, err := cf.f.GlyphIndex(buf, r)
 	if err != nil || gi == 0 || w <= 0 || h <= 0 {
 		return nil
 	}
+	return cf.glyphAt(uint16(gi), w, h)
+}
+
+// glyphAt draws glyph gi. Subtables may overlap: one that covers gi without a
+// bitmap for it hands over to the next.
+func (cf *colorFont) glyphAt(gi uint16, w, h int) *glyph {
 	for _, s := range cf.subs {
-		if uint16(gi) < s.first || uint16(gi) > s.last {
+		if gi < s.first || gi > s.last {
 			continue
 		}
-		rec, ok := s.glyphData(uint16(gi), cf.cbdt)
+		rec, ok := s.glyphData(gi, cf.cbdt)
 		if !ok {
-			return nil
+			continue
 		}
 		data := pngOf(s.imageFormat, rec)
 		if data == nil {
-			return nil
+			continue
 		}
-		img, err := png.Decode(bytes.NewReader(data))
-		if err != nil {
-			return nil
+		img := decodeGlyphPNG(data)
+		if img == nil {
+			continue
 		}
 		return fitImage(img, w, h)
 	}
 	return nil
 }
 
-// fitImage scales img to fit w×h, keeping its shape, centred in that box.
+// fitImage scales img to fit w×h, keeping its shape, centered in that box.
 func fitImage(img image.Image, w, h int) *glyph {
-	iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
-	if iw <= 0 || ih <= 0 {
+	iw, ih := int64(img.Bounds().Dx()), int64(img.Bounds().Dy())
+	if iw <= 0 || ih <= 0 || w <= 0 || h <= 0 {
 		return nil
 	}
-	dw, dh := w, ih*w/iw
-	if dh > h {
-		dw, dh = iw*h/ih, h
+	// In int64 the products cannot wrap, even on a 32-bit int.
+	dw, dh := int64(w), ih*int64(w)/iw
+	if dh > int64(h) {
+		dw, dh = iw*int64(h)/ih, int64(h)
 	}
 	dw, dh = max(dw, 1), max(dh, 1)
-	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
+	dst := image.NewRGBA(image.Rect(0, 0, int(dw), int(dh)))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Src, nil)
-	return &glyph{color: dst, x: (w - dw) / 2, y: (h - dh) / 2}
+	return &glyph{color: dst, x: (w - int(dw)) / 2, y: (h - int(dh)) / 2}
 }

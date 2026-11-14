@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/png"
 	"os"
+	"runtime"
 	"testing"
+	"time"
 
 	"golang.org/x/image/font/sfnt"
 )
@@ -197,5 +200,146 @@ func TestDrawColorGlyphComposites(t *testing.T) {
 	want := []byte{10, 20, 30, 255, 50, 100, 200, 255, 10, 20, 30, 255, 10, 20, 30, 255}
 	if !bytes.Equal(a.buf, want) {
 		t.Errorf("buffer %v, quer %v", a.buf, want)
+	}
+}
+
+// pngDeclaring troca o tamanho no IHDR de um PNG 1x1 e refaz o CRC: o arquivo
+// continua pequeno, só o cabeçalho promete w×h pixels.
+func pngDeclaring(t *testing.T, w, h uint32) []byte {
+	t.Helper()
+	b := encodePNG(t, 1, 1)
+	// Assinatura (8), tamanho do bloco (4), "IHDR" (4), largura e altura.
+	binary.BigEndian.PutUint32(b[16:], w)
+	binary.BigEndian.PutUint32(b[20:], h)
+	binary.BigEndian.PutUint32(b[29:], crc32.ChecksumIEEE(b[12:29]))
+	return b
+}
+
+// A fonte do sistema não é confiável: um PNG cujo IHDR promete 100000×100000
+// pixels é recusado pelo cabeçalho, sem alocar a imagem.
+func TestGlyphPNGRejectsHugeHeader(t *testing.T) {
+	cases := map[string][2]uint32{
+		"100000x100000":        {100000, 100000},
+		"lado acima do teto":   {maxGlyphSide + 1, 1},
+		"altura acima do teto": {1, maxGlyphSide + 1},
+	}
+	for name, wh := range cases {
+		data := pngDeclaring(t, wh[0], wh[1])
+		if cfg, err := png.DecodeConfig(bytes.NewReader(data)); err != nil || cfg.Width != int(wh[0]) {
+			t.Fatalf("%s: PNG de teste mal montado: %v %+v", name, err, cfg)
+		}
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		img := decodeGlyphPNG(data)
+		runtime.ReadMemStats(&after)
+		if img != nil {
+			t.Errorf("%s: imagem aceita", name)
+		}
+		if grew := after.TotalAlloc - before.TotalAlloc; grew > 1<<20 {
+			t.Errorf("%s: alocou %d bytes para recusar", name, grew)
+		}
+	}
+	if decodeGlyphPNG(encodePNG(t, 4, 4)) == nil {
+		t.Error("PNG pequeno e válido recusado")
+	}
+	// O mesmo vale pelo caminho do desenho.
+	cf := &colorFont{cbdt: rawRecord(pngDeclaring(t, 100000, 100000)), subs: []bitmapSub{oneGlyphSub(5, 0)}}
+	if g := cf.glyphAt(5, 20, 20); g != nil {
+		t.Error("glifo com IHDR gigante desenhado")
+	}
+}
+
+// rawRecord monta um registro CBDT de formato 19: tamanho e PNG.
+func rawRecord(p []byte) []byte {
+	return append(binary.BigEndian.AppendUint32(nil, uint32(len(p))), p...)
+}
+
+// oneGlyphSub cobre só o glifo gi, com o registro em [0, n) do CBDT. n == 0
+// deixa a faixa sem bitmap para gi.
+func oneGlyphSub(gi uint16, n uint32) bitmapSub {
+	idx := binary.BigEndian.AppendUint32(binary.BigEndian.AppendUint32(nil, 0), n)
+	return bitmapSub{first: gi, last: gi, indexFormat: 1, imageFormat: 19, index: idx}
+}
+
+// finishesFast falha se f não volta em um segundo: os contadores lidos da fonte
+// não podem ditar quantas voltas o laço dá.
+func finishesFast(t *testing.T, name string, f func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() { f(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatalf("%s: o laço não terminou em 1s", name)
+	}
+}
+
+// count, no CBLC, e n, nos índices 4 e 5, valendo 0xffffffff param no fim dos
+// dados em vez de girar quatro bilhões de vezes.
+func TestBitmapCountsBoundedByData(t *testing.T) {
+	// Registro do strike em 0: arrayOff 16, count 0xffffffff. Uma única entrada
+	// de subtable em 16 aponta para o cabeçalho em 16+8.
+	cblc := make([]byte, 16)
+	binary.BigEndian.PutUint32(cblc[0:], 16)
+	binary.BigEndian.PutUint32(cblc[8:], 0xffffffff)
+	cblc = binary.BigEndian.AppendUint16(cblc, 1)
+	cblc = binary.BigEndian.AppendUint16(cblc, 1)
+	cblc = binary.BigEndian.AppendUint32(cblc, 8)
+	cblc = append(cblc, 0, 1, 0, 19, 0, 0, 0, 0)
+	var subs []bitmapSub
+	finishesFast(t, "CBLC", func() { subs = strikeSubtables(cblc, 0) })
+	// O cabeçalho da subtable também se lê como entrada; o que importa é parar.
+	if len(subs) == 0 || len(subs) > len(cblc)/8 || subs[0].first != 1 || subs[0].indexFormat != 1 {
+		t.Errorf("subtables %+v, quer a de 1 a 1 no formato 1 primeiro", subs)
+	}
+
+	cbdt := make([]byte, 64)
+	f4 := binary.BigEndian.AppendUint32(nil, 0xffffffff)
+	f4 = append(f4, 0, 9, 0, 0, 0, 9, 0, 4)
+	f5 := binary.BigEndian.AppendUint32(nil, 4)
+	f5 = append(f5, make([]byte, 8)...)
+	f5 = binary.BigEndian.AppendUint32(f5, 0xffffffff)
+	f5 = binary.BigEndian.AppendUint16(f5, 9)
+	for format, index := range map[uint16][]byte{4: f4, 5: f5} {
+		s := bitmapSub{first: 1, last: 0xfffe, indexFormat: format, imageFormat: 19, index: index}
+		var ok bool
+		finishesFast(t, "índice", func() { _, ok = s.glyphData(7, cbdt) })
+		if ok {
+			t.Errorf("índice %d: glifo ausente encontrado", format)
+		}
+	}
+}
+
+// Offsets cuja soma ou produto transborda 32 bits não levam a outro registro.
+func TestBitmapOffsetsDoNotWrap(t *testing.T) {
+	// No índice 2, o glifo 65535 com registros de 65540 bytes começa em
+	// 0x1_0002_FFFC: em uint32 cairia em [196604, 262144) do CBDT.
+	s := bitmapSub{first: 0, last: 0xffff, indexFormat: 2, imageFormat: 19,
+		index: binary.BigEndian.AppendUint32(make([]byte, 0, 12), 65540)}
+	s.index = append(s.index, make([]byte, 8)...)
+	if rec, ok := s.glyphData(0xffff, make([]byte, 300000)); ok {
+		t.Errorf("índice 2 transbordou para um registro de %d bytes", len(rec))
+	}
+	// No CBLC, arrayOff perto de 2³² mais o deslocamento da subtable não volta
+	// para o início da tabela.
+	cblc := make([]byte, 64)
+	binary.BigEndian.PutUint32(cblc[0:], 0xfffffff8)
+	binary.BigEndian.PutUint32(cblc[8:], 1)
+	if subs := strikeSubtables(cblc, 0); len(subs) != 0 {
+		t.Errorf("arrayOff fora do CBLC virou %d subtables", len(subs))
+	}
+}
+
+// Subtables sobrepostas: a primeira que cobre o glifo e não tem bitmap passa a
+// vez para a seguinte.
+func TestOverlappingSubtablesFallThrough(t *testing.T) {
+	rec := rawRecord(encodePNG(t, 4, 4))
+	cf := &colorFont{cbdt: rec, subs: []bitmapSub{
+		oneGlyphSub(5, 0),
+		{first: 4, last: 6, indexFormat: 1, imageFormat: 19,
+			index: binary.BigEndian.AppendUint32(binary.BigEndian.AppendUint32(binary.BigEndian.AppendUint32(nil, 0), 0), uint32(len(rec)))},
+	}}
+	if g := cf.glyphAt(5, 8, 8); g == nil || g.color == nil {
+		t.Error("o glifo da segunda subtable não foi desenhado")
 	}
 }

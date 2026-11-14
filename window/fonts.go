@@ -12,8 +12,8 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// glyph is a drawn rune: an alpha mask painted in the cell's colour, placed
-// from the baseline, or a colour image (an emoji), placed from the cell's top
+// glyph is a drawn rune: an alpha mask painted in the cell's color, placed
+// from the baseline, or a color image (an emoji), placed from the cell's top
 // left corner.
 type glyph struct {
 	mask  *image.Alpha
@@ -32,7 +32,7 @@ type fontSet struct {
 	cache   map[uint64]*glyph
 	sfntBuf sfnt.Buffer
 	tofu    int
-	// emojiPaths are the colour emoji fonts, opened on the first rune no other
+	// emojiPaths are the color emoji fonts, opened on the first rune no other
 	// font has: most screens never need the 10 MB of Noto Color Emoji.
 	emojiPaths []string
 	emoji      *colorFont
@@ -65,7 +65,7 @@ func loadFace(path string, px float64) (font.Face, *sfnt.Font, error) {
 // system font folders on Windows and macOS.
 type fontFiles struct {
 	regular, bold, fallback []string
-	// emoji are colour bitmap fonts (CBDT/CBLC), the last resort for a rune.
+	// emoji are color bitmap fonts (CBDT/CBLC), the last resort for a rune.
 	emoji []string
 }
 
@@ -116,7 +116,7 @@ func cellMetrics(reg font.Face) (int, int, int, error) {
 }
 
 // get returns the glyph of r for a cell span cells wide (1 or 2), or nil when no
-// font has it. Only a colour emoji depends on the span: it is scaled to the cells.
+// font has it. Only a color emoji depends on the span: it is scaled to the cells.
 func (fs *fontSet) get(r rune, bold bool, span int) *glyph {
 	key := uint64(r) << 2
 	if bold {
@@ -167,7 +167,7 @@ func (fs *fontSet) get(r rune, bold bool, span int) *glyph {
 	return g
 }
 
-// emojiGlyph draws r from the colour emoji font, sized to span cells.
+// emojiGlyph draws r from the color emoji font, sized to span cells.
 func (fs *fontSet) emojiGlyph(r rune, span int) *glyph {
 	if !fs.emojiTried {
 		fs.emojiTried = true
