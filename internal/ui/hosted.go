@@ -204,7 +204,7 @@ func (m *Model) warnChatUnavailable() {
 // handleHostedResizeKey moves a divider. It reports whether msg was one of its keys.
 func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.hosted.host == nil {
-		if m.keys.actionFor(modeWindow, msg) == actChatOverlay {
+		if m.keys.actionFor(modeWindow, msg) != "" {
 			m.warnStatus(m.t("feedback.window_only"))
 			return true, nil
 		}

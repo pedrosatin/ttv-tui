@@ -17,6 +17,7 @@ const (
 	footChat
 	footCompose
 	footMenu
+	footFocus
 )
 
 type footerUse struct {
@@ -27,6 +28,8 @@ type footerUse struct {
 
 func (m Model) footerMode() footerMode {
 	switch {
+	case m.LayoutMode() == LayoutFocus:
+		return footFocus
 	case m.list.prefs.menuOpen:
 		return footMenu
 	case m.listVisible() && m.list.search.active:

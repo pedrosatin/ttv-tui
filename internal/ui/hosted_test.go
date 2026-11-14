@@ -238,8 +238,8 @@ func TestHostedResizeKeysOnlyInTheHostedWindow(t *testing.T) {
 		t.Fatalf("Alt+← na janela: handled %v, cols %d", handled, m.hosted.chatCols)
 	}
 	m.hosted.host = nil
-	if handled, _ := m.handleHostedResizeKey(right); handled {
-		t.Fatal("num terminal comum as teclas seguem livres")
+	if handled, cmd := m.handleHostedResizeKey(right); !handled || cmd != nil || m.StatusNotice() != m.t("feedback.window_only") {
+		t.Fatal("num terminal comum as teclas explicam que precisam da janela única")
 	}
 }
 

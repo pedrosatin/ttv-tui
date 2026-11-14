@@ -429,6 +429,7 @@
   "action.favorite": "Favorite the channel or pin the category; again to undo",
   "action.help_next_section": "Go to the next help section",
   "action.help_prev_section": "Go back to the previous help section",
+  "footer.layouts": "layouts",
   "footer.open": "open",
   "footer.favorite": "★",
   "footer.filter": "filter",

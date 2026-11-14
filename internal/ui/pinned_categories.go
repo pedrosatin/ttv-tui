@@ -63,6 +63,7 @@ func (m Model) toggleCategory(cat catalog.Category) (tea.Model, tea.Cmd) {
 		m.reconcileHighlight()
 	}
 	if m.store == nil {
+		m.notices.favorite = true
 		m.notices.status = fmt.Sprintf(m.t(key), sanitizeScreenText(cat.Name))
 		return m, nil
 	}

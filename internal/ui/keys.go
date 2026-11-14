@@ -115,7 +115,11 @@ func (m Model) typingField() bool {
 // the draft. When layout hides either panel, Tab is a no-op; when width does, it
 // says so.
 func (m Model) switchPanelFocus() Model {
-	if !m.listVisible() || !m.chatColumnVisible() {
+	if m.chatColumnVisible() && !m.listVisible() {
+		m.warnStatus(m.t("layout.hidden_list_key"))
+		return m
+	}
+	if !m.chatColumnVisible() {
 		m.warnChatUnavailable()
 		return m
 	}
@@ -134,11 +138,16 @@ func (m Model) enterCompose() (tea.Model, tea.Cmd) {
 		m.warnStatus(m.t("feedback.open_channel"))
 		return m, nil
 	}
-	if m.chat.panel.unsupported || !m.chat.panel.caps.CanSend {
+	if m.chat.panel.unsupported || m.chat.session == nil {
+		m.warnStatus(m.t("chat.unsupported"))
+		return m, nil
+	}
+	if !m.chat.panel.caps.CanSend {
 		m.warnStatus(m.t("feedback.read_only"))
 		return m, nil
 	}
-	if m.warnChatHiddenByWidth() || !m.layout.showChat || m.chatHiddenByWidth() {
+	if !m.chatColumnVisible() {
+		m.warnChatUnavailable()
 		return m, nil
 	}
 	if !m.chat.hasToken() && (m.chat.session != nil || m.chat.panel.channel != "") {

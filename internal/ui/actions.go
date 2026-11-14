@@ -288,6 +288,12 @@ func defaultActions() []action {
 	for i := range actions {
 		a := &actions[i]
 		switch a.ID {
+		case actCycleLayout:
+			a.Footer = []footerUse{{footFocus, 1, "footer.layouts"}}
+		case actToggleList:
+			a.Footer = []footerUse{{footFocus, 2, "footer.list"}}
+		case actToggleChat:
+			a.Footer = []footerUse{{footFocus, 3, "layout.mode.chat"}}
 		case actSelect:
 			a.Footer = []footerUse{{footList, 1, "footer.open"}, {footSearch, 1, "footer.search"}, {footFilter, 1, "footer.open"}, {footCompose, 1, "footer.send"}, {footMenu, 1, "footer.choose"}}
 		case actFavorite:

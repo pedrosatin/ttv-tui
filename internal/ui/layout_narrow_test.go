@@ -363,7 +363,7 @@ func TestWidthNoticeStaysOffWhenLayoutHidesTheChat(t *testing.T) {
 }
 
 // Hidden by layout is the user's choice: chat keys must not blame the width.
-func TestChatKeysStayQuietWhenLayoutHidesTheChat(t *testing.T) {
+func TestChatKeysExplainWhenLayoutHidesTheChat(t *testing.T) {
 	for name, k := range map[string]tea.KeyMsg{"tab": keyTab, "i": keyI, "y": keyY} {
 		t.Run(name, func(t *testing.T) {
 			m, _, _ := setupTwoPanelModel(t)
@@ -371,7 +371,7 @@ func TestChatKeysStayQuietWhenLayoutHidesTheChat(t *testing.T) {
 			m = sendKeys(m, keyCtrlL)
 			m = resize(m, 60, 24)
 			m = sendKeys(m, k)
-			if k.Type == tea.KeyTab {
+			if k.Type == tea.KeyTab || name == "i" {
 				if m.StatusNotice() != m.t("layout.hidden_chat_key") {
 					t.Fatalf("missing hidden chat feedback: %q", m.StatusNotice())
 				}
