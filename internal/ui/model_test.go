@@ -810,12 +810,13 @@ func TestInvalidTokenWarnsOnceInStatusBarWithoutCrashingApp(t *testing.T) {
 }
 
 type fakePlayback struct {
-	started   []string
-	targets   []PlayTarget
-	stopped   int
-	pauses    int
-	volDeltas []int
-	startMsg  PlayerStatusMsg
+	started     []string
+	targets     []PlayTarget
+	stopped     int
+	pauses      int
+	volDeltas   []int
+	muteToggles int
+	startMsg    PlayerStatusMsg
 }
 
 func (f *fakePlayback) Start(login string, selection uint64) tea.Cmd {
@@ -859,6 +860,11 @@ func (f *fakePlayback) TogglePause() tea.Cmd {
 
 func (f *fakePlayback) AdjustVolume(delta int) tea.Cmd {
 	f.volDeltas = append(f.volDeltas, delta)
+	return func() tea.Msg { return nil }
+}
+
+func (f *fakePlayback) ToggleMute() tea.Cmd {
+	f.muteToggles++
 	return func() tea.Msg { return nil }
 }
 

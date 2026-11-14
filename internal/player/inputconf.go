@@ -19,6 +19,10 @@ const volumeOSD = `show-text "${volume}%"`
 const pauseText = "${?pause==yes:‖}${?pause==no:▶}"
 const pauseOSD = `show-text "` + pauseText + `"`
 
+// muteText also avoids words: a note with a cross when muted, the volume when not.
+const muteText = "${?mute==yes:♪ ✕}${?mute==no:♪ ${volume}%}"
+const muteOSD = `show-text "` + muteText + `"`
+
 // inputBindings is every key the mpv window answers to, mirroring the TUI's
 // player keys. mpv runs with --no-input-default-bindings, so a key left out does
 // nothing. The window's close button does not depend on this list: mpv quits on
@@ -29,6 +33,7 @@ var inputBindings = []struct{ key, command string }{
 	{"=", "no-osd add volume 5; " + volumeOSD},
 	{"-", "no-osd add volume -5; " + volumeOSD},
 	{"_", "no-osd add volume -5; " + volumeOSD},
+	{"m", "no-osd cycle mute; " + muteOSD},
 }
 
 // inputConfContent returns the input.conf text, always the same bytes.

@@ -147,6 +147,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | --- | --- |
 | `Space` | Pausa ou retoma |
 | `+` `-` | Sobe ou desce o volume em 5% |
+| `m` | Liga ou desliga o mudo; a barra de status mostra `mudo` no lugar do volume |
 | `Ctrl+X` | Para o vídeo sem sair do app |
 | `Ctrl+W` | Troca o layout: lista + chat, chat, lista, nenhum |
 | `Ctrl+H` / `Ctrl+L` | Mostra ou esconde a lista / o chat |
@@ -155,7 +156,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 
 Com o foco na mensagem, na busca ou no filtro, o que se digita fica no campo: `Space`, `=` e `_` entram como texto, `Ctrl+W` apaga a palavra e `Ctrl+H` não faz nada. Fora do campo, voltam a ser atalhos.
 
-`Space` e `+` `-` funcionam também na janela do `mpv`. As outras teclas dela não fazem nada.
+`Space`, `+` `-` e `m` funcionam também na janela do `mpv`. As outras teclas dela não fazem nada.
 
 </details>
 
@@ -182,7 +183,7 @@ O app guarda essas escolhas no `config.toml`.
 O app junta três ferramentas e desenha a interface em volta delas:
 
 1. **Listas.** Categorias, canais e busca vêm da API GraphQL pública que a própria twitch.tv usa. O app não registra aplicativo na Twitch.
-2. **Vídeo.** Quando você abre um canal, o app inicia o `streamlink`. Ele busca a live na melhor qualidade, descarta os trechos de anúncio e repassa o vídeo ao `mpv`. O app manda pausa, volume e parada ao `mpv` por um socket IPC JSON local.
+2. **Vídeo.** Quando você abre um canal, o app inicia o `streamlink`. Ele busca a live na melhor qualidade, descarta os trechos de anúncio e repassa o vídeo ao `mpv`. O app manda pausa, volume, mudo e parada ao `mpv` por um socket IPC JSON local.
 3. **Chat.** O chat se conecta ao IRC da Twitch por TLS. Sem token, entra como anônimo e só lê.
 
 O app toca um canal por vez. Abrir outro canal encerra o player anterior e leva o chat para a nova sala. Cada canal guarda o próprio rascunho de mensagem até você sair do app; a troca nunca o envia, e voltar ao canal traz o rascunho de volta. `Ctrl+X` para só o vídeo, e o chat continua aberto. `Ctrl+Q` encerra o `streamlink` e o `mpv`, apaga os arquivos temporários de IPC e desconecta o chat.
@@ -372,7 +373,7 @@ Ainda não:
 
 1. Rode `ttv-tui doctor`. Ele aponta `streamlink` ou `mpv` ausentes, o navegador de que a Kick pode precisar, os caminhos em uso e se há token, sem mostrá-lo.
 2. `Erro: Canal offline` quer dizer que a live acabou. Escolha outro canal ou aperte `r` para tentar de novo.
-3. Confira se a barra de status não mostra `vol 0`. Aperte `+` para subir o volume.
+3. Confira se a barra de status não mostra `vol 0` nem `mudo`. Aperte `+` para subir o volume e `m` para tirar o mudo.
 4. No Linux, confira se `WAYLAND_DISPLAY` ou `DISPLAY` está definido e se há um servidor de áudio rodando.
 5. Depois de uma falha, aperte `?` para ler o último erro do `streamlink` ou do `mpv`.
 

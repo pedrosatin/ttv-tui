@@ -38,6 +38,8 @@ type sessionConfig struct {
 	Note func(string)
 	// Volume is what the player is set to once its IPC connects.
 	Volume int
+	// Muted mutes the player once its IPC connects. False leaves mpv's own setting.
+	Muted bool
 }
 
 type pendingKind int
@@ -45,12 +47,14 @@ type pendingKind int
 const (
 	pendingPause pendingKind = iota
 	pendingVolume
+	pendingMute
 )
 
 type pendingCommand struct {
 	kind   pendingKind
 	paused bool
 	volume int
+	muted  bool
 	osd    bool
 }
 
@@ -104,8 +108,13 @@ type Session struct {
 	// whether a newer one replaced its wish, even with the same value.
 	desiredPauseSeq uint64
 	volume          int
-	waitDone        chan struct{}
-	waitErr         error
+	// muted is mpv's mute as last observed; wantMuted is a toggle on its way to
+	// mpv, so a second m before the reply flips it back.
+	muted        bool
+	wantMuted    bool
+	hasWantMuted bool
+	waitDone     chan struct{}
+	waitErr      error
 	// failing is set once failFast has taken the session down: streamlink repeats
 	// its error line in the log and on stdout, and only the first one acts.
 	failing bool
@@ -172,6 +181,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		cancel:   cancel,
 		state:    StateStarting,
 		volume:   cfg.Volume,
+		muted:    cfg.Muted,
 		waitDone: make(chan struct{}),
 		pending:  make(map[int64]pendingCommand),
 
@@ -215,6 +225,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 		Target:     cfg.Target,
 		Login:      cfg.Target.Identity(),
 		Volume:     s.volume,
+		Muted:      s.muted,
 	})
 
 	cmd, err = startProcess(cmd)
@@ -242,7 +253,7 @@ func startSession(cfg sessionConfig) (*Session, error) {
 	if s.group.containmentDegraded() {
 		emit := s.cfg.Emit
 		s.cfg.Emit = func(ev Event) { ev.ContainmentDegraded = true; emit(ev) }
-		s.emit(Event{Generation: cfg.Generation, State: StateStarting, Target: cfg.Target, Login: cfg.Target.Identity(), Volume: s.volume})
+		s.emit(Event{Generation: cfg.Generation, State: StateStarting, Target: cfg.Target, Login: cfg.Target.Identity(), Volume: s.volume, Muted: s.muted})
 	}
 
 	if cfg.RegistryDir != "" {
@@ -541,6 +552,9 @@ func (s *Session) superviseIPC(ctx context.Context) {
 	_ = writeIPC(conn, s.cfg.WriteWait, map[string]any{
 		"command": []any{"observe_property", 3, "volume"},
 	})
+	_ = writeIPC(conn, s.cfg.WriteWait, map[string]any{
+		"command": []any{"observe_property", 4, "mute"},
+	})
 	// Explicit baseline after connect: mpv softvol can open above 100 (observed
 	// 102) while the status bar starts at 100, and pause must not be presumed
 	// from the Session zero value. Setting both here keeps the UI and mpv aligned
@@ -590,6 +604,10 @@ func (s *Session) handleIPCMessage(msg ipcMessage) {
 			if vol, ok := parseVolumeData(msg.Data); ok {
 				s.applyVolumeObservation(vol)
 			}
+		case "mute":
+			if muted, ok := parseBoolData(msg.Data); ok {
+				s.applyMuteObservation(muted)
+			}
 		}
 	}
 }
@@ -613,6 +631,8 @@ func (s *Session) handleCommandReply(msg ipcMessage) {
 		s.applyPauseFromCommand(pending.paused)
 	case pendingVolume:
 		s.applyVolumeFromCommand(pending.volume)
+	case pendingMute:
+		s.applyMuteObservation(pending.muted)
 	}
 	if pending.osd {
 		// Not from this goroutine: it reads what mpv writes, and a write that
@@ -625,8 +645,11 @@ func (s *Session) handleCommandReply(msg ipcMessage) {
 // baseline writes or property observations. OSD failure does not fail playback.
 func (s *Session) showControlOSD(kind pendingKind) {
 	text := "${volume}%"
-	if kind == pendingPause {
+	switch kind {
+	case pendingPause:
 		text = pauseText
+	case pendingMute:
+		text = muteText
 	}
 	s.cmdMu.Lock()
 	defer s.cmdMu.Unlock()
@@ -714,6 +737,25 @@ func (s *Session) applyVolumeFromCommand(vol int) {
 	s.emitStatus()
 }
 
+// applyMuteObservation records mpv's mute, observed or confirmed by a command.
+func (s *Session) applyMuteObservation(muted bool) {
+	s.mu.Lock()
+	if s.stopped || s.state == StateEnded || s.state == StateError {
+		s.mu.Unlock()
+		return
+	}
+	if s.hasWantMuted && s.wantMuted == muted {
+		s.hasWantMuted = false
+	}
+	if s.muted == muted {
+		s.mu.Unlock()
+		return
+	}
+	s.muted = muted
+	s.mu.Unlock()
+	s.emitStatus()
+}
+
 func (s *Session) emitStatus() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -730,6 +772,7 @@ func (s *Session) emitStatusLocked() {
 		Login:      s.cfg.Target.Identity(),
 		LastLine:   s.lastLine,
 		Volume:     s.volume,
+		Muted:      s.muted,
 	}
 	if s.state == StateBreak && s.adHold {
 		ev.BreakElapsed = time.Since(s.breakAt)
@@ -747,6 +790,9 @@ func (s *Session) applyPlaybackBaseline() {
 	s.desiredPauseSeq++
 	s.mu.Unlock()
 	_ = s.setVolumeWithOSD(s.cfg.Volume, false)
+	if s.cfg.Muted {
+		_ = s.sendCommand([]any{"set_property", "mute", true}, pendingCommand{kind: pendingMute, muted: true})
+	}
 	_ = s.sendCommand([]any{"set_property", "pause", false}, pendingCommand{
 		kind:   pendingPause,
 		paused: false,
@@ -782,6 +828,34 @@ func (s *Session) togglePause() error {
 		s.mu.Lock()
 		if s.hasDesiredPause && s.desiredPauseSeq == seq {
 			s.desiredPaused, s.hasDesiredPause = prevDesired, prevHas
+		}
+		s.mu.Unlock()
+	}
+	return err
+}
+
+// toggleMute flips mpv's mute. A toggle still waiting for its reply counts as
+// done, so two quick presses end where they started.
+func (s *Session) toggleMute() error {
+	s.mu.Lock()
+	if s.stopped || s.state == StateEnded || s.state == StateError {
+		s.mu.Unlock()
+		return fmt.Errorf("player: session not controllable")
+	}
+	base := s.muted
+	if s.hasWantMuted {
+		base = s.wantMuted
+	}
+	want := !base
+	prevWant, prevHas := s.wantMuted, s.hasWantMuted
+	s.wantMuted, s.hasWantMuted = want, true
+	s.mu.Unlock()
+
+	err := s.sendCommand([]any{"set_property", "mute", want}, pendingCommand{kind: pendingMute, muted: want, osd: true})
+	if err != nil {
+		s.mu.Lock()
+		if s.hasWantMuted && s.wantMuted == want {
+			s.wantMuted, s.hasWantMuted = prevWant, prevHas
 		}
 		s.mu.Unlock()
 	}
@@ -1006,6 +1080,7 @@ func (s *Session) transition(state State, reason EndReason, lastLine string) {
 		LastLine:   s.lastLine,
 		Reason:     reason,
 		Volume:     s.volume,
+		Muted:      s.muted,
 	}
 	if state == StateError {
 		if s.failClass != FailureNone {
@@ -1071,6 +1146,13 @@ func (s *Session) Volume() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.volume
+}
+
+// Muted reports mpv's mute as last known.
+func (s *Session) Muted() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.muted
 }
 
 // IPCEndpoint returns the endpoint mpv listens on: a socket path on Unix, a

@@ -28,8 +28,11 @@ type StateReport struct {
 	HighlightIndex int
 	Items          int
 	// Notice é o aviso da barra de status.
-	Notice       string
-	Player       string
+	Notice string
+	Player string
+	// Volume e Muted são o volume e o mudo que a barra mostra.
+	Volume       int
+	Muted        bool
 	ChatChannel  string
 	ChatMessages int
 	// ChatVisible diz se o chat aparece, ao lado ou sobre o vídeo.
@@ -81,6 +84,8 @@ func (m Model) stateSnapshot() StateReport {
 		HighlightIndex: -1,
 		Notice:         m.notices.status,
 		Player:         string(m.player.state),
+		Volume:         m.player.volume,
+		Muted:          m.player.muted,
 		ChatChannel:    m.chat.panel.channel,
 		ChatVisible:    m.chatColumnVisible(),
 		Config: ReportConfig{

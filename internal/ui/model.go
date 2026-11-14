@@ -377,6 +377,7 @@ type playbackState struct {
 	failure      PlayerFailure
 	breakElapsed time.Duration
 	volume       int
+	muted        bool
 	// windowNotified is set once the first video of the session reached
 	// playback; windowNotice keeps the one-time notice on screen until the
 	// next key press.

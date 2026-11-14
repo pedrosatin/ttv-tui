@@ -57,6 +57,8 @@ type PlayerStatusMsg struct {
 	LastLine     string
 	BreakElapsed time.Duration
 	Volume       int
+	// Muted is the player's mute; the bar shows it in place of the volume.
+	Muted bool
 	// Failure classifies a PlayerStateError message; LastLine keeps the
 	// original line as technical detail.
 	Failure PlayerFailure
@@ -102,6 +104,8 @@ type Playback interface {
 	TogglePause() tea.Cmd
 	// AdjustVolume changes volume by delta (clamped by the player). Status arrives via PlayerStatusMsg.
 	AdjustVolume(delta int) tea.Cmd
+	// ToggleMute mutes or unmutes the active playback. Status arrives via PlayerStatusMsg.
+	ToggleMute() tea.Cmd
 	// Listen is optional; implementations that push events via the tea program
 	// may return nil.
 	Listen() tea.Cmd
@@ -132,6 +136,11 @@ func (m Model) PlayerGeneration() uint64 {
 // PlayerVolume returns the last known volume (0..100) shown in the status bar.
 func (m Model) PlayerVolume() int {
 	return m.player.volume
+}
+
+// PlayerMuted reports whether the player is muted.
+func (m Model) PlayerMuted() bool {
+	return m.player.muted
 }
 
 // Composing reports whether chat compose mode is active (ticket 09). While
@@ -199,6 +208,9 @@ func (m Model) playerLabel() string {
 func (m Model) playerVolumeText() string {
 	switch m.player.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak, PlayerStateStarting:
+		if m.player.muted {
+			return m.t("player.muted")
+		}
 		return fmt.Sprintf(m.t("player.vol"), m.player.volume)
 	default:
 		return ""

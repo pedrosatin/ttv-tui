@@ -284,7 +284,7 @@ func (m Model) keyRetry() (tea.Model, tea.Cmd) {
 	return m.retryCurrentMode()
 }
 
-// handlePlayerKey answers pause and volume.
+// handlePlayerKey answers pause, volume and mute.
 func (m Model) handlePlayerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	switch m.keys.actionFor(modeNormal, msg) {
 	case actPause:
@@ -295,8 +295,18 @@ func (m Model) handlePlayerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 	case actVolumeDown:
 		return handled(m.adjustVolume(-5))
+
+	case actMute:
+		return handled(m.keyMute())
 	}
 	return m, nil, false
+}
+
+func (m Model) keyMute() (tea.Model, tea.Cmd) {
+	if m.playback == nil || !m.player.controllable() {
+		return m, nil
+	}
+	return m, m.playback.ToggleMute()
 }
 
 func (m Model) keyPause() (tea.Model, tea.Cmd) {

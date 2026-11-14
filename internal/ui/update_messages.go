@@ -314,6 +314,7 @@ func (m Model) applyPlayerStatus(msg PlayerStatusMsg) (tea.Model, tea.Cmd) {
 	if msg.Volume > 0 || msg.State == PlayerStatePlaying || msg.State == PlayerStatePaused || msg.State == PlayerStateBreak {
 		m.player.volume = clampPlayerVolume(msg.Volume)
 	}
+	m.player.muted = msg.Muted
 	if m.player.state != stateBefore || m.player.volume != volumeBefore {
 		m.clearVolumeLimitNotice()
 	}

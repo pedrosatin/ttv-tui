@@ -243,6 +243,7 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 			State:      ui.PlayerStateStarting,
 			Login:      identity,
 			Volume:     mgr.Volume(),
+			Muted:      mgr.Muted(),
 			Selection:  selection,
 		}
 	}
@@ -280,6 +281,14 @@ func (b *playbackBridge) TogglePause() tea.Cmd {
 	}
 }
 
+func (b *playbackBridge) ToggleMute() tea.Cmd {
+	mgr := b.mgr
+	return func() tea.Msg {
+		_ = mgr.ToggleMute()
+		return nil
+	}
+}
+
 func (b *playbackBridge) AdjustVolume(delta int) tea.Cmd {
 	mgr := b.mgr
 	return func() tea.Msg {
@@ -312,6 +321,7 @@ func mapPlayerEvent(ev player.Event) ui.PlayerStatusMsg {
 		LastLine:     ev.LastLine,
 		BreakElapsed: ev.BreakElapsed,
 		Volume:       ev.Volume,
+		Muted:        ev.Muted,
 		Failure:      ui.PlayerFailure(ev.Failure),
 
 		InputConfFailed:     ev.InputConfFailed,

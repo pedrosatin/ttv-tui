@@ -147,6 +147,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | --- | --- |
 | `Space` | Pause or resume |
 | `+` `-` | Volume up or down by 5% |
+| `m` | Mute or unmute; the status bar shows `muted` in place of the volume |
 | `Ctrl+X` | Stop the video and stay in the app |
 | `Ctrl+W` | Cycle layouts: list + chat, chat, list, none |
 | `Ctrl+H` / `Ctrl+L` | Show or hide the list / the chat |
@@ -155,7 +156,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 
 With focus on the message, the search or the filter, what you type stays in the field: `Space`, `=` and `_` go in as text, `Ctrl+W` deletes a word and `Ctrl+H` does nothing. Outside the field they are shortcuts again.
 
-`Space` and `+` `-` also work in the `mpv` window. Its other keys do nothing.
+`Space`, `+` `-` and `m` also work in the `mpv` window. Its other keys do nothing.
 
 </details>
 
@@ -182,7 +183,7 @@ The app saves these choices in `config.toml`.
 The app ties three tools together and draws the interface around them:
 
 1. **Lists.** Categories, channels and search come from the public GraphQL API that twitch.tv itself uses. The app registers no Twitch application.
-2. **Video.** When you open a channel, the app starts `streamlink`. It fetches the stream at the best quality, drops the ad segments and pipes the video to `mpv`. The app sends pause, volume and stop to `mpv` over a local JSON IPC socket.
+2. **Video.** When you open a channel, the app starts `streamlink`. It fetches the stream at the best quality, drops the ad segments and pipes the video to `mpv`. The app sends pause, volume, mute and stop to `mpv` over a local JSON IPC socket.
 3. **Chat.** The chat connects to Twitch IRC over TLS. Without a token it logs in anonymously and only reads.
 
 The app plays one channel at a time. Opening another channel stops the old player and moves the chat to the new room. Each channel keeps its own message draft until you quit; switching never sends it, and going back brings it back. `Ctrl+X` stops only the video, and the chat stays open. `Ctrl+Q` stops `streamlink` and `mpv`, removes the temporary IPC files and disconnects the chat.
@@ -372,7 +373,7 @@ Not yet:
 
 1. Run `ttv-tui doctor`. It reports missing `streamlink` or `mpv`, the browser Kick may need, the paths in use and whether a token exists, without showing it.
 2. `Player error: channel offline` means the stream ended. Pick another channel, or press `r` to retry.
-3. Check that the status bar does not show `vol 0`. Press `+` to raise the volume.
+3. Check that the status bar does not show `vol 0` or `muted`. Press `+` to raise the volume and `m` to unmute.
 4. On Linux, check that `WAYLAND_DISPLAY` or `DISPLAY` is set and that an audio server is running.
 5. Press `?` after a failure to read the last error from `streamlink` or `mpv`.
 

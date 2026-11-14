@@ -19,6 +19,7 @@ func TestInputConfContentIsExact(t *testing.T) {
 		{"=", `no-osd add volume 5; show-text "${volume}%"`},
 		{"-", `no-osd add volume -5; show-text "${volume}%"`},
 		{"_", `no-osd add volume -5; show-text "${volume}%"`},
+		{"m", `no-osd cycle mute; show-text "${?mute==yes:♪ ✕}${?mute==no:♪ ${volume}%}"`},
 	}
 	var b strings.Builder
 	for _, line := range want {
@@ -46,8 +47,8 @@ func TestInputConfBindsNothingElse(t *testing.T) {
 			t.Errorf("key %q must stay unbound", key)
 		}
 	}
-	if len(keys) != 5 {
-		t.Fatalf("bound keys = %v, want exactly 5", keys)
+	if len(keys) != 6 {
+		t.Fatalf("bound keys = %v, want exactly 6", keys)
 	}
 }
 

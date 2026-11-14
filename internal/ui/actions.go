@@ -52,6 +52,7 @@ const (
 	actPause          actionID = "action.pause"
 	actVolumeUp       actionID = "action.volume_up"
 	actVolumeDown     actionID = "action.volume_down"
+	actMute           actionID = "action.mute"
 	actCompose        actionID = "action.compose"
 	actCopyMessage    actionID = "action.copy_message"
 	actFavorite       actionID = "action.favorite"
@@ -182,6 +183,8 @@ func defaultActions() []action {
 		{ID: actPause, Modes: []keyMode{modeNormal, modeMenu}, Section: sectionPlayer, Default: []string{" ", "space"}},
 		{ID: actVolumeUp, Modes: []keyMode{modeNormal}, Section: sectionPlayer, Default: []string{"+", "="}},
 		{ID: actVolumeDown, Modes: []keyMode{modeNormal}, Section: sectionPlayer, Default: []string{"-", "_"}},
+		// m liga e desliga o mudo, como no mpv e no player da Twitch.
+		{ID: actMute, Modes: []keyMode{modeNormal}, Section: sectionPlayer, Default: []string{"m"}},
 
 		{ID: actCompose, Modes: []keyMode{modeNormal}, Section: sectionChat, Default: []string{"i"}},
 		// y copia a mensagem marcada (ou a última, ao vivo) pelo wl-copy, xclip ou

@@ -79,3 +79,38 @@ func TestJanelaEmojiDoTituloTemFonte(t *testing.T) {
 		return nil
 	})
 }
+
+// statusBar é a última linha da grade: a barra de status.
+func statusBar(screen []string) string {
+	if len(screen) == 0 {
+		return ""
+	}
+	return screen[len(screen)-1]
+}
+
+// W11: m liga e desliga o mudo, e a barra diz "mudo" no lugar de "vol 100". A
+// janela dos cenários abre o mpv já mudo (TTV_WINDOW_MUTE), como pede a bateria.
+func TestJanelaTeclaMAlternaOMudo(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 1}})
+	w.openFirstChannel()
+	w.waitState("o player mudo desde a abertura", 5*time.Second, func(s ui.StateReport) bool { return s.Muted })
+	barSays := func(want, not string) func() error {
+		return func() error {
+			bar := statusBar(w.screen())
+			if !strings.Contains(bar, want) || strings.Contains(bar, not) {
+				return fmt.Errorf("barra %q: quer %q e não %q", bar, want, not)
+			}
+			return nil
+		}
+	}
+	expect(t, barSays("mudo", "vol 100"))
+
+	w.press("m")
+	w.waitState("o som de volta", 5*time.Second, func(s ui.StateReport) bool { return !s.Muted && s.Volume == 100 })
+	expect(t, barSays("vol 100", "mudo"))
+
+	w.press("m")
+	w.waitState("o mudo de novo", 5*time.Second, func(s ui.StateReport) bool { return s.Muted })
+	expect(t, barSays("mudo", "vol 100"))
+}

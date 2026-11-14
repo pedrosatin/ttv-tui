@@ -59,6 +59,8 @@ type Event struct {
 	Reason       EndReason
 	// Volume is the last known mpv volume in 0..100 for this generation.
 	Volume int
+	// Muted is mpv's mute as last known for this generation.
+	Muted bool
 	// Failure classifies a StateError event; LastLine keeps the original line
 	// as technical detail.
 	Failure Failure
@@ -291,6 +293,9 @@ type Manager struct {
 	// failed and left none.
 	keptIdentity string
 	keptVolume   int
+	// keptMuted is the mute the last session ended with. Unlike the volume it
+	// follows the viewer to any channel, as on the Twitch site.
+	keptMuted bool
 
 	// afterPrevStop, when set by a test, runs in Start once the previous
 	// session is down and before the new one is spawned.
@@ -483,6 +488,7 @@ func (m *Manager) start(target Target, order uint64) (uint64, error) {
 		Command:            command,
 		CommandNoInputConf: noInputConf,
 		Volume:             m.startVolume(target),
+		Muted:              m.startMuted(),
 		WriteInputConf:     m.opts.WriteInputConf,
 		SocketWait:         m.opts.SocketWait,
 		StopWait:           m.opts.StopWait,
@@ -542,10 +548,17 @@ func (m *Manager) doneStarting() {
 
 // keepVolume records where sess left the volume, once it can no longer change.
 func (m *Manager) keepVolume(sess *Session) {
-	volume := sess.Volume()
+	volume, muted := sess.Volume(), sess.Muted()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.keptIdentity, m.keptVolume = sess.cfg.Target.Identity(), volume
+	m.keptIdentity, m.keptVolume, m.keptMuted = sess.cfg.Target.Identity(), volume, muted
+}
+
+// startMuted is the mute a new session opens with: where the last one left it.
+func (m *Manager) startMuted() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.keptMuted
 }
 
 // startVolume is the volume a new session of target opens at: where the same
@@ -715,6 +728,28 @@ func (m *Manager) AdjustVolume(delta int) error {
 		return fmt.Errorf("player: no active session")
 	}
 	return sess.adjustVolume(delta)
+}
+
+// ToggleMute flips the mute of the active session.
+func (m *Manager) ToggleMute() error {
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
+	if sess == nil {
+		return fmt.Errorf("player: no active session")
+	}
+	return sess.toggleMute()
+}
+
+// Muted returns the mute of the active session, or false without one.
+func (m *Manager) Muted() bool {
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
+	if sess == nil {
+		return false
+	}
+	return sess.Muted()
 }
 
 // SetVolume sets absolute volume clamped to 0..100.
