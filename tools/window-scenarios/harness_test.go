@@ -328,10 +328,10 @@ func (w *window) press(keys ...string) {
 // windowState é a resposta do comando state.
 type windowState struct {
 	Window struct {
-		Cols, Rows, W, H, CellW, CellH int
-		Hole                           []int
-		HoleOn                         bool
-		Overlay, OverlayOpacity        int
+		Cols, Rows, W, H, CellW, CellH       int
+		Hole                                 []int
+		HoleOn                               bool
+		Overlay, OverlayOpacity, OverlayRows int
 	} `json:"window"`
 	TUI *ui.StateReport `json:"tui"`
 }

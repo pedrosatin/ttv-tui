@@ -20,6 +20,9 @@ func TestJanelaAlturaEFundoDoChat(t *testing.T) {
 			w.waitScreen(fixture.MessageText(3), 5*time.Second)
 			rows := st.Window.Hole[3]
 			expected := max(6, (rows*60+50)/100)
+			if st.Window.OverlayRows != expected {
+				t.Fatalf("altura %d, quero %d", st.Window.OverlayRows, expected)
+			}
 			// A célula à direita, no início do painel, não tem texto.
 			x := (st.Window.Hole[0]-1+st.Window.Hole[2])*st.Window.CellW - 2
 			y := (rows-expected)*st.Window.CellH + 2
@@ -31,6 +34,13 @@ func TestJanelaAlturaEFundoDoChat(t *testing.T) {
 				red := fixture.ClipLooksRight(r, g, b)
 				if (backdrop == "text") != red {
 					return fmt.Errorf("fundo %s: pixel %d,%d,%d", backdrop, r, g, b)
+				}
+				r, g, b, err = w.fbpixel(x, (rows-expected-1)*st.Window.CellH+2)
+				if err != nil {
+					return err
+				}
+				if !fixture.ClipLooksRight(r, g, b) {
+					return fmt.Errorf("acima do painel %s: pixel %d,%d,%d", backdrop, r, g, b)
 				}
 				return nil
 			})

@@ -125,6 +125,10 @@ func (m Model) chatPageSize() int {
 	// Approximate the message-area row budget without relying on View mutations
 	// (tea.Model.View receives a copy). Header ~2, footer ~2, status bar 1.
 	height := m.height
+	if m.hosted.host != nil && m.hosted.chatOverlay {
+		available := max(m.height-1-m.footerRows(), 1)
+		return max(m.overlayHeight(available)-len(m.renderChatHeaderLines(0))-1, 1)
+	}
 	if height > 6 {
 		return height - 6
 	}

@@ -69,3 +69,93 @@ func TestHostedOverlayWarnsAboutNarrowWindow(t *testing.T) {
 		t.Fatalf("janela estreita: overlay %v, notice %q", m.hosted.chatOverlay, m.notices.status)
 	}
 }
+
+func TestHostedOverlayFitsAt79Columns(t *testing.T) {
+	m := hostedModel(t, 79, 24, true)
+	m.toggleChatOverlay()
+	if !m.hosted.chatOverlay || !m.chatColumnVisible() {
+		t.Fatalf("overlay recusado em 79 colunas: %q", m.notices.status)
+	}
+	_, chat, video := m.hostedWidths()
+	if chat < hostedMinChat || video-chat < hostedMinVideo {
+		t.Fatalf("chat %d, vídeo %d", chat, video)
+	}
+	m.toggleChatOverlay()
+	if m.hosted.chatOverlay {
+		t.Fatal("overlay não desligou em 79 colunas")
+	}
+	m = hostedModel(t, 70, 24, true)
+	m.layout.showList = false
+	m.toggleChatOverlay()
+	if !m.hosted.chatOverlay {
+		t.Fatal("overlay recusado sem lista")
+	}
+}
+
+func TestHostedOverlayReducedPageKeys(t *testing.T) {
+	m := scrollFixture(t, "en", 40)
+	m.hosted.host = hostedModel(t, 120, 24, true).hosted.host
+	m.hosted.chatOverlay = true
+	m.hosted.overlayPreferences.Rows = 40
+	const budget = 7 // 22 body rows * 40%, rounded, minus header and input.
+	if got := m.chatPageSize(); got != budget {
+		t.Errorf("page size %d, want %d", got, budget)
+	}
+	m = play(t, m, "pgup")
+	if got := m.chat.panel.bottomIdx; got != 39-budget {
+		t.Fatalf("PgUp bottom %d, want %d", got, 39-budget)
+	}
+	m = play(t, m, "pgup pgdown")
+	if got := m.chat.panel.bottomIdx; got != 39-budget {
+		t.Fatalf("PgDn bottom %d, want %d", got, 39-budget)
+	}
+	m = play(t, m, "pgdown")
+	if !m.ChatFollowLive() {
+		t.Fatal("PgDn did not return to live")
+	}
+	m = play(t, m, "home")
+	if got := m.chat.panel.bottomIdx; got != budget-1 {
+		t.Fatalf("Home bottom %d, want %d", got, budget-1)
+	}
+	m.hosted.overlayPreferences.Rows = 1
+	m.height = 3
+	if got := m.chatPageSize(); got != 1 {
+		t.Fatalf("minimum page %d", got)
+	}
+}
+
+// O usuário liga o chat sobreposto com a lista visível em uma janela de 79 colunas.
+func TestCenarioOverlay79Colunas(t *testing.T) {
+	m, _ := hostedScenario(t, 79, 24)
+	m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
+	if !m.hosted.chatOverlay {
+		t.Fatal("overlay recusado em 79 colunas")
+	}
+	assertGolden(t, "chat-sobreposto-79x24", screen(m))
+}
+
+// O usuário lê a primeira página de mensagens com o painel sobreposto reduzido.
+func TestCenarioOverlayHomeReduzido(t *testing.T) {
+	m, _ := hostedScenario(t, 120, 40)
+	m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
+	m = withMessages(t, m, 40)
+	m.hosted.overlayPreferences.Rows = 40
+	m = play(t, m, "tab home")
+	if m.chat.panel.bottomIdx != 12 {
+		t.Fatalf("Home bottom %d", m.chat.panel.bottomIdx)
+	}
+	assertGolden(t, "chat-sobreposto-home-120x40", screen(m))
+}
+
+// O usuário abre um canal sem chat e vê o aviso junto da entrada do overlay.
+func TestCenarioOverlaySemChat(t *testing.T) {
+	m, _ := hostedScenario(t, 120, 40)
+	m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
+	m.chat.panel.unsupported = true
+	m.hosted.overlayPreferences.Rows = 40
+	lines := m.renderChatLines(15, 30)
+	if !strings.Contains(lines[len(lines)-2], TruncateVisual("  "+m.t("chat.unsupported"), 30)) {
+		t.Fatal("aviso distante da entrada")
+	}
+	assertGolden(t, "chat-sobreposto-sem-chat-120x40", screen(m))
+}

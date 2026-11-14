@@ -664,14 +664,13 @@ def flows():
     # Lê os pixels direto, sem depender da posição do texto na string da tela.
     col0 = col - 1 + cc - chat_cols
     good, tried, sample = 0, 0, ""
-    for y in range(3, rr - 3):
+    for y in range(row - 1 + rr - s7["overlayRows"], row - 1 + rr):
         first_a = int(t("pixel", str(col0), str(y)).split()[3])
         last_a = int(t("pixel", str(col0 + chat_cols - 1), str(y)).split()[3])
-        if first_a > 0:
-            tried += 1
-            good += first_a >= 150 and last_a >= 150
-            sample = f"linha {y}: início {first_a}, fim {last_a}"
-    veil_ok = tried >= 4 and good >= 3
+        tried += 1
+        good += first_a >= 150 and last_a >= 150
+        sample = f"linha {y}: início {first_a}, fim {last_a}"
+    veil_ok = tried == s7["overlayRows"] and good == tried
     check(role, "o fundo cobre o painel inteiro no padrão", veil_ok, f"{good} de {tried} amostras; {sample}")
 
     def veil_alpha():
@@ -707,8 +706,9 @@ def flows():
     check(role, "altura e aviso de migração salvos", "chat_overlay_rows = " in cfg and "chat_overlay_height_keys_seen = true" in cfg, cfg)
     press("alt+Up", 2)
     wait(lambda: stats()["overlayRows"] == full_height, 3, 0.1)
-    press("i")
+    text("i")
     check(role, "escrita no overlay explica o login", wait(lambda: "login" in screen().lower(), 3, 0.1), last_line())
+    t("key", "Escape")
     press("alt+Left", 3)
     ok = wait(lambda: stats()["overlay"] == chat_cols + 6 and stats()["hole"] == s7["hole"], 3, 0.05)
     check(role, "Alt+← alarga o chat sem encolher o vídeo", ok, f"chat {stats()['overlay']}, {stats()['hole']}")
@@ -916,9 +916,13 @@ def flows():
     base = stats()["hole"][0] - 2
     press("ctrl+Right", 5)
     time.sleep(1.2)  # a gravação espera a tecla parar
-    press("ctrl+o")
+    t("key", "ctrl+o")
+    check(role, "overlay ligado antes de ajustar", wait(lambda: stats()["overlay"] > 0, 3, 0.1))
+    before_rows = stats()["overlayRows"]
+    before_opacity = stats()["overlayOpacity"]
     press("alt+Down", 3)
     press("alt+PageDown", 2)
+    check(role, "altura e opacidade ajustadas antes de salvar", wait(lambda: stats()["overlayRows"] == max(6, before_rows - 6) and stats()["overlayOpacity"] == max(10, before_opacity - 10), 3, 0.1))
     saved_rows = stats()["overlayRows"]
     saved_opacity = stats()["overlayOpacity"]
     time.sleep(1.2)
@@ -944,8 +948,14 @@ def flows():
     c, r, cc, rr = st["hole"]
     x = c - 1 + cc - st["overlay"]
     top = r - 1 + rr - st["overlayRows"]
-    alphas = [int(t("pixel", str(x + st["overlay"] - 1), str(y)).split()[3]) for y in range(top, r - 1 + rr)]
-    check(role, "backdrop text deixa o fim das linhas livre", st["overlayTextBackdrop"] and alphas.count(0) > len(alphas)//2, str(alphas))
+    def text_backdrop_ready():
+        nonlocal alphas
+        alphas = [int(t("pixel", str(x + st["overlay"] - 1), str(y)).split()[3]) for y in range(top, r - 1 + rr)]
+        return stats()["overlayTextBackdrop"] and alphas.count(0) > len(alphas)//2
+
+    alphas = []
+    ok = wait(text_backdrop_ready, 3, 0.1)
+    check(role, "backdrop text deixa o fim das linhas livre", ok, str(alphas))
     down()
 
 

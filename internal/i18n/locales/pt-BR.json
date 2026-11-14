@@ -455,7 +455,6 @@
   "layout.chat_height": "chat: %d%% da altura",
   "layout.height_needs_overlay": "A altura é do chat sobre o vídeo: {action.chat_overlay}",
   "layout.opacity_moved": "A opacidade mudou para {action.chat_more_opaque/action.chat_less_opaque}",
-  "status.overlay_height": "{action.chat_taller/action.chat_shorter} altura",
   "footer.height_up": "altura+",
   "footer.height_down": "altura−",
   "footer.opacity_up": "opacidade+",

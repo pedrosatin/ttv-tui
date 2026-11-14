@@ -201,6 +201,11 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 		}
 		lines := make([]string, 0, maxLines)
 		lines = append(lines, headerLines...)
+		if pinned && m.hosted.host != nil && m.hosted.chatOverlay {
+			for range max(maxLines-len(headerLines)-len(body)-len(footer), 0) {
+				lines = append(lines, "")
+			}
+		}
 		lines = append(lines, body...)
 		if pinned {
 			for len(lines)+len(footer) < maxLines {

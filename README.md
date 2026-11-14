@@ -314,6 +314,10 @@ The app does not decode video. `mpv` plays it in its own window, and the app con
 
 When `ttv-tui-window` sits next to `ttv-tui` and can open a window, the app opens a single window instead, with the list, the video and the chat side by side. It needs SDL3 and libmpv. On Linux amd64 the install script adds `ttv-tui-window` for you; it was tested by hand on Wayland, not on X11. On Windows x64, `install.ps1` adds it in a `ttv-tui-window` folder with its DLLs; a proof of concept worked on Windows 11. On macOS you build it from source, and nobody has tried it there. To stay in the terminal, run `ttv-tui --terminal`. Color emoji show as empty boxes in that window for now. See [ADR 0011](docs/adr/0011-janela-unica.md) and [ADR 0012](docs/adr/0012-janela-unica-multiplataforma.md).
 
+Overlay chat uses the full height with messages above the input. The app saves the height in
+`chat_overlay_rows`, a percentage from 1 to 100, with at least six visible rows.
+Use `chat_overlay_backdrop = "text"` for background only behind text.
+
 </details>
 
 <details>
@@ -438,7 +442,3 @@ The design decisions are in [`docs/adr/`](docs/adr/).
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-Overlay chat uses the full height with messages above the input. Height is saved in
-`chat_overlay_rows`, a percentage from 1 to 100, with at least six visible rows.
-Use `chat_overlay_backdrop = "text"` for background only behind text.

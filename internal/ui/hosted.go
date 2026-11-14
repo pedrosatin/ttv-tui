@@ -151,8 +151,11 @@ func (m Model) hostedOverlayWidths(listW, chatW int) (int, int, int) {
 
 // toggleChatOverlay moves the chat between the side column and over the video.
 func (m *Model) toggleChatOverlay() tea.Cmd {
-	if !m.chatColumnVisible() {
-		m.warnChatUnavailable()
+	target := *m
+	target.hosted.chatOverlay = true
+	if !target.chatColumnVisible() {
+		target.warnChatUnavailable()
+		m.notices = target.notices
 		return nil
 	}
 	m.hosted.chatOverlay = !m.hosted.chatOverlay
