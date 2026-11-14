@@ -167,9 +167,12 @@ func RunLogin(ctx context.Context, opts LoginOptions) error {
 	}
 	existingCfg.AccessToken = token
 
-	if err := config.SaveTo(cfgPath, existingCfg); err != nil {
+	notice, err := config.SaveToWithNotice(cfgPath, existingCfg)
+	if err != nil {
 		return fmt.Errorf(cat.T("login.err_save_config"), cfgPath, err)
 	}
+
+	logConfigPermissions(out, cfgPath, notice, cat)
 
 	_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.success"), existingCfg.Username, cfgPath))
 	return nil

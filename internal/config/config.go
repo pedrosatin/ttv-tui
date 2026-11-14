@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
 // Config represents the user configuration stored in config.toml under DefaultPath's directory (~/.config/ttv-tui on Linux).
@@ -78,6 +80,23 @@ func NormalizeToken(raw string) string {
 		s = strings.TrimSpace(s[6:])
 	}
 	return s
+}
+
+// ValidateCredentials recusa credenciais fora da gramática sem revelar os valores.
+// Token vazio e usuário vazio continuam permitidos no config anônimo.
+func ValidateCredentials(token, username string) error {
+	if platform.HasControl(token) {
+		return errors.New("invalid access_token: expected visible ASCII without spaces")
+	}
+	for _, c := range NormalizeToken(token) {
+		if c < 0x21 || c > 0x7e {
+			return errors.New("invalid access_token: expected visible ASCII without spaces")
+		}
+	}
+	if username != "" && !platform.ValidTwitchLogin(platform.LowerASCII(username)) {
+		return errors.New("invalid username: expected 1-25 ASCII letters, digits or underscore")
+	}
+	return nil
 }
 
 // DefaultPath resolves the default configuration file path: config.toml in
@@ -179,10 +198,22 @@ func Save(cfg Config) error {
 	return SaveTo(path, cfg)
 }
 
-// SaveTo writes cfg atomically to path using a temporary file in the same
-// directory followed by os.Rename. File permissions are enforced as 0600
-// even when overwriting an existing file with looser permissions.
+// SaveTo recusa credenciais inválidas e grava por rename de um arquivo temporário
+// 0600. Só tenta restringir o diretório padrão; falhas de chmod não abortam a gravação.
 func SaveTo(path string, cfg Config) error {
+	_, err := SaveToWithNotice(path, cfg)
+	return err
+}
+
+// SaveToWithNotice grava como SaveTo e devolve o aviso de permissões.
+func SaveToWithNotice(path string, cfg Config) (PermissionNotice, error) {
+	return saveTo(path, cfg, os.Chmod)
+}
+
+func saveTo(path string, cfg Config, chmod chmodFunc) (notice PermissionNotice, err error) {
+	if err := ValidateCredentials(cfg.AccessToken, cfg.Username); err != nil {
+		return notice, fmt.Errorf("save config: %w", err)
+	}
 	cfg.AccessToken = NormalizeToken(cfg.AccessToken)
 	cfg.FilterLanguages = normalizeFilterLanguages(cfg.FilterLanguages)
 	if cfg.MinViewers < 0 {
@@ -194,12 +225,15 @@ func SaveTo(path string, cfg Config) error {
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create config dir %s: %w", dir, err)
+		return notice, fmt.Errorf("create config dir %s: %w", dir, err)
 	}
 
+	if err := tightenConfigDir(dir, chmod, &notice); err != nil {
+		return notice, err
+	}
 	tmp, err := os.CreateTemp(dir, ".config-*.toml.tmp")
 	if err != nil {
-		return fmt.Errorf("create temp config in %s: %w", dir, err)
+		return notice, fmt.Errorf("create temp config in %s: %w", dir, err)
 	}
 	tmpName := tmp.Name()
 	cleanup := true
@@ -209,33 +243,27 @@ func SaveTo(path string, cfg Config) error {
 		}
 	}()
 
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("chmod temp config: %w", err)
-	}
+	// CreateTemp cria o arquivo com 0600.
 
 	content := formatTOML(cfg)
 	if _, err := tmp.WriteString(content); err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("write temp config: %w", err)
+		return notice, fmt.Errorf("write temp config: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("sync temp config: %w", err)
+		return notice, fmt.Errorf("sync temp config: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp config: %w", err)
+		return notice, fmt.Errorf("close temp config: %w", err)
 	}
 
 	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("rename temp config to %s: %w", path, err)
+		return notice, fmt.Errorf("rename temp config to %s: %w", path, err)
 	}
 	cleanup = false
 
-	if err := os.Chmod(path, 0o600); err != nil {
-		return fmt.Errorf("chmod config %s: %w", path, err)
-	}
-	return nil
+	return notice, nil
 }
 
 func formatTOML(cfg Config) string {
@@ -372,13 +400,20 @@ func parseTOML(input string) (Config, error) {
 			"twitch.access_token", "twitch.token", "twitch.oauth_token":
 			val, err := unquoteTOML(rawVal)
 			if err != nil {
-				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+				return Config{}, fmt.Errorf("line %d: invalid credential string", lineNum)
+			}
+			if err := ValidateCredentials(val, ""); err != nil {
+				return Config{}, fmt.Errorf("line %d: %w", lineNum, err)
 			}
 			cfg.AccessToken = NormalizeToken(val)
 		case "username", "login", "auth.username", "auth.login", "twitch.username", "twitch.login":
 			val, err := unquoteTOML(rawVal)
 			if err != nil {
-				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+				return Config{}, fmt.Errorf("line %d: invalid credential string", lineNum)
+			}
+			val = strings.TrimSpace(val)
+			if err := ValidateCredentials("", val); err != nil {
+				return Config{}, fmt.Errorf("line %d: %w", lineNum, err)
 			}
 			cfg.Username = val
 		case "languages", "filters.languages", "channel.languages":

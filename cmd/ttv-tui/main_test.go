@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -66,8 +67,8 @@ func TestCLIVersionAndLoginNeverPrintToken(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
 	twtPath := filepath.Join(dir, "twt.toml")
-	secretBrowser := "cli_browser_secret_token_30chrs"
-	secretTwt := "cli_twt_secret_token_30chars_ok"
+	secretBrowser := "clibrowsersecrettoken30chrs"
+	secretTwt := "clitwtsecrettoken30charsok"
 
 	if err := os.WriteFile(twtPath, []byte(fmt.Sprintf("[twitch]\nusername = \"pedrosatin\"\ntoken = \"oauth:%s\"\n", secretTwt)), 0o600); err != nil {
 		t.Fatal(err)
@@ -234,7 +235,7 @@ func TestCLILanguageResolutionAndHelpOutput(t *testing.T) {
 func TestCLILangFlagPersistsToConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
-	secret := "test_secret_token_1234567890"
+	secret := "testsecrettoken1234567890"
 
 	baseOpts := app.LoginOptions{
 		ConfigPath: cfgPath,
@@ -327,5 +328,46 @@ func TestDoctorCLI(t *testing.T) {
 	}
 	if code := run([]string{"doctor", "extra"}, &stdout, &stderr); code != 2 {
 		t.Fatalf("argument exit = %d", code)
+	}
+}
+
+func TestRunWithIOConfigPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permissões Unix")
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	path, err := config.DefaultPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := config.SaveTo(path, config.Config{Language: "pt-BR"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"--version"}, {"--help"}, {"login", "--help"}, {"--terminal"}} {
+		if err := os.Chmod(path, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr bytes.Buffer
+		code := runWithIO(args, &bytes.Buffer{}, &stdout, &stderr, app.LoginOptions{})
+		wantFile, wantDir := os.FileMode(0o644), os.FileMode(0o755)
+		if args[0] == "--terminal" {
+			wantFile, wantDir = 0o600, 0o700
+			warning := fmt.Sprintf("A configuração em %s estava legível por outros usuários; agora só o seu usuário tem acesso.", path)
+			if code == 0 || !strings.HasPrefix(stderr.String(), warning+"\n") || strings.Count(stderr.String(), warning) != 1 {
+				t.Fatal("aviso Fixed ausente, repetido ou depois do erro de terminal")
+			}
+		} else if code != 0 || stderr.Len() != 0 {
+			t.Fatal("comando informativo falhou ou emitiu aviso")
+		}
+		for name, want := range map[string]os.FileMode{path: wantFile, filepath.Dir(path): wantDir} {
+			info, err := os.Stat(name)
+			if err != nil || info.Mode().Perm() != want {
+				t.Fatal("modo inesperado após runWithIO")
+			}
+		}
 	}
 }

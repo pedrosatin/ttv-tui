@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -68,7 +69,7 @@ func loginElsewhere(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.AccessToken, cfg.Username = "token-from-other-terminal", "latecomer"
+	cfg.AccessToken, cfg.Username = "tokenfromotherterminal", "latecomer"
 	if err := config.SaveTo(path, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +87,7 @@ func savedConfig(t *testing.T, path string) string {
 
 func TestConfigWriterRereadsBeforeSaving(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	start := config.Config{Language: "en", AccessToken: "token-at-startup", Username: "early", MinViewers: 10}
+	start := config.Config{Language: "en", AccessToken: "tokenatstartup", Username: "early", MinViewers: 10}
 	if err := config.SaveTo(path, start); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +99,7 @@ func TestConfigWriterRereadsBeforeSaving(t *testing.T) {
 		t.Fatalf("saveColumns: %v", err)
 	}
 	want := config.Config{
-		Language: "en", AccessToken: "token-from-other-terminal", Username: "latecomer", MinViewers: 10,
+		Language: "en", AccessToken: "tokenfromotherterminal", Username: "latecomer", MinViewers: 10,
 		ListColumns: 30, ChatColumns: 40, ChatOverlay: true, PanelsSwapped: true, ChatOverlayOpacity: 70,
 	}
 	if got := savedConfig(t, path); got != fmt.Sprintf("%+v", want) {
@@ -106,7 +107,7 @@ func TestConfigWriterRereadsBeforeSaving(t *testing.T) {
 	}
 
 	// The next save starts from the file again, not from what the first one kept.
-	want.AccessToken = "token-renewed"
+	want.AccessToken = "tokenrenewed"
 	if err := config.SaveTo(path, want); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func TestConfigWriterRereadsBeforeSaving(t *testing.T) {
 
 func TestConfigWriterReportsARemovedConfigOnce(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	if err := config.SaveTo(path, config.Config{Language: "en", AccessToken: "token-at-startup"}); err != nil {
+	if err := config.SaveTo(path, config.Config{Language: "en", AccessToken: "tokenatstartup"}); err != nil {
 		t.Fatal(err)
 	}
 	w := &configWriter{path: path, existed: true}
@@ -234,7 +235,7 @@ func toggleEnglishFilter(t *testing.T, opts []ui.Option) ui.Model {
 
 func TestConfigOptionsWithPathSaveWhatTheUIChanges(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	cfg := config.Config{Language: "en", AccessToken: "token-at-startup", ListColumns: 30}
+	cfg := config.Config{Language: "en", AccessToken: "tokenatstartup", ListColumns: 30}
 	if err := config.SaveTo(path, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +254,7 @@ func TestConfigOptionsWithPathSaveWhatTheUIChanges(t *testing.T) {
 	if !slices.Equal(got.FilterLanguages, []string{"en"}) {
 		t.Fatalf("filter change not saved: %+v", got)
 	}
-	if got.AccessToken != "token-from-other-terminal" {
+	if got.AccessToken != "tokenfromotherterminal" {
 		t.Fatalf("the filter change undid the login: token %q", got.AccessToken)
 	}
 	if got.ListColumns != 30 || got.Language != "en" {
@@ -265,7 +266,7 @@ func TestConfigOptionsWithPathSaveWhatTheUIChanges(t *testing.T) {
 // change without the token and the status bar says the session is gone.
 func TestConfigOptionsWarnWhenTheConfigWasRemoved(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	cfg := config.Config{Language: "en", AccessToken: "token-at-startup", Username: "early", ListColumns: 30}
+	cfg := config.Config{Language: "en", AccessToken: "tokenatstartup", Username: "early", ListColumns: 30}
 	if err := config.SaveTo(path, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +363,7 @@ type brokenConfig struct {
 var brokenConfigs = []brokenConfig{
 	{"unreadable", func(t *testing.T, path string) []byte {
 		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-			t.Skip("permission 000 does not stop root or Windows from reading")
+			t.Skip("permissão 000 não impede leitura como root ou no Windows")
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -386,7 +387,7 @@ var brokenConfigs = []brokenConfig{
 // breakConfig saves a valid config at path and breaks it as b says.
 func breakConfig(t *testing.T, path string, b brokenConfig) []byte {
 	t.Helper()
-	if err := config.SaveTo(path, config.Config{Language: "en", AccessToken: "token-at-startup", MinViewers: 10}); err != nil {
+	if err := config.SaveTo(path, config.Config{Language: "en", AccessToken: "tokenatstartup", MinViewers: 10}); err != nil {
 		t.Fatal(err)
 	}
 	return b.apply(t, path)
@@ -429,7 +430,7 @@ func TestConfigOptionsWarnWhenTheConfigCannotBeRead(t *testing.T) {
 		t.Run(b.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.toml")
 			want := breakConfig(t, path, b)
-			m := toggleEnglishFilter(t, configOptions(config.Config{Language: "en", AccessToken: "token-at-startup"}, path))
+			m := toggleEnglishFilter(t, configOptions(config.Config{Language: "en", AccessToken: "tokenatstartup"}, path))
 			cat, err := i18n.New(i18n.LangEN)
 			if err != nil {
 				t.Fatal(err)
@@ -444,7 +445,7 @@ func TestConfigOptionsWarnWhenTheConfigCannotBeRead(t *testing.T) {
 
 func TestPersistLangRereadsBeforeSaving(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	start := config.Config{Language: "en", AccessToken: "token-at-startup", Username: "early", MinViewers: 10}
+	start := config.Config{Language: "en", AccessToken: "tokenatstartup", Username: "early", MinViewers: 10}
 	if err := config.SaveTo(path, start); err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +457,7 @@ func TestPersistLangRereadsBeforeSaving(t *testing.T) {
 	if cfg.Language != i18n.LangPTBR {
 		t.Fatalf("cfg.Language = %q, want %q", cfg.Language, i18n.LangPTBR)
 	}
-	want := config.Config{Language: i18n.LangPTBR, AccessToken: "token-from-other-terminal", Username: "latecomer", MinViewers: 10}
+	want := config.Config{Language: i18n.LangPTBR, AccessToken: "tokenfromotherterminal", Username: "latecomer", MinViewers: 10}
 	if got := savedConfig(t, path); got != fmt.Sprintf("%+v", want) {
 		t.Fatalf("after persistLang:\n got %s\nwant %+v", got, want)
 	}
@@ -467,7 +468,7 @@ func TestPersistLangLeavesAConfigItCannotReadAlone(t *testing.T) {
 		t.Run(b.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.toml")
 			want := breakConfig(t, path, b)
-			cfg := config.Config{Language: "en", AccessToken: "token-at-startup", MinViewers: 10}
+			cfg := config.Config{Language: "en", AccessToken: "tokenatstartup", MinViewers: 10}
 			if err := persistLang("pt-BR", &cfg, path); err == nil {
 				t.Fatal("persistLang over a config it could not read reported success")
 			}
@@ -494,7 +495,7 @@ func TestLoadStateWarnsWhenTheStoreCannotBeRead(t *testing.T) {
 
 	t.Run("unreadable file", func(t *testing.T) {
 		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-			t.Skip("permission 000 does not stop root or Windows from reading")
+			t.Skip("permissão 000 não impede leitura como root ou no Windows")
 		}
 		path := filepath.Join(t.TempDir(), "state.json")
 		saved := store.Channel{ID: "1", Login: "saved", DisplayName: "Saved"}
@@ -571,5 +572,115 @@ func TestLogDiscardedChannelsSaiSoComAContagem(t *testing.T) {
 	logDiscardedChannels(&log, 0, nil)
 	if log.Len() != 0 {
 		t.Fatalf("sem descarte o log fica vazio, veio %q", log.String())
+	}
+}
+
+func TestConfigWriterDoesNotWriteStderr(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := config.SaveTo(path, config.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
+	writer := &configWriter{path: path, existed: true}
+	updateErr := writer.saveFilters([]string{"pt"}, 10)
+	_ = w.Close()
+	output, readErr := io.ReadAll(r)
+	_ = r.Close()
+	if updateErr != nil || readErr != nil {
+		t.Fatal("update failed")
+	}
+	if len(output) != 0 {
+		t.Fatal("update wrote to stderr")
+	}
+}
+
+func TestConfigPermissionWarning(t *testing.T) {
+	for _, lang := range []string{"en", "pt-BR"} {
+		cat, err := i18n.New(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			notice config.PermissionNotice
+			key    string
+		}{
+			{config.PermissionNotice{}, ""},
+			{config.PermissionNotice{Fixed: true}, "app.warn_config_permissions_fixed"},
+			{config.PermissionNotice{Failed: true}, "app.warn_config_permissions_failed"},
+			{config.PermissionNotice{Fixed: true, Failed: true}, "app.warn_config_permissions_failed"},
+		} {
+			var log bytes.Buffer
+			logConfigPermissions(&log, "/config.toml", tc.notice, cat)
+			want := ""
+			if tc.key != "" {
+				want = fmt.Sprintf(cat.T(tc.key), "/config.toml") + "\n"
+			}
+			if log.String() != want {
+				t.Fatal("aviso de permissões inesperado")
+			}
+		}
+	}
+}
+
+func TestRunReportsPermissionsBeforeTerminalCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permissões Unix")
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := config.SaveTo(path, config.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var log, output bytes.Buffer
+	err := Run(Options{ConfigPath: path, Lang: "en", Terminal: true, Input: &bytes.Buffer{}, Output: &output, Log: &log})
+	if err == nil {
+		t.Fatal("expected terminal check to stop startup")
+	}
+	cat, err := i18n.New("en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if log.String() != fmt.Sprintf(cat.T("app.warn_config_permissions_fixed"), path)+"\n" {
+		t.Fatal("startup warning missing or repeated")
+	}
+}
+
+// TestRunVideoHostChildDoesNotSecure verifica o fluxo real do filho sem conectar ao host.
+func TestRunVideoHostChildDoesNotSecure(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv(videoHostEnv, filepath.Join(t.TempDir(), "host-ausente"))
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := config.SaveTo(path, config.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var log, output bytes.Buffer
+	err := Run(Options{ConfigPath: path, Terminal: true, Input: &bytes.Buffer{}, Output: &output, Log: &log})
+	if err == nil || log.Len() != 0 {
+		t.Fatal("filho deve parar no terminal sem emitir aviso de permissões")
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != 0o644 {
+			t.Fatal("filho restringiu o config novamente")
+		}
 	}
 }
