@@ -28,6 +28,11 @@ const (
 	// ChatErrorKeyRefused: the chat service refused the application key the
 	// client presents. Only a new key fixes it.
 	ChatErrorKeyRefused ChatErrorReason = "key_refused"
+	// ChatErrorVOD: the target is an on-demand video rather than an active live
+	// stream, so live chat cannot open.
+	ChatErrorVOD ChatErrorReason = "vod"
+	// ChatErrorBotCheck: the platform presented an anti-bot verification prompt.
+	ChatErrorBotCheck ChatErrorReason = "bot_check"
 )
 
 // ChatError is the error a chat implementation puts in an event when the

@@ -253,6 +253,25 @@ func TestParse(t *testing.T) {
 			wantOK: false,
 		},
 		{
+			name:       "YouTube live path with video id",
+			input:      "https://www.youtube.com/live/4t4AQ15yj1M",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "4t4AQ15yj1M",
+			wantLabel:  "youtube:4t4AQ15yj1M",
+			wantTwitch: false,
+		},
+		{
+			name:   "YouTube bare /live without id is rejected",
+			input:  "https://www.youtube.com/live",
+			wantOK: false,
+		},
+		{
+			name:   "YouTube bare /@ without handle is rejected",
+			input:  "https://www.youtube.com/@",
+			wantOK: false,
+		},
+		{
 			name:       "Other platform Trovo",
 			input:      "https://trovo.live/channel1",
 			wantOK:     true,
@@ -458,5 +477,24 @@ func TestParseConfereIdentificadorDecodificado(t *testing.T) {
 				t.Errorf("Parse(%q) = Login %q Label %q, want %q %q", tc.input, info.Login, info.Label, tc.wantLogin, tc.wantLabel)
 			}
 		})
+	}
+}
+
+func TestParseInput(t *testing.T) {
+	info, ok := ParseInput("@LofiGirl")
+	if !ok {
+		t.Fatal("ParseInput(@LofiGirl) = false, want true")
+	}
+	if info.Platform != platform.YouTube || info.Login != "@LofiGirl" || info.Label != "youtube:@LofiGirl" || info.URL != "https://www.youtube.com/@LofiGirl/live" {
+		t.Errorf("ParseInput(@LofiGirl) = %+v", info)
+	}
+
+	if _, ok := ParseInput("https://www.youtube.com/watch?v=4t4AQ15yj1M"); !ok {
+		t.Error("ParseInput(watch URL) = false, want true")
+	}
+	for _, bad := range []string{"", "@", "@@", "@a/b", "@a..b", "@a b", "just chatting"} {
+		if info, ok := ParseInput(bad); ok {
+			t.Errorf("ParseInput(%q) = %+v, want false", bad, info)
+		}
 	}
 }
