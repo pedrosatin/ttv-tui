@@ -135,7 +135,7 @@ func TestJanelaTelaInicialFalaDoDestacado(t *testing.T) {
 }
 
 // W9: enquanto o streamlink procura a live, a área do vídeo diz "Abrindo
-// <canal>…" em vez de ficar preta: a janela só abre o buraco do vídeo com o
+// <canal>…" em vez de ficar preta. A janela só abre o buraco do vídeo com o
 // primeiro quadro.
 func TestJanelaCarregandoMostraOCanal(t *testing.T) {
 	t.Parallel()
@@ -265,8 +265,8 @@ func TestJanelaFocoClaroEmColunaEstreita(t *testing.T) {
 }
 
 // W8: o espectador assiste a um canal da Twitch e troca a lista para a Kick com
-// p. Numa janela de 100 colunas a barra mostra "lista: Kick" e o foco inteiros:
-// o aviso da plataforma vem antes do contexto e do chat, que ficam de fora.
+// p. Numa janela de 100 colunas a barra mostra "lista: Kick" e o foco inteiros.
+// O aviso da plataforma vem antes do contexto e do chat, que ficam de fora.
 func TestJanelaBarraMostraListaKickEFoco(t *testing.T) {
 	t.Parallel()
 	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 1}})
