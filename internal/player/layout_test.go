@@ -198,6 +198,23 @@ func TestSessionKeepsDirAndEndpointSeparate(t *testing.T) {
 // com um RuntimeDir ou $TMPDIR relativo, o MkdirTemp devolveria um diretório
 // relativo e o input.conf, o plugin e o socket do mpv seriam lidos de dentro da
 // própria sessão. Vale também para o fallback e para a sessão com plugin da Kick.
+// shortLaunchDir é o diretório "de onde o app foi aberto" nos testes de base
+// relativa. No Unix fica direto em /tmp: um TMPDIR longo faria a sessão sob ele
+// passar do limite do socket, e fallbackBase cairia, corretamente, em /tmp, fora
+// do diretório que o teste confere. O fallback por comprimento tem teste próprio.
+func shortLaunchDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return t.TempDir()
+	}
+	dir, err := os.MkdirTemp("/tmp", "ttvl-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func TestSessionPathsAreAbsoluteWithRelativeBase(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -228,7 +245,7 @@ func TestSessionPathsAreAbsoluteWithRelativeBase(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			launch, err := filepath.EvalSymlinks(t.TempDir())
+			launch, err := filepath.EvalSymlinks(shortLaunchDir(t))
 			if err != nil {
 				t.Fatal(err)
 			}
