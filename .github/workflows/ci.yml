@@ -5,6 +5,39 @@ on:
   pull_request:
 
 jobs:
+  govulncheck:
+    name: Govulncheck (root and window)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 15
+    steps:
+      - name: Install window build dependencies
+        run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+      - name: Check root module
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          govulncheck ./...
+          GOOS=windows govulncheck ./...
+          GOOS=darwin govulncheck ./...
+      - name: Set up window Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: window/go.mod
+          cache: false
+      - name: Check window module
+        working-directory: window
+        run: govulncheck ./...
+
   ci:
     name: Build, Lint & Test
     runs-on: ubuntu-latest
@@ -14,13 +47,16 @@ jobs:
       XDG_RUNTIME_DIR: /tmp
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version-file: go.mod
+          go-version: '1.27.4'
           cache: true
+
+      - name: Check module tidiness
+        run: go mod tidy -diff
 
       - name: Build packages
         run: go build ./...
@@ -29,7 +65,7 @@ jobs:
         run: go vet ./...
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
         with:
           version: v2.15.0
 
@@ -56,10 +92,10 @@ jobs:
         run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd mesa ttf-dejavu
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: window/go.mod
           cache: false
@@ -67,6 +103,7 @@ jobs:
       - name: Build, vet and test
         working-directory: window
         run: |
+          go mod tidy -diff
           go build -buildvcs=false -o /tmp/ttv-tui-window .
           go vet ./...
           go test -buildvcs=false ./...
@@ -93,7 +130,7 @@ jobs:
         os: [macos-latest, windows-latest]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install SDL3 and libmpv (macOS)
         if: runner.os == 'macOS'
@@ -101,7 +138,7 @@ jobs:
 
       - name: Install SDL3 and libmpv (Windows)
         if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
           path-type: inherit
@@ -115,7 +152,7 @@ jobs:
             zip
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: window/go.mod
           cache: false
@@ -127,6 +164,9 @@ jobs:
         env:
           TMPDIR: /tmp
         run: |
+          go mod tidy -diff
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck ./...
           go build -buildvcs=false -o ttv-tui-window .
           go vet ./...
           go test -buildvcs=false ./...
@@ -138,6 +178,9 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: |
+          go mod tidy -diff
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck ./...
           go build -buildvcs=false -o ttv-tui-window.exe .
           go vet ./...
           go test -buildvcs=false ./...
@@ -180,7 +223,7 @@ jobs:
       # Lets a branch be tried on a real Windows before a release has the zip.
       - name: Upload the Windows zip
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ttv-tui-window-windows
           path: dist-window/ttv-tui-window.zip
@@ -203,12 +246,12 @@ jobs:
         shell: bash
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version-file: go.mod
+          go-version: '1.27.4'
           cache: true
 
       # The default macOS TMPDIR is too long for a Unix socket path.

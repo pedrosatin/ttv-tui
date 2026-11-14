@@ -19,10 +19,10 @@ jobs:
         run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd mesa tar gzip
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: window/go.mod
           cache: false
@@ -38,7 +38,7 @@ jobs:
           tar -czf "dist-window/ttv-tui-window_${VERSION}_linux_amd64.tar.gz" -C window ttv-tui-window
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: window
           path: dist-window/
@@ -51,10 +51,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install build dependencies
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
           path-type: inherit
@@ -68,7 +68,7 @@ jobs:
             zip
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: window/go.mod
           cache: false
@@ -83,7 +83,7 @@ jobs:
           packaging/window-windows.sh "dist-window/ttv-tui-window_${VERSION}_windows_amd64.zip"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: window-windows
           path: dist-window/
@@ -94,38 +94,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version-file: go.mod
-          cache: true
+          go-version: '1.27.4'
+          cache: false
 
       - name: Download window binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: window*
           merge-multiple: true
           path: dist-window
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6.1.0
+        uses: goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf # v6.1.0
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: v2.20.2
           args: release --clean
         env:
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify injected version
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          ARCHIVE="dist/ttv-tui_${VERSION}_linux_amd64.tar.gz"
-          echo "Verificando o arquivo $ARCHIVE"
-          tar -xzf "$ARCHIVE" -C /tmp ttv-tui
-          OUTPUT=$(/tmp/ttv-tui --version)
-          echo "Saída de ttv-tui --version: $OUTPUT"
-          echo "$OUTPUT" | grep -F "$VERSION"
+      - name: Require host version check
+        run: test -f dist/version-checked

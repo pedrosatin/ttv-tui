@@ -5,7 +5,7 @@ project_name: ttv-tui
 
 before:
   hooks:
-    - go mod tidy
+    - go mod tidy -diff
 
 builds:
   - id: ttv-tui
@@ -20,6 +20,13 @@ builds:
     goarch:
       - amd64
       - arm64
+    # Roda o binário do host com --version e exige "ttv-tui <versão>" antes de empacotar e publicar.
+    hooks:
+      post:
+        - cmd: >-
+            {{ if and (eq .Os .Runtime.Goos) (eq .Arch .Runtime.Goarch) }}sh -ec 'scratch=$(mktemp -d); trap "rm -rf \"$scratch\"" EXIT; export XDG_CONFIG_HOME="$scratch/config" XDG_STATE_HOME="$scratch/state"; output=$("{{ .Path }}" --version); echo "Versão injetada -> $output"; test "$output" = "ttv-tui {{ .Version }}"; touch "$(dirname "$(dirname "{{ .Path }}")")/version-checked"'
+            {{ else }}true{{ end }}
+          output: true
     ldflags:
       - -s -w -X main.version={{.Version}}
 
