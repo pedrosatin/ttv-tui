@@ -171,3 +171,13 @@ func (a *app) handle(ev *C.SDL_Event) {
 		}
 	}
 }
+
+var keyNames = map[string]C.SDL_Keycode{
+	"F1": C.SDLK_F1, "F2": C.SDLK_F2, "F3": C.SDLK_F3, "F4": C.SDLK_F4,
+	"F5": C.SDLK_F5, "F6": C.SDLK_F6, "F7": C.SDLK_F7, "F8": C.SDLK_F8,
+	"F9": C.SDLK_F9, "F10": C.SDLK_F10, "F11": C.SDLK_F11, "F12": C.SDLK_F12,
+	"Home": C.SDLK_HOME, "End": C.SDLK_END, "PageUp": C.SDLK_PAGEUP, "PageDown": C.SDLK_PAGEDOWN,
+	"Return": C.SDLK_RETURN, "Escape": C.SDLK_ESCAPE, "Tab": C.SDLK_TAB, "Up": C.SDLK_UP,
+	"Down": C.SDLK_DOWN, "Left": C.SDLK_LEFT, "Right": C.SDLK_RIGHT, "Backspace": C.SDLK_BACKSPACE,
+	"Delete": C.SDLK_DELETE, "Space": C.SDLK_SPACE,
+}

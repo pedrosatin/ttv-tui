@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -27,12 +31,74 @@ func readStart(c *net.UnixConn) (ctlMsg, error) {
 	var req struct {
 		IPC string `json:"ipc"`
 	}
-	_ = json.Unmarshal(data[:n], &req)
 	fd := -1
-	if ms, err := syscall.ParseSocketControlMessage(oob[:oobn]); err == nil && len(ms) > 0 {
-		if fds, err := syscall.ParseUnixRights(&ms[0]); err == nil && len(fds) > 0 {
-			fd = fds[0]
+	if ms, err := syscall.ParseSocketControlMessage(oob[:oobn]); err == nil {
+		for _, m := range ms {
+			if fds, err := syscall.ParseUnixRights(&m); err == nil {
+				for _, extra := range fds {
+					if fd < 0 {
+						fd = extra
+					} else {
+						closeFD(extra)
+					}
+				}
+			}
 		}
 	}
+	if err := json.Unmarshal(data[:n], &req); err != nil {
+		closeFD(fd)
+		return ctlMsg{}, err
+	}
+	if !validIPC(req.IPC) {
+		closeFD(fd)
+		return ctlMsg{}, fmt.Errorf("IPC fora do runtime privado")
+	}
 	return ctlMsg{kind: "start", ipc: req.IPC, fd: fd, url: fmt.Sprintf("fdclose://%d", fd), conn: c}, nil
+}
+
+// validIPC accepts only the session socket in the app's private runtime.
+// Resolve directories to reject symlinks escaping the expected base.
+func validIPC(ipc string) bool {
+	if !filepath.IsAbs(ipc) || filepath.Clean(ipc) != ipc || filepath.Base(ipc) != "i" {
+		return false
+	}
+	base := os.Getenv("XDG_RUNTIME_DIR")
+	if base == "" {
+		base = os.TempDir()
+	}
+	base = filepath.Join(base, "ttv-tui")
+	dir := filepath.Dir(ipc)
+	// The player falls back to a private temp directory when the runtime
+	// cannot hold a Unix socket. Its name carries the TUI pid and generation.
+	parts := strings.Split(filepath.Base(dir), "-")
+	if len(parts) == 4 && parts[0] == "ttv" && parts[1] == "tui" {
+		pid, pidErr := strconv.ParseUint(parts[2], 10, 64)
+		_, genErr := strconv.ParseUint(parts[3], 10, 64)
+		if pidErr != nil || genErr != nil || pid == 0 {
+			return false
+		}
+		parent := filepath.Dir(dir)
+		if parent != filepath.Clean(os.TempDir()) && parent != "/tmp" {
+			return false
+		}
+		return privateIPCDir(dir)
+	}
+	if !privateIPCDir(base) || !privateIPCDir(dir) {
+		return false
+	}
+	realBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return false
+	}
+	realDir, err := filepath.EvalSymlinks(dir)
+	return err == nil && filepath.Dir(realDir) == realBase
+}
+
+func privateIPCDir(path string) bool {
+	st, err := os.Lstat(path)
+	if err != nil || !st.IsDir() || st.Mode().Perm()&0o077 != 0 {
+		return false
+	}
+	stat, ok := st.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == uint32(os.Geteuid())
 }

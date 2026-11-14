@@ -63,6 +63,9 @@ func build(dir string) error {
 	}
 	for _, s := range steps {
 		cmd := exec.Command("go", "build", "-buildvcs=false", "-o", s.out, s.pkg)
+		if s.out == bins.window {
+			cmd.Args = append(cmd.Args[:2], append([]string{"-tags", "windowtest"}, cmd.Args[2:]...)...)
+		}
 		cmd.Dir = s.dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("compilar %s em %s: %w\n%s", s.pkg, s.dir, err, out)

@@ -5,7 +5,9 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"net"
+	"strings"
 )
 
 // closeFD has nothing to close: the stream comes through the shim's named pipe.
@@ -22,6 +24,15 @@ func readStart(c *net.UnixConn) (ctlMsg, error) {
 		IPC  string `json:"ipc"`
 		Pipe string `json:"pipe"`
 	}
-	_ = json.Unmarshal(line, &req)
+	if err := json.Unmarshal(line, &req); err != nil {
+		return ctlMsg{}, err
+	}
+	if !validStreamPipe(req.Pipe) || !strings.HasPrefix(req.IPC, "ttv-tui-") || strings.ContainsAny(req.IPC, `/\`) {
+		return ctlMsg{}, fmt.Errorf("pipe fora do runtime esperado")
+	}
 	return ctlMsg{kind: "start", ipc: req.IPC, fd: -1, url: req.Pipe, conn: c}, nil
+}
+
+func validStreamPipe(name string) bool {
+	return strings.HasPrefix(name, `\\.\pipe\ttv-win-stream-`) && !strings.ContainsAny(strings.TrimPrefix(name, `\\.\pipe\ttv-win-stream-`), `/\`)
 }

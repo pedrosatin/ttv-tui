@@ -1,3 +1,5 @@
+//go:build windowtest
+
 package main
 
 import "strings"

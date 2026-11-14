@@ -21,7 +21,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -73,7 +72,7 @@ func main() {
 	_ = os.Mkdir(binDir, 0o755)
 	exe, _ := os.Executable()
 	ctlPath := filepath.Join(dir, "ctl.sock")
-	testPath := os.Getenv("TTV_WINDOW_TEST") // só os testes de fluxo abrem esta porta
+	testPath := testSocketPath()
 
 	fatal := func(args ...any) {
 		fmt.Fprintln(os.Stderr, args...)
@@ -116,10 +115,7 @@ func main() {
 	C.init_gl_extensions()
 
 	scale := float64(C.SDL_GetWindowDisplayScale(win))
-	pt := 9.0
-	if v, err := strconv.ParseFloat(os.Getenv("TTV_WINDOW_PT"), 64); err == nil {
-		pt = v
-	}
+	pt := fontPoints(os.Getenv("TTV_WINDOW_PT"))
 	fs, err := scaledFontSet(pt, scale)
 	if err != nil {
 		fatal(err)
@@ -145,12 +141,12 @@ func main() {
 	go a.serveCtl(ctlLn)
 	if testPath != "" {
 		_ = os.Remove(testPath)
-		go a.serveTest(testPath)
+		a.startTest(testPath)
 	}
 	go a.serveLayout(layoutLn)
 
 	a.cmd = exec.Command(tui, os.Args[1:]...)
-	a.cmd.Env = append(os.Environ(),
+	a.cmd.Env = append(tuiEnvironment(os.Environ()),
 		"PATH="+shimPATH(binDir, filepath.Dir(exe), os.Getenv("PATH")),
 		"TTV_WINDOW_SOCK="+ctlPath,
 		"TTV_TUI_VIDEO_HOST="+layoutPath,

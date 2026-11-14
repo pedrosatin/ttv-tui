@@ -44,9 +44,9 @@ func loadTheme() {
 			fgR, fgG, fgB = byte(c>>16), byte(c>>8), byte(c)
 		case k == "background":
 			bgR, bgG, bgB = byte(c>>16), byte(c>>8), byte(c)
-		case strings.HasPrefix(k, "regular") && len(k) == 8:
+		case strings.HasPrefix(k, "regular") && len(k) == 8 && k[7] >= '0' && k[7] <= '7':
 			palette[k[7]-'0'] = c
-		case strings.HasPrefix(k, "bright") && len(k) == 7:
+		case strings.HasPrefix(k, "bright") && len(k) == 7 && k[6] >= '0' && k[6] <= '7':
 			palette[8+k[6]-'0'] = c
 		}
 	}

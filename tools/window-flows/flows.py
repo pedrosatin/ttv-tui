@@ -945,7 +945,7 @@ def preflight():
 def build():
     os.makedirs(f"{RUN}/bin")
     for name, cwd, pkg in (("ttv-tui", REPO, "./cmd/ttv-tui"), ("ttv-tui-window", f"{REPO}/window", ".")):
-        r = subprocess.run(["go", "build", "-buildvcs=false", "-o", f"{RUN}/bin/{name}", pkg], cwd=cwd, capture_output=True, text=True)
+        r = subprocess.run(["go", "build", *(["-tags", "windowtest"] if name == "ttv-tui-window" else []), "-buildvcs=false", "-o", f"{RUN}/bin/{name}", pkg], cwd=cwd, capture_output=True, text=True)
         if r.returncode != 0:
             raise BuildFailed(f"{name}:\n{r.stdout}{r.stderr}")
     if subprocess.run([f"{RUN}/bin/ttv-tui-window", "--probe"], capture_output=True).returncode != 0:
