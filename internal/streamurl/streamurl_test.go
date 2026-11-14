@@ -253,6 +253,108 @@ func TestParse(t *testing.T) {
 			wantOK: false,
 		},
 		{
+			name:       "YouTube live path with video id",
+			input:      "https://www.youtube.com/live/4t4AQ15yj1M",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "4t4AQ15yj1M",
+			wantLabel:  "youtube:4t4AQ15yj1M",
+			wantTwitch: false,
+		},
+		{
+			name:   "YouTube bare /live without id is rejected",
+			input:  "https://www.youtube.com/live",
+			wantOK: false,
+		},
+		{
+			name:   "YouTube bare /@ without handle is rejected",
+			input:  "https://www.youtube.com/@",
+			wantOK: false,
+		},
+		{
+			name:       "YouTube /channel/id/live",
+			input:      "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/live",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantLabel:  "youtube:channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantTwitch: false,
+		},
+		{
+			name:       "YouTube /channel/id without /live",
+			input:      "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantLabel:  "youtube:channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantTwitch: false,
+		},
+		{
+			name:       "YouTube /c/name/live",
+			input:      "https://www.youtube.com/c/NomeCanal/live",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "c/NomeCanal",
+			wantLabel:  "youtube:c/NomeCanal",
+			wantTwitch: false,
+		},
+		{
+			name:       "YouTube /user/name/live",
+			input:      "https://www.youtube.com/user/NomeUser/live",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "user/NomeUser",
+			wantLabel:  "youtube:user/NomeUser",
+			wantTwitch: false,
+		},
+		{
+			name:       "YouTube /embed/video_id",
+			input:      "https://www.youtube.com/embed/4t4AQ15yj1M",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "4t4AQ15yj1M",
+			wantLabel:  "youtube:4t4AQ15yj1M",
+			wantTwitch: false,
+		},
+		{
+			name:       "YouTube /embed/live_stream?channel=id",
+			input:      "https://www.youtube.com/embed/live_stream?channel=UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantLabel:  "youtube:channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ",
+			wantTwitch: false,
+		},
+		{
+			name:       "YouTube /v/video_id",
+			input:      "https://www.youtube.com/v/dQw4w9WgXcQ",
+			wantOK:     true,
+			wantPlat:   platform.YouTube,
+			wantLogin:  "dQw4w9WgXcQ",
+			wantLabel:  "youtube:dQw4w9WgXcQ",
+			wantTwitch: false,
+		},
+		{
+			name:   "YouTube /channel subpath other than /live is rejected",
+			input:  "https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ/videos",
+			wantOK: false,
+		},
+		{
+			name:   "YouTube /embed/live_stream without channel param is rejected",
+			input:  "https://www.youtube.com/embed/live_stream",
+			wantOK: false,
+		},
+		{
+			name:   "YouTube video id shorter than 11 chars is rejected",
+			input:  "https://www.youtube.com/watch?v=short",
+			wantOK: false,
+		},
+		{
+			name:   "YouTube video id longer than 11 chars is rejected",
+			input:  "https://www.youtube.com/watch?v=twelvechars1",
+			wantOK: false,
+		},
+		{
 			name:       "Other platform Trovo",
 			input:      "https://trovo.live/channel1",
 			wantOK:     true,
@@ -458,5 +560,24 @@ func TestParseConfereIdentificadorDecodificado(t *testing.T) {
 				t.Errorf("Parse(%q) = Login %q Label %q, want %q %q", tc.input, info.Login, info.Label, tc.wantLogin, tc.wantLabel)
 			}
 		})
+	}
+}
+
+func TestParseInput(t *testing.T) {
+	info, ok := ParseInput("@LofiGirl")
+	if !ok {
+		t.Fatal("ParseInput(@LofiGirl) = false, want true")
+	}
+	if info.Platform != platform.YouTube || info.Login != "@LofiGirl" || info.Label != "youtube:@LofiGirl" || info.URL != "https://www.youtube.com/@LofiGirl/live" {
+		t.Errorf("ParseInput(@LofiGirl) = %+v", info)
+	}
+
+	if _, ok := ParseInput("https://www.youtube.com/watch?v=4t4AQ15yj1M"); !ok {
+		t.Error("ParseInput(watch URL) = false, want true")
+	}
+	for _, bad := range []string{"", "@", "@@", "@a/b", "@a..b", "@a b", "just chatting"} {
+		if info, ok := ParseInput(bad); ok {
+			t.Errorf("ParseInput(%q) = %+v, want false", bad, info)
+		}
 	}
 }

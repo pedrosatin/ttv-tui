@@ -39,6 +39,9 @@ const (
 	PlayerFailureNoPlugin          PlayerFailure = "no_plugin"
 	PlayerFailureBlocked           PlayerFailure = "blocked"
 	PlayerFailureBrowserMissing    PlayerFailure = "browser_missing"
+	PlayerFailureVOD               PlayerFailure = "vod"
+	PlayerFailureBotCheck          PlayerFailure = "bot_check"
+	PlayerFailureLoginRequired     PlayerFailure = "login_required"
 	PlayerFailureUnknown           PlayerFailure = "unknown"
 )
 
@@ -184,13 +187,20 @@ func (m Model) playerStatusBase() string {
 	}
 }
 
+func samePlayerLabel(plat, a, b string) bool {
+	if platform.Normalize(plat) == platform.YouTube {
+		return a == b
+	}
+	return strings.EqualFold(a, b)
+}
+
 // playerLabel names what the player shows, as a person reads it. Outside Twitch
 // the session label is qualified ("kick:gaules") so two platforms never collide;
 // the bar shows the channel and its platform instead ("gaules (Kick)").
 func (m Model) playerLabel() string {
 	label := m.player.login
 	ch := m.player.target.Channel
-	if label == "" || platform.IsTwitch(ch.Platform) || !strings.EqualFold(ch.PlayerLabel(), label) {
+	if label == "" || platform.IsTwitch(ch.Platform) || !samePlayerLabel(ch.Platform, ch.PlayerLabel(), label) {
 		return label
 	}
 	name := strings.TrimSpace(ch.DisplayName)
@@ -262,6 +272,12 @@ func (m Model) playerFailureText() string {
 		return m.t("player.fail.blocked")
 	case PlayerFailureBrowserMissing:
 		return m.t("player.fail.browser_missing")
+	case PlayerFailureVOD:
+		return m.t("player.fail.vod")
+	case PlayerFailureBotCheck:
+		return m.t("player.fail.bot_check")
+	case PlayerFailureLoginRequired:
+		return m.t("player.fail.login_required")
 	default:
 		return m.t("player.fail.unknown")
 	}

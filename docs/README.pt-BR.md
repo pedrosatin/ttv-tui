@@ -84,7 +84,7 @@ ttv-tui login --import twt  # opcional: usa o token do twitch-tui para enviar me
 ttv-tui doctor              # confere dependências, caminhos e se há token
 ```
 
-Escolha uma categoria com `Enter` e depois um canal com `Enter`. A lista abre na Twitch; o `p` troca para a Kick e volta. Você também pode apertar `Ctrl+F` e colar a URL de uma transmissão (Twitch, Kick, YouTube) para tocar direto. A live começa e o chat abre à direita: Twitch e Kick têm chat, e o da Kick é só leitura. Aperte `?` para ver os atalhos.
+Escolha uma categoria com `Enter` e depois um canal com `Enter`. A lista abre na Twitch; o `p` troca para a Kick e volta. Você também pode apertar `Ctrl+F` (ou `/` quando nada na lista combina) e colar a URL de uma transmissão (Twitch, Kick, YouTube) ou um `@canal` do YouTube para tocar direto. A live começa e o chat abre à direita: Twitch, Kick e YouTube têm chat, e os da Kick e do YouTube são só leitura. Aperte `?` para ver os atalhos.
 
 ## Plataformas
 
@@ -114,7 +114,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Favorita um canal ou fixa uma categoria; aperte de novo para remover |
 | `/` | Filtra a lista atual; `Enter` abre o item destacado e `Ctrl+F` busca com o texto |
-| `Ctrl+F` ou `Ctrl+S` | Busca canais e categorias na plataforma que a lista mostra, ou cola a URL de uma live |
+| `Ctrl+F` ou `Ctrl+S` | Busca canais e categorias na plataforma que a lista mostra, ou cola uma URL de live ou um `@canal` do YouTube |
 | `p` | Troca a lista entre Twitch e Kick; o vídeo e o chat continuam |
 | `l` | Filtra canais por idioma e público |
 | `r` | Tenta de novo carregar a lista ou o vídeo |
@@ -257,6 +257,17 @@ A Kick não tem API pública para nada disso sem conta. O app lê o JSON que o p
   Um caminho relativo vale a partir do diretório em que você abre o app. O navegador só vai para o streamlink quando um canal da Kick toca. O `ttv-tui doctor` informa os navegadores compatíveis que encontra nas entradas absolutas do `PATH` e nos diretórios padrão de instalação.
 
 - O chat da Kick conecta direto no Pusher e ignora o `HTTPS_PROXY`. Atrás de um proxy obrigatório, a lista ainda mostra o estado do canal, mas o chat fica reconectando.
+
+</details>
+
+<details>
+<summary><b>Dá para assistir YouTube?</b></summary>
+
+Dá, por URL ou `@canal`, sem catálogo para navegar. Aperte `Ctrl+F`, ou `/`, e cole um link de live, como `youtube.com/watch?v=...`, `youtu.be/...`, `youtube.com/live/...` ou `youtube.com/@canal/live`, ou digite `@canal`. O app confere se a transmissão está ao vivo, entrega `@canal` ao `streamlink` como `/@canal/live` e abre o chat ao vivo ao lado do vídeo sem exigir conta.
+
+O chat do YouTube é só leitura e consulta o innertube no intervalo que a própria resposta pede, com espera crescente em caso de erro. A barra de status nunca mostra intervalo comercial no YouTube porque o plugin do YouTube no `streamlink` não emite sinal verificável de anúncio.
+
+Canais salvos do YouTube aparecem nos favoritos e recentes com a marca `[YouTube]` e conferem o estado ao vivo ao abrir o app. Vídeos sob demanda, canais sem live ativa, transmissões que exigem login (por idade, para membros ou privadas) e bloqueios com `"Sign in to confirm you're not a bot"` mostram mensagem própria na barra ou no chat.
 
 </details>
 

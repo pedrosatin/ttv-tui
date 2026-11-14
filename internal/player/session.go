@@ -501,16 +501,18 @@ func (s *Session) handleLine(line string) {
 		go s.failFast()
 	}
 
-	switch classifyAdLine(line) {
-	case adSignalHoldStart:
-		s.startAdHold()
-	case adSignalHoldEnd:
-		s.endAdHold()
-	case adSignalUnknown:
-		// Neither start nor end can be verified from here on: drop any hold
-		// instead of waiting for BreakMaxHold.
-		s.note("player: unrecognized streamlink ad-hold line: " + line)
-		s.endAdHold()
+	if !s.cfg.Target.NoAdSignal {
+		switch classifyAdLine(line) {
+		case adSignalHoldStart:
+			s.startAdHold()
+		case adSignalHoldEnd:
+			s.endAdHold()
+		case adSignalUnknown:
+			// Neither start nor end can be verified from here on: drop any hold
+			// instead of waiting for BreakMaxHold.
+			s.note("player: unrecognized streamlink ad-hold line: " + line)
+			s.endAdHold()
+		}
 	}
 }
 

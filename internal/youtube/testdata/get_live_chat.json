@@ -1,0 +1,236 @@
+{
+  "continuationContents": {
+    "liveChatContinuation": {
+      "continuations": [
+        {
+          "invalidationContinuationData": {
+            "timeoutMs": 10000,
+            "continuation": "TEST_NEXT_CONTINUATION"
+          }
+        }
+      ],
+      "actions": [
+        {
+          "addChatItemAction": {
+            "item": {
+              "giftMessageViewModel": {
+                "id": "ChwKGkNOXzN4dnZQaDVnREZTTEpQd1FkY3ljUDNR",
+                "authorName": {
+                  "content": "@user_alpha ",
+                  "styleRuns": [
+                    {
+                      "startIndex": 0,
+                      "length": 12
+                    }
+                  ]
+                },
+                "text": {
+                  "content": "sent Star",
+                  "styleRuns": [
+                    {
+                      "startIndex": 0,
+                      "length": 9
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatTextMessageRenderer": {
+                "id": "ChwKGkNNT3RoOGJvaDVnREZSQWYxZ0FkQ3FZZEZB",
+                "timestampUsec": "1794671558914514",
+                "authorName": {
+                  "simpleText": "@viewer_bravo"
+                },
+                "message": {
+                  "runs": [
+                    {
+                      "text": "kya howw??"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatTextMessageRenderer": {
+                "id": "ChwKGkNOZUVsTWJvaDVnREZYdzNkZ1lkTjM0OHdR",
+                "timestampUsec": "1794671559122378",
+                "authorName": {
+                  "simpleText": "@viewer_charlie"
+                },
+                "message": {
+                  "runs": [
+                    {
+                      "text": "Mortal insta nhi use karte"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "removeChatItemAction": {
+            "targetItemId": "ChwKGkNNT3RoOGJvaDVnREZSQWYxZ0FkQ3FZZEZB"
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatTextMessageRenderer": {
+                "id": "ChwKGkNPN0poc3JvaDVnREZVX2M1d01kcHg4akln",
+                "timestampUsec": "1794671567292531",
+                "authorName": {
+                  "simpleText": "@viewer_delta"
+                },
+                "message": {
+                  "runs": [
+                    {
+                      "text": "Silcnn what uhh do"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatTextMessageRenderer": {
+                "id": "ChwKGkNJamkyc3JvaDVnREZRRW5kZ1lkaFlNek5n",
+                "timestampUsec": "1794671568669103",
+                "authorName": {
+                  "simpleText": "@viewer_charlie"
+                },
+                "message": {
+                  "runs": [
+                    {
+                      "text": "exit"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatTextMessageRenderer": {
+                "id": "ChwKGkNOcl82c3pvaDVnREZXVEdQd1FkckRFVjRR",
+                "timestampUsec": "1794671573132905",
+                "authorName": {
+                  "simpleText": "@viewer_bravo"
+                },
+                "message": {
+                  "runs": [
+                    {
+                      "text": "آها یادم رفت"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatTextMessageRenderer": {
+                "id": "ChwKGkNMMmI1dERvaDVnREZSelI1d01kT3VVRTN3",
+                "timestampUsec": "1794671581435033",
+                "authorName": {
+                  "simpleText": "@viewer_echo"
+                },
+                "message": {
+                  "runs": [
+                    {
+                      "text": "udhar Reze baat kr rha hai "
+                    },
+                    {
+                      "emoji": {
+                        "emojiId": "🥀",
+                        "shortcuts": [
+                          ":wilted_flower:"
+                        ],
+                        "searchTerms": [
+                          "wilted",
+                          "flower"
+                        ],
+                        "image": {
+                          "thumbnails": [
+                            {
+                              "url": "https://fonts.gstatic.com/s/e/notoemoji/15.1/1f940/72.png"
+                            }
+                          ],
+                          "accessibility": {
+                            "accessibilityData": {
+                              "label": "🥀"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "emoji": {
+                        "emojiId": "🥀",
+                        "shortcuts": [
+                          ":wilted_flower:"
+                        ],
+                        "searchTerms": [
+                          "wilted",
+                          "flower"
+                        ],
+                        "image": {
+                          "thumbnails": [
+                            {
+                              "url": "https://fonts.gstatic.com/s/e/notoemoji/15.1/1f940/72.png"
+                            }
+                          ],
+                          "accessibility": {
+                            "accessibilityData": {
+                              "label": "🥀"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatViewerEngagementMessageRenderer": {
+                "id": "CjEKL0NPTU1VTklUWV9HVUlERUxJTkVTX1ZFTTIwMjYvMTEvMTQtMDc6NTk6MjkuMzI3",
+                "timestampUsec": "1794671969327420",
+                "icon": {
+                  "iconType": "YOUTUBE_ROUND"
+                },
+                "message": {
+                  "runs": [
+                    {
+                      "text": "Welcome to live chat! Remember to guard your privacy and abide by our community guidelines."
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

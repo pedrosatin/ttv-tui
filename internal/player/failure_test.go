@@ -51,6 +51,11 @@ func TestClassifyLine(t *testing.T) {
 		// A plugin failure that names a network or offline cause keeps that cause.
 		{"error: Unable to validate response text: Max retries exceeded with url: /gql", FailureNetwork},
 		{"error: PluginError: No playable streams found on this URL", FailureOffline},
+		{"[plugins.youtube][error] Could not get video info - LOGIN_REQUIRED: Sign in to confirm you're not a bot", FailureBotCheck},
+		{"[plugins.youtube][error] Could not get video info - LOGIN_REQUIRED: Sign in to confirm your age", FailureLoginRequired},
+		{"[plugins.youtube][error] Could not get video info - LOGIN_REQUIRED", FailureLoginRequired},
+		{"[plugins.youtube][error] Could not get video info - LIVE_STREAM_OFFLINE: This live stream recording is not available.", FailureOffline},
+		{"error: This plugin does not support VOD content, try yt-dlp instead", FailureVOD},
 		{"[cli][info] Found matching plugin twitch for URL https://www.twitch.tv/xqc", FailureNone},
 		{"", FailureNone},
 	}
@@ -99,6 +104,9 @@ func TestOnlyStreamlinkFailuresBlameTheBuild(t *testing.T) {
 		FailureNoPlugin:          false,
 		FailureBlocked:           false,
 		FailureBrowserMissing:    false,
+		FailureVOD:               false,
+		FailureBotCheck:          false,
+		FailureLoginRequired:     false,
 		FailureUnknown:           false,
 		FailureStreamlinkBroken:  true,
 	}
@@ -402,5 +410,65 @@ func TestBrowserPhraseInsidePlayerPathIsNotBrowserMissing(t *testing.T) {
 	line := "error: Failed to start player: /home/u/invalid web browser executable: mpv (Permission denied)"
 	if got := classifyLine(line, false); got == FailureBrowserMissing {
 		t.Fatalf("classifyLine(%q) = %v, want a player failure", line, got)
+	}
+}
+
+func TestYouTubeTargetNeverEntersBreak(t *testing.T) {
+	var emitted []Event
+	s := &Session{
+		cfg: sessionConfig{
+			Generation: 1,
+			Target: Target{
+				URL:        "https://www.youtube.com/@LofiGirl/live",
+				Label:      "youtube:@LofiGirl",
+				NoAdSignal: true,
+			},
+			Emit: func(ev Event) { emitted = append(emitted, ev) },
+		},
+		state: StatePlaying,
+	}
+	s.handleLine("[stream.hls][info] Filtering out segments and pausing stream output")
+	if s.state != StatePlaying || s.adHold {
+		t.Fatalf("NoAdSignal target entered state=%s adHold=%v, must never enter break", s.state, s.adHold)
+	}
+	for _, ev := range emitted {
+		if ev.State == StateBreak {
+			t.Fatalf("emitted StateBreak for NoAdSignal target: %+v", ev)
+		}
+	}
+
+	// Without NoAdSignal, ad-hold lines apply regardless of URL/label.
+	s2 := &Session{
+		cfg: sessionConfig{
+			Generation: 1,
+			Target: Target{
+				URL:        "https://www.youtube.com/@LofiGirl/live",
+				Label:      "youtube:@LofiGirl",
+				NoAdSignal: false,
+			},
+			Emit: func(Event) {},
+		},
+		state: StatePlaying,
+	}
+	s2.handleLine("[stream.hls][info] Filtering out segments and pausing stream output")
+	if !s2.adHold {
+		t.Fatal("target with NoAdSignal=false did not enter adHold")
+	}
+}
+
+func TestSessionLoginRequiredNotOverwrittenByOffline(t *testing.T) {
+	s := &Session{
+		cfg: sessionConfig{
+			Generation: 1,
+			Target:     Target{URL: "https://www.youtube.com/watch?v=agegate1234", Label: "youtube:agegate1234"},
+			Emit:       func(Event) {},
+		},
+		state:   StateStarting,
+		failing: true, // keep test focused on line precedence without spawning failFast goroutine
+	}
+	s.handleLine("[plugins.youtube][error] Could not get video info - LOGIN_REQUIRED: Sign in to confirm your age")
+	s.handleLine("error: No playable streams found on this URL: https://www.youtube.com/watch?v=agegate1234")
+	if s.failClass != FailureLoginRequired {
+		t.Fatalf("failClass = %q, want %q", s.failClass, FailureLoginRequired)
 	}
 }

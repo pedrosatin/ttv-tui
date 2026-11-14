@@ -165,8 +165,9 @@ type Stream struct {
 	ExtraArgs []string
 	// Plugins are written to a private directory of the session and handed to
 	// streamlink with --plugin-dir, for this playback only.
-	Plugins []StreamlinkPlugin
-	Label   string
+	Plugins    []StreamlinkPlugin
+	Label      string
+	NoAdSignal bool
 }
 
 // StreamlinkPlugin is the source of a streamlink plugin module. A Name equal to

@@ -80,8 +80,9 @@ type Target struct {
 	ExtraArgs []string
 	// Plugins go to a private directory of the session and reach streamlink
 	// through --plugin-dir. Only the default command passes them.
-	Plugins []Plugin
-	Label   string
+	Plugins    []Plugin
+	Label      string
+	NoAdSignal bool
 }
 
 // Identity returns the session identity: Label when non-empty, otherwise URL.

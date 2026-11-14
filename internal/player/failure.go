@@ -40,6 +40,15 @@ const (
 	// found, or the configured path is not an executable. The Kick plugin of
 	// streamlink 8.x does this when its API refuses the request.
 	FailureBrowserMissing Failure = "browser_missing"
+	// FailureVOD: streamlink refused an on-demand video that its plugin does
+	// not play (YouTube VOD: "This plugin does not support VOD content").
+	FailureVOD Failure = "vod"
+	// FailureBotCheck: the site presented a bot verification challenge
+	// (YouTube LOGIN_REQUIRED: "Sign in to confirm you're not a bot").
+	FailureBotCheck Failure = "bot_check"
+	// FailureLoginRequired: the stream requires a platform account sign-in
+	// (age-restricted, members-only, or private) rather than a bot check.
+	FailureLoginRequired Failure = "login_required"
 	// FailureStreamlinkBroken: this streamlink build failed on its own, not
 	// because of the channel or the network: a plugin or Python runtime error,
 	// a binary that cannot run, or an exit with an error status before any
@@ -161,9 +170,16 @@ func classifyLine(line string, afterTraceback bool) Failure {
 		// First: the "Invalid web browser executable" line repeats the
 		// configured path, which may contain any of the phrases below.
 		return FailureBrowserMissing
+	case isYouTubeBotCheckLine(l):
+		return FailureBotCheck
+	case isYouTubeLoginRequiredLine(l):
+		return FailureLoginRequired
+	case strings.Contains(l, "this plugin does not support vod content"):
+		return FailureVOD
 	case strings.Contains(l, "no playable streams found"),
 		strings.Contains(l, "this stream is offline"),
 		strings.Contains(l, "channel is offline"),
+		strings.Contains(l, "[plugins.youtube][error]") && strings.Contains(l, "live_stream_offline"),
 		// The site answered that the channel or its playlist does not exist: a
 		// channel the API still lists as live right after it ended, or a wrong
 		// name. The connection worked, so this is not a network error.
@@ -234,6 +250,19 @@ const (
 	browserNotFoundLine  = "[plugins.kick][error] Could not find Chromium-based web browser executable: Please set the path to a supported web browser using --webbrowser-executable"
 	browserInvalidPrefix = "[plugins.kick][error] Invalid web browser executable: "
 )
+
+func isYouTubeBotCheckLine(l string) bool {
+	if !strings.Contains(l, "[plugins.youtube][error]") {
+		return false
+	}
+	return strings.Contains(l, "sign in to confirm you're not a bot") ||
+		strings.Contains(l, "sign in to confirm you\u2019re not a bot")
+}
+
+func isYouTubeLoginRequiredLine(l string) bool {
+	return strings.Contains(l, "[plugins.youtube][error]") &&
+		strings.Contains(l, "login_required")
+}
 
 // buildExceptions são as exceções Python que indicam defeito do próprio
 // streamlink (plugin, import, código), e não do canal ou da rede.
@@ -358,7 +387,7 @@ func isPerSegmentLine(l string) bool {
 // process or the IPC socket deadline.
 func isFatalLine(f Failure) bool {
 	switch f {
-	case FailureOffline, FailureMPVMissing, FailureStreamlinkMissing, FailureNoPlugin:
+	case FailureOffline, FailureMPVMissing, FailureStreamlinkMissing, FailureNoPlugin, FailureVOD, FailureBotCheck, FailureLoginRequired:
 		return true
 	default:
 		return false

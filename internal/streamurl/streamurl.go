@@ -144,32 +144,15 @@ func Parse(raw string) (Info, bool) {
 		}, true
 
 	case "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be":
-		var slug string
-		if host == "youtu.be" {
-			slug = strings.Trim(u.Path, "/")
-		} else {
-			cleanPath := strings.Trim(u.Path, "/")
-			parts := strings.Split(cleanPath, "/")
-			if len(parts) > 0 && strings.EqualFold(parts[0], "watch") {
-				v := query.Get("v")
-				if v == "" {
-					return Info{}, false
-				}
-				slug = v
-			} else if v := query.Get("v"); v != "" {
-				slug = v
-			} else {
-				slug = cleanSlug(u.Path)
-			}
-		}
-		if slug == "" || strings.EqualFold(slug, "watch") {
+		slug, display, ok := parseYouTubeURL(host, u.Path, query)
+		if !ok {
 			return Info{}, false
 		}
 		return Info{
 			URL:         raw,
 			Platform:    platform.YouTube,
 			Login:       slug,
-			DisplayName: slug,
+			DisplayName: display,
 			Label:       fmt.Sprintf("%s:%s", platform.YouTube, slug),
 			IsTwitch:    false,
 		}, true
@@ -200,6 +183,89 @@ func Parse(raw string) (Info, bool) {
 			IsTwitch:    false,
 		}, true
 	}
+}
+
+func parseYouTubeURL(host, rawPath string, query url.Values) (slug, display string, ok bool) {
+	segs := pathSegments(rawPath)
+	if host == "youtu.be" {
+		if len(segs) != 1 || !platform.ValidYouTubeVideoID(segs[0]) {
+			return "", "", false
+		}
+		return segs[0], segs[0], true
+	}
+	if len(segs) == 0 {
+		return "", "", false
+	}
+	switch kind := strings.ToLower(segs[0]); {
+	case kind == "watch":
+		v := query.Get("v")
+		if !platform.ValidYouTubeVideoID(v) {
+			return "", "", false
+		}
+		return v, v, true
+	case kind == "live", kind == "v":
+		if len(segs) < 2 || !platform.ValidYouTubeVideoID(segs[1]) {
+			return "", "", false
+		}
+		return segs[1], segs[1], true
+	case kind == "embed":
+		if len(segs) < 2 {
+			return "", "", false
+		}
+		if strings.EqualFold(segs[1], "live_stream") {
+			ch := query.Get("channel")
+			if !platform.ValidYouTubeChannelSegment(ch) {
+				return "", "", false
+			}
+			return "channel/" + ch, ch, true
+		}
+		if !platform.ValidYouTubeVideoID(segs[1]) {
+			return "", "", false
+		}
+		return segs[1], segs[1], true
+	case strings.HasPrefix(segs[0], "@"):
+		if !platform.ValidYouTubeHandle(segs[0]) {
+			return "", "", false
+		}
+		if len(segs) > 1 && (len(segs) != 2 || !strings.EqualFold(segs[1], "live")) {
+			return "", "", false
+		}
+		return segs[0], segs[0], true
+	case kind == "channel", kind == "c", kind == "user":
+		if len(segs) < 2 || !platform.ValidYouTubeChannelSegment(segs[1]) {
+			return "", "", false
+		}
+		if len(segs) > 2 && (len(segs) != 3 || !strings.EqualFold(segs[2], "live")) {
+			return "", "", false
+		}
+		return kind + "/" + segs[1], segs[1], true
+	default:
+		v := query.Get("v")
+		if !platform.ValidYouTubeVideoID(v) {
+			return "", "", false
+		}
+		return v, v, true
+	}
+}
+
+// ParseInput parses a pasted stream URL (via Parse) or a bare YouTube @channel
+// handle. Leading/trailing spaces are NOT trimmed; callers normalize whitespace
+// before invoking it, matching Parse.
+func ParseInput(raw string) (Info, bool) {
+	if info, ok := Parse(raw); ok {
+		return info, true
+	}
+	if platform.ValidYouTubeHandle(raw) {
+		return Info{
+			URL:         "https://www.youtube.com/" + raw + "/live",
+			Platform:    platform.YouTube,
+			Login:       raw,
+			DisplayName: raw,
+			Label:       fmt.Sprintf("%s:%s", platform.YouTube, raw),
+			IsTwitch:    false,
+		}, true
+	}
+	return Info{}, false
 }
 
 // IsStreamURL reports whether raw is a valid http(s) URL with a host.

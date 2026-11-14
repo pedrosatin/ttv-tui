@@ -28,6 +28,14 @@ const (
 	// ChatErrorKeyRefused: the chat service refused the application key the
 	// client presents. Only a new key fixes it.
 	ChatErrorKeyRefused ChatErrorReason = "key_refused"
+	// ChatErrorVOD: the target is an on-demand video rather than an active live
+	// stream, so live chat cannot open.
+	ChatErrorVOD ChatErrorReason = "vod"
+	// ChatErrorBotCheck: the platform presented an anti-bot verification prompt.
+	ChatErrorBotCheck ChatErrorReason = "bot_check"
+	// ChatErrorLoginRequired: the stream requires a platform account sign-in
+	// (age-restricted, members-only, or private) rather than a bot check.
+	ChatErrorLoginRequired ChatErrorReason = "login_required"
 )
 
 // ChatError is the error a chat implementation puts in an event when the
@@ -279,8 +287,11 @@ func ClassifyUserNotice(msgID string) UserNoticeKind {
 // changes state, updates room moderation modes, updates outbound message status,
 // or flushes a batch of messages.
 type ChatEvent struct {
-	Generation  uint64
-	Channel     string
+	Generation uint64
+	Channel    string
+	// ChannelName carries the resolved human-readable channel name (e.g.
+	// YouTube Author) when Channel is an opaque identifier such as a video ID.
+	ChannelName string
 	State       ChatState
 	Anonymous   bool
 	Messages    []ChatMessage

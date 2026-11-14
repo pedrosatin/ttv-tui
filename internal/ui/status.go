@@ -85,7 +85,7 @@ func (m Model) listErrorDetail() string {
 func (m Model) activeContextSummary() string {
 	var parts []string
 	if m.list.selectedChannel != nil {
-		playerHasLogin := m.player.login != "" && strings.EqualFold(m.player.login, m.list.selectedChannel.PlayerLabel())
+		playerHasLogin := m.player.login != "" && samePlayerLabel(m.list.selectedChannel.Platform, m.player.login, m.list.selectedChannel.PlayerLabel())
 		name := sanitizeScreenText(m.list.selectedChannel.DisplayName)
 		login := sanitizeScreenText(m.list.selectedChannel.Login)
 		chText := ""
@@ -181,11 +181,14 @@ func (c chatState) statusHasChannel() bool {
 // primaryNamesChannel reports whether primary already cites the chat room
 // (playing/selected), so promoting the chat status would only duplicate it.
 func (c chatState) primaryNamesChannel(primary string) bool {
-	ch := strings.TrimSpace(c.panel.channel)
-	if ch == "" {
-		return false
+	lp := strings.ToLower(primary)
+	if ch := strings.TrimSpace(c.panel.channel); ch != "" && strings.Contains(lp, strings.ToLower(ch)) {
+		return true
 	}
-	return strings.Contains(strings.ToLower(primary), strings.ToLower(ch))
+	if name := strings.TrimSpace(c.panel.channelName); name != "" && strings.Contains(lp, strings.ToLower(name)) {
+		return true
+	}
+	return false
 }
 
 // chatChannelRef is the short "#login" form used when the full chat status
