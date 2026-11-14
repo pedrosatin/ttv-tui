@@ -1,4 +1,6 @@
 {
+  "app.warn_config_permissions_fixed": "A configuração em %s estava legível por outros usuários; agora só o seu usuário tem acesso.",
+  "app.warn_config_permissions_failed": "Não foi possível restringir %s, que continua legível por outros usuários. Rode chmod 600 no arquivo e chmod 700 no diretório.",
   "chat.auth_failed": "Login do chat recusado. Execute ttv-tui login e reinicie o app.",
   "store.save_failed": "Não salvo: verifique permissões/espaço",
   "saves.timeout": "gravações ainda em andamento depois de %v",

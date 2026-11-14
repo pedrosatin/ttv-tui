@@ -73,6 +73,21 @@ func Run(opts Options) error {
 	if err != nil {
 		return fmt.Errorf(earlyCatalog().T("app.err_load_config"), withRecoveryHint(earlyCatalog(), err))
 	}
+	resolvedLang := i18n.Resolve(opts.Lang, cfg.Language, i18n.EnvLocale())
+	appCat, err := i18n.New(resolvedLang)
+	if err != nil {
+		// No catalog exists to localize this one: the embedded files failed to load.
+		return fmt.Errorf("initialize i18n catalog: %w", err)
+	}
+
+	input, output, logw := streams(opts)
+	if os.Getenv(videoHostEnv) == "" {
+		notice, err := config.Secure(cfgPath)
+		if err != nil {
+			return fmt.Errorf(appCat.T("app.err_load_config"), err)
+		}
+		logConfigPermissions(logw, cfgPath, notice, appCat)
+	}
 	if openWindow(opts) {
 		return nil
 	}
@@ -85,14 +100,6 @@ func Run(opts Options) error {
 		}
 	}
 
-	resolvedLang := i18n.Resolve(opts.Lang, cfg.Language, i18n.EnvLocale())
-	appCat, err := i18n.New(resolvedLang)
-	if err != nil {
-		// No catalog exists to localize this one: the embedded files failed to load.
-		return fmt.Errorf("initialize i18n catalog: %w", err)
-	}
-
-	input, output, logw := streams(opts)
 	if !isTerminal(input) || !isTerminal(output) {
 		return errors.New(appCat.T("app.err_tty_required"))
 	}
@@ -285,10 +292,8 @@ func persistLang(lang string, cfg *config.Config, cfgPath string) error {
 	return rewriteConfig(cfgPath, func(c *config.Config) { c.Language = norm })
 }
 
-// rewriteConfig rereads the config at path, applies change and saves it, so a
-// `ttv-tui login` in another terminal since this run read the config is kept.
-// A config that exists but cannot be read or parsed is left as it is and the
-// error returned: saving over it would lose what it holds.
+// rewriteConfig relê o config antes de gravar para preservar um login concorrente.
+// Configs ilegíveis ou inválidos são mantidos como estão.
 func rewriteConfig(path string, change func(*config.Config)) error {
 	cfg, err := config.LoadFrom(path)
 	if err != nil {
@@ -519,5 +524,18 @@ func tokenCheck(validate func(ctx context.Context, token string) (auth.Validatio
 			return auth.ErrTokenInvalid
 		}
 		return nil
+	}
+}
+
+// logConfigPermissions escreve em logw o aviso de permissões do config, se houver.
+func logConfigPermissions(logw io.Writer, path string, notice config.PermissionNotice, cat *i18n.Catalog) {
+	key := ""
+	if notice.Failed {
+		key = "app.warn_config_permissions_failed"
+	} else if notice.Fixed {
+		key = "app.warn_config_permissions_fixed"
+	}
+	if key != "" {
+		_, _ = fmt.Fprintln(logw, fmt.Sprintf(cat.T(key), path))
 	}
 }

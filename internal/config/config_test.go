@@ -143,7 +143,7 @@ func TestSaveToNewWithTokenPermissions(t *testing.T) {
 	want := Config{
 		Language:    "pt-BR",
 		Username:    "streamer",
-		AccessToken: "secret-access-token",
+		AccessToken: "secretaccesstoken",
 	}
 	if err := SaveTo(path, want); err != nil {
 		t.Fatalf("SaveTo returned error: %v", err)
@@ -180,7 +180,7 @@ func TestSaveToAtomicRoundTripAndTokenPermissions(t *testing.T) {
 	want := Config{
 		Language:    "pt-BR",
 		Username:    "streamer",
-		AccessToken: "secret-access-token",
+		AccessToken: "secretaccesstoken",
 	}
 	if err := SaveTo(path, want); err != nil {
 		t.Fatalf("SaveTo returned error: %v", err)
@@ -316,7 +316,7 @@ func TestLoadTwtFrom(t *testing.T) {
 
 	// File with [twitch] section, oauth: prefix, and non-string frontend keys.
 	twtWithPrefix := filepath.Join(dir, "twt_prefix.toml")
-	rawWithPrefix := "[twitch]\nusername = \"pedrosatin\"\nchannel = \"gaules\"\ntoken = \"oauth:tok30chars_with_prefix_1234567\"\n\n[frontend]\nshow_datetimes = false\nbadges = true\n"
+	rawWithPrefix := "[twitch]\nusername = \"pedrosatin\"\nchannel = \"gaules\"\ntoken = \"oauth:tok30charswithprefix1234567\"\n\n[frontend]\nshow_datetimes = false\nbadges = true\n"
 	if err := os.WriteFile(twtWithPrefix, []byte(rawWithPrefix), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -327,13 +327,13 @@ func TestLoadTwtFrom(t *testing.T) {
 	if cfg.Username != "pedrosatin" {
 		t.Fatalf("username = %q, want pedrosatin", cfg.Username)
 	}
-	if cfg.AccessToken != "tok30chars_with_prefix_1234567" {
+	if cfg.AccessToken != "tok30charswithprefix1234567" {
 		t.Fatalf("access_token = %q, want normalized token", cfg.AccessToken)
 	}
 
 	// File without oauth: prefix.
 	twtNoPrefix := filepath.Join(dir, "twt_noprefix.toml")
-	rawNoPrefix := "[twitch]\nusername = \"pedrosatin\"\ntoken = \"tok30chars_plain_value_1234567\"\n"
+	rawNoPrefix := "[twitch]\nusername = \"pedrosatin\"\ntoken = \"tok30charsplainvalue1234567\"\n"
 	if err := os.WriteFile(twtNoPrefix, []byte(rawNoPrefix), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -341,15 +341,15 @@ func TestLoadTwtFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadTwtFrom without prefix: %v", err)
 	}
-	if cfg2.AccessToken != "tok30chars_plain_value_1234567" {
-		t.Fatalf("access_token = %q, want tok30chars_plain_value_1234567", cfg2.AccessToken)
+	if cfg2.AccessToken != "tok30charsplainvalue1234567" {
+		t.Fatalf("access_token = %q, want tok30charsplainvalue1234567", cfg2.AccessToken)
 	}
 }
 
 func TestLoadLegacyConfigWithRefreshToken(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "legacy_config.toml")
-	legacyTOML := "language = \"pt-BR\"\nusername = \"pedrosatin\"\naccess_token = \"access_token_12345\"\nrefresh_token = \"legacy_refresh_token_67890\"\n"
+	legacyTOML := "language = \"pt-BR\"\nusername = \"pedrosatin\"\naccess_token = \"accesstoken12345\"\nrefresh_token = \"legacy_refresh_token_67890\"\n"
 	if err := os.WriteFile(path, []byte(legacyTOML), 0o600); err != nil {
 		t.Fatalf("write legacy config: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestLoadLegacyConfigWithRefreshToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFrom failed on legacy config with refresh_token: %v", err)
 	}
-	if cfg.Language != "pt-BR" || cfg.Username != "pedrosatin" || cfg.AccessToken != "access_token_12345" {
+	if cfg.Language != "pt-BR" || cfg.Username != "pedrosatin" || cfg.AccessToken != "accesstoken12345" {
 		t.Fatalf("loaded config mismatch: %+v", cfg)
 	}
 
@@ -374,7 +374,7 @@ func TestLoadLegacyConfigWithRefreshToken(t *testing.T) {
 	if strings.Contains(savedStr, "refresh_token") {
 		t.Fatalf("saved config must not contain refresh_token, got:\n%s", savedStr)
 	}
-	if !strings.Contains(savedStr, "access_token = \"access_token_12345\"") {
+	if !strings.Contains(savedStr, "access_token = \"accesstoken12345\"") {
 		t.Fatalf("saved config missing access_token, got:\n%s", savedStr)
 	}
 }

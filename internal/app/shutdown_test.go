@@ -181,7 +181,7 @@ func runTUIHelper() int {
 			dial = newReconnectIRC()
 		}
 		chatMgr := chat.New(chat.Options{
-			Token:    "pty-test-token",
+			Token:    "ptytesttoken",
 			Username: "tester",
 			Dial:     dial,
 		})
