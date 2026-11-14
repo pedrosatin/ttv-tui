@@ -471,7 +471,7 @@ func (p playbackState) isPlaying(ch catalog.Channel) bool {
 	switch p.state {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
 		if platform.IsNonTwitch(ch.Platform) {
-			return strings.EqualFold(p.login, ch.PlayerLabel())
+			return samePlayerLabel(ch.Platform, p.login, ch.PlayerLabel())
 		}
 		return strings.EqualFold(p.login, ch.Login)
 	default:
@@ -491,7 +491,7 @@ func (m *Model) markChannelOffline(label string) {
 		out := make([]catalog.Channel, len(chs))
 		copy(out, chs)
 		for i := range out {
-			if !strings.EqualFold(out[i].PlayerLabel(), label) {
+			if !samePlayerLabel(out[i].CanonicalPlatform(), out[i].PlayerLabel(), label) {
 				continue
 			}
 			out[i].Availability = catalog.AvailabilityOffline
@@ -538,6 +538,9 @@ func (m Model) withLoadedAvailability(saved, loaded []catalog.Channel) []catalog
 			out[i].Availability = avail
 			out[i].Viewers = c.Viewers
 			out[i].Title = c.Title
+			if out[i].CanonicalPlatform() == platform.YouTube && strings.TrimSpace(c.DisplayName) != "" {
+				out[i].DisplayName = c.DisplayName
+			}
 			if c.CategoryID != nil {
 				out[i].CategoryID = c.CategoryID
 			}

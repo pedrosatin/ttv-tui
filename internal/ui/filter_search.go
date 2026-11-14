@@ -123,7 +123,7 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	if q == "" {
 		return m, nil
 	}
-	if info, ok := streamurl.Parse(q); ok {
+	if info, ok := streamurl.ParseInput(q); ok {
 		var ch catalog.Channel
 		if info.IsTwitch {
 			ch = catalog.Channel{
