@@ -92,8 +92,9 @@ type app struct {
 	texs    []C.GLuint
 	glCheck bool // confere glGetError no próximo quadro
 
-	inputq chan []byte
-	fbq    chan fbReq // leituras do framebuffer pedidas pelo socket de teste
+	inputq      chan []byte
+	arrowRepeat arrowRepeatGate
+	fbq         chan fbReq // leituras do framebuffer pedidas pelo socket de teste
 
 	tuiDirty     atomic.Bool
 	tuiPending   atomic.Bool

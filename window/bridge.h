@@ -49,4 +49,7 @@ void panel_tile(GLuint t, int x, int y, int w, int h, float u, float v);
 void panel_end(void);
 void fb_pixel(int x, int y, unsigned char *rgba);
 
+bool e_repeat(SDL_Event *e);
+void inject_repeat_burst(SDL_Keycode k, int count);
+
 #endif

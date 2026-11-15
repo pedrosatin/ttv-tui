@@ -11,7 +11,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
-func batchCategoriesModel(t *testing.T, n int) Model {
+func batchCategoriesModel(t testing.TB, n int) Model {
 	t.Helper()
 	catEN, err := i18n.New(i18n.LangEN)
 	if err != nil {
