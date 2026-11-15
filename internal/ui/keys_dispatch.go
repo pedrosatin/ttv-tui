@@ -455,7 +455,7 @@ func (m Model) moveListPage(direction int) (tea.Model, tea.Cmd) {
 	lines = m.appendFilterHint(lines, width)
 	budget := m.listRowBudget(len(lines)+len(m.catalogUnavailableLines(width)), m.Mode() == ModeSearch, width)
 	items := m.VisibleItems()
-	rows := m.listRows(items, m.Mode() == ModeSearch, width)
+	rows := m.listRowPositions(items, m.Mode() == ModeSearch, width)
 	current := 0
 	for i, row := range rows {
 		if !row.isHeader && row.itemID == m.list.highlightedID {

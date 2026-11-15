@@ -136,7 +136,15 @@ func (a *app) handle(ev *C.SDL_Event) {
 		a.relayoutFonts(fs)
 	case t == C.SDL_EVENT_WINDOW_EXPOSED:
 		a.layoutDirty = true
+	case t == C.SDL_EVENT_KEY_UP:
+		a.arrowRepeat.release(int64(C.e_key(ev)))
 	case t == C.SDL_EVENT_KEY_DOWN:
+		key := C.e_key(ev)
+		// Modified arrows use the same gate: delayed repeats must not jump
+		// overlay height, opacity or other arrow-controlled settings either.
+		if (key == C.SDLK_UP || key == C.SDLK_DOWN) && !a.arrowRepeat.accept(int64(key), bool(C.e_repeat(ev)), time.Now()) {
+			return
+		}
 		a.writeInput(keyBytes(C.e_key(ev), C.e_mod(ev)))
 	case t == C.SDL_EVENT_TEXT_INPUT:
 		a.writeInput([]byte(C.GoString(C.e_text(ev))))

@@ -11,9 +11,10 @@ import (
 
 // listRow is one drawn line of the list: a section header or an item.
 type listRow struct {
-	isHeader bool
-	itemID   string
-	text     string
+	isHeader  bool
+	itemID    string
+	itemIndex int
+	text      string
 }
 
 // renderListBodyLines draws the list under header: the prompt, the rows that
@@ -36,7 +37,7 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 		return m.appendListEmptyLines(lines, maxWidth)
 	}
 
-	rows := m.listRows(items, isSearch, maxWidth)
+	rows := m.listRowPositions(items, isSearch, maxWidth)
 
 	lines := make([]string, 0, len(rows)+5)
 	lines = append(lines, header)
@@ -47,7 +48,11 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	if m.height > 0 {
 		start, end = m.list.rowWindow(rows, m.listRowBudget(len(lines)+len(unavailable), isSearch, maxWidth))
 	}
+	tagWidth := m.listTagWidth(items)
 	for _, r := range rows[start:end] {
+		if !r.isHeader {
+			r.text = m.formatListItemRow(items[r.itemIndex], isSearch, maxWidth, tagWidth)
+		}
 		lines = append(lines, r.text)
 	}
 	lines = append(lines, unavailable...)
@@ -124,23 +129,19 @@ func (m Model) hasData() bool {
 	return len(m.list.categories) > 0 || len(m.list.channels) > 0 || len(m.list.search.categories) > 0 || m.hasSavedOnList()
 }
 
-// listRows formats every visible item, with a header where the section changes.
-func (m Model) listRows(items []ListItem, isSearch bool, maxWidth int) []listRow {
+// listRowPositions builds the scroll geometry without formatting off-screen items.
+func (m Model) listRowPositions(items []ListItem, isSearch bool, maxWidth int) []listRow {
 	showSectionHeaders := listHasSections(items, isSearch)
-	tagWidth := m.listTagWidth(items)
 	rows := make([]listRow, 0, len(items))
 	var currentSection ListItemType
-	for _, it := range items {
+	for i, it := range items {
 		if showSectionHeaders && it.Type != currentSection {
 			currentSection = it.Type
 			if title, ok := m.listSectionTitle(it.Type, isSearch); ok {
 				rows = append(rows, listSectionHeader(title, maxWidth))
 			}
 		}
-		rows = append(rows, listRow{
-			itemID: it.ID(),
-			text:   m.formatListItemRow(it, isSearch, maxWidth, tagWidth),
-		})
+		rows = append(rows, listRow{itemID: it.ID(), itemIndex: i})
 	}
 	return rows
 }
