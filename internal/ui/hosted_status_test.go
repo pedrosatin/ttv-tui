@@ -27,7 +27,14 @@ func TestHostedHelpDoesNotOfferTheTerminalVideo(t *testing.T) {
 	}
 	// Na janela, as teclas dela vêm logo depois das de layout, sem a marca de
 	// que só valem nela.
-	toggleChat, overlay := strings.Index(help, m.t("action.toggle_chat")), strings.Index(help, m.t("action.chat_overlay"))
+	// No mapa padrão, a linha do chat fala do painel da direita.
+	chatText := "action.toggle_chat"
+	for _, a := range m.keys.actions {
+		if a.ID == actToggleChat {
+			chatText = a.text()
+		}
+	}
+	toggleChat, overlay := strings.Index(help, m.t(chatText)), strings.Index(help, m.t("action.chat_overlay"))
 	if toggleChat < 0 || overlay < toggleChat || strings.Contains(help, m.t("help.ctx.window_only")) {
 		t.Fatalf("os atalhos da janela devem vir depois dos de layout, sem marca: %d, %d\n%s", toggleChat, overlay, help)
 	}

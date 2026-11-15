@@ -163,6 +163,18 @@ type action struct {
 	Default []string
 	Also    []helpUse
 	Footer  []footerUse
+	// Text troca a chave do texto da linha principal, que sem ele é o ID: no
+	// mapa padrão, Ctrl+W h e Ctrl+W l falam do painel da esquerda e da
+	// direita, porque seguem o lado depois de trocar os lados.
+	Text string
+}
+
+// text é a chave do catálogo da linha principal da ação.
+func (a action) text() string {
+	if a.Text != "" {
+		return a.Text
+	}
+	return string(a.ID)
 }
 
 // helpUses são as linhas da ajuda da ação: a principal e as de Also.
@@ -170,7 +182,7 @@ func (a action) helpUses() []helpUse {
 	if a.Section == sectionHidden {
 		return nil
 	}
-	return append([]helpUse{{Section: a.Section, Context: a.Context, Text: string(a.ID)}}, a.Also...)
+	return append([]helpUse{{Section: a.Section, Context: a.Context, Text: a.text()}}, a.Also...)
 }
 
 // windowOnly diz se a ação só vale na janela única.
@@ -334,8 +346,9 @@ func classicActions() []action {
 
 // defaultActions é o mapa padrão: o clássico com Ctrl+W como prefixo das
 // janelas, como no vim, g como prefixo de ir a um lugar da lista e L no filtro de
-// idioma. Ctrl+H, Ctrl+L, Ctrl+P, Ctrl+S e o g do Home deixam de ser padrão; o
-// Ctrl+O do chat sobreposto fica como apelido de Ctrl+W o.
+// idioma. Ctrl+H, Ctrl+L, Ctrl+P, Ctrl+S e o g sozinho do Home deixam de ser
+// padrão (o topo fica em g g, como no vim); o Ctrl+O do chat sobreposto fica
+// como apelido de Ctrl+W o.
 func defaultActions() []action {
 	actions := classicActions()
 	bindings := map[actionID][]string{
@@ -343,11 +356,17 @@ func defaultActions() []action {
 		actChatOverlay: {"ctrl+w o", "ctrl+o"}, actSwapSides: {"ctrl+w x"},
 		actChatTaller: {"alt+up", "ctrl+w +"}, actChatShorter: {"alt+down", "ctrl+w -"},
 		actChatWider: {"alt+left", "ctrl+w <"}, actChatNarrower: {"alt+right", "ctrl+w >"},
-		actChannelFilter: {"L"}, actCategories: {"g c", "ctrl+r"}, actSearch: {"ctrl+f"}, actHome: {"home"},
+		actChannelFilter: {"L"}, actCategories: {"g c", "ctrl+r"}, actSearch: {"ctrl+f"}, actHome: {"home", "g g"},
 	}
 	for i := range actions {
 		if keys, ok := bindings[actions[i].ID]; ok {
 			actions[i].Default = keys
+		}
+		switch actions[i].ID {
+		case actToggleList:
+			actions[i].Text = "action.left_panel"
+		case actToggleChat:
+			actions[i].Text = "action.right_panel"
 		}
 	}
 	actions = append(actions,

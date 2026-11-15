@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
@@ -112,12 +113,7 @@ func TestMapaLogicoNavegacaoETeclasLivres(t *testing.T) {
 	if !m.ChannelFilterMenuOpen() {
 		t.Fatal("L não abriu filtro")
 	}
-	for _, a := range classicActions() {
-		classic := newClassicModel(nil)
-		if !slices.Equal(a.Default, classic.keys.keys[a.ID]) {
-			t.Fatalf("classic mudou %s", a.ID)
-		}
-	}
+	assertClassicKeys(t, newClassicModel(nil).keys)
 	// O terminal deixa Ctrl+B para o tmux; nenhum aviso ou layout muda.
 	m, _ = newScenario(t, 120, 40)
 	m = play(t, m, "ctrl+b")
@@ -186,8 +182,8 @@ func TestCenarioMapaLogicoCtrlCDesfazOPrefixo(t *testing.T) {
 	})
 }
 
-// As teclas que valem em qualquer situação desfazem o prefixo e fazem o seu
-// trabalho: Ctrl+Q sai, F1 abre a ajuda e Ctrl+R volta às categorias.
+// Ctrl+Q e F1 desfazem o prefixo e fazem o seu trabalho: Ctrl+Q sai e F1 abre
+// a ajuda. As outras teclas com Ctrl valem a letra (veja o teste seguinte).
 func TestMapaLogicoTeclasGlobaisDesfazemOPrefixo(t *testing.T) {
 	for _, tc := range []struct {
 		key  string
@@ -195,7 +191,6 @@ func TestMapaLogicoTeclasGlobaisDesfazemOPrefixo(t *testing.T) {
 	}{
 		{"ctrl+q", func(m Model) bool { return m.Quitting() }},
 		{"f1", func(m Model) bool { return m.HelpVisible() }},
-		{"ctrl+r", func(m Model) bool { return m.Mode() == ModeCategories }},
 	} {
 		t.Run(tc.key, func(t *testing.T) {
 			m, _ := newScenario(t, 120, 40)
@@ -312,5 +307,191 @@ func TestCenarioMapaLogicoGNosCampos(t *testing.T) {
 				return m
 			})
 		})
+	}
+}
+
+// Como no vim, Ctrl+letra depois do prefixo vale a letra: Ctrl+W Ctrl+X troca
+// os lados, como Ctrl+W x, em vez de encerrar o vídeo; Ctrl+W Ctrl+H esconde a
+// lista; Ctrl+W Ctrl+R, sem sequência, é engolido e não volta às categorias.
+func TestMapaLogicoCtrlLetraDepoisDoPrefixoValeALetra(t *testing.T) {
+	m, w := hostedScenarioDefault(t, 160, 40)
+	m = play(t, m, "enter enter")
+	m = play(t, m, "ctrl+w ctrl+x")
+	if !m.hosted.panelsSwapped || w.playback.stopped != 0 || m.prefix != "" {
+		t.Fatalf("Ctrl+W Ctrl+X: lados trocados %v, vídeo parado %d vez(es), prefixo %q", m.hosted.panelsSwapped, w.playback.stopped, m.prefix)
+	}
+	m = play(t, m, "ctrl+w ctrl+x ctrl+w ctrl+r")
+	if m.Mode() == ModeCategories || m.prefix != "" {
+		t.Fatalf("Ctrl+W Ctrl+R saiu dos canais (modo %v) ou deixou o prefixo %q", m.Mode(), m.prefix)
+	}
+	m = play(t, m, "ctrl+w ctrl+h")
+	if m.listVisible() {
+		t.Fatal("Ctrl+W Ctrl+H não escondeu a lista")
+	}
+}
+
+// Na escrita do chat e no filtro /, Ctrl+W apaga a palavra anterior, como na
+// busca, e não começa o prefixo.
+func TestMapaLogicoCtrlWApagaPalavraNaEscritaENoFiltro(t *testing.T) {
+	m, _ := newScenario(t, 120, 40)
+	m = play(t, focusChat(t, openGaulesWithChat(t, m)), "i fix space ab ctrl+w")
+	if m.chat.composeDraft != "fix " || m.prefix != "" {
+		t.Fatalf("escrita: rascunho %q, prefixo %q", m.chat.composeDraft, m.prefix)
+	}
+	m, _ = newScenario(t, 120, 40)
+	m = play(t, m, "enter / fix space ab ctrl+w")
+	if m.list.filter != "fix " || m.prefix != "" {
+		t.Fatalf("filtro: texto %q, prefixo %q", m.list.filter, m.prefix)
+	}
+}
+
+// Ctrl+W h e Ctrl+W l seguem o lado do painel, e o texto também: o popup e a
+// ajuda falam do painel da esquerda e da direita, e a barra do modo foco, depois
+// de Ctrl+W x, diz que Ctrl+W h traz o chat. O Ctrl+B sempre mostra a lista.
+func TestMapaLogicoTextoDoPainelSegueOLado(t *testing.T) {
+	m, _ := hostedScenarioDefault(t, 160, 40)
+	m = play(t, m, "enter enter ctrl+w x ctrl+w")
+	m = feed(t, m, prefixPopupMsg{m.prefixGeneration})
+	popup := screen(m)
+	for key, side := range map[string]string{"Ctrl+W h": "esquerda", "Ctrl+W l": "direita"} {
+		line := textLineWith(popup, key+"  ")
+		if !strings.Contains(line, side) || strings.Contains(line, "lista") {
+			t.Errorf("popup: a linha de %s não fala do painel da %s: %q", key, side, line)
+		}
+	}
+	m = play(t, m, "esc ? tab tab tab tab tab")
+	help := strings.Join(m.renderHelpLines(200), "\n")
+	for key, side := range map[string]string{"Ctrl+W h": "esquerda", "Ctrl+W l": "direita"} {
+		if line := textLineWith(help, key+"  "); !strings.Contains(line, side) {
+			t.Errorf("ajuda: a linha de %s não fala do painel da %s: %q", key, side, line)
+		}
+	}
+	if line := textLineWith(help, "Ctrl+B  "); !strings.Contains(line, "a lista") || strings.Contains(line, "Também") {
+		t.Errorf("ajuda: a linha do Ctrl+B: %q", line)
+	}
+	m = play(t, m, "esc ctrl+w w ctrl+w w ctrl+w w")
+	if m.LayoutMode() != LayoutFocus {
+		t.Fatalf("layout %v, quer foco", m.LayoutMode())
+	}
+	if bar := m.Footer(); !strings.Contains(bar, "Ctrl+W h chat") || !strings.Contains(bar, "Ctrl+W l lista") {
+		t.Errorf("a barra do modo foco não acompanha os lados trocados: %q", bar)
+	}
+}
+
+// textLineWith é a primeira linha de text que contém sub, sem cor.
+func textLineWith(text, sub string) string {
+	for _, line := range strings.Split(ansi.Strip(text), "\n") {
+		if strings.Contains(line, sub) {
+			return line
+		}
+	}
+	return ""
+}
+
+// classicKeysAt6b74874 são as teclas do mapa antes do prefixo Ctrl+W, tiradas
+// de git show 6b74874:internal/ui/actions.go. keymap = "classic" tem de
+// restaurá-las exatamente, sem ação a mais nem a menos.
+var classicKeysAt6b74874 = map[actionID][]string{
+	actQuit:           {"ctrl+q"},
+	actCtrlC:          {"ctrl+c"},
+	actHelp:           {"?"},
+	actHelpAnywhere:   {"f1"},
+	actCloseHelp:      {"q"},
+	actHelpNext:       {"tab", "right"},
+	actHelpPrev:       {"shift+tab", "left"},
+	actUp:             {"up", "k"},
+	actDown:           {"down", "j"},
+	actPageUp:         {"pgup"},
+	actPageDown:       {"pgdown"},
+	actHome:           {"home", "g"},
+	actEnd:            {"end", "G"},
+	actSelect:         {"enter"},
+	actSwitchFocus:    {"tab"},
+	actBack:           {"esc"},
+	actCategories:     {"ctrl+r"},
+	actSwitchPlatform: {"p"},
+	actFavorite:       {"f"},
+	actFilter:         {"/"},
+	actSearch:         {"ctrl+f", "ctrl+s"},
+	actChannelFilter:  {"l"},
+	actCompose:        {"i"},
+	actCopyMessage:    {"y"},
+	actReconnectChat:  {"ctrl+t"},
+	actPause:          {" ", "space"},
+	actVolumeUp:       {"+", "="},
+	actVolumeDown:     {"-", "_"},
+	actMute:           {"m"},
+	actStopVideo:      {"ctrl+x"},
+	actRetry:          {"r"},
+	actCycleLayout:    {"ctrl+w"},
+	actToggleList:     {"ctrl+h"},
+	actToggleChat:     {"ctrl+l"},
+	actChatOverlay:    {"ctrl+o"},
+	actSwapSides:      {"ctrl+p"},
+	actChatTaller:     {"alt+up"},
+	actChatShorter:    {"alt+down"},
+	actChatMoreOpaque: {"alt+pgup"},
+	actChatLessOpaque: {"alt+pgdown"},
+	actListWider:      {"ctrl+right"},
+	actListNarrower:   {"ctrl+left"},
+	actChatWider:      {"alt+left"},
+	actChatNarrower:   {"alt+right"},
+}
+
+func assertClassicKeys(t *testing.T, keys keyRegistry) {
+	t.Helper()
+	if len(keys.keys) != len(classicKeysAt6b74874) {
+		t.Errorf("o classic tem %d ações, o mapa de 6b74874 tinha %d", len(keys.keys), len(classicKeysAt6b74874))
+	}
+	for id, want := range classicKeysAt6b74874 {
+		if got := keys.keys[id]; !slices.Equal(got, want) {
+			t.Errorf("classic mudou %s: %q, quer %q", id, got, want)
+		}
+	}
+}
+
+// Como no vim, g g vai ao topo da lista, já que o g sozinho virou prefixo. Uma
+// tecla sem sequência depois do g é engolida em silêncio.
+func TestCenarioMapaLogicoGGVaiAoTopo(t *testing.T) {
+	eachSize(t, "mapa-logico-g-g-topo", func(t *testing.T, w, h int) Model {
+		m, _ := newScenario(t, w, h)
+		m = play(t, m, "j j")
+		if items := m.VisibleItems(); m.list.indexOfHighlighted(items) != 2 {
+			t.Fatalf("j j destacou %d", m.list.indexOfHighlighted(items))
+		}
+		m = play(t, m, "g x")
+		if m.list.indexOfHighlighted(m.VisibleItems()) != 2 || m.prefix != "" || m.notices.status != "" {
+			t.Fatalf("g x fez algo: destaque %d, prefixo %q, aviso %q", m.list.indexOfHighlighted(m.VisibleItems()), m.prefix, m.notices.status)
+		}
+		m = play(t, m, "g g")
+		if i := m.list.indexOfHighlighted(m.VisibleItems()); i != 0 || m.prefix != "" {
+			t.Fatalf("g g destacou %d, prefixo %q", i, m.prefix)
+		}
+		return m
+	})
+}
+
+// No terminal, o popup só lista o que vale nele: sem janela, o chat sobreposto,
+// a troca de lados, a altura e a largura do chat ficam de fora.
+func TestMapaLogicoPopupSemJanelaSoMostraOQueVale(t *testing.T) {
+	m, _ := newScenario(t, 120, 40)
+	m = play(t, m, "ctrl+w")
+	m = feed(t, m, prefixPopupMsg{m.prefixGeneration})
+	popup := screen(m)
+	for _, key := range []string{"h", "l", "w"} {
+		if textLineWith(popup, "Ctrl+W "+key+"  ") == "" {
+			t.Errorf("o popup sem janela não mostra Ctrl+W %s", key)
+		}
+	}
+	for _, key := range []string{"o", "x", "+", "-", "<", ">"} {
+		if line := textLineWith(popup, "Ctrl+W "+key+"  "); line != "" {
+			t.Errorf("o popup sem janela mostra %q", line)
+		}
+	}
+	m, _ = hostedScenarioDefault(t, 160, 40)
+	m = play(t, m, "ctrl+w")
+	m = feed(t, m, prefixPopupMsg{m.prefixGeneration})
+	if textLineWith(screen(m), "Ctrl+W x  ") == "" {
+		t.Error("na janela, o popup não mostra Ctrl+W x")
 	}
 }

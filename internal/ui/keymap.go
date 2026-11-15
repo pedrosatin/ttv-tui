@@ -34,13 +34,16 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 	name := keyName(msg)
 	if m.prefix != "" {
-		seq := m.prefix + " " + name
+		seq := m.prefix + " " + prefixSecondKey(name)
 		m.cancelPrefix()
 		if name == "esc" {
 			return m, nil, true
 		}
 		if id := m.keys.byMode[modeGlobal][seq]; id == actCategories {
 			return handled(m.keyCategories())
+		}
+		if m.keys.byMode[modeNormal][seq] == actHome {
+			return handled(m.keyHome())
 		}
 		if id := m.keys.byMode[modeNormal][seq]; id == actFavorites || id == actRecents {
 			next, cmd := m.returnToCategories()
@@ -62,9 +65,10 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if next, cmd, ok := m.handleLayoutAction(m.keys.byMode[modeGlobal][seq], m.keys.byMode[modeWindow][seq]); ok {
 			return next, cmd, true
 		}
-		// Uma tecla que vale em qualquer situação (F1, Ctrl+R, Ctrl+X) desfaz o
-		// prefixo e segue para o seu trabalho; as demais acabam a sequência.
-		if m.keys.actionFor(modeGlobal, msg) != "" {
+		// Só a ajuda atravessa o prefixo: F1 o desfaz e abre a ajuda. Ctrl+C e
+		// Ctrl+Q chegam antes, em handleKeyMsg. As demais teclas acabam a
+		// sequência sem efeito.
+		if m.keys.actionFor(modeGlobal, msg) == actHelpAnywhere {
 			return m, nil, false
 		}
 		return m, nil, true
@@ -78,6 +82,16 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, m.after(250*time.Millisecond, func(time.Time) tea.Msg { return prefixPopupMsg{gen} }), true
 }
 
+// prefixSecondKey é a tecla que fecha a sequência. Como no vim, Ctrl+letra vale
+// a letra: Ctrl+W Ctrl+H é Ctrl+W h, e Ctrl+W Ctrl+X, Ctrl+W x, sem encerrar o
+// vídeo no caminho.
+func prefixSecondKey(name string) string {
+	if letter, ok := strings.CutPrefix(name, "ctrl+"); ok && len(letter) == 1 && letter[0] >= 'a' && letter[0] <= 'z' {
+		return letter
+	}
+	return name
+}
+
 // cancelPrefix desfaz o prefixo pendente e o popup dele. O temporizador que
 // ainda vai chegar traz a geração antiga e não reabre o popup.
 func (m *Model) cancelPrefix() {
@@ -88,12 +102,18 @@ func (m *Model) cancelPrefix() {
 	m.prefixGeneration++
 }
 
+// prefixLines é o popup do prefixo: as sequências dele, uma por linha. Sem a
+// janela, as que só valem nela (chat sobreposto, lados, altura e largura) ficam
+// de fora.
 func (m Model) prefixLines() []string {
 	lines := []string{keyLabel(m.prefix, m.catalog)}
 	for _, a := range m.keys.actions {
+		if a.windowOnly() && m.hosted.host == nil {
+			continue
+		}
 		for _, key := range m.keys.keys[a.ID] {
 			if strings.HasPrefix(key, m.prefix+" ") {
-				lines = append(lines, keyLabel(key, m.catalog)+"  "+m.t(string(a.ID)))
+				lines = append(lines, keyLabel(key, m.catalog)+"  "+m.t(a.text()))
 			}
 		}
 	}

@@ -25,16 +25,16 @@ func helpColumn(screen []string, col, cols int) []string {
 	return out
 }
 
+// windowHelpKeys são os rótulos das teclas só da janela que a ajuda mostra no
+// começo de uma linha, no mapa padrão.
+var windowHelpKeys = []string{"Ctrl+W o/Ctrl+O", "Ctrl+W x"}
+
 // W13: com o vídeo tocando, o espectador abre a ajuda com F1 e passa pelas
 // seções com →. A ajuda tem fundo opaco atrás do texto, não fala de "só TUI"
 // e mostra as teclas do chat sobreposto (Ctrl+W o, com o apelido Ctrl+O) e da
 // troca de lados (Ctrl+W x) em linhas próprias na seção Janela e layout, longe
 // de "Largura". Dentro da janela, essas teclas não levam a marca "só na
 // janela". F1 de novo fecha a ajuda e devolve o vídeo inteiro.
-// windowHelpKeys são os rótulos das teclas só da janela que a ajuda mostra no
-// começo de uma linha, no mapa padrão.
-var windowHelpKeys = []string{"Ctrl+W o/Ctrl+O", "Ctrl+W x"}
-
 func TestJanelaAjudaLegivelSobreOVideo(t *testing.T) {
 	t.Parallel()
 	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 3}})

@@ -16,8 +16,8 @@
   r                   Tenta de novo o vídeo que falhou ou, sem ele, a lista
 ── Janela e layout ──
   Ctrl+W w            Cicla os layouts: dividido, chat, lista e foco
-  Ctrl+W h            Mostra ou esconde a lista
-  Ctrl+W l            Mostra ou esconde o chat; abaixo de 80 colunas, abre só o chat
+  Ctrl+W h            Mostra ou esconde o painel da esquerda
+  Ctrl+W l            Mostra ou esconde o painel da direita; abaixo de 80 colunas, só o chat
   Esc                 Não muda o layout; para trocá-lo, use Ctrl+W w, Ctrl+W h ou Ctrl+W l
   Só na janela:
     Ctrl+W o/Ctrl+O   Põe o chat sobre o vídeo ou ao lado dele
@@ -30,7 +30,7 @@
     Ctrl+←            Move a divisa da lista para a esquerda
     Alt+←/Ctrl+W <    Move a divisa do chat para a esquerda
     Alt+→/Ctrl+W >    Move a divisa do chat para a direita
-    Ctrl+B            Também mostra ou esconde a lista
+    Ctrl+B            Mostra ou esconde a lista
 ── Configurações ──
   Idioma: pt-BR · troque com --lang en ou --lang pt-BR
   Sem cor: NO_COLOR desliga a cor · símbolos ▸ ★ ● ▶ ‖ ✖ ! mostram o estado

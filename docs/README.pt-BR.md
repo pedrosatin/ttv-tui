@@ -103,7 +103,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 
 ## Atalhos de teclado
 
-Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o chat, x troca os lados, w cicla o layout, +/- ajustam a altura e </> a largura do chat. O popup aparece após uma pausa curta; a sequência funciona na hora. Esc cancela. Ctrl+B também alterna a lista na janela; no terminal, fica para o tmux. Use g f para favoritos e g r para recentes. Configs existentes recebem um aviso único. Ctrl+O continua pondo o chat sobre o vídeo, ao lado de Ctrl+W o. Defina `keymap = "classic"` no config para restaurar as teclas anteriores, incluindo Ctrl+H/L/P, Ctrl+W para ciclar, l minúsculo, g (Home) e Ctrl+S para buscar.
+Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o chat, x troca os lados, w cicla o layout, +/- ajustam a altura e </> a largura do chat. O popup aparece após uma pausa curta; a sequência funciona na hora. Esc cancela. Ctrl+B também alterna a lista na janela; no terminal, fica para o tmux. Use g f para favoritos, g r para recentes e g g para o topo. Configs existentes recebem um aviso único. Ctrl+O continua pondo o chat sobre o vídeo, ao lado de Ctrl+W o. Defina `keymap = "classic"` no config para restaurar as teclas anteriores, incluindo Ctrl+H/L/P, Ctrl+W para ciclar, l minúsculo, g (Home) e Ctrl+S para buscar.
 
 <details open>
 <summary>Lista e busca</summary>
@@ -112,7 +112,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 | --- | --- |
 | `↑` `↓` ou `j` `k` | Move a seleção |
 | `PgUp` `PgDn` | Move uma tela |
-| `Home`, `End` / `G` | Primeiro ou último item carregado |
+| `Home` / `g g`, `End` / `G` | Primeiro ou último item carregado |
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Favorita um canal ou fixa uma categoria; aperte de novo para remover |
 | `/` | Filtra a lista atual; `Enter` abre o item destacado e `Ctrl+F` busca com o texto |
@@ -136,7 +136,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 | `Enter` | Envia a mensagem |
 | `Esc` | Sai da escrita e guarda o rascunho |
 | `Ctrl+W` ou `Alt+Backspace` | Apaga a palavra anterior na mensagem, na busca e no filtro |
-| `↑` `↓` `PgUp` `PgDn` `Home` | Rola o histórico |
+| `↑` `↓` `PgUp` `PgDn` `Home` `g g` | Rola o histórico |
 | `End` ou `G` | Volta às mensagens ao vivo |
 | `y` | Copia a mensagem selecionada |
 | `Ctrl+T` | Reconecta ao chat |
@@ -153,7 +153,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 | `m` | Liga ou desliga o mudo; a barra de status mostra `mudo` no lugar do volume |
 | `Ctrl+X` | Para o vídeo sem sair do app |
 | `Ctrl+W w` | Troca o layout: dividido (lista + chat), chat, lista, foco (nenhum painel) |
-| `Ctrl+W h` / `Ctrl+W l` | Mostra ou esconde a lista / o chat |
+| `Ctrl+W h` / `Ctrl+W l` | Mostra ou esconde o painel da esquerda / da direita: a lista e o chat, até `Ctrl+W x` trocar os lados |
 | `?` ou `F1` | Mostra ou esconde a ajuda de atalhos. Ela abre na seção do que você está usando; `Tab` / `→` e `Shift+Tab` / `←` passam de uma seção a outra |
 | `Ctrl+Q` | Sai |
 

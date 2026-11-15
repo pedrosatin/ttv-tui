@@ -16,8 +16,8 @@
   r                   Retry the video that failed or, without one, the list
 ── Window and layout ──
   Ctrl+W w            Cycle the layouts: split, chat, list and focus
-  Ctrl+W h            Show or hide the list
-  Ctrl+W l            Show or hide the chat; under 80 columns, open the chat alone
+  Ctrl+W h            Show or hide the left panel
+  Ctrl+W l            Show or hide the right panel; under 80 columns, open the chat alone
   Esc                 Leaves the layout alone; to change it, use Ctrl+W w, Ctrl+W h or Ctrl+W l
   Window only:
     Ctrl+W o/Ctrl+O   Put the chat over the video or beside it
@@ -30,7 +30,7 @@
     Ctrl+←            Move the list divider to the left
     Alt+←/Ctrl+W <    Move the chat divider to the left
     Alt+→/Ctrl+W >    Move the chat divider to the right
-    Ctrl+B            Also show or hide the list
+    Ctrl+B            Show or hide the list
 ── Settings ──
   Language: en · change it with --lang en or --lang pt-BR
   No color: NO_COLOR disables color · symbols ▸ ★ ● ▶ ‖ ✖ ! still show state

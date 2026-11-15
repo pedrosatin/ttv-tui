@@ -398,6 +398,8 @@
   "action.cycle_layout": "Cicla os layouts: dividido, chat, lista e foco",
   "action.toggle_list": "Mostra ou esconde a lista",
   "action.toggle_chat": "Mostra ou esconde o chat; abaixo de 80 colunas, abre só o chat",
+  "action.left_panel": "Mostra ou esconde o painel da esquerda",
+  "action.right_panel": "Mostra ou esconde o painel da direita; abaixo de 80 colunas, só o chat",
   "action.chat_overlay": "Põe o chat sobre o vídeo ou ao lado dele",
   "action.swap_sides": "Troca os lados da lista e do chat",
   "action.chat_more_opaque": "Deixa o fundo do chat mais opaco",
@@ -461,7 +463,7 @@
   "footer.opacity_down": "opacidade−",
   "action.favorites": "Vai aos favoritos",
   "action.recents": "Vai aos recentes",
-  "action.window_list": "Também mostra ou esconde a lista",
+  "action.window_list": "Mostra ou esconde a lista",
   "keymap.cancel": "Esc cancelar",
   "keymap.migration": "Novas teclas: {action.toggle_list/action.toggle_chat/action.cycle_layout} para os painéis; {action.channel_filter} para idiomas; {action.categories:1/action.favorites/action.recents} para navegar. Volte às teclas antigas com keymap = \"classic\" em %s.",
   "keymap.save_error": "Salvar migração de teclas: %w"

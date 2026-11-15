@@ -80,8 +80,6 @@ func TestWaitTUIKillsAndReapsAfterDeadline(t *testing.T) {
 	}
 }
 
-// As teclas imprimíveis chegam por TEXT_INPUT; as demais passam por keyBytes.
-// As teclas são as padrão do registro de ações da TUI (o campo Default).
 // bindingField diz se o campo de um literal guarda teclas: o Default de uma
 // ação ou uma entrada actXxx do mapa padrão, que troca as teclas do clássico.
 func bindingField(name string) bool {
@@ -92,6 +90,8 @@ func bindingField(name string) bool {
 	return ok && rest != "" && rest[0] >= 'A' && rest[0] <= 'Z'
 }
 
+// As teclas imprimíveis chegam por TEXT_INPUT; as demais passam por keyBytes.
+// As teclas são as padrão do registro de ações da TUI (o campo Default).
 func TestBoundKeysHaveWindowTranslation(t *testing.T) {
 	file, err := parser.ParseFile(token.NewFileSet(), "../internal/ui/actions.go", nil, 0)
 	if err != nil {

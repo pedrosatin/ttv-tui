@@ -33,6 +33,7 @@ var allowedExceptions = map[string]bool{
 	"g c":      true,
 	"g f":      true,
 	"g r":      true,
+	"g g":      true,
 	"ctrl+b":   true,
 	"ctrl+w ":  true,
 	"g ":       true,

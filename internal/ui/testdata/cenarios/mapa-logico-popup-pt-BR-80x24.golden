@@ -9,16 +9,16 @@ Categorias ao vivo
 
 
 
+
+
+
+
+
+
 Ctrl+W
 Ctrl+W w  Cicla os layouts: dividido, chat, lista e foco
-Ctrl+W h  Mostra ou esconde a lista
-Ctrl+W l  Mostra ou esconde o chat; abaixo de 80 colunas, abre só o chat
-Ctrl+W o  Põe o chat sobre o vídeo ou ao lado dele
-Ctrl+W x  Troca os lados da lista e do chat
-Ctrl+W +  Aumenta a altura do chat sobreposto
-Ctrl+W -  Diminui a altura do chat sobreposto
-Ctrl+W <  Move a divisa do chat para a esquerda
-Ctrl+W >  Move a divisa do chat para a direita
+Ctrl+W h  Mostra ou esconde o painel da esquerda
+Ctrl+W l  Mostra ou esconde o painel da direita; abaixo de 80 colunas, só o chat
 Esc cancelar
 Enter abrir · f ★ · / filtrar · Ctrl+F buscar · ? ajuda
  ttv-tui | [pt-BR] Pronto                               | ? ajuda · Ctrl+Q sair

@@ -66,7 +66,7 @@ func (m Model) Footer() string {
 				label = keyLabel(keys[0], m.catalog)
 			}
 			if label != "" {
-				hints = append(hints, hint{use.Priority, label + " " + m.t(use.Text)})
+				hints = append(hints, hint{use.Priority, label + " " + m.t(m.footerText(a.ID, use))})
 			}
 		}
 	}
@@ -87,6 +87,32 @@ func (m Model) Footer() string {
 		}
 	}
 	return padToWidth(strings.Join(append(parts, help), statusSep), m.width)
+}
+
+// footerText é o texto da dica. No mapa padrão, Ctrl+W h e Ctrl+W l seguem o
+// lado do painel: com os lados trocados, Ctrl+W h traz o chat e Ctrl+W l, a
+// lista, e a barra do modo foco diz isso.
+func (m Model) footerText(id actionID, use footerUse) string {
+	if m.classic || !m.hosted.panelsSwapped || use.Mode != footFocus {
+		return use.Text
+	}
+	var other actionID
+	switch id {
+	case actToggleList:
+		other = actToggleChat
+	case actToggleChat:
+		other = actToggleList
+	default:
+		return use.Text
+	}
+	for _, a := range m.keys.actions {
+		for _, u := range a.Footer {
+			if a.ID == other && u.Mode == footFocus {
+				return u.Text
+			}
+		}
+	}
+	return use.Text
 }
 
 // A ajuda e o menu já têm dicas próprias; terminais mínimos preservam o conteúdo.

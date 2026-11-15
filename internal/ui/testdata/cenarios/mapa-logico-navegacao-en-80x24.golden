@@ -4,7 +4,7 @@
   ↓/j                 Move down in the list, chat, menu or help
   PgUp                Move up one page
   PgDn                Move down one page
-  Home                Go to the top
+  Home/g g            Go to the top
   End/G               Go to the end; in the chat, back to live
   Enter               Open the highlighted item
   Tab                 Switch between the list and the chat

@@ -331,12 +331,17 @@ func TestKeymapOverlaysResolveInBothLanguages(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		t.Run(lang, func(t *testing.T) {
 			cat := auditCatalog(t, lang)
+			// Na janela, o popup lista também as sequências que só valem nela.
 			m := auditModel(t, lang, 200, false)
+			m.hosted.host = &recordingHost{}
 			m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})
 			m = auditSend(m, prefixPopupMsg{m.prefixGeneration})
 			want := []expectKey{ek("keymap.cancel")}
-			for _, id := range []actionID{actToggleList, actToggleChat, actChatOverlay, actSwapSides, actCycleLayout, actChatTaller, actChatWider} {
-				want = append(want, ek(string(id)))
+			for _, a := range defaultActions() {
+				switch a.ID {
+				case actToggleList, actToggleChat, actChatOverlay, actSwapSides, actCycleLayout, actChatTaller, actChatWider:
+					want = append(want, ek(a.text()))
+				}
 			}
 			assertResolved(t, cat, defaultKeys(), "prefix popup", ansi.Strip(m.View()), want)
 

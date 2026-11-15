@@ -119,10 +119,16 @@ func (m Model) helpEntries() []helpEntry {
 		}
 	}
 	for _, a := range m.keys.actions {
-		label := m.actionKeyLabel(a.ID)
+		label, single := m.actionKeyLabel(a.ID), m.singleKeyLabel(a.ID)
 		for i, use := range a.helpUses() {
 			if a.windowOnly() {
 				use.Context = ctxWindowOnly
+			}
+			label := label
+			// O prefixo não começa com a ajuda aberta nem no menu de filtros:
+			// lá, a linha não cita as sequências (o g g do Home).
+			if use.Context == ctxHelp || use.Context == ctxMenu {
+				label = single
 			}
 			// A tecla da plataforma só tem para onde ir com duas, e a linha diz quais.
 			if a.ID == actSwitchPlatform && len(m.catalogs) < 2 {
@@ -156,6 +162,17 @@ func (m Model) actionKeyLabel(id actionID) string {
 	var labels []string
 	for _, k := range m.keys.keys[id] {
 		labels = append(labels, keyLabel(k, m.catalog))
+	}
+	return joinKeyLabels(labels)
+}
+
+// singleKeyLabel são as teclas da ação sem as sequências do prefixo.
+func (m Model) singleKeyLabel(id actionID) string {
+	var labels []string
+	for _, k := range m.keys.keys[id] {
+		if !strings.Contains(strings.TrimSpace(k), " ") {
+			labels = append(labels, keyLabel(k, m.catalog))
+		}
 	}
 	return joinKeyLabels(labels)
 }

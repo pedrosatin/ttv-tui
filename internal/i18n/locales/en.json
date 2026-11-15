@@ -398,6 +398,8 @@
   "action.cycle_layout": "Cycle the layouts: split, chat, list and focus",
   "action.toggle_list": "Show or hide the list",
   "action.toggle_chat": "Show or hide the chat; under 80 columns, open the chat alone",
+  "action.left_panel": "Show or hide the left panel",
+  "action.right_panel": "Show or hide the right panel; under 80 columns, open the chat alone",
   "action.chat_overlay": "Put the chat over the video or beside it",
   "action.swap_sides": "Swap the sides of the list and the chat",
   "action.chat_more_opaque": "Make the chat background more opaque",
@@ -461,7 +463,7 @@
   "footer.opacity_down": "opacity−",
   "action.favorites": "Go to favorites",
   "action.recents": "Go to recents",
-  "action.window_list": "Also show or hide the list",
+  "action.window_list": "Show or hide the list",
   "keymap.cancel": "Esc cancel",
   "keymap.migration": "New shortcuts: {action.toggle_list/action.toggle_chat/action.cycle_layout} for panels; {action.channel_filter} for languages; {action.categories:1/action.favorites/action.recents} to navigate. Restore the old keys with keymap = \"classic\" in %s.",
   "keymap.save_error": "Save keymap migration: %w"

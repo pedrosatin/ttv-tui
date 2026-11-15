@@ -39,11 +39,17 @@ func TestEveryActionIsDescribedInBothLanguages(t *testing.T) {
 }
 
 // Every default key is a name the terminal delivers, and pressing it fires its
-// action in each of its modes.
+// action in each of its modes. A sequence (Ctrl+W h, g c) is pressed key by key
+// through handleKeyMsg, as the terminal delivers it, and must have the effect of
+// its action.
 func TestEveryDefaultKeyFiresItsAction(t *testing.T) {
 	keys := defaultKeys()
 	for _, a := range defaultActions() {
 		for _, name := range a.Default {
+			if strings.Contains(name, " ") && name != " " {
+				t.Run(name, func(t *testing.T) { assertSequenceFires(t, a.ID, name) })
+				continue
+			}
 			msg, ok := parseKeyName(name)
 			if !ok {
 				t.Errorf("%s: %q não é nome de tecla", a.ID, name)
@@ -55,6 +61,76 @@ func TestEveryDefaultKeyFiresItsAction(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// sequenceEffects diz, para cada ação com sequência no mapa padrão, as teclas que
+// preparam o cenário (um canal já aberto na janela) e o efeito que a sequência
+// tem de produzir.
+var sequenceEffects = map[actionID]struct {
+	prep  string
+	fired func(before, after Model) bool
+}{
+	actCycleLayout: {"", func(b, a Model) bool { return a.LayoutMode() != b.LayoutMode() }},
+	actToggleList:  {"", func(b, a Model) bool { return b.listVisible() && !a.listVisible() }},
+	actToggleChat:  {"", func(b, a Model) bool { return b.layout.showChat && !a.layout.showChat }},
+	actChatOverlay: {"", func(b, a Model) bool { return !b.hosted.chatOverlay && a.hosted.chatOverlay }},
+	actSwapSides:   {"", func(b, a Model) bool { return !b.hosted.panelsSwapped && a.hosted.panelsSwapped }},
+	actChatTaller: {"ctrl+w o ctrl+w - ctrl+w -", func(b, a Model) bool {
+		return a.hosted.overlayPreferences.Rows > b.hosted.overlayPreferences.Rows
+	}},
+	actChatShorter: {"ctrl+w o ctrl+w -", func(b, a Model) bool {
+		return a.hosted.overlayPreferences.Rows < b.hosted.overlayPreferences.Rows
+	}},
+	actChatWider: {"", func(b, a Model) bool {
+		_, before, _ := b.hostedWidths()
+		_, after, _ := a.hostedWidths()
+		return after > before
+	}},
+	actChatNarrower: {"ctrl+w <", func(b, a Model) bool {
+		_, before, _ := b.hostedWidths()
+		_, after, _ := a.hostedWidths()
+		return after < before
+	}},
+	actCategories: {"ctrl+f gaules enter", func(b, a Model) bool { return b.Mode() != ModeCategories && a.Mode() == ModeCategories }},
+	actFavorites:  {"", func(_, a Model) bool { return highlightedType(a) == ItemTypeFavorite }},
+	actRecents:    {"", func(_, a Model) bool { return highlightedType(a) == ItemTypeRecent }},
+	actHome: {"j", func(b, a Model) bool {
+		return b.list.indexOfHighlighted(b.VisibleItems()) > 0 && a.list.indexOfHighlighted(a.VisibleItems()) == 0
+	}},
+}
+
+func highlightedType(m Model) ListItemType {
+	items := m.VisibleItems()
+	if i := m.list.indexOfHighlighted(items); i >= 0 {
+		return items[i].Type
+	}
+	return ""
+}
+
+func assertSequenceFires(t *testing.T, id actionID, name string) {
+	t.Helper()
+	effect, ok := sequenceEffects[id]
+	if !ok {
+		t.Fatalf("%s (%q) sem efeito em sequenceEffects", id, name)
+	}
+	channels := scenarioChannels()
+	m, _ := hostedScenarioDefault(t, 160, 40, WithFavorites(channels[:1]), WithRecents(channels[1:]))
+	m = play(t, m, "enter enter")
+	if effect.prep != "" {
+		m = play(t, m, effect.prep)
+	}
+	before := m
+	for _, part := range strings.Fields(name) {
+		msg, ok := parseKeyName(part)
+		if !ok {
+			t.Fatalf("%q: %q não é nome de tecla", name, part)
+		}
+		next, cmd := m.handleKeyMsg(msg)
+		m = settle(t, next.(Model), cmd)
+	}
+	if m.prefix != "" || !effect.fired(before, m) {
+		t.Errorf("%q não fez %s (prefixo %q, modo %v -> %v)", name, id, m.prefix, before.Mode(), m.Mode())
 	}
 }
 
@@ -235,7 +311,7 @@ func TestExpandKeys(t *testing.T) {
 	keys := defaultKeys()
 	for in, want := range map[string]string{
 		"{action.quit} quit":                       "Ctrl+Q quit",
-		"{action.home} {action.end}":               "Home End/G",
+		"{action.home} {action.end}":               "Home/g g End/G",
 		"({action.search:2} alt)":                  "( alt)",
 		"{action.up:1}{action.down:1}":             "↑↓",
 		"{action.list_narrower/action.list_wider}": "Ctrl+←/→",

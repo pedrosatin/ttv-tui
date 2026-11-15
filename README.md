@@ -103,7 +103,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 
 ## Keyboard shortcuts
 
-Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x to swap sides, w to cycle layouts, +/- for chat height, and </> for chat width. A popup appears after a short pause; the sequence works immediately. Esc cancels. Ctrl+B also toggles the list in the window; terminal users keep their tmux prefix. Use g f for favorites and g r for recents. Existing configurations receive one migration notice. Ctrl+O still puts the chat over the video, next to Ctrl+W o. Set `keymap = "classic"` in your config to restore the previous keys, including Ctrl+H/L/P, Ctrl+W cycling, lowercase l, g (Home) and Ctrl+S search.
+Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x to swap sides, w to cycle layouts, +/- for chat height, and </> for chat width. A popup appears after a short pause; the sequence works immediately. Esc cancels. Ctrl+B also toggles the list in the window; terminal users keep their tmux prefix. Use g f for favorites, g r for recents and g g for the top. Existing configurations receive one migration notice. Ctrl+O still puts the chat over the video, next to Ctrl+W o. Set `keymap = "classic"` in your config to restore the previous keys, including Ctrl+H/L/P, Ctrl+W cycling, lowercase l, g (Home) and Ctrl+S search.
 
 <details open>
 <summary>List and search</summary>
@@ -112,7 +112,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 | --- | --- |
 | `↑` `↓` or `j` `k` | Move the selection |
 | `PgUp` `PgDn` | Move one screen |
-| `Home`, `End` / `G` | First or last loaded item |
+| `Home` / `g g`, `End` / `G` | First or last loaded item |
 | `Enter` | Open the category or watch the channel |
 | `f` | Favorite a channel or pin a category; press again to remove |
 | `/` | Filter the current list; `Enter` opens the highlighted item and `Ctrl+F` searches with the text |
@@ -136,7 +136,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 | `Enter` | Send the message |
 | `Esc` | Stop writing and keep the draft |
 | `Ctrl+W` or `Alt+Backspace` | Delete the previous word in the message, the search and the filter |
-| `↑` `↓` `PgUp` `PgDn` `Home` | Scroll the history |
+| `↑` `↓` `PgUp` `PgDn` `Home` `g g` | Scroll the history |
 | `End` or `G` | Back to live messages |
 | `y` | Copy the selected message |
 | `Ctrl+T` | Reconnect to the chat |
@@ -153,7 +153,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 | `m` | Mute or unmute; the status bar shows `muted` in place of the volume |
 | `Ctrl+X` | Stop the video and stay in the app |
 | `Ctrl+W w` | Cycle layouts: split (list + chat), chat, list, focus (no panel) |
-| `Ctrl+W h` / `Ctrl+W l` | Show or hide the list / the chat |
+| `Ctrl+W h` / `Ctrl+W l` | Show or hide the left / right panel: the list and the chat, until `Ctrl+W x` swaps them |
 | `?` or `F1` | Show or hide the shortcut help. It opens at the section you are using; `Tab` / `→` and `Shift+Tab` / `←` move between sections |
 | `Ctrl+Q` | Quit |
 
