@@ -3,6 +3,7 @@
 package windowscenarios
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +13,12 @@ import (
 // Ao soltar Down, a rajada de repetições atrasadas não atravessa as categorias.
 func TestJanelaSetaSoltaSemRajada(t *testing.T) {
 	w := openWindow(t, setup{})
-	w.must("repeat-burst", "Down 70")
+	if got := strings.TrimSpace(w.must("repeat-burst", "invalid 70")); got != "repeat-burst?" {
+		t.Fatalf("argumento inválido respondeu %q", got)
+	}
+	if got := strings.TrimSpace(w.must("repeat-burst", "Down 70")); got != "ok" {
+		t.Fatalf("rajada recusada: %q", got)
+	}
 	st := w.waitState("a seta na lista", 5*time.Second, func(s ui.StateReport) bool { return s.HighlightIndex > 0 })
 	if st.TUI.HighlightIndex > 2 {
 		t.Fatalf("rajada levou o seletor à posição %d", st.TUI.HighlightIndex)

@@ -167,10 +167,10 @@ void fb_pixel(int x, int y, unsigned char *rgba) {
 bool e_repeat(SDL_Event *e) { return e->key.repeat; }
 
 void inject_repeat_burst(SDL_Keycode k, int count) {
- SDL_Event e; SDL_zero(e); e.type = SDL_EVENT_KEY_DOWN; e.key.key = k; e.key.down = true;
- SDL_PushEvent(&e);
- e.key.repeat = true;
- for (int i = 0; i < count; i++) SDL_PushEvent(&e);
- e.type = SDL_EVENT_KEY_UP; e.key.down = false; e.key.repeat = false;
- SDL_PushEvent(&e);
+    SDL_Event e; SDL_zero(e); e.type = SDL_EVENT_KEY_DOWN; e.key.key = k; e.key.down = true;
+    SDL_PushEvent(&e);
+    e.key.repeat = true;
+    for (int i = 0; i < count; i++) SDL_PushEvent(&e);
+    e.type = SDL_EVENT_KEY_UP; e.key.down = false; e.key.repeat = false;
+    SDL_PushEvent(&e);
 }

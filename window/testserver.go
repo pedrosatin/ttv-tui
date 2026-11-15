@@ -96,6 +96,8 @@ func (a *app) serveTest(path string) {
 				if code, ok := keyNames[name]; ok && count > 0 && count <= 1000 {
 					C.inject_repeat_burst(code, C.int(count))
 					_, _ = fmt.Fprintln(c, "ok")
+				} else {
+					_, _ = fmt.Fprintln(c, "repeat-burst?")
 				}
 			case "text":
 				injectInput([]byte(rest))
