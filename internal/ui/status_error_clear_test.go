@@ -106,7 +106,7 @@ func TestListErrorClearsOnNavigation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n: %v", err)
 	}
-	m := New(cat)
+	m := newClassicModel(cat)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 20})
 	m.list.err = &catalog.Error{Kind: catalog.Rede, Op: "categories", Err: errors.New("timeout")}
 	if bar := ansi.Strip(m.StatusBar()); !strings.Contains(bar, m.t("error.list.network")) {
@@ -128,7 +128,7 @@ func TestClearStaleStatusErrorsKeepsTransientNotice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n: %v", err)
 	}
-	m := New(cat)
+	m := newClassicModel(cat)
 	m.notices.status = m.t("favorites.added")
 	m.list.err = &catalog.Error{Kind: catalog.Rede, Op: "categories", Err: errors.New("x")}
 	m.player.state = PlayerStateError

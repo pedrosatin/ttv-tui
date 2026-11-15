@@ -12,9 +12,11 @@ import (
 
 // Config represents the user configuration stored in config.toml under DefaultPath's directory (~/.config/ttv-tui on Linux).
 type Config struct {
-	Language    string
-	AccessToken string
-	Username    string
+	Keymap           string
+	KeymapNoticeSeen bool
+	Language         string
+	AccessToken      string
+	Username         string
 	// FilterLanguages are preferred stream language codes (lowercase: pt, en).
 	// Empty means no language filter. TOML key: languages.
 	FilterLanguages []string
@@ -76,7 +78,7 @@ func normalizePanelColumns(cols int) int {
 
 // Default returns a Config initialized with in-memory defaults.
 func Default() Config {
-	return Config{}
+	return Config{KeymapNoticeSeen: true}
 }
 
 // NormalizeToken trims whitespace and strips any leading "oauth:" prefix (case-insensitive).
@@ -248,6 +250,12 @@ func SaveTo(path string, cfg Config) error {
 
 func formatTOML(cfg Config) string {
 	var b strings.Builder
+	if cfg.Keymap != "" {
+		fmt.Fprintf(&b, "keymap = %s\n", quoteTOML(cfg.Keymap))
+	}
+	if cfg.KeymapNoticeSeen {
+		b.WriteString("keymap_notice_seen = true\n")
+	}
 	if cfg.Language != "" {
 		fmt.Fprintf(&b, "language = %s\n", quoteTOML(cfg.Language))
 	}
@@ -357,6 +365,7 @@ func quoteTOML(s string) string {
 
 func parseTOML(input string) (Config, error) {
 	cfg := Default()
+	cfg.KeymapNoticeSeen = false
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	lineNum := 0
 	section := ""
@@ -381,6 +390,17 @@ func parseTOML(input string) (Config, error) {
 			fullKey = section + "." + key
 		}
 		switch fullKey {
+		case "keymap":
+			val, err := unquoteTOML(rawVal)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: keymap: %w", lineNum, err)
+			}
+			if val != "classic" && val != "default" {
+				return Config{}, fmt.Errorf("line %d: unknown keymap %q", lineNum, val)
+			}
+			cfg.Keymap = val
+		case "keymap_notice_seen":
+			cfg.KeymapNoticeSeen = rawVal == "true"
 		case "language", "ui.language":
 			val, err := unquoteTOML(rawVal)
 			if err != nil {

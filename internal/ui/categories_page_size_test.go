@@ -20,7 +20,7 @@ func TestDefaultCategoryPageSizeIsAPIMax(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat)
+	m := newClassicModel(cat)
 	if m.list.pageSize != twitch.MaxGamesFirst {
 		t.Fatalf("default pageSize = %d, want %d (games(first:) API max)", m.list.pageSize, twitch.MaxGamesFirst)
 	}
@@ -43,7 +43,7 @@ func TestCategoriesLoadRequestsLimit100(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat, WithSource(src))
+	m := newClassicModel(cat, WithSource(src))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 	cmd := m.Init()
 	if cmd == nil {
@@ -99,7 +99,7 @@ func TestSlashTeamFindsTeamfightTacticsInTop100(t *testing.T) {
 		},
 	}
 
-	m := New(mustCatalog(t, i18n.LangPTBR), WithSource(src))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR), WithSource(src))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m, _ = pressKeyMsg(m, m.Init()())
 	if len(m.list.categories) != twitch.MaxGamesFirst {
@@ -156,7 +156,7 @@ func TestEnterWithoutFilterMatchStartsGlobalSearch(t *testing.T) {
 		},
 	}
 
-	m := New(mustCatalog(t, i18n.LangPTBR), WithSource(src))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR), WithSource(src))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
 	m, _ = pressKeyMsg(m, m.Init()())
 
@@ -209,7 +209,7 @@ func TestEnterWithFilterMatchOpensHighlightedItem(t *testing.T) {
 		},
 	}
 
-	m := New(mustCatalog(t, i18n.LangPTBR), WithSource(src))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR), WithSource(src))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
 	m, _ = pressKeyMsg(m, m.Init()())
 

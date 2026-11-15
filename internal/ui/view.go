@@ -165,6 +165,12 @@ func (m Model) frame() string {
 
 	// Help is modal, so it wins over the filter menu it may have opened on.
 	overlayLines := m.helpViewLines()
+	if m.keymapNotice != "" {
+		overlayLines = strings.Split(ansi.Wrap(m.keymapNotice, max(20, min(m.width-4, 76)), ""), "\n")
+	}
+	if m.prefixVisible {
+		overlayLines = m.prefixLines()
+	}
 	if len(overlayLines) == 0 {
 		overlayLines = m.renderChannelFilterMenuLines(m.width)
 	}

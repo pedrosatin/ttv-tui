@@ -17,6 +17,7 @@ func handled(next tea.Model, cmd tea.Cmd) (tea.Model, tea.Cmd, bool) {
 
 // clearKeyNotices drops the notices that last until the next key.
 func (m *Model) clearKeyNotices() {
+	m.keymapNotice = ""
 	m.notices.auth = ""
 	m.notices.corrupt = ""
 	m.clearStatusNotice()
@@ -72,7 +73,7 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 	// Ctrl+R returns to categories from anywhere, including compose.
 	case actCategories:
-		return handled(m.returnToCategories())
+		return handled(m.keyCategories())
 
 	// Ctrl+X ends video without leaving the app (works while composing).
 	case actStopVideo:
@@ -112,7 +113,19 @@ func (m Model) keyReconnectChat() (tea.Model, tea.Cmd) {
 // handleLayoutKey answers the layout controls, which work from any mode
 // (compose, search, filter), and the hosted window's own.
 func (m Model) handleLayoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch id := m.keys.actionFor(modeGlobal, msg); {
+	return m.handleLayoutAction(m.keys.actionFor(modeGlobal, msg), m.keys.actionFor(modeWindow, msg))
+}
+
+func (m Model) handleLayoutAction(id, windowID actionID) (tea.Model, tea.Cmd, bool) {
+	if !m.classic && m.hosted.panelsSwapped {
+		switch id {
+		case actToggleList:
+			id = actToggleChat
+		case actToggleChat:
+			id = actToggleList
+		}
+	}
+	switch {
 	case (id == actCycleLayout || id == actToggleList || id == actToggleChat) && !m.chat.hasPanel():
 		m.keepListWithoutChat()
 		return m, nil, true
@@ -126,7 +139,7 @@ func (m Model) handleLayoutKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		m.toggleChatPanel()
 		return m, nil, true
 	}
-	if ok, cmd := m.handleHostedResizeKey(msg); ok {
+	if ok, cmd := m.handleHostedAction(windowID); ok {
 		return m, cmd, true
 	}
 	return m, nil, false

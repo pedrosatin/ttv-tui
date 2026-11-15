@@ -20,7 +20,7 @@ func TestTextInputSanitizesPaste(t *testing.T) {
 			{"multiline", "a\r\nb\nc\td", "a  b c d"},
 		} {
 			t.Run(mode+"/"+tc.name, func(t *testing.T) {
-				m := New(nil)
+				m := newClassicModel(nil)
 				m.width, m.height = 200, 24
 				switch mode {
 				case "search":

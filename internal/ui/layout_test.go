@@ -48,7 +48,7 @@ func setupTwoPanelModel(t *testing.T) (Model, *fakePlayback, *fakeChat) {
 		username: "pedrosatin",
 	}
 
-	m := New(catEN, WithSource(src), WithPlayback(pb), WithChat(fc))
+	m := newClassicModel(catEN, WithSource(src), WithPlayback(pb), WithChat(fc))
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 
@@ -339,7 +339,7 @@ func TestCJKChannelNameDoesNotInsertBlankListRow(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	title := "配信タイトル — とても長いタイトルで折り返しを誘発する"
-	m := New(catEN)
+	m := newClassicModel(catEN)
 	m.list.mode = ModeChannels
 	m.list.channels = []catalog.Channel{
 		{ID: "cjk-1", Login: "nihongo", DisplayName: "日本語配信者", Viewers: catalog.IntPtr(1234), Title: &title, Availability: catalog.AvailabilityLive},

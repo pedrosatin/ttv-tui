@@ -23,7 +23,7 @@ func TestChatReadOnlyPlatform_DisplaysMessagesAndDisablesInput(t *testing.T) {
 		caps:     &caps,
 	}
 
-	m := New(catEN, WithChat(fc))
+	m := newClassicModel(catEN, WithChat(fc))
 	m = resize(m, 120, 24)
 
 	// Start channel on a read-only platform.
@@ -98,7 +98,7 @@ func TestChatCapabilities_SlowModeTagOmittedWhenUnsupported(t *testing.T) {
 		SupportsSlowMode: false,
 	}
 	fc := &fakeChat{caps: &capsNoSlow}
-	m := New(catEN, WithChat(fc))
+	m := newClassicModel(catEN, WithChat(fc))
 	// Capabilities arrive with the Join of a channel.
 	m.startChatChannel(catalog.Channel{Login: "ch"})
 	m.chat.panel.roomState = ChatRoomState{Slow: 30}

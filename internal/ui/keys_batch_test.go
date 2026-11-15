@@ -25,7 +25,7 @@ func batchCategoriesModel(t *testing.T, n int) Model {
 			Viewers: catalog.IntPtr((n - i) * 1000),
 		}
 	}
-	m := New(catEN)
+	m := newClassicModel(catEN)
 	updated, _ := m.Update(CategoriesLoadedMsg{
 		Generation: m.Generation(),
 		Page:       catalog.Page[catalog.Category]{Items: items},
@@ -96,7 +96,7 @@ func TestBatchedMixedRunesAndShortcuts(t *testing.T) {
 		t.Fatalf("i18n.New(en): %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catEN, WithPlayback(pb))
+	m := newClassicModel(catEN, WithPlayback(pb))
 	updated, _ := m.Update(CategoriesLoadedMsg{
 		Generation: m.Generation(),
 		Page: catalog.Page[catalog.Category]{

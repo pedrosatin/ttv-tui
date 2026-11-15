@@ -112,7 +112,7 @@ func benchHostedModel(tb testing.TB) Model {
 			return catalog.Page[catalog.Channel]{Items: benchChannels()}, nil
 		},
 	}
-	m := New(cat, WithSource(src), WithPlayback(&fakePlayback{}),
+	m := newClassicModel(cat, WithSource(src), WithPlayback(&fakePlayback{}),
 		WithChat(&fakeChat{hasToken: true, username: "espectador"}), WithVideoHost(&recordingHost{}))
 	m.timer = scenarioTimer
 	m = benchRun(tb, m, func() tea.Msg { return tea.WindowSizeMsg{Width: benchWidth, Height: benchHeight} })

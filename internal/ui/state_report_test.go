@@ -8,7 +8,7 @@ import (
 
 // Sem WithStateReport o modelo não monta nem conta nada.
 func TestRelatorioDeEstadoDesligadoPorPadrao(t *testing.T) {
-	m := New(nil)
+	m := newClassicModel(nil)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	next, _ = next.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	if got := next.(Model); got.keysSeen != 0 || got.reported != (StateReport{}) {
@@ -20,7 +20,7 @@ func TestRelatorioDeEstadoDesligadoPorPadrao(t *testing.T) {
 // repete quando nada mudou.
 func TestRelatorioDeEstadoSoQuandoMuda(t *testing.T) {
 	var got []StateReport
-	m := New(nil, WithStateReport(func(r StateReport) { got = append(got, r) }))
+	m := newClassicModel(nil, WithStateReport(func(r StateReport) { got = append(got, r) }))
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	next, _ = next.(Model).Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	if len(got) != 1 || got[0].Width != 100 || got[0].Mode != string(ModeCategories) || got[0].Layout != string(LayoutSplit) {

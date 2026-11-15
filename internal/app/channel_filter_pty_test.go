@@ -64,7 +64,7 @@ func TestChannelFilterMenu_PTY(t *testing.T) {
 	}
 
 	menuOff := p.mark()
-	p.sendAndWait([]byte("l"), "Channel filters (l/Esc close)")
+	p.sendAndWait([]byte("L"), "Channel filters (L/Esc close)")
 	screenMenu := p.waitScreen(menuOff, "PT (2 in list)", "EN (1 in list)", "500+")
 	if !strings.Contains(screenMenu, "PT (2 in list)") || !strings.Contains(screenMenu, "EN (1 in list)") {
 		t.Fatalf("menu must list languages with counts:\n%s", screenMenu)

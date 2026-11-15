@@ -17,7 +17,7 @@ func newSearchCategoriesModel(t *testing.T, src *fakeSource) Model {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat, WithSource(src), WithPageSize(10))
+	m := newClassicModel(cat, WithSource(src), WithPageSize(10))
 	m.width = 100
 	m.height = 24
 	updated, cmd := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})

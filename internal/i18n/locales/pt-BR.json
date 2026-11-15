@@ -458,5 +458,11 @@
   "footer.height_up": "altura+",
   "footer.height_down": "altura−",
   "footer.opacity_up": "opacidade+",
-  "footer.opacity_down": "opacidade−"
+  "footer.opacity_down": "opacidade−",
+  "action.favorites": "Ir aos favoritos",
+  "action.recents": "Ir aos recentes",
+  "action.window_list": "Mostrar/esconder lista (janela)",
+  "keymap.cancel": "Esc cancelar",
+  "keymap.migration": "Novas teclas: {action.cycle_layout} (h/l/w) para os painéis; L para idiomas; g c/f/r para navegar. Volte às teclas antigas com keymap = \"classic\" em %s.",
+  "keymap.save_error": "Salvar migração de teclas: %w"
 }

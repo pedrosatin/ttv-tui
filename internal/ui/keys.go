@@ -64,6 +64,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		next, cmd, _ := m.handleModeKey(msg)
 		return next, cmd
 	}
+	if next, cmd, ok := m.handlePrefixKey(msg); ok {
+		return next, cmd
+	}
 	if next, cmd, ok := m.handleGlobalKey(msg); ok {
 		return next, cmd
 	}

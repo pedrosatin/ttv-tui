@@ -18,7 +18,7 @@ func TestCenarioRodapePorModo(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			eachSize(t, "rodape-"+tc.name, func(t *testing.T, w, h int) Model {
-				m, _ := newScenario(t, w, h)
+				m, _ := newScenarioClassic(t, w, h)
 				m = play(t, m, tc.keys)
 				if tc.name == "escrevendo" && !m.chat.composing {
 					t.Fatal("não entrou na escrita")
@@ -31,7 +31,7 @@ func TestCenarioRodapePorModo(t *testing.T) {
 		})
 	}
 	eachSize(t, "rodape-janela", func(t *testing.T, w, h int) Model {
-		m, _ := hostedScenario(t, w, h)
+		m, _ := hostedScenarioClassic(t, w, h)
 		return m
 	})
 }
@@ -43,7 +43,7 @@ func TestCenarioTeclasSemEfeitoAvisam(t *testing.T) {
 		{"ctrl+f gaules enter enter tab f", "Tab para favoritar na lista"},
 	} {
 		t.Run(tc.keys, func(t *testing.T) {
-			m, _ := newScenario(t, 80, 24)
+			m, _ := newScenarioClassic(t, 80, 24)
 			m = play(t, m, tc.keys)
 			if !strings.Contains(ansi.Strip(m.StatusBar()), tc.want) {
 				t.Fatalf("barra %q sem %q", ansi.Strip(m.StatusBar()), tc.want)
@@ -54,7 +54,7 @@ func TestCenarioTeclasSemEfeitoAvisam(t *testing.T) {
 
 func TestCenarioFavoritoSobreErro(t *testing.T) {
 	eachSize(t, "favorito-sobre-erro", func(t *testing.T, w, h int) Model {
-		m, _ := newScenario(t, w, h, WithStore(&feedbackStore{}))
+		m, _ := newScenarioClassic(t, w, h, WithStore(&feedbackStore{}))
 		m = play(t, m, "ctrl+f gaules enter")
 		m.player.state, m.player.failure = PlayerStateError, PlayerFailureNetwork
 		m = play(t, m, "f")
@@ -71,7 +71,7 @@ func TestCenarioFavoritoSobreErro(t *testing.T) {
 
 func TestRodapeLarguraEMapaEfetivo(t *testing.T) {
 	for _, width := range []int{60, 79, 80, 100, 120} {
-		m, _ := newScenario(t, width, 24)
+		m, _ := newScenarioClassic(t, width, 24)
 		if got := ansi.StringWidth(m.Footer()); got > width {
 			t.Fatalf("rodapé com %d colunas em %d", got, width)
 		}
@@ -86,7 +86,7 @@ func TestRodapeLarguraEMapaEfetivo(t *testing.T) {
 }
 
 func TestBarraNaoRepeteCanalAntigo(t *testing.T) {
-	m, _ := newScenario(t, 80, 24)
+	m, _ := newScenarioClassic(t, 80, 24)
 	m = play(t, m, "ctrl+f gaules enter enter")
 	m.player.state = PlayerStateNone
 	if strings.Contains(ansi.Strip(m.StatusBar()), "Canal selecionado") {
@@ -101,7 +101,7 @@ func TestCenarioRodapeEmIngles(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			eachSize(t, "rodape-en-"+tc.name, func(t *testing.T, w, h int) Model {
-				m, _ := newScenario(t, w, h)
+				m, _ := newScenarioClassic(t, w, h)
 				m.catalog = mustCatalog(t, i18n.LangEN)
 				return play(t, m, tc.keys)
 			})

@@ -60,7 +60,7 @@ func (s *flakyStore) Save(st store.State) error {
 // oneChannelModel lists a single channel, highlighted.
 func oneChannelModel(t *testing.T, opts ...Option) Model {
 	t.Helper()
-	m := New(testCatalog(t, i18n.LangEN), opts...)
+	m := newClassicModel(testCatalog(t, i18n.LangEN), opts...)
 	m.list.mode = ModeChannels
 	m.list.channels = []catalog.Channel{{ID: "ch-1", Login: "streamer", DisplayName: "Streamer", Viewers: catalog.IntPtr(500)}}
 	m.reconcileHighlight()
@@ -72,7 +72,7 @@ func oneChannelModel(t *testing.T, opts ...Option) Model {
 // cell widths, which other tests do not expect.
 func hostedWithPersist(t *testing.T, persist HostedColumnsPersist) Model {
 	t.Helper()
-	m := New(testCatalog(t, i18n.LangEN), WithHostedColumns(0, 0, false, false, 0, persist))
+	m := newClassicModel(testCatalog(t, i18n.LangEN), WithHostedColumns(0, 0, false, false, 0, persist))
 	m.hosted.host = &recordingHost{}
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 212, Height: 49})
 	return next.(Model)

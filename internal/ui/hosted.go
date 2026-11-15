@@ -208,8 +208,15 @@ func (m *Model) warnChatUnavailable() {
 
 // handleHostedResizeKey moves a divider. It reports whether msg was one of its keys.
 func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	return m.handleHostedAction(m.keys.actionFor(modeWindow, msg))
+}
+
+func (m *Model) handleHostedAction(id actionID) (bool, tea.Cmd) {
 	if m.hosted.host == nil {
-		if m.keys.actionFor(modeWindow, msg) != "" {
+		if id == actWindowList {
+			return false, nil
+		}
+		if id != "" {
 			m.warnStatus(m.t("feedback.window_only"))
 			return true, nil
 		}
@@ -220,7 +227,14 @@ func (m *Model) handleHostedResizeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.hosted.panelsSwapped {
 		step = -step
 	}
-	switch m.keys.actionFor(modeWindow, msg) {
+	switch id {
+	case actWindowList:
+		if !m.chat.hasPanel() {
+			m.keepListWithoutChat()
+			return true, nil
+		}
+		m.toggleListPanel()
+		return true, nil
 	case actChatOverlay:
 		return true, m.toggleChatOverlay()
 	case actSwapSides:
@@ -328,7 +342,7 @@ func (m Model) syncHostPanel() Model {
 // hostedPanel is the video's region, in 1-based cells. An overlay takes the screen
 // over, so the zero value tells the host to draw the TUI's cells there instead.
 func (m Model) hostedPanel() HostPanel {
-	if m.hosted.host == nil || m.quitting || m.width <= 0 || m.height <= 1 || m.list.prefs.menuOpen {
+	if m.hosted.host == nil || m.quitting || m.width <= 0 || m.height <= 1 || m.list.prefs.menuOpen || m.prefixVisible || m.keymapNotice != "" {
 		return HostPanel{}
 	}
 	listW, chatW, videoW := m.hostedWidths()

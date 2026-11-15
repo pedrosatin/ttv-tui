@@ -21,7 +21,7 @@ func TestNarrowChat_PTY(t *testing.T) {
 	p.waitScreen(0, "PtyCat")
 
 	off := p.mark()
-	p.send([]byte{keyCtrlW})
+	p.send([]byte{keyCtrlW, 'w'})
 	home := p.waitScreen(off, "No chat yet")
 	if strings.Contains(home, "layout:") {
 		t.Fatalf("Ctrl+W on the home screen announced a layout:\n%s", home)
@@ -33,11 +33,11 @@ func TestNarrowChat_PTY(t *testing.T) {
 
 	off = p.mark()
 	setSize(t, p.master, 24, 60)
-	split := p.waitScreen(off, "Chat hidden (<80 cols)", "Ctrl+L")
+	split := p.waitScreen(off, "Chat hidden (<80 cols)", "Ctrl+W l")
 	t.Logf("PTY capture split at 60 columns:\n%s", split)
 
 	off = p.mark()
-	p.send([]byte{keyCtrlL})
+	p.send([]byte{keyCtrlW, 'l'})
 	chatOnly := p.waitScreen(off, "Chat — #ptychan", "Bob: oi gente")
 	t.Logf("PTY capture chat-only at 60 columns:\n%s", chatOnly)
 }

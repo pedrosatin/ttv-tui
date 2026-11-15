@@ -69,7 +69,7 @@ func TestCtrlQQuitsModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New(en): %v", err)
 	}
-	m := New(cat)
+	m := newClassicModel(cat)
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
 	got, ok := updated.(Model)
@@ -98,7 +98,7 @@ func TestStatusBarReflectsCatalogLanguage(t *testing.T) {
 		t.Fatalf("i18n.New(pt-BR): %v", err)
 	}
 
-	viewEN := New(catEN).View()
+	viewEN := newClassicModel(catEN).View()
 	if !strings.Contains(viewEN, "[en]") || !strings.Contains(viewEN, "Empty: r retry · Esc back") || !strings.Contains(viewEN, "Ctrl+Q quit") {
 		t.Fatalf("unexpected English status bar: %q", viewEN)
 	}
@@ -106,7 +106,7 @@ func TestStatusBarReflectsCatalogLanguage(t *testing.T) {
 		t.Fatalf("English status bar still cites Ctrl+C: %q", viewEN)
 	}
 
-	viewPT := New(catPT).View()
+	viewPT := newClassicModel(catPT).View()
 	if !strings.Contains(viewPT, "[pt-BR]") || !strings.Contains(viewPT, "Vazio: r tentar de novo · Esc voltar") || !strings.Contains(viewPT, "Ctrl+Q sair") {
 		t.Fatalf("unexpected Portuguese status bar: %q", viewPT)
 	}
@@ -134,7 +134,7 @@ func TestCategoriesLoadingAndOptionalViewersRender(t *testing.T) {
 		},
 	}
 
-	m := New(catPT, WithSource(src))
+	m := newClassicModel(catPT, WithSource(src))
 	if !m.Loading() {
 		t.Fatal("expected model to start in loading state when Source is provided")
 	}
@@ -197,7 +197,7 @@ func TestCategoriesNavigationArrowsJKAndNextPage(t *testing.T) {
 		},
 	}
 
-	m := New(catEN, WithSource(src), WithPageSize(2))
+	m := newClassicModel(catEN, WithSource(src), WithPageSize(2))
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 
@@ -250,7 +250,7 @@ func TestSelectionByIDPreservedWhenFiltering(t *testing.T) {
 		t.Fatalf("i18n.New(en): %v", err)
 	}
 
-	m := New(catEN)
+	m := newClassicModel(catEN)
 	updated, _ := m.Update(CategoriesLoadedMsg{
 		Generation: m.Generation(),
 		Page: catalog.Page[catalog.Category]{
@@ -331,7 +331,7 @@ func TestErrorStateDisplaysActionableMessageAndRetryRecovers(t *testing.T) {
 		},
 	}
 
-	m := New(catPT, WithSource(src))
+	m := newClassicModel(catPT, WithSource(src))
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 
@@ -380,7 +380,7 @@ func TestCancelActiveRequestCancelsContextAndDiscardsStaleGeneration(t *testing.
 		},
 	}
 
-	m := New(catEN, WithSource(src))
+	m := newClassicModel(catEN, WithSource(src))
 	staleGen := m.Generation()
 	cmd := m.Init()
 	go func() {
@@ -446,7 +446,7 @@ func TestOpenCategoryLoadsChannelsAndEnterEmitsChannelSelectedMsg(t *testing.T) 
 		},
 	}
 
-	m := New(catPT, WithSource(src))
+	m := newClassicModel(catPT, WithSource(src))
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 
@@ -530,7 +530,7 @@ func TestLocalFilterSlashAndEscPreservesSelectionByIDWithoutNetworkRequest(t *te
 		},
 	}
 
-	m := New(catEN, WithSource(src))
+	m := newClassicModel(catEN, WithSource(src))
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 
@@ -635,7 +635,7 @@ func TestCtrlFSearchAndCtrlRReturnsToCategories(t *testing.T) {
 		},
 	}
 
-	m := New(catPT, WithSource(src))
+	m := newClassicModel(catPT, WithSource(src))
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 
@@ -713,7 +713,7 @@ func TestEmptyAndErrorStatesInChannelsAndSearch(t *testing.T) {
 		},
 	}
 
-	m := New(catPT, WithSource(src))
+	m := newClassicModel(catPT, WithSource(src))
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 
@@ -773,7 +773,7 @@ func TestInvalidTokenWarnsOnceInStatusBarWithoutCrashingApp(t *testing.T) {
 		},
 	}
 
-	m := New(
+	m := newClassicModel(
 		catPT,
 		WithSource(src),
 		WithTokenCheck(func(ctx context.Context) error {
@@ -876,7 +876,7 @@ func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catEN, WithPlayback(pb))
+	m := newClassicModel(catEN, WithPlayback(pb))
 	ch := catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}
 
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: ch})
@@ -926,7 +926,7 @@ func TestPlayerControlKeys(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catEN, WithPlayback(pb))
+	m := newClassicModel(catEN, WithPlayback(pb))
 
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
@@ -999,7 +999,7 @@ func TestSpaceDoesNotPauseWhileComposing(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catEN, WithPlayback(pb))
+	m := newClassicModel(catEN, WithPlayback(pb))
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
@@ -1038,7 +1038,7 @@ func TestPlayerStatusDiscardsStaleGeneration(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catEN, WithPlayback(pb))
+	m := newClassicModel(catEN, WithPlayback(pb))
 
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "aaa"}})
 	m = updated.(Model)
@@ -1072,7 +1072,7 @@ func TestPlayerBreakStaleGenerationAndRecovery(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catPT, WithPlayback(pb))
+	m := newClassicModel(catPT, WithPlayback(pb))
 
 	for _, login := range []string{"aaa", "bbb"} {
 		updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: login}})
@@ -1110,7 +1110,7 @@ func TestCtrlQStopsPlayback(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catEN, WithPlayback(pb))
+	m := newClassicModel(catEN, WithPlayback(pb))
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
 	m = updated.(Model)
 	if !m.Quitting() {
@@ -1127,7 +1127,7 @@ func TestPlayerVolumeClampedInUIAndStaleSwitchEventsDiscarded(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catEN, WithPlayback(pb))
+	m := newClassicModel(catEN, WithPlayback(pb))
 
 	// Select channel A (gen 1) and finish start handshake.
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "chanA"}})

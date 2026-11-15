@@ -12,7 +12,7 @@ import (
 
 // A categoria fixada ganha audiência atual, abre canais e pode ser desfixada.
 func TestCategoriasFixadasCatalogoEEnter(t *testing.T) {
-	m, _ := newScenario(t, 80, 24)
+	m, _ := newScenarioClassic(t, 80, 24)
 	m = play(t, m, "f")
 	it := m.VisibleItems()[0]
 	if it.Type != ItemTypePinnedCategory || it.Category.Viewers == nil || *it.Category.Viewers != 410000 {
@@ -35,7 +35,7 @@ func TestCategoriasFixadasCatalogoEEnter(t *testing.T) {
 // Sem dado fresco, a categoria salva mantém a identidade e mostra não verificado.
 func TestCenarioCategoriaFixadaSemDadoFresco(t *testing.T) {
 	eachSize(t, "categoria-fixada-nao-verificada", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height, WithFavoriteCategories([]store.Category{{Platform: "twitch", ID: "antiga", Name: "Antiga"}, {Platform: "kick", ID: "antiga", Name: "KickCat"}}))
+		m, _ := newScenarioClassic(t, width, height, WithFavoriteCategories([]store.Category{{Platform: "twitch", ID: "antiga", Name: "Antiga"}, {Platform: "kick", ID: "antiga", Name: "KickCat"}}))
 		if !strings.Contains(screen(m), "não verificado") || strings.Contains(screen(m), "KickCat") {
 			t.Fatal(screen(m))
 		}
@@ -45,7 +45,7 @@ func TestCenarioCategoriaFixadaSemDadoFresco(t *testing.T) {
 
 func TestCategoriaFixadaNaBuscaEPersistida(t *testing.T) {
 	s := store.New(filepath.Join(t.TempDir(), "state.json"))
-	m, _ := newScenario(t, 80, 24, WithStore(s))
+	m, _ := newScenarioClassic(t, 80, 24, WithStore(s))
 	m.list.mode = ModeSearch
 	m.list.search.categories = []catalog.Category{{ID: "cat-val", Name: "VALORANT", Viewers: catalog.IntPtr(10)}}
 	m.list.channels = nil
@@ -79,7 +79,7 @@ func TestCategoriaFixadaNaBuscaEPersistida(t *testing.T) {
 // Na busca, f fixa o resultado no lugar e conserva a estrela após repetir a busca.
 func TestCenarioFixaCategoriaNaBusca(t *testing.T) {
 	eachSize(t, "fixa-categoria-na-busca", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f zelda enter f ctrl+f zelda enter")
 		it := m.VisibleItems()[0]
 		if it.Category == nil || !it.Favorite || !strings.Contains(screen(m), "★") {
@@ -92,7 +92,7 @@ func TestCenarioFixaCategoriaNaBusca(t *testing.T) {
 // O usuário fixa duas categorias seguidas sem o cursor saltar para o topo.
 func TestCenarioFixaCategoriasSeguidas(t *testing.T) {
 	eachSize(t, "fixa-categorias-seguidas", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m.list.categories = append(m.list.categories, catalog.Category{ID: "cat-mc", Name: "Minecraft", Viewers: catalog.IntPtr(100)})
 		m = play(t, m, "down down f down f")
 		if !m.categoryPinned("cat-val") || !m.categoryPinned("cat-mc") || len(m.list.favoriteCategories) != 2 {
@@ -105,7 +105,7 @@ func TestCenarioFixaCategoriasSeguidas(t *testing.T) {
 // Na busca sem audiência, fixar conserva o resultado fresco com sua estrela.
 func TestCenarioFixaCategoriaSemAudienciaNaBusca(t *testing.T) {
 	eachSize(t, "fixa-categoria-sem-audiencia-na-busca", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m.list.mode = ModeSearch
 		m.list.search.categories = []catalog.Category{{ID: "sem-live", Name: "SemLive"}}
 		m.list.channels = nil
@@ -121,7 +121,7 @@ func TestCenarioFixaCategoriaSemAudienciaNaBusca(t *testing.T) {
 
 // Na lista estreita, a categoria salva mantém o nome antes da marca à direita.
 func TestCategoriaFixadaEstreita(t *testing.T) {
-	m, _ := newScenario(t, 80, 24, WithFavoriteCategories([]store.Category{{ID: "antiga", Name: "Grand Theft Auto V"}}))
+	m, _ := newScenarioClassic(t, 80, 24, WithFavoriteCategories([]store.Category{{ID: "antiga", Name: "Grand Theft Auto V"}}))
 	row := m.formatListItemRow(m.VisibleItems()[0], false, 35, 0)
 	if !strings.Contains(row, "Grand") || !strings.Contains(row, "[não verificado]") || strings.Index(row, "Grand") > strings.Index(row, "[não verificado]") {
 		t.Fatalf("linha estreita = %q", row)

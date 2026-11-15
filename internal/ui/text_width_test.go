@@ -14,7 +14,7 @@ import (
 func TestComposedEmojiListAlignment(t *testing.T) {
 	for _, width := range []int{80, 120} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
-			m := New(nil)
+			m := newClassicModel(nil)
 			m.width, m.height, m.list.mode, m.list.loading = width, 24, ModeChannels, false
 			m.layout.showList, m.layout.showChat = true, false
 			title := "🫶🏻 " + strings.Repeat("live ", 30)
@@ -100,7 +100,7 @@ func TestWideScreenLineHasSpareCell(t *testing.T) {
 }
 
 func TestScreenInputsNormalizeWithoutMutatingSource(t *testing.T) {
-	m := New(nil)
+	m := newClassicModel(nil)
 	m.width, m.height, m.list.loading = 80, 24, false
 	m.list.categories = []catalog.Category{{ID: "cat", Name: "Categoria👨‍👩‍👧‍👦"}}
 	if !strings.Contains(ansi.Strip(m.View()), "Categoria👨") || strings.Contains(m.View(), "\u200d") {

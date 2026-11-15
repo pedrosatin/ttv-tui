@@ -77,7 +77,7 @@ func TestParseKeysRecusaTeclaComModificadorErrado(t *testing.T) {
 
 // Um temporizador de uma hora não segura o cenário, e os lotes rodam em ordem.
 func TestSettleNaoEsperaTemporizadorERodaLotesEmOrdem(t *testing.T) {
-	m := New(mustCatalog(t, i18n.LangPTBR))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 	m.timer = scenarioTimer
 	fired := false
 	hour := m.after(time.Hour, func(time.Time) tea.Msg { fired = true; return nil })

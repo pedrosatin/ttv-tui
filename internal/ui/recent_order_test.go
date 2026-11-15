@@ -35,7 +35,7 @@ func TestOpenChannelDoesNotReorderVisibleList(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	fs := &fakeStore{}
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithStore(fs),
 		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "fav_one", DisplayName: "Fav One"},
@@ -81,7 +81,7 @@ func TestOpenChannelDoesNotReorderVisibleList(t *testing.T) {
 func TestEnterRightAfterOpenDoesNotReopenSameChannelByShift(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithRecents([]catalog.Channel{
 			{ID: "rec-a", Login: "alice", DisplayName: "Alice"},
 			{ID: "rec-b", Login: "bob", DisplayName: "Bob"},
@@ -130,7 +130,7 @@ func TestPendingRecentsApplyOnRefreshAndBackToCategories(t *testing.T) {
 	}
 	fs := &fakeStore{}
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithSource(src),
 		WithStore(fs),
 		WithFavorites([]catalog.Channel{
@@ -207,7 +207,7 @@ func TestOpenChannelKeepsFavoritePositionAndDedup(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	fs := &fakeStore{}
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithStore(fs),
 		WithFavorites([]catalog.Channel{
 			{ID: "fav-shared", Login: "shared", DisplayName: "Shared"},

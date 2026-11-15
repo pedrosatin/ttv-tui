@@ -16,6 +16,9 @@ import (
 type actionID string
 
 const (
+	actFavorites      actionID = "action.favorites"
+	actRecents        actionID = "action.recents"
+	actWindowList     actionID = "action.window_list"
 	actQuit           actionID = "action.quit"
 	actCtrlC          actionID = "action.ctrl_c"
 	actCloseHelp      actionID = "action.close_help"
@@ -175,10 +178,10 @@ func (a action) windowOnly() bool {
 	return len(a.Modes) > 0 && !slices.ContainsFunc(a.Modes, func(m keyMode) bool { return m != modeWindow })
 }
 
-// defaultActions é o mapa de teclas da TUI, na ordem em que a ajuda mostra as
+// classicActions é o mapa anterior à migração, na ordem em que a ajuda mostra as
 // linhas de cada seção. As primitivas de edição dos campos de texto ficam fora
 // dele, em field_keys.go.
-func defaultActions() []action {
+func classicActions() []action {
 	nav := []keyMode{modeNormal, modeHelp, modeMenu}
 	// O movimento rola a ajuda e o chat e anda pelo menu de filtros.
 	also := func(help, menu, chat string) []helpUse {
@@ -326,6 +329,29 @@ func defaultActions() []action {
 			a.Footer = []footerUse{{footChat, 3, "footer.list"}, {footCompose, 3, "footer.list"}}
 		}
 	}
+	return actions
+}
+
+// defaultActions conserva o registro clássico como base da migração.
+func defaultActions() []action {
+	actions := classicActions()
+	bindings := map[actionID][]string{
+		actCycleLayout: {"ctrl+w w"}, actToggleList: {"ctrl+w h"}, actToggleChat: {"ctrl+w l"},
+		actChatOverlay: {"ctrl+w o"}, actSwapSides: {"ctrl+w x"},
+		actChatTaller: {"alt+up", "ctrl+w +"}, actChatShorter: {"alt+down", "ctrl+w -"},
+		actChatWider: {"alt+left", "ctrl+w <"}, actChatNarrower: {"alt+right", "ctrl+w >"},
+		actChannelFilter: {"L"}, actCategories: {"g c", "ctrl+r"}, actSearch: {"ctrl+f"}, actHome: {"home"},
+	}
+	for i := range actions {
+		if keys, ok := bindings[actions[i].ID]; ok {
+			actions[i].Default = keys
+		}
+	}
+	actions = append(actions,
+		action{ID: actFavorites, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"g f"}},
+		action{ID: actRecents, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"g r"}},
+		action{ID: actWindowList, Modes: []keyMode{modeWindow}, Section: sectionWindow, Default: []string{"ctrl+b"}},
+	)
 	return actions
 }
 

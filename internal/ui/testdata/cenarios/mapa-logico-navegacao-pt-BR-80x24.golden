@@ -1,0 +1,24 @@
+=== Atalhos de Teclado ===
+── Navegação ──
+  ↑/k                 Sobe na lista, no chat, no menu ou na ajuda
+  ↓/j                 Desce na lista, no chat, no menu ou na ajuda
+  PgUp                Sobe uma página
+  PgDn                Desce uma página
+  Home                Vai ao topo
+  End/G               Vai ao fim; no chat, volta ao vivo
+  Enter               Abre o item destacado
+  Tab                 Troca entre a lista e o chat
+  Esc                 Volta um nível; da busca, à tela de onde ela saiu
+  g c/Ctrl+R          Volta às categorias de qualquer lugar
+  f                   Favorita o canal ou fixa a categoria; de novo, desfaz
+  g f                 Ir aos favoritos
+  g r                 Ir aos recentes
+── Busca e filtros ──
+  /                   Filtra a lista
+  Ctrl+F              Busca categorias e canais
+  L                   Abre os filtros de idioma e audiência
+  No prompt de busca:
+    Enter Ctrl+F      Busca o texto digitado
+    Esc               Cancela a busca
+Navegação · seção 2 de 7 · Tab/→ próxima                                   33/99
+ ttv-tui | [pt-BR] Pronto                               | ? ajuda · Ctrl+Q sair

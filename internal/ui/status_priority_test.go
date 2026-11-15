@@ -447,7 +447,7 @@ func TestVolumeLimitDoesNotOutrankPlayerFailure(t *testing.T) {
 
 func TestVolumeKeysWithoutPlayerStaySilent(t *testing.T) {
 	cat := mustCatalog(t, i18n.LangPTBR)
-	m := New(cat, WithPlayback(&fakePlayback{}))
+	m := newClassicModel(cat, WithPlayback(&fakePlayback{}))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
 	if m.StatusNotice() != "" {

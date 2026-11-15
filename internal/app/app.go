@@ -98,6 +98,11 @@ func Run(opts Options) error {
 		return errors.New(appCat.T("app.err_tty_required"))
 	}
 
+	keymapNotice, err := migrateKeymap(&cfg, cfgPath, appCat)
+	if err != nil {
+		return err
+	}
+
 	// Only after the terminal check: a run that cannot start must not write.
 	if err := persistLang(opts.Lang, &cfg, cfgPath); err != nil {
 		return fmt.Errorf(appCat.T("app.err_persist_lang"), err)
@@ -163,6 +168,7 @@ func Run(opts Options) error {
 
 	chats := newChatBridge(ctx, providerRegistry)
 	uiOpts := []ui.Option{
+		ui.WithKeymap(cfg.Keymap == "classic", keymapNotice),
 		hostOption,
 		reportOption,
 		ui.WithPlayback(playback),
@@ -541,4 +547,17 @@ func tokenCheck(validate func(ctx context.Context, token string) (auth.Validatio
 
 func overlayOption(c config.Config) ui.Option {
 	return ui.WithHostedOverlay(ui.OverlayPreferences{Rows: c.ChatOverlayRows, TextBackdrop: c.ChatOverlayBackdrop == "text", HeightKeysSeen: c.ChatOverlayHeightKeysSeen})
+}
+
+// migrateKeymap records the notice before opening the UI so later saves retain it.
+func migrateKeymap(cfg *config.Config, path string, cat *i18n.Catalog) (string, error) {
+	if cfg.KeymapNoticeSeen || cfg.Keymap == "classic" {
+		return "", nil
+	}
+	notice := fmt.Sprintf(ui.CatalogText(cat, "keymap.migration"), path)
+	if err := rewriteConfig(path, func(c *config.Config) { c.KeymapNoticeSeen = true }); err != nil {
+		return "", fmt.Errorf(cat.T("keymap.save_error"), err)
+	}
+	cfg.KeymapNoticeSeen = true
+	return notice, nil
 }

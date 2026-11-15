@@ -39,7 +39,7 @@ func TestLanguageConsistency_PTY(t *testing.T) {
 			t.Logf("PTY capture (%s) — home:\n%s", tc.lang, home)
 
 			// No channel yet: Ctrl+W has no layout to offer and says so.
-			p.sendAndWait([]byte{0x17}, ui.CatalogText(cat, "layout.no_chat"))
+			p.sendAndWait([]byte{0x17, 'w'}, ui.CatalogText(cat, "layout.no_chat"))
 
 			p.sendAndWait([]byte("\r"), "PtLive")
 
@@ -49,9 +49,9 @@ func TestLanguageConsistency_PTY(t *testing.T) {
 			p.followPlayer(oldPid)
 
 			// Ctrl+W: split → chat → list. Only chat, list and focus reach the bar.
-			p.sendAndWait([]byte{0x17}, "layout: "+cat.T("layout.mode.chat"))
+			p.sendAndWait([]byte{0x17, 'w'}, "layout: "+cat.T("layout.mode.chat"))
 			listOff := p.mark()
-			p.sendAndWait([]byte{0x17}, "layout: "+cat.T("layout.mode.list"))
+			p.sendAndWait([]byte{0x17, 'w'}, "layout: "+cat.T("layout.mode.list"))
 			t.Logf("PTY capture (%s) — layout list:\n%s", tc.lang, p.screenSince(listOff))
 
 			// The help opens at the list keys; four → reach the window and layout
@@ -70,7 +70,7 @@ func TestLanguageConsistency_PTY(t *testing.T) {
 			p.send([]byte("?"))
 
 			menuOff := p.mark()
-			p.sendAndWait([]byte("l"), ui.CatalogText(cat, "channel_filter.title"))
+			p.sendAndWait([]byte("L"), ui.CatalogText(cat, "channel_filter.title"))
 			// The scan below only proves absence over a whole frame, so wait for
 			// the status line that closes the menu's.
 			menu := p.waitScreen(menuOff, cat.T("channel_filter.status_open"), ui.CatalogText(cat, "status.quit_hint"))

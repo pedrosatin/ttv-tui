@@ -14,7 +14,7 @@ func TestCenarioFavoritosPorPlataforma(t *testing.T) {
 	eachSize(t, "favoritos-por-plataforma", func(t *testing.T, width, height int) Model {
 		kick := kickCatalog()
 		kick.hits = []catalog.Channel{{Platform: platform.Kick, ID: "xqc", Login: "xqc", DisplayName: "xQc"}}
-		m, _ := newScenario(t, width, height,
+		m, _ := newScenarioClassic(t, width, height,
 			WithPlatformCatalog(platform.Kick, kick, kick),
 			WithFavorites([]catalog.Channel{{Login: "twitch_favorito"}}),
 			WithRecents([]catalog.Channel{{Login: "twitch_recente"}, {Platform: platform.Kick, Login: "kick_recente"}}))
@@ -48,7 +48,7 @@ func assertSavedPlatform(t *testing.T, m Model, plat string) {
 
 func TestBuscaKickNaoIncluiSalvosTwitch(t *testing.T) {
 	kick := kickCatalog()
-	m, _ := newScenario(t, 80, 24, WithPlatformCatalog(platform.Kick, kick, kick),
+	m, _ := newScenarioClassic(t, 80, 24, WithPlatformCatalog(platform.Kick, kick, kick),
 		WithFavorites([]catalog.Channel{{Login: "twitch_favorito"}}),
 		WithRecents([]catalog.Channel{{Login: "twitch_recente"}}))
 	m = play(t, m, "p ctrl+f gaules enter")
@@ -65,7 +65,7 @@ func TestCenarioRecentesRecolhidosAoTrocarPlataforma(t *testing.T) {
 			}
 		}
 		kick := kickCatalog()
-		m, _ := newScenario(t, width, height, WithPlatformCatalog(platform.Kick, kick, kick), WithRecents(recents))
+		m, _ := newScenarioClassic(t, width, height, WithPlatformCatalog(platform.Kick, kick, kick), WithRecents(recents))
 		m = play(t, m, "down down down down down down enter")
 		if !m.list.recentsExpanded {
 			t.Fatal("recentes da Twitch não expandiram")
@@ -93,7 +93,7 @@ func TestContagemRecentesSoDaListaAtiva(t *testing.T) {
 		recents = append(recents, catalog.Channel{Platform: platform.Kick, Login: fmt.Sprintf("kick_%d", i)})
 	}
 	kick := kickCatalog()
-	m, _ := newScenario(t, 80, 24, WithPlatformCatalog(platform.Kick, kick, kick), WithRecents(recents))
+	m, _ := newScenarioClassic(t, 80, 24, WithPlatformCatalog(platform.Kick, kick, kick), WithRecents(recents))
 	check := func(m Model, wantRecent, wantHidden int) {
 		t.Helper()
 		recent, hidden := 0, 0
@@ -117,7 +117,7 @@ func TestContagemRecentesSoDaListaAtiva(t *testing.T) {
 func TestFiltrosIgnoramSalvosDaOutraPlataforma(t *testing.T) {
 	pt := "pt"
 	kick := kickCatalog()
-	m, _ := newScenario(t, 80, 24, WithPlatformCatalog(platform.Kick, kick, kick),
+	m, _ := newScenarioClassic(t, 80, 24, WithPlatformCatalog(platform.Kick, kick, kick),
 		WithFavorites([]catalog.Channel{{Login: "favorito", Language: &pt}}),
 		WithRecents([]catalog.Channel{{Login: "recente", Language: &pt}}))
 	m = play(t, m, "p")
@@ -136,7 +136,7 @@ func TestFiltrosIgnoramSalvosDaOutraPlataforma(t *testing.T) {
 func TestSalvoSemCatalogoUsaListaInicial(t *testing.T) {
 	ch := catalog.Channel{Platform: platform.YouTube, Login: "video"}
 	kick := kickCatalog()
-	m := New(mustCatalog(t, "en"), WithPlatformCatalog(platform.Kick, kick, kick))
+	m := newClassicModel(mustCatalog(t, "en"), WithPlatformCatalog(platform.Kick, kick, kick))
 	if m.ListPlatform() != platform.Kick || !m.savedOnList(ch) {
 		t.Fatal("sem Twitch, salvo sem catálogo deve ficar no primeiro catálogo")
 	}
@@ -159,7 +159,7 @@ func TestCenarioSalvosHomonimosPorPlataforma(t *testing.T) {
 		{"salvos-homonimos-youtube-twitch", catalog.Channel{Platform: platform.YouTube, Login: "gaules"}, catalog.Channel{Login: "gaules"}},
 	} {
 		eachSize(t, tc.name, func(t *testing.T, width, height int) Model {
-			m, _ := newScenario(t, width, height, WithFavorites([]catalog.Channel{tc.favorite}), WithRecents([]catalog.Channel{tc.recent}))
+			m, _ := newScenarioClassic(t, width, height, WithFavorites([]catalog.Channel{tc.favorite}), WithRecents([]catalog.Channel{tc.recent}))
 			assertHighlight := func(m Model, want catalog.Channel) {
 				t.Helper()
 				it, ok := m.HighlightedItem()
@@ -204,7 +204,7 @@ func TestDeduplicacaoSalvosPorPlataforma(t *testing.T) {
 		{"prefixo do identificador", catalog.Channel{Platform: "vimeo.com", Login: "vimeo.com:gaules"}, catalog.Channel{Platform: "vimeo.com", Login: "gaules"}, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m, _ := newScenario(t, 80, 24, WithFavorites([]catalog.Channel{tc.favorite}), WithRecents([]catalog.Channel{tc.recent}))
+			m, _ := newScenarioClassic(t, 80, 24, WithFavorites([]catalog.Channel{tc.favorite}), WithRecents([]catalog.Channel{tc.recent}))
 			count := 0
 			for _, it := range m.VisibleItems() {
 				if it.Channel != nil {
@@ -232,7 +232,7 @@ func TestDestaquePorLoginRespeitaPlataforma(t *testing.T) {
 		{"homônimo de outra plataforma", catalog.Channel{Platform: "vimeo.com", Login: "gaules"}, []catalog.Channel{{Login: "gaules"}}, -1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m, _ := newScenario(t, 80, 24)
+			m, _ := newScenarioClassic(t, 80, 24)
 			m.setHighlightToItem([]ListItem{{Type: ItemTypeChannel, Channel: &tc.original}}, 0)
 			m.list.highlightedID = "id-que-saiu-da-lista"
 			items := make([]ListItem, len(tc.channels))

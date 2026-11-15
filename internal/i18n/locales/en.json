@@ -458,5 +458,11 @@
   "footer.height_up": "height+",
   "footer.height_down": "height−",
   "footer.opacity_up": "opacity+",
-  "footer.opacity_down": "opacity−"
+  "footer.opacity_down": "opacity−",
+  "action.favorites": "Go to favorites",
+  "action.recents": "Go to recents",
+  "action.window_list": "Toggle list (window)",
+  "keymap.cancel": "Esc cancel",
+  "keymap.migration": "New shortcuts: {action.cycle_layout} (h/l/w) for panels; L for languages; g c/f/r to navigate. Restore the old keys with keymap = \"classic\" in %s.",
+  "keymap.save_error": "Save keymap migration: %w"
 }

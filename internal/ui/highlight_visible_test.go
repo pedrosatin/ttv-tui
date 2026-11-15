@@ -51,7 +51,7 @@ func TestHighlightKeepsFavoriteAfterLanguageHydration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat,
+	m := newClassicModel(cat,
 		WithChannelFilters([]string{"pt"}, 0, nil),
 		WithFavorites([]catalog.Channel{
 			{ID: "f-en", Login: "gringo", DisplayName: "Gringo"},
@@ -91,7 +91,7 @@ func TestHighlightMovesToNeighborWhenOfflineChannelLeavesAudienceFilter(t *testi
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat,
+	m := newClassicModel(cat,
 		WithPlayback(&fakePlayback{}),
 		WithChannelFilters(nil, 1000, nil),
 	)
@@ -131,7 +131,7 @@ func TestHighlightMovesToNeighborWhenRetryDropsHighlightedRecent(t *testing.T) {
 		id := fmt.Sprintf("rec-%02d", i)
 		recents[i] = catalog.Channel{ID: id, Login: id, DisplayName: id}
 	}
-	m := New(cat, WithRecents(recents), WithSource(&fakeSource{}))
+	m := newClassicModel(cat, WithRecents(recents), WithSource(&fakeSource{}))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
 	// O usuário já abriu "mais…": o último recente só aparece com a lista inteira.

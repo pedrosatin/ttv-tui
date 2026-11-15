@@ -51,7 +51,7 @@ func setupBuscaFixture(t *testing.T) Model {
 			return catalog.Page[catalog.Channel]{}, nil
 		},
 	}
-	m := New(catPT, WithSource(src))
+	m := newClassicModel(catPT, WithSource(src))
 	m.list.loading = false
 	m.list.categories = []catalog.Category{
 		{ID: "cat-cs", Name: "Counter-Strike"},

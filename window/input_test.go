@@ -99,7 +99,7 @@ func TestBoundKeysHaveWindowTranslation(t *testing.T) {
 		if !ok {
 			return true
 		}
-		if name, ok := field.Key.(*ast.Ident); !ok || name.Name != "Default" {
+		if name, ok := field.Key.(*ast.Ident); !ok || name.Name != "Default" && !(strings.HasPrefix(name.Name, "act") && len(name.Name) > 3 && name.Name[3] >= 'A' && name.Name[3] <= 'Z') {
 			return true
 		}
 		keys, ok := field.Value.(*ast.CompositeLit)
@@ -115,44 +115,51 @@ func TestBoundKeysHaveWindowTranslation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if seen[name] {
-				continue
+			// Cada componente da sequência atravessa o teclado da janela.
+			parts := strings.Fields(name)
+			if len(parts) == 0 {
+				parts = []string{name}
 			}
-			seen[name] = true
-			t.Run(name, func(t *testing.T) {
-				base := name
-				// SDL_KMOD_LSHIFT, SDL_KMOD_LCTRL e SDL_KMOD_LALT.
-				mod := keyModifier(keyBytes, 0)
-				if strings.HasPrefix(base, "shift+") {
-					mod = 0x1
-					base = strings.TrimPrefix(base, "shift+")
+			for _, name := range parts {
+				if seen[name] {
+					continue
 				}
-				if strings.HasPrefix(base, "ctrl+") {
-					mod = 0x40
-					base = strings.TrimPrefix(base, "ctrl+")
-				}
-				if strings.HasPrefix(base, "alt+") {
-					mod = 0x100
-					base = strings.TrimPrefix(base, "alt+")
-				}
-				if alias, ok := aliases[base]; ok {
-					base = alias
-				}
-				if mod == 0 && utf8.RuneCountInString(base) == 1 {
-					return
-				}
-				k, ok := keyNames[base]
-				if !ok {
-					k, ok = keyNames[strings.ToUpper(base)]
-				}
-				if !ok && len(base) == 1 {
-					k, ok = asciiKey(base[0], keyNames["Return"]), true
-				}
-				b := keyBytes(k, mod)
-				if !ok || len(b) == 0 {
-					t.Errorf("tecla ligada na TUI sem tradução em keyBytes: %s", name)
-				}
-			})
+				seen[name] = true
+				t.Run(name, func(t *testing.T) {
+					base := name
+					// SDL_KMOD_LSHIFT, SDL_KMOD_LCTRL e SDL_KMOD_LALT.
+					mod := keyModifier(keyBytes, 0)
+					if strings.HasPrefix(base, "shift+") {
+						mod = 0x1
+						base = strings.TrimPrefix(base, "shift+")
+					}
+					if strings.HasPrefix(base, "ctrl+") {
+						mod = 0x40
+						base = strings.TrimPrefix(base, "ctrl+")
+					}
+					if strings.HasPrefix(base, "alt+") {
+						mod = 0x100
+						base = strings.TrimPrefix(base, "alt+")
+					}
+					if alias, ok := aliases[base]; ok {
+						base = alias
+					}
+					if mod == 0 && utf8.RuneCountInString(base) == 1 {
+						return
+					}
+					k, ok := keyNames[base]
+					if !ok {
+						k, ok = keyNames[strings.ToUpper(base)]
+					}
+					if !ok && len(base) == 1 {
+						k, ok = asciiKey(base[0], keyNames["Return"]), true
+					}
+					b := keyBytes(k, mod)
+					if !ok || len(b) == 0 {
+						t.Errorf("tecla ligada na TUI sem tradução em keyBytes: %s", name)
+					}
+				})
+			}
 		}
 		return true
 	})

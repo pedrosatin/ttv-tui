@@ -31,7 +31,7 @@ func eachSize(t *testing.T, name string, run func(t *testing.T, width, height in
 // o vídeo começa, o chat da sala aparece ao lado e a lista guarda a busca.
 func TestCenarioBuscaEAbreCanal(t *testing.T) {
 	eachSize(t, "busca-e-abre-canal", func(t *testing.T, width, height int) Model {
-		m, w := newScenario(t, width, height)
+		m, w := newScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f gaules enter enter")
 
 		if !slices.Equal(w.searched, []string{"gaules"}) {
@@ -57,7 +57,7 @@ func TestCenarioBuscaEAbreCanal(t *testing.T) {
 func TestCenarioFiltroComFavorito(t *testing.T) {
 	eachSize(t, "filtro-com-favorito", func(t *testing.T, width, height int) Model {
 		fav := scenarioChannels()[0]
-		m, w := newScenario(t, width, height, WithFavorites([]catalog.Channel{fav}))
+		m, w := newScenarioClassic(t, width, height, WithFavorites([]catalog.Channel{fav}))
 		m = play(t, m, "/ g a u")
 
 		if len(w.searched) != 0 {
@@ -80,7 +80,7 @@ func TestCenarioAjudaAberta(t *testing.T) {
 			name += "-" + lang
 		}
 		eachSize(t, name, func(t *testing.T, width, height int) Model {
-			m, _ := newScenario(t, width, height)
+			m, _ := newScenarioClassic(t, width, height)
 			m.catalog = mustCatalog(t, lang)
 			m = play(t, m, "?")
 			assertHelpAt(t, m, sectionNav)
@@ -113,7 +113,7 @@ func assertHelpAt(t *testing.T, m Model, s helpSection) {
 // ajuda abre na seção do chat, com as teclas de rolar e de escrever.
 func TestCenarioAjudaNoChat(t *testing.T) {
 	eachSize(t, "ajuda-no-chat", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m = play(t, m, "enter enter tab ?")
 		assertHelpAt(t, m, sectionChat)
 		return m
@@ -124,7 +124,7 @@ func TestCenarioAjudaNoChat(t *testing.T) {
 // Busca e filtros, e fechá-la devolve o filtro como estava.
 func TestCenarioAjudaNoFiltro(t *testing.T) {
 	eachSize(t, "ajuda-no-filtro", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m = play(t, m, "/ g a f1")
 		assertHelpAt(t, m, sectionSearch)
 		if closed := play(t, m, "f1"); !closed.Filtering() || closed.list.filter != "ga" {
@@ -138,7 +138,7 @@ func TestCenarioAjudaNoFiltro(t *testing.T) {
 // estão as teclas da janela, com a marca de que só valem nela.
 func TestCenarioAjudaPulaDeSecao(t *testing.T) {
 	eachSize(t, "ajuda-pula-de-secao", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m = play(t, m, "? tab tab tab tab")
 		assertHelpAt(t, m, sectionWindow)
 		if view := ansi.Strip(m.View()); !strings.Contains(view, m.t("help.ctx.window_only")) || !strings.Contains(view, "Ctrl+O") {
@@ -152,7 +152,7 @@ func TestCenarioAjudaPulaDeSecao(t *testing.T) {
 // como Alt+Backspace: some a última palavra, e a lista continua à vista.
 func TestCenarioCtrlBackspaceNaBusca(t *testing.T) {
 	eachSize(t, "ctrl-backspace-na-busca", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f gaules space ao space vivo alt+backspace")
 
 		if got := m.list.search.input; got != "gaules ao " {

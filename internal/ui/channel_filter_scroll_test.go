@@ -17,7 +17,7 @@ var menuPosition = regexp.MustCompile(`^\s*(\d+)/(\d+)$`)
 // menuWithLanguages opens the filter menu over n distinct stream languages.
 func menuWithLanguages(t *testing.T, lang string, n, width, height int) Model {
 	t.Helper()
-	m := New(testCatalog(t, lang))
+	m := newClassicModel(testCatalog(t, lang))
 	m.list.mode = ModeChannels
 	for i := range n {
 		code := fmt.Sprintf("%c%c", 'a'+i/26, 'a'+i%26)

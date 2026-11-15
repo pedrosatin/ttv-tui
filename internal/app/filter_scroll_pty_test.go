@@ -76,7 +76,7 @@ func startFilterScrollTUI(t *testing.T) *ptyTUI {
 func TestFilterMenuScrollsToAudience_PTY(t *testing.T) {
 	p := startFilterScrollTUI(t)
 	p.sendAndWait([]byte("\r"), "Chan0")
-	p.sendAndWait([]byte("l"), "1/36")
+	p.sendAndWait([]byte("L"), "1/36")
 	for i := 2; i <= 36; i++ {
 		off := p.mark()
 		p.send([]byte("j"))

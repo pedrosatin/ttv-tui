@@ -118,7 +118,7 @@ func TestChatPanel_LifecycleMessagesHighlightAndChannelSwitch(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	fc := &fakeChat{}
-	m := New(catEN, WithChat(fc))
+	m := newClassicModel(catEN, WithChat(fc))
 
 	// 1. Select first channel "gaules" -> starts chat connecting.
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
@@ -305,7 +305,7 @@ func TestChatCompose_KeysDraftPreservationEmptySendAndDeliveryLifecycle(t *testi
 		hasToken: true,
 		username: "pedrosatin",
 	}
-	m := New(catEN, WithChat(fc))
+	m := newClassicModel(catEN, WithChat(fc))
 
 	// Join #gaules (generation 1).
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
@@ -468,7 +468,7 @@ func TestChatCompose_NoTokenBlocksSendWithLoginInstruction(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	fc := &fakeChat{hasToken: false}
-	m := New(catEN, WithChat(fc))
+	m := newClassicModel(catEN, WithChat(fc))
 
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
@@ -509,7 +509,7 @@ func joinChatFixture(t *testing.T, lang string) Model {
 		t.Fatalf("i18n.New(%s): %v", lang, err)
 	}
 	fc := &fakeChat{}
-	m := New(cat, WithChat(fc))
+	m := newClassicModel(cat, WithChat(fc))
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())

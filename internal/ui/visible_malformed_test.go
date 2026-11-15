@@ -11,7 +11,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
 	t.Run("empty logins do not match different channels", func(t *testing.T) {
-		m := New(catEN,
+		m := newClassicModel(catEN,
 			WithFavorites([]catalog.Channel{
 				{ID: "1", Login: ""},
 			}),
@@ -33,7 +33,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 	})
 
 	t.Run("duplicate favorites", func(t *testing.T) {
-		m := New(catEN,
+		m := newClassicModel(catEN,
 			WithFavorites([]catalog.Channel{
 				{ID: "1", Login: "a"},
 				{ID: "1", Login: "a"},
@@ -46,7 +46,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 	})
 
 	t.Run("case 3 recent resolving to duplicate favorite login", func(t *testing.T) {
-		m := New(catEN,
+		m := newClassicModel(catEN,
 			WithFavorites([]catalog.Channel{
 				{ID: "10", Login: "a"},
 			}),
@@ -70,7 +70,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 	})
 
 	t.Run("empty favorite ignored", func(t *testing.T) {
-		m := New(catEN,
+		m := newClassicModel(catEN,
 			WithFavorites([]catalog.Channel{
 				{ID: "", Login: ""},
 			}),
@@ -81,7 +81,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 	})
 
 	t.Run("empty recents ignored", func(t *testing.T) {
-		m := New(catEN,
+		m := newClassicModel(catEN,
 			WithRecents([]catalog.Channel{
 				{ID: "", Login: ""},
 				{ID: "", Login: ""},
@@ -96,7 +96,7 @@ func TestVisibleItems_MalformedData(t *testing.T) {
 
 func TestVisibleItems_ReclaimedLoginPreservesListingChannel(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithFavorites([]catalog.Channel{
 			{ID: "1", Login: "old"},
 		}),

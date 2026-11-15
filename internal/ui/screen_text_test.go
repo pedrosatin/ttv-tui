@@ -59,7 +59,7 @@ func TestExternalTextNeverReachesTerminalRaw(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := New(mustCatalog(t, i18n.LangEN))
+			m := newClassicModel(mustCatalog(t, i18n.LangEN))
 			m.list.mode = ModeChannels
 			m.list.selectedCategory = &category
 			m.list.channels = []catalog.Channel{ch}

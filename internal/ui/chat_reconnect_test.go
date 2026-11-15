@@ -21,7 +21,7 @@ func rcLive(t *testing.T, lang string, fc *fakeChat, n int) (Model, *i18n.Catalo
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat, WithChat(fc))
+	m := newClassicModel(cat, WithChat(fc))
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"}})
 	m = updated.(Model)
 	if cmd != nil {
@@ -341,7 +341,7 @@ func TestCtrlT_FailureKeepsHistoryAndSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat, WithChat(failingReconnect{&fakeChat{hasToken: true, username: "tester"}}))
+	m := newClassicModel(cat, WithChat(failingReconnect{&fakeChat{hasToken: true, username: "tester"}}))
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{ID: "1", Login: "gaules"}})
 	m = updated.(Model)
 	m = rcSend(t, m, cmd())

@@ -19,7 +19,7 @@ func TestStartReplyOfEarlierSelectionIsIgnored(t *testing.T) {
 	}
 	pb := &fakePlayback{startMsg: PlayerStatusMsg{Generation: 1, State: PlayerStateError,
 		LastLine: "player: superseded before attach", Failure: PlayerFailureUnknown}}
-	m := New(cat, WithPlayback(pb))
+	m := newClassicModel(cat, WithPlayback(pb))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = updated.(Model)
 
@@ -53,7 +53,7 @@ func TestLateSelectionMessageDoesNotOverrideNewerEnter(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(cat, WithPlayback(pb))
+	m := newClassicModel(cat, WithPlayback(pb))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	m = updated.(Model)
 	m.list.mode = ModeChannels

@@ -250,7 +250,7 @@ func TestHelpDocumentsLayoutKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n: %v", err)
 	}
-	m := New(catEN)
+	m := newClassicModel(catEN)
 	m.layout.helpVisible = true
 	m.layout.helpSection = sectionWindow
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})

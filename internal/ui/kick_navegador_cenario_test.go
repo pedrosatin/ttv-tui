@@ -16,7 +16,7 @@ import (
 func TestCenarioKickSemNavegador(t *testing.T) {
 	eachSize(t, "kick-sem-navegador", func(t *testing.T, width, height int) Model {
 		kick := kickCatalog()
-		m, w := newScenario(t, width, height,
+		m, w := newScenarioClassic(t, width, height,
 			WithPlatformCatalog(platform.Kick, kick, kick),
 			WithRecents([]catalog.Channel{{Platform: platform.Kick, Login: "xqc", DisplayName: "xQc", URL: "https://kick.com/xqc"}}))
 		m = play(t, m, "p")

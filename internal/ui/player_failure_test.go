@@ -21,7 +21,7 @@ func newFailureModel(t *testing.T, lang string, width int, login string) (Model,
 		t.Fatalf("i18n.New(%s): %v", lang, err)
 	}
 	pb := &fakePlayback{}
-	m := New(cat, WithPlayback(pb))
+	m := newClassicModel(cat, WithPlayback(pb))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
 	m = updated.(Model)
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: login, DisplayName: login}})
@@ -284,7 +284,7 @@ func setupStaleLiveListing(t *testing.T) Model {
 	pb := &fakePlayback{}
 	xqc := liveChannel("xqc-id", "xqc", "xQc", 13000)
 	gaules := liveChannel("gaules-id", "gaules", "Gaules", 8500)
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithPlayback(pb),
 		WithFavorites([]catalog.Channel{xqc, gaules}),
 		WithRecents([]catalog.Channel{xqc}),

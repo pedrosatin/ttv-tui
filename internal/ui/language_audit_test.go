@@ -36,7 +36,7 @@ func auditCatalog(t *testing.T, lang string) *i18n.Catalog {
 
 func auditModel(t *testing.T, lang string, width int) Model {
 	t.Helper()
-	m := New(auditCatalog(t, lang))
+	m := newClassicModel(auditCatalog(t, lang))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
 	return updated.(Model)
 }
@@ -52,7 +52,7 @@ func auditPlaying(t *testing.T, lang string, width int) Model {
 // to arrange; before that the layout keys only explain why they do nothing.
 func auditChannelOpen(t *testing.T, lang string, width int) Model {
 	t.Helper()
-	m := New(auditCatalog(t, lang), WithPlayback(&fakePlayback{}), WithChat(&fakeChat{}))
+	m := newClassicModel(auditCatalog(t, lang), WithPlayback(&fakePlayback{}), WithChat(&fakeChat{}))
 	m = auditSend(m, tea.WindowSizeMsg{Width: width, Height: 30})
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
@@ -80,7 +80,7 @@ func assertResolved(t *testing.T, cat *i18n.Catalog, surface, screen string, wan
 			t.Errorf("%s: key %q has no %s text (would fall back to English)", surface, w.key, cat.Lang())
 			continue
 		}
-		text := CatalogText(cat, w.key)
+		text := newKeyRegistry(classicActions(), nil).expandKeys(cat.T(w.key), cat)
 		if len(w.args) > 0 {
 			text = fmt.Sprintf(text, w.args...)
 		}
@@ -226,7 +226,7 @@ func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 		helpKeys = append(helpKeys, "help.ctx."+c)
 	}
 	seen := map[string]bool{}
-	for _, a := range defaultActions() {
+	for _, a := range classicActions() {
 		for _, use := range a.helpUses() {
 			if !seen[use.Text] && use.Text != string(actSwitchPlatform) {
 				seen[use.Text] = true

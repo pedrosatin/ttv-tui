@@ -1,0 +1,40 @@
+=== Keyboard Shortcuts ===
+    Enter             Send the message
+    Tab               Go to the list and keep the draft
+    Esc               Stop writing and keep the draft
+    Backspace/Delete  Delete the previous character
+    Alt+Backspace/Ctrl+W
+                      Delete the previous word
+── Video ──
+  Space               Pause or resume the video
+  +/=                 Turn the volume up
+  -/_                 Turn the volume down
+  m                   Mute or unmute the sound
+  Ctrl+X              Stop the video
+  r                   Retry the video that failed or, without one, the list
+── Window and layout ──
+  Ctrl+W w            Cycle the layouts: split, chat, list and focus
+  Ctrl+W h            Show or hide the list
+  Ctrl+W l            Show or hide the chat; under 80 columns, open the chat alone
+  Esc                 Leaves the layout alone; to change it, use Ctrl+W w, Ctrl+W h or Ctrl+W l
+  Window only:
+    Ctrl+W o          Put the chat over the video or beside it
+    Ctrl+W x          Swap the sides of the list and the chat
+    Alt+↑/Ctrl+W +    Increase overlay chat height
+    Alt+↓/Ctrl+W -    Decrease overlay chat height
+    Alt+PgUp          Make the chat background more opaque
+    Alt+PgDn          Make the chat background more transparent
+    Ctrl+→            Move the list divider to the right
+    Ctrl+←            Move the list divider to the left
+    Alt+←/Ctrl+W <    Move the chat divider to the left
+    Alt+→/Ctrl+W >    Move the chat divider to the right
+    Ctrl+B            Toggle list (window)
+  In a text field:
+    Ctrl+H            Does nothing, so the list does not vanish mid-sentence
+── Settings ──
+  Language: en · change it with --lang en or --lang pt-BR
+  No color: NO_COLOR disables color · symbols ▸ ★ ● ▶ ‖ ✖ ! still show state
+  Colors: green = ●/[live] and viewers · yellow = pause and ★ favorite/pinned · cyan = focus · red = error/[offline] ·
+    magenta = system · mention with underline
+Window and layout · section 6 of 7 · Tab/→ next                                                                    96/96
+ ttv-tui | [en] Ready                                                                            | ? help · Ctrl+Q quit

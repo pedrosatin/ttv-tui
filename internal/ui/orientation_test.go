@@ -47,7 +47,7 @@ func newCategoriesModel(t *testing.T, lang string, width int, searched *[]string
 			}}, nil
 		},
 	}
-	m := New(mustCatalog(t, lang), WithSource(src))
+	m := newClassicModel(mustCatalog(t, lang), WithSource(src))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: width, Height: 24})
 	m, _ = pressKeyMsg(m, m.Init()())
 	if len(m.VisibleItems()) != 2 {

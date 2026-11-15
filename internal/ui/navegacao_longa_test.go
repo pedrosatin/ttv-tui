@@ -12,7 +12,7 @@ import (
 // O usuário desce uma tela de categorias e vê o novo destaque.
 func TestCenarioPaginaCategorias(t *testing.T) {
 	eachSize(t, "pagina-categorias", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m.list.categories = nil
 		for i := range 90 {
 			m.list.categories = append(m.list.categories, catalog.Category{ID: fmt.Sprint(i), Name: fmt.Sprintf("Categoria %02d", i)})
@@ -28,7 +28,7 @@ func TestCenarioPaginaCategorias(t *testing.T) {
 
 // Home, End, g e G param no primeiro e no último item carregado, e g e G digitados na busca viram texto.
 func TestListaNavegacaoLonga(t *testing.T) {
-	m, _ := newScenario(t, 80, 24)
+	m, _ := newScenarioClassic(t, 80, 24)
 	m = play(t, m, "pgup home g end")
 	if m.list.highlightIndex != len(m.VisibleItems())-1 {
 		t.Fatal("End não chegou ao fim")
@@ -44,7 +44,7 @@ func TestListaNavegacaoLonga(t *testing.T) {
 }
 
 func TestEndCarregaSemPularItens(t *testing.T) {
-	m, _ := newScenario(t, 80, 24)
+	m, _ := newScenarioClassic(t, 80, 24)
 	old := m.VisibleItems()
 	m.browser = &fakeSource{categoriesFn: func(_ context.Context, page catalog.PageRequest) (catalog.Page[catalog.Category], error) {
 		if page.Cursor != "proxima" {
@@ -84,7 +84,7 @@ func TestCenarioChatPaginaAbaixo(t *testing.T) {
 }
 
 func TestPaginaComSecoesECampos(t *testing.T) {
-	m, _ := newScenario(t, 80, 24, WithFavorites(scenarioChannels()))
+	m, _ := newScenarioClassic(t, 80, 24, WithFavorites(scenarioChannels()))
 	m = play(t, m, "end pgup")
 	if m.list.highlightIndex != 0 {
 		t.Fatal("PgUp não chegou ao primeiro item depois do cabeçalho")
@@ -113,7 +113,7 @@ func TestPaginaSaltaCabecalho(t *testing.T) {
 		{"pgup", 50, 29},
 	} {
 		t.Run(tc.tecla, func(t *testing.T) {
-			m, _ := newScenario(t, 80, 24, WithFavorites(favoritos))
+			m, _ := newScenarioClassic(t, 80, 24, WithFavorites(favoritos))
 			m.list.categories = nil
 			for i := range 40 {
 				m.list.categories = append(m.list.categories, catalog.Category{ID: fmt.Sprint(i), Name: fmt.Sprintf("Categoria %02d", i)})
@@ -131,7 +131,7 @@ func TestPaginaSaltaCabecalho(t *testing.T) {
 // Enquanto digita o filtro, o usuário desce uma tela dos resultados.
 func TestFiltroPagina(t *testing.T) {
 	eachSize(t, "filtro-pagina", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m.list.categories = nil
 		for i := range 60 {
 			m.list.categories = append(m.list.categories, catalog.Category{ID: fmt.Sprint(i), Name: fmt.Sprintf("Categoria %02d", i)})
@@ -153,7 +153,7 @@ func TestFiltroPagina(t *testing.T) {
 
 func TestAjudaNavegacaoCabeEm80Colunas(t *testing.T) {
 	for _, lang := range []string{"pt-BR", "en"} {
-		m, _ := newScenario(t, 80, 24)
+		m, _ := newScenarioClassic(t, 80, 24)
 		m.catalog = testCatalog(t, lang)
 		m.layout.helpVisible = true
 		for _, row := range m.renderHelpLines(80) {
@@ -167,7 +167,7 @@ func TestAjudaNavegacaoCabeEm80Colunas(t *testing.T) {
 // No modo foco, as teclas de navegação avisam como reabrir a lista.
 func TestCenarioPaginaListaOculta(t *testing.T) {
 	eachSize(t, "pagina-lista-oculta", func(t *testing.T, width, height int) Model {
-		m, _ := newScenario(t, width, height)
+		m, _ := newScenarioClassic(t, width, height)
 		m = play(t, m, "enter enter")
 		m.layout.showList, m.layout.showChat = false, false
 		m.normalizeFocusAfterLayout()

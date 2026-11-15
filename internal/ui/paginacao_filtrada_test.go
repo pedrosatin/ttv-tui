@@ -14,7 +14,7 @@ import (
 func TestCenarioMenuIdiomaContaCanaisDaLista(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		eachSize(t, "filtro-idioma-menu-"+lang, func(t *testing.T, width, height int) Model {
-			m, _ := newScenario(t, width, height)
+			m, _ := newScenarioClassic(t, width, height)
 			m.catalog = mustCatalog(t, lang)
 			return play(t, m, "enter l")
 		})
@@ -25,7 +25,7 @@ func TestCenarioMenuIdiomaContaCanaisDaLista(t *testing.T) {
 func TestRodadaFiltradaParaNoFimErroOuCursorRepetido(t *testing.T) {
 	for _, mode := range []string{"fim", "erro", "cursor", "sem-filtro"} {
 		t.Run(mode, func(t *testing.T) {
-			m, _ := newScenario(t, 80, 24, WithChannelFilters([]string{"pt"}, 0, nil))
+			m, _ := newScenarioClassic(t, 80, 24, WithChannelFilters([]string{"pt"}, 0, nil))
 			if mode == "sem-filtro" {
 				m.list.prefs.languages = nil
 			}
@@ -58,7 +58,7 @@ func TestRodadaFiltradaParaNoFimErroOuCursorRepetido(t *testing.T) {
 
 // Mudar idiomas descarta o cursor anterior e envia a seleção ao catálogo.
 func TestTrocarIdiomaReiniciaCategoria(t *testing.T) {
-	m, _ := newScenario(t, 80, 24)
+	m, _ := newScenarioClassic(t, 80, 24)
 	requests := []catalog.PageRequest{}
 	m = play(t, m, "enter")
 	m.browser = &fakeSource{channelsFn: func(_ context.Context, _ string, p catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
@@ -77,7 +77,7 @@ func TestTrocarIdiomaReiniciaCategoria(t *testing.T) {
 
 // Uma falha posterior preserva os canais e o cursor da última consulta boa.
 func TestRodadaParcialPreservaCursor(t *testing.T) {
-	m, _ := newScenario(t, 80, 24, WithChannelFilters([]string{"pt"}, 0, nil))
+	m, _ := newScenarioClassic(t, 80, 24, WithChannelFilters([]string{"pt"}, 0, nil))
 	m = play(t, m, "enter")
 	var cursors []string
 	m.browser = &fakeSource{channelsFn: func(_ context.Context, _ string, p catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
@@ -100,7 +100,7 @@ func TestRodadaParcialPreservaCursor(t *testing.T) {
 
 // Texto e idioma precisam passar juntos para a rodada encerrar cedo.
 func TestRodadaFiltradaConsideraTexto(t *testing.T) {
-	m, _ := newScenario(t, 80, 24, WithChannelFilters([]string{"pt"}, 0, nil))
+	m, _ := newScenarioClassic(t, 80, 24, WithChannelFilters([]string{"pt"}, 0, nil))
 	m.list.filter = "alvo"
 	calls := 0
 	m.browser = &fakeSource{channelsFn: func(_ context.Context, _ string, p catalog.PageRequest) (catalog.Page[catalog.Channel], error) {

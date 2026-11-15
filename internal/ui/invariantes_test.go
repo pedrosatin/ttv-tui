@@ -98,7 +98,7 @@ func TestInvariantesDeTelaEmCadaLarguraEModo(t *testing.T) {
 	for _, width := range invariantWidths {
 		for _, mode := range uxModes {
 			t.Run(fmt.Sprintf("%s/%d", mode.name, width), func(t *testing.T) {
-				m, _ := newScenario(t, width, invariantHeight)
+				m, _ := newScenarioClassic(t, width, invariantHeight)
 				m = mode.reach(t, m)
 				rows := strings.Split(ansi.Strip(m.View()), "\n")
 				dump := strings.Join(rows, "\n")

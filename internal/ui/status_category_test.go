@@ -48,7 +48,7 @@ func TestStatusBarShowsChannelCategoryNotLastVisitedList(t *testing.T) {
 			}
 		},
 	}
-	m := New(cat, WithSource(src), WithPlayback(&fakePlayback{}))
+	m := newClassicModel(cat, WithSource(src), WithPlayback(&fakePlayback{}))
 	m, cmd := pressKeyMsg(m, m.Init()())
 	m = feedLoadedMsgs(t, m, cmd)
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
@@ -95,7 +95,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 	cat := mustCatalog(t, i18n.LangEN)
 
 	t.Run("favorite", func(t *testing.T) {
-		m := New(cat,
+		m := newClassicModel(cat,
 			WithFavorites([]catalog.Channel{{
 				ID: "f1", Login: "favchan", DisplayName: "FavChan",
 				CategoryName: catalog.StringPtr("Valorant"),
@@ -122,7 +122,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 	})
 
 	t.Run("recent", func(t *testing.T) {
-		m := New(cat,
+		m := newClassicModel(cat,
 			WithRecents([]catalog.Channel{{
 				ID: "r1", Login: "recchan", DisplayName: "RecChan",
 				CategoryName: catalog.StringPtr("Dota 2"),
@@ -160,7 +160,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 				}, nil
 			},
 		}
-		m := New(cat, WithSource(src), WithPlayback(&fakePlayback{}))
+		m := newClassicModel(cat, WithSource(src), WithPlayback(&fakePlayback{}))
 		m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 24})
 		m.list.selectedCategory = &catalog.Category{ID: "cat-fn", Name: "Fortnite"}
 		m.list.mode = ModeSearch
@@ -185,7 +185,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 	})
 
 	t.Run("unknown_omitted", func(t *testing.T) {
-		m := New(cat,
+		m := newClassicModel(cat,
 			WithFavorites([]catalog.Channel{{
 				ID: "f2", Login: "mystery", DisplayName: "Mystery",
 			}}),
@@ -210,7 +210,7 @@ func TestStatusBarCategoryFromFavoriteRecentSearchAndUnknown(t *testing.T) {
 
 func TestStatusBarCategoryUpdatesOnChannelSwitch(t *testing.T) {
 	cat := mustCatalog(t, i18n.LangEN)
-	m := New(cat, WithPlayback(&fakePlayback{}),
+	m := newClassicModel(cat, WithPlayback(&fakePlayback{}),
 		WithFavorites([]catalog.Channel{
 			{ID: "a", Login: "alpha", DisplayName: "Alpha", CategoryName: catalog.StringPtr("Chess")},
 			{ID: "b", Login: "bravo", DisplayName: "Bravo", CategoryName: catalog.StringPtr("Poker")},

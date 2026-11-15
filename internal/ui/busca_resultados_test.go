@@ -45,7 +45,7 @@ func TestEnterNoFiltroSoAbreDestaqueVisivel(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			fav := scenarioChannels()[0]
-			m, w := newScenario(t, 80, 24, WithFavorites([]catalog.Channel{fav}))
+			m, w := newScenarioClassic(t, 80, 24, WithFavorites([]catalog.Channel{fav}))
 			m = play(t, m, tc.keys)
 			if tc.prepare != nil {
 				m = tc.prepare(m)
@@ -64,7 +64,7 @@ func TestEnterNoFiltroSoAbreDestaqueVisivel(t *testing.T) {
 // A dica do filtro aparece só enquanto se digita nele e cita a plataforma da
 // lista.
 func TestDicaDoFiltroSoEnquantoSeDigita(t *testing.T) {
-	m, _ := newScenario(t, 80, 24)
+	m, _ := newScenarioClassic(t, 80, 24)
 	hint := fmt.Sprintf(m.t("filter.typing_hint"), "Twitch")
 	if lineWith(m, hint) >= 0 {
 		t.Fatalf("a dica aparece sem o filtro aberto:\n%s", screen(m))
@@ -105,7 +105,7 @@ func TestRecentesDaTelaInicial(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := New(mustCatalog(t, i18n.LangPTBR), WithRecents(recs(tc.recents)))
+			m := newClassicModel(mustCatalog(t, i18n.LangPTBR), WithRecents(recs(tc.recents)))
 			m.list.filter = tc.filter
 			m.list.recentsExpanded = tc.expanded
 			shown, hidden, moreRows := 0, 0, 0
@@ -134,7 +134,7 @@ func TestFNaLinhaMaisNaoFavorita(t *testing.T) {
 	for i := range recents {
 		recents[i] = catalog.Channel{ID: fmt.Sprintf("rec-%d", i), Login: fmt.Sprintf("recente%d", i)}
 	}
-	m := New(mustCatalog(t, i18n.LangPTBR), WithRecents(recents))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR), WithRecents(recents))
 	m.list.highlightedID = moreRecentsID
 	if it, ok := m.HighlightedItem(); !ok || it.Type != ItemTypeMoreRecents {
 		t.Fatalf("preparação: destaque %+v, quer a linha mais…", it)

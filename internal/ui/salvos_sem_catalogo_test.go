@@ -13,7 +13,7 @@ import (
 func TestCenarioSalvosSemCatalogo(t *testing.T) {
 	eachSize(t, "salvos-sem-catalogo", func(t *testing.T, width, height int) Model {
 		kick := kickCatalog()
-		m, _ := newScenario(t, width, height,
+		m, _ := newScenarioClassic(t, width, height,
 			WithPlatformCatalog(platform.Kick, kick, kick),
 			WithFavorites([]catalog.Channel{{Platform: "facebook.com", Login: "pagina", DisplayName: "pagina", URL: "https://facebook.com/pagina"}}),
 			WithRecents([]catalog.Channel{{Platform: platform.YouTube, Login: "video", DisplayName: "video", URL: "https://youtube.com/watch?v=video"}}))
@@ -46,7 +46,7 @@ func TestCenarioSalvosSemCatalogo(t *testing.T) {
 // Um host longo na marca não esconde o nome do canal em 80 colunas.
 func TestMarcaDeHostLongoMantemONome(t *testing.T) {
 	host := strings.Repeat("a", 121) + ".com"
-	m, _ := newScenario(t, 80, 24,
+	m, _ := newScenarioClassic(t, 80, 24,
 		WithFavorites([]catalog.Channel{{Platform: host, Login: "canal", DisplayName: "canal", URL: "https://" + host + "/canal"}}))
 	view := ansi.Strip(m.View())
 	if !strings.Contains(view, "] canal") {

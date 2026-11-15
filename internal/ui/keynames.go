@@ -39,6 +39,9 @@ var keyTypesByName = func() map[string]tea.KeyType {
 // o mesmo formato. ok é falso para um nome que não é tecla; quem mostra o erro
 // ao usuário escreve a mensagem pelo catálogo de i18n.
 func parseKeyName(name string) (tea.KeyMsg, bool) {
+	if strings.HasPrefix(name, "ctrl+w ") || strings.HasPrefix(name, "g ") {
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(name)}, true
+	}
 	if t, ok := keyTypesByName[name]; ok {
 		return keyMsgOf(t, false), true
 	}
@@ -93,6 +96,9 @@ var keySymbols = map[string]string{
 // "alt+up" vira Alt+↑, "pgdown" vira PgDn e "enter" vira Enter. Um caractere sai
 // como é, e o espaço, único nome traduzido, vem do catálogo.
 func keyLabel(name string, cat *i18n.Catalog) string {
+	if parts := strings.Split(name, " "); len(parts) == 2 && parts[0] != "" {
+		return keyLabel(parts[0], cat) + " " + keyLabel(parts[1], cat)
+	}
 	if name == " " || name == "space" {
 		return cat.T("key.space")
 	}

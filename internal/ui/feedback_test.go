@@ -24,7 +24,7 @@ type feedbackStore struct {
 func (s *feedbackStore) Save(store.State) error { s.calls++; return s.err }
 
 func feedbackModel(t *testing.T, s Store) Model {
-	m := New(mustCatalog(t, i18n.LangPTBR), WithStore(s))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR), WithStore(s))
 	m.width, m.height = 80, 24
 	m.list.mode = ModeChannels
 	m.list.channels = []catalog.Channel{{ID: "1", Login: "demo", DisplayName: "Demo"}}
@@ -93,7 +93,7 @@ func TestFeedbackRecentSaveFailure(t *testing.T) {
 
 func TestFeedbackPlayerInfo(t *testing.T) {
 	for _, line := range []string{"[cli][info] Stream ended", "[plugins.twitch][info] Will skip ad segments"} {
-		m := New(mustCatalog(t, i18n.LangPTBR))
+		m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 		m, _ = pressKeyMsg(m, PlayerStatusMsg{State: PlayerStatePlaying, LastLine: line})
 		if m.player.errorLine() != "" {
 			t.Errorf("info exposed as last error: %q", m.player.errorLine())
@@ -118,7 +118,7 @@ func TestFeedbackPlayerInfo(t *testing.T) {
 func TestFeedbackLoadingAndEmpty(t *testing.T) {
 	for _, lang := range orientationLangs {
 		for _, mode := range []Mode{ModeCategories, ModeChannels, ModeSearch} {
-			m := New(mustCatalog(t, lang))
+			m := newClassicModel(mustCatalog(t, lang))
 			m.width, m.height, m.list.mode = 80, 24, mode
 			m.list.loading = true
 			loading := ansi.Strip(m.View())
@@ -140,7 +140,7 @@ func TestFeedbackLoadingAndEmpty(t *testing.T) {
 func TestFeedbackDisconnectedChat(t *testing.T) {
 	for _, lang := range orientationLangs {
 		for _, state := range []ChatState{ChatStateConnecting, ChatStateReconnecting, ChatStateDisconnected, ChatStateError} {
-			m := New(mustCatalog(t, lang))
+			m := newClassicModel(mustCatalog(t, lang))
 			m.chat.panel.channel, m.chat.panel.state, m.chat.panel.errText = "demo", state, "connection refused"
 			view := ansi.Strip(strings.Join(m.renderChatLines(12, 80), "\n"))
 			waiting := fmt.Sprintf(m.t("chat.empty"), "#demo")
@@ -209,7 +209,7 @@ func TestFeedbackPTY(t *testing.T) {
 	if state == "" {
 		t.Skip("opt-in PTY capture")
 	}
-	m := New(mustCatalog(t, i18n.LangPTBR))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 	m.width, m.height = 80, 24
 	switch state {
 	case "loading":

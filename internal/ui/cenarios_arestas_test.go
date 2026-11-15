@@ -20,7 +20,7 @@ func statusLine(m Model) string {
 // mudo confirmado, a barra diz "mudo" no lugar do volume.
 func TestCenarioTeclaMMuda(t *testing.T) {
 	eachSize(t, "tecla-m-muda", func(t *testing.T, width, height int) Model {
-		m, w := newScenario(t, width, height)
+		m, w := newScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f gaules enter enter")
 		m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
 		m = play(t, m, "m")
@@ -37,7 +37,7 @@ func TestCenarioTeclaMMuda(t *testing.T) {
 
 // Sem player, m não pede nada: não há o que silenciar.
 func TestTeclaMSemPlayer(t *testing.T) {
-	m, w := newScenario(t, 80, 24)
+	m, w := newScenarioClassic(t, 80, 24)
 	m = play(t, m, "m")
 	if w.playback.muteToggles != 0 {
 		t.Fatalf("m sem player pediu %d trocas de mudo", w.playback.muteToggles)
@@ -49,7 +49,7 @@ func TestTeclaMSemPlayer(t *testing.T) {
 
 // Escrevendo no chat, m é texto.
 func TestTeclaMNaEscritaEhTexto(t *testing.T) {
-	m, w := newScenario(t, 80, 24)
+	m, w := newScenarioClassic(t, 80, 24)
 	m = play(t, m, "ctrl+f gaules enter enter")
 	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
 	m = chatLines(t, m, [2]string{"Fulano", "oi"})
@@ -65,21 +65,21 @@ func hostedScenario(t *testing.T, width, height int, opts ...Option) (Model, *sc
 	t.Helper()
 	exactCellWidths = true
 	t.Cleanup(func() { exactCellWidths = false })
-	return newScenario(t, width, height, append([]Option{WithVideoHost(&recordingHost{})}, opts...)...)
+	return newScenarioClassic(t, width, height, append([]Option{WithVideoHost(&recordingHost{})}, opts...)...)
 }
 
 // Na janela, com uma categoria destacada na tela inicial, a área do vídeo diz
 // que Enter abre a categoria; com um canal destacado, que Enter assiste a ele.
 func TestCenarioJanelaTelaInicialFalaDoDestacado(t *testing.T) {
 	eachSize(t, "janela-tela-inicial", func(t *testing.T, width, height int) Model {
-		m, _ := hostedScenario(t, width, height)
+		m, _ := hostedScenarioClassic(t, width, height)
 		if !strings.Contains(screen(m), "Enter abre a categoria") {
 			t.Fatalf("tela inicial sem a dica da categoria:\n%s", screen(m))
 		}
 		return m
 	})
 	eachSize(t, "janela-canal-destacado", func(t *testing.T, width, height int) Model {
-		m, _ := hostedScenario(t, width, height)
+		m, _ := hostedScenarioClassic(t, width, height)
 		m = play(t, m, "j enter")
 		if !strings.Contains(screen(m), "Enter assiste a Gaules") {
 			t.Fatalf("canais sem a dica do canal destacado:\n%s", screen(m))
@@ -92,7 +92,7 @@ func TestCenarioJanelaTelaInicialFalaDoDestacado(t *testing.T) {
 // gaules…"; com o vídeo tocando, ela fica livre para o quadro.
 func TestCenarioJanelaAbrindoCanal(t *testing.T) {
 	eachSize(t, "janela-abrindo-canal", func(t *testing.T, width, height int) Model {
-		m, _ := hostedScenario(t, width, height)
+		m, _ := hostedScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f gaules enter enter")
 		if m.PlayerState() != PlayerStateStarting || !strings.Contains(screen(m), "Abrindo gaules…") {
 			t.Fatalf("player %s, tela:\n%s", m.PlayerState(), screen(m))
@@ -115,7 +115,7 @@ func listHeader(m Model) string {
 // vez de mostrar "[f…". Tab passa o foco ao chat, e a marca vai junto.
 func TestCenarioFocoNaoSeCortaEmColunaEstreita(t *testing.T) {
 	eachSize(t, "foco-coluna-estreita", func(t *testing.T, width, height int) Model {
-		m, _ := hostedScenario(t, width, height, WithHostedColumns(25, 0, false, false, 0, nil))
+		m, _ := hostedScenarioClassic(t, width, height, WithHostedColumns(25, 0, false, false, 0, nil))
 		m = play(t, m, "ctrl+f gaules enter enter ctrl+r")
 		head := listHeader(m)
 		if !strings.HasPrefix(head, "▸ ") {
@@ -141,7 +141,7 @@ func TestCenarioFocoNaoSeCortaEmColunaEstreita(t *testing.T) {
 func TestSelecaoDaListaAtenuaForaDeFoco(t *testing.T) {
 	forceOrientationColorsForTest(true)
 	defer forceOrientationColorsForTest(false)
-	m, _ := newScenario(t, 100, 24)
+	m, _ := newScenarioClassic(t, 100, 24)
 	m = play(t, m, "ctrl+f gaules enter enter")
 	m = chatLines(t, m, [2]string{"Fulano", "oi"})
 	row := func(m Model) string {
@@ -195,7 +195,7 @@ func TestCenarioBarraComListaDaKick(t *testing.T) {
 // dizem a mesma coisa, citando --import twt. Esc tira o aviso.
 func TestCenarioEscreverSemToken(t *testing.T) {
 	eachSize(t, "escrever-sem-token", func(t *testing.T, width, height int) Model {
-		m, w := newScenario(t, width, height)
+		m, w := newScenarioClassic(t, width, height)
 		w.chat.hasToken = false
 		m = play(t, m, "ctrl+f gaules enter enter")
 		m = chatLines(t, m, [2]string{"Fulano", "oi"})

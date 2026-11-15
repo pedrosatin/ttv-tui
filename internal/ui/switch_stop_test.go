@@ -25,7 +25,7 @@ func TestStopDuringSwitchEndsStopped(t *testing.T) {
 	for name, reply := range replies {
 		t.Run(name, func(t *testing.T) {
 			pb := &fakePlayback{}
-			m := New(catEN, WithPlayback(pb))
+			m := newClassicModel(catEN, WithPlayback(pb))
 			updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 			m = updated.(Model)
 			updated, _ = m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
@@ -66,7 +66,7 @@ func TestChannelSelectedAfterQuitStartsNothing(t *testing.T) {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	pb := &fakePlayback{}
-	m := New(catEN, WithPlayback(pb))
+	m := newClassicModel(catEN, WithPlayback(pb))
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
 	m = updated.(Model)
 	if !m.Quitting() {

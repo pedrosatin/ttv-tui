@@ -558,6 +558,7 @@ def flows():
     time.sleep(0.3)
     check(role, "Ctrl+W e Ctrl+H na busca não mexem no layout", stats()["hole"] == h0 and "Live Channels" in screen().splitlines()[0], f"{h0} -> {stats()['hole']}")
     t("key", "Escape")
+    time.sleep(0.1)
     wait(lambda: "Search: " not in screen(), 3, 0.05)
 
     # ---- Quem quer só o vídeo: esconder e mostrar lista e chat
@@ -565,26 +566,30 @@ def flows():
     full_cols = stats()["cols"]
     h0 = list(stats()["hole"])
     f0 = stats()["videoFrames"]
-    t("key", "ctrl+h")
+    press("ctrl+w", 1)
+    press("h", 1)
     ok = wait(lambda: stats()["hole"][0] == 1 and stats()["hole"][2] > h0[2], 4, 0.1)
     s4 = stats()
-    check(role, "Ctrl+H esconde a lista e o vídeo cresce à esquerda", ok and "Live Channels" not in screen().splitlines()[0], str(s4["hole"]))
+    check(role, "Ctrl+W h esconde a lista e o vídeo cresce à esquerda", ok and "Live Channels" not in screen().splitlines()[0], str(s4["hole"]))
     time.sleep(0.5)
     a, b = two_grabs("nolist")
     L2 = (origin()[0] + 20, origin()[1] + 200, max((h0[0] - 1) * s4["cellW"] - 40, 40), s4["rows"] * s4["cellH"] - 400)
     m2 = motion(a, b, *L2)
     check(role, "o vídeo ocupa em pixels a área da lista", m2 > 0.002, f"{m2:.4f}")
-    t("key", "ctrl+l")
+    press("ctrl+w", 1)
+    press("l", 1)
     ok = wait(lambda: stats()["hole"][2] == full_cols, 4, 0.1)
-    check(role, "Ctrl+L esconde o chat e o vídeo ocupa a largura toda", ok, str(stats()["hole"]))
+    check(role, "Ctrl+W l esconde o chat e o vídeo ocupa a largura toda", ok, str(stats()["hole"]))
     time.sleep(0.3)
     bar = last_line()
-    check(role, "só com o vídeo, a barra diz como voltar", "Ctrl+H" in bar and "Ctrl+L" in bar, bar.strip()[-60:])
+    check(role, "só com o vídeo, a barra diz como voltar", "Ctrl+W h" in bar and "Ctrl+W l" in bar, bar.strip()[-60:])
     time.sleep(0.3)
     check(role, "vídeo não parou ao alternar", stats()["videoFrames"] > f0 + 30, f"+{stats()['videoFrames'] - f0} quadros")
-    t("key", "ctrl+h")
+    press("ctrl+w", 1)
+    press("h", 1)
     time.sleep(0.25)
-    t("key", "ctrl+l")
+    press("ctrl+w", 1)
+    press("l", 1)
     ok = wait(lambda: stats()["hole"] == h0, 4, 0.1)
     first = screen().splitlines()[0]
     check(role, "os dois voltam ao lugar", ok and "Live Channels" in first and "Chat" in first, str(stats()["hole"]))
@@ -632,12 +637,14 @@ def flows():
     check(role, "Ctrl+Alt+→ não chega como Ctrl+→", after_alt == h0 and moved, f"Ctrl+Alt+→ {h0} -> {after_alt}; Ctrl+→ em seguida {'move' if moved else 'não move'}")
     press("ctrl+Left", 1)
     wait(lambda: stats()["hole"] == h0, 3, 0.05)
-    t("key", "ctrl+h")
+    press("ctrl+w", 1)
+    press("h", 1)
     wait(lambda: stats()["hole"][0] == 1, 3, 0.05)
     press("ctrl+Right", 1)
     ok = wait(lambda: "hidden" in last_line().lower(), 3, 0.05)
     check(role, "com a lista oculta, o atalho avisa", ok and stats()["hole"][0] == 1, last_line().strip()[:50])
-    t("key", "ctrl+h")
+    press("ctrl+w", 1)
+    press("h", 1)
     wait(lambda: stats()["hole"] == h0, 3, 0.05)
     time.sleep(0.2)
 
@@ -645,11 +652,12 @@ def flows():
     role = "sobreposto"
     h0 = list(stats()["hole"])
     f0 = stats()["videoFrames"]
-    t("key", "ctrl+o")
+    press("ctrl+w", 1)
+    press("o", 1)
     ok = wait(lambda: stats()["overlay"] > 0 and stats()["hole"][2] > h0[2], 3, 0.05)
     s7 = stats()
     chat_cols = s7["overlay"]
-    check(role, "Ctrl+O põe o chat sobre o vídeo e o vídeo ganha a coluna", ok and s7["hole"][2] == h0[2] + chat_cols + 1, f"{h0} -> {s7['hole']}, chat {chat_cols}")
+    check(role, "Ctrl+W o põe o chat sobre o vídeo e o vídeo ganha a coluna", ok and s7["hole"][2] == h0[2] + chat_cols + 1, f"{h0} -> {s7['hole']}, chat {chat_cols}")
     time.sleep(0.6)
     col, row, cc, rr = s7["hole"]
     ox, oy = origin()
@@ -709,6 +717,7 @@ def flows():
     text("i")
     check(role, "escrita no overlay explica o login", wait(lambda: "login" in screen().lower(), 3, 0.1), last_line())
     t("key", "Escape")
+    time.sleep(0.1)
     # Um ESC sozinho logo antes de Alt+← (ESC [1;3D) se junta à sequência, e o
     # primeiro Alt+← se perde.
     time.sleep(0.3)
@@ -717,24 +726,28 @@ def flows():
     check(role, "Alt+← alarga o chat sem encolher o vídeo", ok, f"chat {stats()['overlay']}, {stats()['hole']}")
     press("alt+Right", 3)
     wait(lambda: stats()["overlay"] == chat_cols, 3, 0.05)
-    t("key", "ctrl+l")
+    press("ctrl+w", 1)
+    press("l", 1)
     ok = wait(lambda: stats()["overlay"] == 0, 3, 0.05)
-    check(role, "Ctrl+L esconde o chat sobreposto", ok, str(stats()["hole"]))
-    t("key", "ctrl+l")
+    check(role, "Ctrl+W l esconde o chat sobreposto", ok, str(stats()["hole"]))
+    press("ctrl+w", 1)
+    press("l", 1)
     wait(lambda: stats()["overlay"] == chat_cols, 3, 0.05)
     check(role, "vídeo não parou", stats()["videoFrames"] > f0 + 60, f"+{stats()['videoFrames'] - f0} quadros")
-    t("key", "ctrl+o")
+    press("ctrl+w", 1)
+    press("o", 1)
     ok = wait(lambda: stats()["overlay"] == 0 and stats()["hole"] == h0, 3, 0.05)
-    check(role, "Ctrl+O devolve o chat para o lado", ok, str(stats()["hole"]))
+    check(role, "Ctrl+W o devolve o chat para o lado", ok, str(stats()["hole"]))
     t("key", "alt+PageUp")
-    ok = wait(lambda: "Ctrl+O" in last_line(), 3, 0.05)
+    ok = wait(lambda: "Ctrl+W o" in last_line(), 3, 0.05)
     check(role, "com o chat ao lado, o atalho explica o que falta", ok, last_line().strip()[:50])
 
     # ---- Trocar os lados
     role = "lados"
     h0 = list(stats()["hole"])
     chat0 = full_cols - h0[0] + 1 - h0[2] - 1
-    t("key", "ctrl+p")
+    press("ctrl+w", 1)
+    press("x", 1)
     ok = wait(lambda: stats()["hole"] == [chat0 + 2, 1, h0[2], h0[3]], 3, 0.05)
 
     def swapped():
@@ -744,7 +757,7 @@ def flows():
     # O retângulo chega pelo socket de layout e o texto pelo PTY: o título pode vir um quadro depois.
     titles = wait(swapped, 3, 0.05)
     first = screen().splitlines()[0]
-    check(role, "Ctrl+P põe o chat à esquerda e a lista à direita", ok and titles, first[:34] + " … " + first.rsplit("│", 1)[-1].strip()[:30])
+    check(role, "Ctrl+W x põe o chat à esquerda e a lista à direita", ok and titles, first[:34] + " … " + first.rsplit("│", 1)[-1].strip()[:30])
     press("alt+Right", 2)
     ok = wait(lambda: stats()["hole"] == [chat0 + 6, 1, h0[2] - 4, h0[3]], 3, 0.05)
     check(role, "Alt+→ alarga o chat à esquerda", ok, str(stats()["hole"]))
@@ -754,10 +767,11 @@ def flows():
     check(role, "Ctrl+← alarga a lista à direita", ok, str(stats()["hole"]))
     press("ctrl+Right", 2)
     wait(lambda: stats()["hole"][2] == h0[2], 3, 0.05)
-    t("key", "ctrl+o")
+    press("ctrl+w", 1)
+    press("o", 1)
     ok = wait(lambda: stats()["overlayLeft"] and stats()["hole"][0] == 1 and stats()["overlay"] == chat0, 3, 0.05)
     s8 = stats()
-    check(role, "Ctrl+O põe o chat sobre o vídeo, à esquerda", ok, f"{s8['hole']}, chat {s8['overlay']}")
+    check(role, "Ctrl+W o põe o chat sobre o vídeo, à esquerda", ok, f"{s8['hole']}, chat {s8['overlay']}")
     time.sleep(0.6)
     ox, oy = origin()
     a, b = two_grabs("glassleft")
@@ -778,9 +792,11 @@ def flows():
     check(role, "chat largo à esquerda mantém o texto em toda a coluna", max(seen) >= 150, f"chat {s9['overlay']} de {s9['hole'][2]}, coluna {probe}, alfa máx {max(seen)}")
     press("alt+Left", 22)
     wait(lambda: stats()["overlay"] == chat0, 3, 0.05)
-    t("key", "ctrl+o")
+    press("ctrl+w", 1)
+    press("o", 1)
     time.sleep(0.3)
-    t("key", "ctrl+p")
+    press("ctrl+w", 1)
+    press("x", 1)
     ok = wait(lambda: stats()["hole"] == h0 and not stats()["overlayLeft"], 3, 0.05)
     check(role, "tudo volta ao lugar", ok, str(stats()["hole"]))
 
@@ -919,7 +935,8 @@ def flows():
     base = stats()["hole"][0] - 2
     press("ctrl+Right", 5)
     time.sleep(1.2)  # a gravação espera a tecla parar
-    t("key", "ctrl+o")
+    press("ctrl+w", 1)
+    press("o", 1)
     check(role, "overlay ligado antes de ajustar", wait(lambda: stats()["overlay"] > 0, 3, 0.1))
     before_rows = stats()["overlayRows"]
     before_opacity = stats()["overlayOpacity"]

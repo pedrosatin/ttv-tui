@@ -88,7 +88,7 @@ func twoPlatforms(t *testing.T, lang string, tw, kick *countingSource, opts ...O
 		WithPlatformCatalog(platform.Twitch, tw, tw),
 		WithPlatformCatalog(platform.Kick, kick, kick),
 	}, opts...)
-	m := New(mustCatalog(t, lang), all...)
+	m := newClassicModel(mustCatalog(t, lang), all...)
 	return drainAll(t, m, m.Init())
 }
 
@@ -210,7 +210,7 @@ func TestPlatformKey_ChannelsAndSearchComeFromThatPlatform(t *testing.T) {
 
 func TestPlatformKey_SinglePlatformHasNothingToSwitchTo(t *testing.T) {
 	tw := twitchCatalog()
-	m := New(mustCatalog(t, i18n.LangEN), WithSource(tw))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithSource(tw))
 	m = drainAll(t, m, m.Init())
 	asked := len(tw.calls())
 
@@ -235,7 +235,7 @@ func TestPlatformKey_OpensOnTheDefaultPlatform(t *testing.T) {
 	cat := mustCatalog(t, i18n.LangEN)
 
 	// Kick configured first: Twitch still opens, and Kick is the next one.
-	m := New(cat, WithPlatformCatalog(platform.Kick, kick, kick), WithPlatformCatalog(platform.Twitch, tw, tw))
+	m := newClassicModel(cat, WithPlatformCatalog(platform.Kick, kick, kick), WithPlatformCatalog(platform.Twitch, tw, tw))
 	if m.ListPlatform() != platform.Twitch || !m.Loading() {
 		t.Fatalf("opened on %q (loading %v), want twitch", m.ListPlatform(), m.Loading())
 	}
@@ -245,7 +245,7 @@ func TestPlatformKey_OpensOnTheDefaultPlatform(t *testing.T) {
 	}
 
 	// Without the default platform the first one configured opens.
-	only := New(cat, WithPlatformCatalog(platform.Kick, kick, kick))
+	only := newClassicModel(cat, WithPlatformCatalog(platform.Kick, kick, kick))
 	if only.ListPlatform() != platform.Kick {
 		t.Fatalf("opened on %q, want kick", only.ListPlatform())
 	}
@@ -255,7 +255,7 @@ func TestPlatformKey_OpensOnTheDefaultPlatform(t *testing.T) {
 	}
 
 	// A platform with neither capability has no turn.
-	none := New(cat, WithSource(tw), WithPlatformCatalog(platform.Kick, nil, nil))
+	none := newClassicModel(cat, WithSource(tw), WithPlatformCatalog(platform.Kick, nil, nil))
 	if _, cmd := pressKey(none, keyP); cmd != nil {
 		t.Error("p switched to a platform with no catalog")
 	}
@@ -300,7 +300,7 @@ func TestPlatformKey_LeavesPlaybackAndChatAlone(t *testing.T) {
 // An answer of the platform the list just left must not land on the new one.
 func TestPlatformKey_DropsTheLateAnswerOfThePreviousPlatform(t *testing.T) {
 	tw, kick := twitchCatalog(), kickCatalog()
-	m := New(mustCatalog(t, i18n.LangEN), WithPlatformCatalog(platform.Twitch, tw, tw), WithPlatformCatalog(platform.Kick, kick, kick))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlatformCatalog(platform.Twitch, tw, tw), WithPlatformCatalog(platform.Kick, kick, kick))
 	late := m.Init()
 	m = pressP(t, m)
 	if got := strings.Join(categoryNames(m), ","); got != "Slots & Casino,Chess" {
@@ -582,7 +582,7 @@ func TestBlockedCatalog_ARefusedNextPageKeepsTheLoadedRows(t *testing.T) {
 			HasMore: true,
 		}, nil
 	}}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlatformCatalog(platform.Kick, kick, kick))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlatformCatalog(platform.Kick, kick, kick))
 	m = resize(m, 120, 30)
 	m = drainAll(t, m, m.Init())
 
@@ -660,7 +660,7 @@ func TestCatalogError_NamesThePlatformThatFailed(t *testing.T) {
 	}
 
 	// An error with no platform is of the platform on screen.
-	m := New(mustCatalog(t, i18n.LangEN))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN))
 	if got := m.errorMessage(&catalog.Error{Kind: catalog.Servidor}); got != "Twitch service error: the service failed to respond." {
 		t.Errorf("error without a platform = %q", got)
 	}

@@ -31,7 +31,7 @@ func TestFavoritesToggling_ReflectedInListAndStore(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	fs := &fakeStore{}
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithStore(fs),
 		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "streamer_fav", DisplayName: "Favorite Streamer"},
@@ -107,7 +107,7 @@ func TestFavoritesToggling_ReflectedInListAndStore(t *testing.T) {
 func TestListOrder_FavoritesRecentsContent(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "streamer_fav1"},
 			{ID: "fav-2", Login: "streamer_fav2"},
@@ -162,7 +162,7 @@ func TestNoDuplicatesAcrossSections(t *testing.T) {
 
 	// "shared_streamer" is in Favorites AND in Recents AND in loaded category channels
 	// "recent_shared" is in Recents AND in loaded category channels
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithFavorites([]catalog.Channel{
 			{ID: "ch-shared", Login: "shared_streamer", DisplayName: "Shared Streamer"},
 		}),
@@ -209,7 +209,7 @@ func TestRenamedRecentIsSeenByID(t *testing.T) {
 
 	// The store kept the favorite under its old login; the recent has the same
 	// ID with the new one. No listing is loaded to resolve either.
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithFavorites([]catalog.Channel{
 			{ID: "ch-1", Login: "old_login", DisplayName: "Old Login"},
 		}),
@@ -230,7 +230,7 @@ func TestRenamedRecentIsSeenByID(t *testing.T) {
 func TestFilteredRecentDoesNotHideListedChannel(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithRecents([]catalog.Channel{
 			{ID: "ch-1", Login: "quiet", DisplayName: "Quiet"},
 		}),
@@ -263,7 +263,7 @@ func TestEnterSemanticsByItemType(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	fs := &fakeStore{}
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithStore(fs),
 		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "streamer_fav", DisplayName: "Fav"},
@@ -327,7 +327,7 @@ func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
 
 	// fav-off has no viewers and is not in the loaded listing: no evidence.
 	// fav-on is in the loaded category listing with viewers: live.
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithFavorites([]catalog.Channel{
 			{ID: "fav-off", Login: "offline_guy", DisplayName: "Offline Guy", Viewers: nil},
 			{ID: "fav-on", Login: "online_guy", DisplayName: "Online Guy", Viewers: nil},
@@ -368,7 +368,7 @@ func TestSavedChannelWithoutViewersIsUnverifiedNotOffline(t *testing.T) {
 
 func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithRecents([]catalog.Channel{
 			{ID: "r-off", Login: "gaulestv", DisplayName: "gaulestv"},
 			{ID: "r-unk", Login: "xqc", DisplayName: "xQc"},
@@ -413,7 +413,7 @@ func TestOfflineTagRequiresExplicitEvidence(t *testing.T) {
 
 func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 	catPT, _ := i18n.New(i18n.LangPTBR)
-	m := New(catPT,
+	m := newClassicModel(catPT,
 		WithRecents([]catalog.Channel{
 			// Store only carries identity; worst case it even says offline.
 			{ID: "r-1", Login: "eslcs", DisplayName: "ESLCS", Availability: catalog.AvailabilityOffline},
@@ -445,7 +445,7 @@ func TestPlayingChannelIsLiveRegardlessOfStore(t *testing.T) {
 
 func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithFavorites([]catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
 		WithRecents([]catalog.Channel{
 			{ID: "r-1", Login: "strogo", DisplayName: "StRoGo"},
@@ -501,7 +501,7 @@ func TestLoadedCategoryRefreshesSavedAvailability(t *testing.T) {
 
 func TestReturnToCategoriesDropsListing(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithFavorites([]catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules", Language: catalog.StringPtr("pt")}}),
 	)
 	cat := catalog.Category{ID: "cs", Name: "Counter-Strike"}
@@ -543,7 +543,7 @@ func TestReturnToCategoriesDropsListing(t *testing.T) {
 
 func TestRetryFallingToCategoriesDropsListing(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
-	m := New(catEN, WithSource(&fakeSource{}))
+	m := newClassicModel(catEN, WithSource(&fakeSource{}))
 	m.list.mode = ModeSearch
 	m.list.channels = []catalog.Channel{{ID: "c-1", Login: "eslcs", Availability: catalog.AvailabilityLive}}
 
@@ -560,7 +560,7 @@ func TestRetryFallingToCategoriesDropsListing(t *testing.T) {
 func TestAvailabilityLabelsFitIn120And80Columns(t *testing.T) {
 	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
 		cat, _ := i18n.New(lang)
-		m := New(cat,
+		m := newClassicModel(cat,
 			WithFavorites([]catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
 			WithRecents([]catalog.Channel{
 				{ID: "r-1", Login: "eslcs", DisplayName: "ESLCS"},
@@ -603,7 +603,7 @@ func TestAvailabilityLabelsFitIn120And80Columns(t *testing.T) {
 func TestSectionsRenderIn120And79Columns(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithFavorites([]catalog.Channel{
 			{ID: "fav-1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(12000)},
 		}),
@@ -658,7 +658,7 @@ func TestCorruptStateWarnsOnceInStatusBar(t *testing.T) {
 	catPT, _ := i18n.New(i18n.LangPTBR)
 
 	notice := catPT.T("store.corrupt_notice")
-	m := New(catPT, WithCorruptNotice(notice))
+	m := newClassicModel(catPT, WithCorruptNotice(notice))
 
 	if m.CorruptNotice() != notice {
 		t.Fatalf("expected CorruptNotice() = %q, got %q", notice, m.CorruptNotice())
@@ -699,7 +699,7 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 			Availability: catalog.AvailabilityLive,
 		}
 
-		m := New(cat,
+		m := newClassicModel(cat,
 			WithFavorites([]catalog.Channel{favCh}),
 			WithRecents([]catalog.Channel{recCh}),
 		)
@@ -754,7 +754,7 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 		}
 
 		// 2. The same channel has the same line (except highlight marker) in search and category modes
-		mCat := New(cat,
+		mCat := newClassicModel(cat,
 			WithFavorites([]catalog.Channel{favCh}),
 			WithRecents([]catalog.Channel{recCh}),
 		)
@@ -786,12 +786,12 @@ func TestSearchFavoritesRecentsAndLiveLabelsConsistent(t *testing.T) {
 		offCh := catalog.Channel{ID: "off-1", Login: "offchannel", DisplayName: "OffChannel", Availability: catalog.AvailabilityOffline}
 		liveFav := catalog.Channel{ID: "favlive-1", Login: "favlive", DisplayName: "FavLive", Viewers: catalog.IntPtr(5200), Title: catalog.StringPtr("Playing Game"), Availability: catalog.AvailabilityLive}
 
-		mDualCat := New(cat, WithFavorites([]catalog.Channel{liveFav}), WithRecents([]catalog.Channel{offCh}))
+		mDualCat := newClassicModel(cat, WithFavorites([]catalog.Channel{liveFav}), WithRecents([]catalog.Channel{offCh}))
 		mDualCat.list.mode = ModeCategories
 		mDualCat.list.categories = []catalog.Category{{ID: "c-1", Name: "Games"}}
 		mDualCat.list.highlightedID = "c-1"
 
-		mDualSearch := New(cat, WithFavorites([]catalog.Channel{liveFav}), WithRecents([]catalog.Channel{offCh}))
+		mDualSearch := newClassicModel(cat, WithFavorites([]catalog.Channel{liveFav}), WithRecents([]catalog.Channel{offCh}))
 		mDualSearch.list.mode = ModeSearch
 		mDualSearch.list.search.query = "channel"
 		mDualSearch.list.channels = []catalog.Channel{liveFav, offCh, liveCh}
@@ -857,7 +857,7 @@ func TestHydrateSavedAvailabilityOnInit(t *testing.T) {
 		},
 	}
 
-	m := New(cat,
+	m := newClassicModel(cat,
 		WithSource(src),
 		WithFavorites([]catalog.Channel{
 			{ID: "f-1", Login: "gaules", DisplayName: "Gaules"},
@@ -933,7 +933,7 @@ func TestHydrateEmptySavedDoesNotRequest(t *testing.T) {
 		},
 	}
 
-	m := New(cat, WithSource(src))
+	m := newClassicModel(cat, WithSource(src))
 	updated, _ := m.Update(m.Init()())
 	m = updated.(Model)
 	if atomic.LoadInt32(&calls) != 0 {
@@ -961,7 +961,7 @@ func TestHydrateFailureKeepsUnverified(t *testing.T) {
 		},
 	}
 
-	m := New(cat,
+	m := newClassicModel(cat,
 		WithSource(src),
 		WithFavorites([]catalog.Channel{{ID: "f-1", Login: "gaules", DisplayName: "Gaules"}}),
 		WithRecents([]catalog.Channel{{ID: "r-1", Login: "xqc", DisplayName: "xQc"}}),
@@ -1008,7 +1008,7 @@ func TestCaptureSearchScreenPTY(t *testing.T) {
 		Availability: catalog.AvailabilityLive,
 	}
 
-	m := New(cat,
+	m := newClassicModel(cat,
 		WithFavorites([]catalog.Channel{favCh}),
 		WithRecents([]catalog.Channel{recCh}),
 	)
@@ -1028,7 +1028,7 @@ func TestCaptureSearchScreenPTY(t *testing.T) {
 func TestRemovingFavoriteKeepsEarlierModelSlice(t *testing.T) {
 	catEN, _ := i18n.New(i18n.LangEN)
 	fs := &fakeStore{}
-	m := New(catEN,
+	m := newClassicModel(catEN,
 		WithStore(fs),
 		WithFavorites([]catalog.Channel{
 			{ID: "1", Login: "alpha"},

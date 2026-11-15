@@ -79,7 +79,7 @@ func TestHydrate_AsksEachPlatformItsOwnChannels(t *testing.T) {
 		{ID: "youtube:@LofiGirl", Login: "@LofiGirl", Platform: platform.YouTube, URL: "https://www.youtube.com/@LofiGirl/live"},
 	}
 	recents := []catalog.Channel{{ID: "2", Login: "gaules", Platform: platform.Twitch}}
-	m := New(mustCatalog(t, i18n.LangEN),
+	m := newClassicModel(mustCatalog(t, i18n.LangEN),
 		WithResolver(twitch), WithPlatformResolver(platform.Kick, kick),
 		WithFavorites(favs), WithRecents(recents))
 
@@ -111,7 +111,7 @@ func TestHydrate_OnePlatformFailingKeepsTheOthers(t *testing.T) {
 		{ID: "2", Login: "gaules", Availability: catalog.AvailabilityLive, Viewers: catalog.IntPtr(5)},
 	}}
 	kick := &platformResolver{err: &catalog.Error{Platform: platform.Kick, Kind: catalog.Bloqueio, StatusCode: 403}}
-	m := New(mustCatalog(t, i18n.LangEN),
+	m := newClassicModel(mustCatalog(t, i18n.LangEN),
 		WithResolver(twitch), WithPlatformResolver(platform.Kick, kick),
 		WithFavorites([]catalog.Channel{
 			{ID: "2", Login: "gaules", Platform: platform.Twitch},
@@ -141,7 +141,7 @@ func TestHydrate_OnePlatformFailingKeepsTheOthers(t *testing.T) {
 
 func TestHydrate_NothingToAskIssuesNoRequest(t *testing.T) {
 	kick := &platformResolver{}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlatformResolver(platform.Kick, kick),
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlatformResolver(platform.Kick, kick),
 		WithFavorites([]catalog.Channel{{ID: "1", Login: "gaules", Platform: platform.Twitch}}))
 	if cmd := m.fetchHydrateCmd(1); cmd != nil {
 		t.Fatal("a Twitch favorite with only a Kick resolver must issue no request")
@@ -161,7 +161,7 @@ func TestHydrate_NothingToAskIssuesNoRequest(t *testing.T) {
 // the list (a mode change, "r") while it runs must not discard its answer.
 func TestChannelStateLookup_SurvivesAListReload(t *testing.T) {
 	kick := &platformResolver{answer: []catalog.Channel{liveKick("gaules", 3600, "kick title", "Project Zomboid")}}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlatformResolver(platform.Kick, kick))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlatformResolver(platform.Kick, kick))
 	pasted := catalog.Channel{ID: "kick:gaules", Login: "gaules", Platform: platform.Kick, URL: "https://kick.com/gaules"}
 	m.list.selectedChannel = &pasted
 
@@ -188,7 +188,7 @@ func TestPasteKickURL_OpensWithReadOnlyChatAndChannelState(t *testing.T) {
 			pb := &fakePlayback{}
 			fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{platform.Kick: catalog.ReadOnlyChatCapabilities}}
 			kick := &platformResolver{answer: []catalog.Channel{liveKick("gaules", 3681, "GAMEPLAY DO ALASTRO", "Project Zomboid")}}
-			m := New(cat, WithPlayback(pb), WithChat(fc), WithStore(&fakeStore{}), WithPlatformResolver(platform.Kick, kick))
+			m := newClassicModel(cat, WithPlayback(pb), WithChat(fc), WithStore(&fakeStore{}), WithPlatformResolver(platform.Kick, kick))
 			m = resize(m, 140, 24)
 
 			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
@@ -258,7 +258,7 @@ func TestPasteKickURL_OpensWithReadOnlyChatAndChannelState(t *testing.T) {
 func TestReadOnlyInputLine_ShortFormWhenNarrow(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		cat := mustCatalog(t, lang)
-		m := New(cat)
+		m := newClassicModel(cat)
 		m.chat.panel = newChatPanel()
 		m.chat.panel.platform, m.chat.panel.channel = platform.Kick, "gaules"
 		m.chat.panel.caps = catalog.ReadOnlyChatCapabilities
@@ -304,7 +304,7 @@ func TestChatErrorReasons_AreExplained(t *testing.T) {
 			catalog.ChatErrorKeyRefused: "chat.err.key_refused",
 		} {
 			fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{platform.Kick: catalog.ReadOnlyChatCapabilities}}
-			m := resize(New(cat, WithChat(fc)), 140, 24)
+			m := resize(newClassicModel(cat, WithChat(fc)), 140, 24)
 			m = selectChannel(t, m, catalog.Channel{Platform: platform.Kick, Login: "gaules", URL: "https://kick.com/gaules"})
 			updated, _ := m.Update(ChatEventMsg{
 				Generation: 1, Platform: platform.Kick, Channel: "gaules", State: ChatStateError,
@@ -326,7 +326,7 @@ func TestChatErrorReasons_AreExplained(t *testing.T) {
 		}
 	}
 
-	m := resize(New(mustCatalog(t, i18n.LangEN), WithChat(&fakeChat{})), 140, 24)
+	m := resize(newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(&fakeChat{})), 140, 24)
 	m = selectChannel(t, m, catalog.Channel{Platform: platform.Twitch, Login: "gaules"})
 	updated, _ := m.Update(ChatEventMsg{Generation: 1, Channel: "gaules", State: ChatStateError, ErrText: "dial tcp: connection refused"})
 	if view := ansi.Strip(updated.(Model).View()); !strings.Contains(view, "connection refused") {
@@ -352,7 +352,7 @@ func TestPlayerLabel(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			m := New(mustCatalog(t, i18n.LangEN))
+			m := newClassicModel(mustCatalog(t, i18n.LangEN))
 			m.player.target = PlayTarget{Channel: tc.ch}
 			m.player.login = tc.login
 			if got := m.playerLabel(); got != tc.want {
@@ -365,7 +365,7 @@ func TestPlayerLabel(t *testing.T) {
 func TestBlockedErrorsHaveTheirOwnText(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		cat := mustCatalog(t, lang)
-		m := New(cat)
+		m := newClassicModel(cat)
 		m.player.state, m.player.failure = PlayerStateError, PlayerFailureBlocked
 		if got := m.playerFailureText(); got != CatalogText(cat, "player.fail.blocked") || strings.Contains(got, CatalogText(cat, "player.fail.network")) {
 			t.Errorf("%s: playerFailureText = %q, want the blocked text", lang, got)
@@ -381,7 +381,7 @@ func TestStatusBar_RoomNameDoesNotReplaceThePlayerStatus(t *testing.T) {
 	for width := 80; width <= 200; width += 5 {
 		fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{platform.Kick: catalog.ReadOnlyChatCapabilities}}
 		kick := &platformResolver{answer: []catalog.Channel{liveKick("gaules", 3681, "GAMEPLAY DO ALASTRO", "Project Zomboid")}}
-		m := New(cat, WithPlayback(&fakePlayback{}), WithChat(fc), WithPlatformResolver(platform.Kick, kick))
+		m := newClassicModel(cat, WithPlayback(&fakePlayback{}), WithChat(fc), WithPlatformResolver(platform.Kick, kick))
 		m = resize(m, width, 24)
 		m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
 		m = typeRunes(m, "https://kick.com/gaules")

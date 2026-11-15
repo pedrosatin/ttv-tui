@@ -56,7 +56,7 @@ func TestCatalogWithoutBrowserDoesNotShowCategories(t *testing.T) {
 	resolver := &dummyResolver{}
 
 	// UI initialized with Searcher and Resolver, but without Browser capability.
-	m := New(cat, WithSearcher(searcher), WithResolver(resolver))
+	m := newClassicModel(cat, WithSearcher(searcher), WithResolver(resolver))
 
 	// Init should not issue any category fetch commands.
 	cmd := m.Init()
@@ -89,7 +89,7 @@ func TestCatalogWithoutSearcherDoesNotSearchChannels(t *testing.T) {
 	resolver := &dummyResolver{}
 
 	// UI initialized with Browser and Resolver, but without Searcher capability.
-	m := New(cat, WithBrowser(browser), WithResolver(resolver))
+	m := newClassicModel(cat, WithBrowser(browser), WithResolver(resolver))
 
 	// Open search and submit query
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
@@ -129,7 +129,7 @@ func TestUIStoreRoundTripPreservesNonTwitchPlatformAndURL(t *testing.T) {
 		t.Fatalf("s.Load: %v", err)
 	}
 	cat, _ := i18n.New(i18n.LangEN)
-	m := New(cat, WithStore(s), WithFavorites(store.ToChannels(loaded.Favorites)))
+	m := newClassicModel(cat, WithStore(s), WithFavorites(store.ToChannels(loaded.Favorites)))
 
 	// Check UI loaded the favorite with correct platform and URL.
 	favs := m.Favorites()
@@ -184,7 +184,7 @@ func TestWithoutBrowserReturningToCategoriesStillHydratesSavedChannels(t *testin
 	}
 	resolver := &dummyResolver{}
 	saved := []catalog.Channel{{ID: "kick:xqc", Login: "xqc", Platform: "kick", URL: "https://kick.com/xqc"}}
-	m := New(cat, WithPlatformResolver("kick", resolver), WithFavorites(saved))
+	m := newClassicModel(cat, WithPlatformResolver("kick", resolver), WithFavorites(saved))
 
 	for name, step := range map[string]func(Model) (tea.Model, tea.Cmd){
 		"returnToCategories": Model.returnToCategories,

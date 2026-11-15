@@ -130,7 +130,7 @@ func TestHelpShowsTheKeysItLackedInTheRightSection(t *testing.T) {
 
 // The last player error goes to the settings section.
 func TestHelpPlayerErrorIsInTheSettingsSection(t *testing.T) {
-	m := New(mustCatalog(t, i18n.LangPTBR))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 	m.layout.helpVisible = true
 	m.player.lastLine = "streamlink saiu com 1"
 	if got := strings.Join(helpSectionRows(t, m)[sectionSettings], "\n"); !strings.Contains(got, "streamlink saiu com 1") {
@@ -242,7 +242,7 @@ func TestHelpTabAndArrowsJumpSections(t *testing.T) {
 func TestHelpWindowKeysCarryTheMarkOnlyOutsideTheWindow(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		t.Run(lang, func(t *testing.T) {
-			m := New(mustCatalog(t, lang))
+			m := newClassicModel(mustCatalog(t, lang))
 			m.layout.helpVisible = true
 			mark := m.t("help.ctx.window_only")
 			tui := strings.Join(helpSectionRows(t, m)[sectionWindow], "\n")

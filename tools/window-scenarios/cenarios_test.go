@@ -63,7 +63,7 @@ func TestJanelaAbreCanalComVideoEChat(t *testing.T) {
 		return nil
 	})
 
-	w.press("ctrl+o")
+	w.press("ctrl+w", "o")
 	w.waitState("o chat sobre o vídeo", 5*time.Second, func(s ui.StateReport) bool { return s.Config.ChatOverlay })
 	w.press("alt+PageUp")
 	w.waitState("a opacidade em 75%", 5*time.Second, func(s ui.StateReport) bool { return s.Config.ChatOverlayOpacity == 75 })
@@ -176,7 +176,7 @@ func TestJanelaCtrlWNaBuscaENoFiltro(t *testing.T) {
 
 	w.press("Escape")
 	w.waitState("o filtro fechado", 5*time.Second, func(s ui.StateReport) bool { return !s.Filtering })
-	w.press("ctrl+w")
+	w.press("ctrl+w", "w")
 	w.waitState("o Ctrl+W fora do campo trocar o layout", 5*time.Second, func(s ui.StateReport) bool {
 		return !s.Filtering && !split(s)
 	})

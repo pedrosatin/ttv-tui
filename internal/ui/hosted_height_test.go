@@ -35,7 +35,7 @@ func TestHostedHeightLimitsAndMigration(t *testing.T) {
 
 func TestCenarioChatSobrepostoAltura(t *testing.T) {
 	eachSize(t, "chat-sobreposto-altura", func(t *testing.T, width, height int) Model {
-		m, _ := hostedScenario(t, width, height)
+		m, _ := hostedScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
 		m = chatLines(t, m, [2]string{"Fulano", "salve, chat"}, [2]string{"Ciclana", "que jogada"})
 		m = play(t, m, "alt+down alt+down alt+pgup")
@@ -45,7 +45,7 @@ func TestCenarioChatSobrepostoAltura(t *testing.T) {
 
 func TestCenarioChatSobrepostoMigracao(t *testing.T) {
 	eachSize(t, "chat-sobreposto-migracao", func(t *testing.T, width, height int) Model {
-		m, _ := hostedScenario(t, width, height)
+		m, _ := hostedScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f gaules enter enter ctrl+o alt+down")
 		return m
 	})
@@ -53,7 +53,7 @@ func TestCenarioChatSobrepostoMigracao(t *testing.T) {
 
 func TestCenarioEscritaNoChatSobreposto(t *testing.T) {
 	eachSize(t, "chat-sobreposto-escrita", func(t *testing.T, width, height int) Model {
-		m, _ := hostedScenario(t, width, height)
+		m, _ := hostedScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
 		m = chatLines(t, m, [2]string{"Fulano", "salve, chat"})
 		m = play(t, m, "i mensagem")

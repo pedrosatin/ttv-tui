@@ -40,7 +40,7 @@ func filterClearFixture(t *testing.T) Model {
 			}, nil
 		},
 	}
-	m := New(cat,
+	m := newClassicModel(cat,
 		WithSource(src),
 		// O favorito é um canal da categoria: nela ele aparece no lugar dele,
 		// marcado com ★.

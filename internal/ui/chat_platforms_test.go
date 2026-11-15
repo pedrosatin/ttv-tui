@@ -74,7 +74,7 @@ func chatLine(gen uint64, plat, channel, body string) ChatEventMsg {
 // platform's panel, and the read-only platform's own messages must.
 func TestChatPlatformSwitch_LateTwitchEventStaysOutOfOtherPlatformPanel(t *testing.T) {
 	fc := newPlatformsChat()
-	m := New(mustCatalog(t, i18n.LangEN), WithChat(fc))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(fc))
 	m = resize(m, 120, 24)
 
 	m = selectChannel(t, m, catalog.Channel{Platform: platform.Twitch, Login: "foo"})
@@ -116,7 +116,7 @@ func TestChatPlatformSwitch_LateTwitchEventStaysOutOfOtherPlatformPanel(t *testi
 func TestChatCapabilitiesFollowTheChannel(t *testing.T) {
 	cat := mustCatalog(t, i18n.LangEN)
 	fc := newPlatformsChat()
-	m := New(cat, WithChat(fc))
+	m := newClassicModel(cat, WithChat(fc))
 	m = resize(m, 120, 24)
 
 	m = selectChannel(t, m, catalog.Channel{Platform: platform.Twitch, Login: "foo"})
@@ -154,7 +154,7 @@ func TestChatCapabilitiesFollowTheChannel(t *testing.T) {
 // was active is stopped.
 func TestChatPlatformWithoutChatIsUnsupported(t *testing.T) {
 	fc := newPlatformsChat()
-	m := New(mustCatalog(t, i18n.LangEN), WithChat(fc))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(fc))
 	m = selectChannel(t, m, catalog.Channel{Platform: platform.Twitch, Login: "foo"})
 	m = selectChannel(t, m, catalog.Channel{Platform: platform.YouTube, ID: "AbC", URL: "https://youtube.com/watch?v=AbC"})
 	if !m.chat.panel.unsupported {
@@ -169,7 +169,7 @@ func TestChatPlatformWithoutChatIsUnsupported(t *testing.T) {
 // drafts.
 func TestChatDraftsDoNotCollideAcrossPlatforms(t *testing.T) {
 	fc := newPlatformsChat()
-	m := New(mustCatalog(t, i18n.LangEN), WithChat(fc))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(fc))
 	twitchFoo := catalog.Channel{Platform: platform.Twitch, Login: "foo"}
 	otherFoo := catalog.Channel{Platform: testOnly, Login: "foo", URL: "https://example.test/foo"}
 
@@ -194,7 +194,7 @@ func TestChatDraftsDoNotCollideAcrossPlatforms(t *testing.T) {
 // its case intact, and names the panel as it is.
 func TestChatJoinKeepsIdentifierCase(t *testing.T) {
 	fc := newPlatformsChat()
-	m := New(mustCatalog(t, i18n.LangEN), WithChat(fc))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(fc))
 
 	video := catalog.Channel{Platform: testOnly, ID: "dQw4w9WgXcQ", Login: "dQw4w9WgXcQ", URL: "https://example.test/watch?v=dQw4w9WgXcQ"}
 	m = selectChannel(t, m, video)
@@ -219,7 +219,7 @@ func TestChatYouTubeRoomsAreCaseSensitive(t *testing.T) {
 	video := catalog.Channel{Platform: platform.YouTube, ID: "AbCdEf", URL: "https://youtube.com/watch?v=AbCdEf"}
 	setup := func() Model {
 		fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{platform.YouTube: catalog.ReadOnlyChatCapabilities}}
-		m := New(mustCatalog(t, i18n.LangEN), WithChat(fc))
+		m := newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(fc))
 		m = selectChannel(t, m, video)
 		updated, _ := m.Update(chatLine(1, platform.YouTube, "AbCdEf", "first"))
 		return updated.(Model)
@@ -244,7 +244,7 @@ func TestChatYouTubeRoomsAreCaseSensitive(t *testing.T) {
 func TestChatZeroMessageLimitMeansNoLimit(t *testing.T) {
 	caps := catalog.ChatCapabilities{CanSend: true}
 	fc := &fakeChat{hasToken: true, username: "tester", caps: &caps}
-	m := New(mustCatalog(t, i18n.LangEN), WithChat(fc))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(fc))
 	m = selectChannel(t, m, catalog.Channel{Login: "foo"})
 	m.chat.panel.state = ChatStateConnected
 

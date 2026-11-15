@@ -248,21 +248,26 @@ type Model struct {
 	searcher catalog.Searcher
 	// resolvers holds the live-state lookup of each platform that has one,
 	// keyed by canonical platform name.
-	resolvers  map[string]catalog.Resolver
-	keys       keyRegistry
-	tokenCheck TokenCheckFunc
-	store      Store
-	storeSaves *saveSlot
-	playback   Playback
-	list       listState
-	player     playbackState
-	chat       chatState
-	layout     layoutState
-	hosted     hostedState
-	notices    noticeState
-	width      int
-	height     int
-	quitting   bool
+	resolvers        map[string]catalog.Resolver
+	keys             keyRegistry
+	keymapNotice     string
+	classic          bool
+	prefix           string
+	prefixVisible    bool
+	prefixGeneration uint64
+	tokenCheck       TokenCheckFunc
+	store            Store
+	storeSaves       *saveSlot
+	playback         Playback
+	list             listState
+	player           playbackState
+	chat             chatState
+	layout           layoutState
+	hosted           hostedState
+	notices          noticeState
+	width            int
+	height           int
+	quitting         bool
 	// timer agenda as mensagens que chegam depois de um intervalo; nil usa
 	// tea.Tick. Os cenários de teste trocam por um que não espera o relógio.
 	timer func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
@@ -635,6 +640,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case prefixPopupMsg:
+		if msg.gen == m.prefixGeneration && m.prefix != "" {
+			m.prefixVisible = true
+		}
+		return m, nil
 	case hostedNoticeMsg:
 		return m.applyHostedNotice(msg)
 	case hostedSaveMsg:

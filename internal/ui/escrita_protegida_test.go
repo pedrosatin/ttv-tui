@@ -12,7 +12,7 @@ import (
 // tocando e a sala do chat conectada.
 func scenarioPlaying(t *testing.T, width, height int) (Model, *scenarioWorld) {
 	t.Helper()
-	m, w := newScenario(t, width, height)
+	m, w := newScenarioClassic(t, width, height)
 	m = play(t, m, "enter enter")
 	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 50})
 	m = chatLines(t, m, [2]string{"Fulano", "salve, chat"})

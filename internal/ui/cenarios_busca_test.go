@@ -52,7 +52,7 @@ func lineWith(m Model, text string) int {
 func TestCenarioBuscaMostraResultadosPrimeiro(t *testing.T) {
 	run := func(t *testing.T, width, height int) Model {
 		favs, recs := savedForScenario()
-		m, w := newScenario(t, width, height, WithFavorites(favs), WithRecents(recs))
+		m, w := newScenarioClassic(t, width, height, WithFavorites(favs), WithRecents(recs))
 		m = play(t, m, "ctrl+f gaules enter")
 
 		if !slices.Equal(w.searched, []string{"gaules"}) {
@@ -95,7 +95,7 @@ func TestCenarioBuscaMostraResultadosPrimeiro(t *testing.T) {
 func TestCenarioFiltroMostraDicaEAbreSoOVisivel(t *testing.T) {
 	eachSize(t, "filtro-dica-e-destaque", func(t *testing.T, width, height int) Model {
 		favs, recs := savedForScenario()
-		m, w := newScenario(t, width, height, WithFavorites(favs), WithRecents(recs))
+		m, w := newScenarioClassic(t, width, height, WithFavorites(favs), WithRecents(recs))
 		m = play(t, m, "/ pixel")
 
 		hint := fmt.Sprintf(m.t("filter.typing_hint"), "Twitch")
@@ -123,7 +123,7 @@ func TestCenarioFiltroMostraDicaEAbreSoOVisivel(t *testing.T) {
 func TestCenarioFavoritarNaCategoriaNaoMoveOCanal(t *testing.T) {
 	eachSize(t, "favoritar-na-categoria", func(t *testing.T, width, height int) Model {
 		favs, recs := savedForScenario()
-		m, _ := newScenario(t, width, height, WithFavorites(favs[2:4]), WithRecents(recs[:3]))
+		m, _ := newScenarioClassic(t, width, height, WithFavorites(favs[2:4]), WithRecents(recs[:3]))
 		// Desce além dos 2 favoritos e dos 3 recentes até a primeira categoria.
 		m = play(t, m, "down down down down down enter down")
 		before := highlightedLine(m)
@@ -155,7 +155,7 @@ func TestCenarioFavoritarNaCategoriaNaoMoveOCanal(t *testing.T) {
 func TestCenarioInicioLimitaRecentes(t *testing.T) {
 	eachSize(t, "inicio-recentes-com-mais", func(t *testing.T, width, height int) Model {
 		favs, recs := savedForScenario()
-		m, _ := newScenario(t, width, height, WithFavorites(favs[:2]), WithRecents(recs))
+		m, _ := newScenarioClassic(t, width, height, WithFavorites(favs[:2]), WithRecents(recs))
 
 		recents := func(m Model) int {
 			n := 0
@@ -196,7 +196,7 @@ func TestCenarioNomeUsaLarguraDoPainel(t *testing.T) {
 			{ID: "ch-longo", Login: long, DisplayName: long, Availability: catalog.AvailabilityLive, Viewers: &viewers},
 			{ID: "ch-off", Login: "dang88", DisplayName: "DanG88", Availability: catalog.AvailabilityOffline},
 		}
-		m, _ := newScenario(t, width, height, WithFavorites(favs))
+		m, _ := newScenarioClassic(t, width, height, WithFavorites(favs))
 		// Desce além dos dois favoritos, abre Just Chatting e o primeiro canal.
 		m = play(t, m, "down down enter enter")
 		m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 50})
@@ -219,7 +219,7 @@ func TestCenarioNomeUsaLarguraDoPainel(t *testing.T) {
 // categorias de qualquer modo.
 func TestCenarioEscVoltaABusca(t *testing.T) {
 	run := func(t *testing.T, width, height int) Model {
-		m, w := newScenario(t, width, height)
+		m, w := newScenarioClassic(t, width, height)
 		m = play(t, m, "ctrl+f zelda enter")
 
 		if !slices.Equal(w.searched, []string{"zelda"}) {

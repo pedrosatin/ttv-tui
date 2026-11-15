@@ -126,7 +126,7 @@ func TestHostedOverlayReducedPageKeys(t *testing.T) {
 
 // O usuário liga o chat sobreposto com a lista visível em uma janela de 79 colunas.
 func TestCenarioOverlay79Colunas(t *testing.T) {
-	m, _ := hostedScenario(t, 79, 24)
+	m, _ := hostedScenarioClassic(t, 79, 24)
 	m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
 	if !m.hosted.chatOverlay {
 		t.Fatal("overlay recusado em 79 colunas")
@@ -136,7 +136,7 @@ func TestCenarioOverlay79Colunas(t *testing.T) {
 
 // O usuário lê a primeira página de mensagens com o painel sobreposto reduzido.
 func TestCenarioOverlayHomeReduzido(t *testing.T) {
-	m, _ := hostedScenario(t, 120, 40)
+	m, _ := hostedScenarioClassic(t, 120, 40)
 	m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
 	m = withMessages(t, m, 40)
 	m.hosted.overlayPreferences.Rows = 40
@@ -149,7 +149,7 @@ func TestCenarioOverlayHomeReduzido(t *testing.T) {
 
 // O usuário abre um canal sem chat e vê o aviso junto da entrada do overlay.
 func TestCenarioOverlaySemChat(t *testing.T) {
-	m, _ := hostedScenario(t, 120, 40)
+	m, _ := hostedScenarioClassic(t, 120, 40)
 	m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
 	m.chat.panel.unsupported = true
 	m.hosted.overlayPreferences.Rows = 40

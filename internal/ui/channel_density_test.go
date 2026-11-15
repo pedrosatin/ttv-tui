@@ -11,7 +11,7 @@ import (
 )
 
 func TestChannelDensityIdentity(t *testing.T) {
-	m := New(mustCatalog(t, i18n.LangPTBR))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 	title := "0123456789abcdefghijklmnopqrstuv"
 	ch := catalog.Channel{Login: "alanzoka", DisplayName: "Alanzoka", Title: &title, Viewers: catalog.IntPtr(999)}
 	row := ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 40))
@@ -39,7 +39,7 @@ func TestChannelDensityIdentity(t *testing.T) {
 }
 
 func TestChannelDensityViewers(t *testing.T) {
-	m := New(mustCatalog(t, i18n.LangPTBR))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 	for _, tc := range []struct {
 		n    int
 		want string
@@ -78,7 +78,7 @@ func TestChannelDensitySelection(t *testing.T) {
 				forceOrientationColorsForTest(true)
 			}
 			defer resetOrientationColorsForTest()
-			m := New(mustCatalog(t, i18n.LangPTBR))
+			m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 			m.list.mode = ModeChannels
 			m.list.channels = []catalog.Channel{{ID: "1", Login: "Canal", DisplayName: "Canal", Viewers: catalog.IntPtr(999)}}
 			m.list.highlightedID = "1"
@@ -105,7 +105,7 @@ func TestChannelDensitySelection(t *testing.T) {
 }
 
 func TestChannelDensityMarkers(t *testing.T) {
-	m := New(mustCatalog(t, i18n.LangPTBR))
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 	m.list.mode = ModeSearch
 	language := "pt"
 	m.list.prefs.languages = []string{"pt"}

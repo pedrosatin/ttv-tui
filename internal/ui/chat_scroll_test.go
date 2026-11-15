@@ -19,7 +19,7 @@ func scrollFixture(t *testing.T, lang string, n int) Model {
 		t.Fatalf("i18n.New: %v", err)
 	}
 	fc := &fakeChat{hasToken: true, username: "tester"}
-	m := New(cat, WithChat(fc))
+	m := newClassicModel(cat, WithChat(fc))
 	updated, cmd := m.Update(ChannelSelectedMsg{
 		Channel: catalog.Channel{ID: "1", Login: "gaules", DisplayName: "Gaules"},
 	})

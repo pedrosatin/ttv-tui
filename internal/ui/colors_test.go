@@ -44,7 +44,7 @@ func TestOrientationColorsPlayerStatesEmitExpectedSGR(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := New(mustCatalog(t, i18n.LangEN))
+			m := newClassicModel(mustCatalog(t, i18n.LangEN))
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 100, Height: 24})
 			m.player.login = "gaules"
 			m.player.state = tc.state
@@ -83,7 +83,7 @@ func TestOrientationColorsAvailabilityAndFocus(t *testing.T) {
 	forceOrientationColorsForTest(true)
 	defer forceOrientationColorsForTest(false)
 
-	m := New(mustCatalog(t, i18n.LangPTBR),
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR),
 		WithFavorites([]catalog.Channel{
 			{ID: "f1", Login: "favlive", DisplayName: "FavLive", Viewers: catalog.IntPtr(10), Availability: catalog.AvailabilityLive},
 			{ID: "f2", Login: "favoff", DisplayName: "FavOff", Availability: catalog.AvailabilityOffline},
@@ -142,7 +142,7 @@ func TestOrientationColorsChatSystemRejectMention(t *testing.T) {
 	forceOrientationColorsForTest(true)
 	defer forceOrientationColorsForTest(false)
 
-	m := New(mustCatalog(t, i18n.LangEN), WithChat(&fakeChat{hasToken: true, username: "pedrosatin"}))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(&fakeChat{hasToken: true, username: "pedrosatin"}))
 	m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	m.chat.panel.channel = "gaules"
 	m.chat.panel.state = ChatStateConnected
@@ -218,7 +218,7 @@ func TestOrientationColorsDisabledNoForegroundSGR(t *testing.T) {
 	forceOrientationColorsForTest(false)
 	defer forceOrientationColorsForTest(true)
 
-	m := New(mustCatalog(t, i18n.LangEN),
+	m := newClassicModel(mustCatalog(t, i18n.LangEN),
 		WithFavorites([]catalog.Channel{
 			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(12), Availability: catalog.AvailabilityLive},
 			{ID: "f2", Login: "offline_guy", DisplayName: "Offline", Availability: catalog.AvailabilityOffline},
@@ -274,7 +274,7 @@ func TestOrientationColorsCLICOLORZeroDisablesEvenWithForce(t *testing.T) {
 		t.Fatal("CLICOLOR=0 must disable colors even when CLICOLOR_FORCE=1")
 	}
 
-	m := New(mustCatalog(t, i18n.LangEN),
+	m := newClassicModel(mustCatalog(t, i18n.LangEN),
 		WithFavorites([]catalog.Channel{
 			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(12), Availability: catalog.AvailabilityLive},
 		}),
@@ -315,7 +315,7 @@ func TestOrientationColorsHelpLegendAndWidths(t *testing.T) {
 
 	for _, width := range []int{80, 120} {
 		t.Run(fmt.Sprintf("%d", width), func(t *testing.T) {
-			m := New(mustCatalog(t, i18n.LangPTBR))
+			m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 			m, _ = pressKeyMsg(m, tea.WindowSizeMsg{Width: width, Height: 28})
 			m.layout.helpVisible = true
 			m.player.state = PlayerStatePaused
@@ -363,7 +363,7 @@ func TestAvailabilityTagsNeverTruncatedAt80(t *testing.T) {
 
 	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
 		cat := mustCatalog(t, lang)
-		m := New(cat,
+		m := newClassicModel(cat,
 			WithFavorites([]catalog.Channel{
 				{ID: "f-1", Login: "gaules", DisplayName: "GaulesNomeBemLongoParaForcar", Availability: catalog.AvailabilityUnknown},
 			}),
@@ -397,7 +397,7 @@ func TestAvailabilityTagsNeverTruncatedAt80(t *testing.T) {
 }
 
 func TestMentionsSelfDetection(t *testing.T) {
-	m := New(mustCatalog(t, i18n.LangEN))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN))
 	m.chat.panel.username = "PedroSatin"
 	cases := []struct {
 		body string
@@ -421,7 +421,7 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 	forceOrientationColorsForTest(true)
 	defer forceOrientationColorsForTest(false)
 
-	m := New(mustCatalog(t, i18n.LangPTBR),
+	m := newClassicModel(mustCatalog(t, i18n.LangPTBR),
 		WithFavorites([]catalog.Channel{
 			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(1200), Availability: catalog.AvailabilityLive},
 			{ID: "f2", Login: "off", DisplayName: "Off", Availability: catalog.AvailabilityOffline},
@@ -450,7 +450,7 @@ func TestOrientationColorsPTYEvidenceDump(t *testing.T) {
 	resetOrientationColorsForTest()
 	t.Setenv("NO_COLOR", "1")
 	configureOrientationColors()
-	m2 := New(mustCatalog(t, i18n.LangPTBR),
+	m2 := newClassicModel(mustCatalog(t, i18n.LangPTBR),
 		WithFavorites([]catalog.Channel{
 			{ID: "f1", Login: "gaules", DisplayName: "Gaules", Viewers: catalog.IntPtr(1200), Availability: catalog.AvailabilityLive},
 		}),

@@ -37,7 +37,7 @@ func TestAltBackspaceApagaPalavra(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			m, _ := newScenario(t, 120, 40)
+			m, _ := newScenarioClassic(t, 120, 40)
 			m = play(t, m, c.keys)
 			layout := m.LayoutMode()
 			m = play(t, m, c.key)

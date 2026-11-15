@@ -74,7 +74,7 @@ func TestHydrationServidorQueNuncaRespondeTerminaNoPrazoEListaUsavel(t *testing.
 				Availability: catalog.AvailabilityUnknown,
 			}
 
-			m := New(mustCatalog(t, i18n.LangPTBR),
+			m := newClassicModel(mustCatalog(t, i18n.LangPTBR),
 				WithResolver(tc.resolver),
 				WithFavorites([]catalog.Channel{favChannel}),
 			)

@@ -103,6 +103,8 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 
 ## Keyboard shortcuts
 
+Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x to swap sides, w to cycle layouts, +/- for chat height, and </> for chat width. A popup appears after a short pause; the sequence works immediately. Esc cancels. Ctrl+B also toggles the list in the window; terminal users keep their tmux prefix. Use g f for favorites and g r for recents. Existing configurations receive one migration notice. Set `keymap = "classic"` in your config to restore the previous keys, including Ctrl+H/L/P/O, Ctrl+W cycling, lowercase l, g (Home) and Ctrl+S search.
+
 <details open>
 <summary>List and search</summary>
 
@@ -110,16 +112,16 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | --- | --- |
 | `↑` `↓` or `j` `k` | Move the selection |
 | `PgUp` `PgDn` | Move one screen |
-| `Home` / `g`, `End` / `G` | First or last loaded item |
+| `Home`, `End` / `G` | First or last loaded item |
 | `Enter` | Open the category or watch the channel |
 | `f` | Favorite a channel or pin a category; press again to remove |
 | `/` | Filter the current list; `Enter` opens the highlighted item and `Ctrl+F` searches with the text |
-| `Ctrl+F` or `Ctrl+S` | Search channels and categories on the platform the list shows, or paste a stream URL |
+| `Ctrl+F` | Search channels and categories on the platform the list shows, or paste a stream URL |
 | `p` | Switch the list between Twitch and Kick; the video and the chat keep going |
-| `l` | Filter channels by language and audience |
+| `L` | Filter channels by language and audience |
 | `r` | Retry loading the list or the video |
 | `Esc` | Clear the filter, or go back to categories |
-| `Ctrl+R` | Go back to categories from anywhere |
+| `g c` / `Ctrl+R` | Go back to categories from anywhere |
 | `Tab` | Move focus between the list and the chat |
 
 </details>
@@ -149,12 +151,12 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 | `+` `-` | Volume up or down by 5% |
 | `m` | Mute or unmute; the status bar shows `muted` in place of the volume |
 | `Ctrl+X` | Stop the video and stay in the app |
-| `Ctrl+W` | Cycle layouts: split (list + chat), chat, list, focus (no panel) |
-| `Ctrl+H` / `Ctrl+L` | Show or hide the list / the chat |
+| `Ctrl+W w` | Cycle layouts: split (list + chat), chat, list, focus (no panel) |
+| `Ctrl+W h` / `Ctrl+W l` | Show or hide the list / the chat |
 | `?` or `F1` | Show or hide the shortcut help. It opens at the section you are using; `Tab` / `→` and `Shift+Tab` / `←` move between sections |
 | `Ctrl+Q` | Quit |
 
-With focus on the message, the search or the filter, what you type stays in the field: `Space`, `=` and `_` go in as text, `Ctrl+W` deletes a word and `Ctrl+H` does nothing. Outside the field they are shortcuts again.
+With focus on the message, the search or the filter, what you type stays in the field: `Space`, `=` and `_` go in as text, `Ctrl+W` deletes a word and `Ctrl+H` does nothing. Outside the field, Ctrl+W starts the window prefix; Ctrl+H stays unbound.
 
 `Space`, `+` `-` and `m` also work in the `mpv` window. Its other keys do nothing.
 
@@ -167,10 +169,10 @@ With focus on the message, the search or the filter, what you type stays in the 
 | --- | --- |
 | `Ctrl+→` / `Ctrl+←` | Widen / narrow the list |
 | `Alt+←` / `Alt+→` | Widen / narrow the chat |
-| `Ctrl+O` | Put the chat beside the video or over it |
+| `Ctrl+W o` | Put the chat beside the video or over it |
 | `Alt+↑` / `Alt+↓` | Increase / decrease overlay chat height |
 | `Alt+PgUp` / `Alt+PgDn` | Raise / lower overlay chat opacity |
-| `Ctrl+P` | Swap the sides of the list and the chat |
+| `Ctrl+W x` | Swap the sides of the list and the chat |
 
 The app saves these choices in `config.toml`.
 
@@ -323,7 +325,7 @@ Use `chat_overlay_backdrop = "text"` for background only behind text.
 <details>
 <summary><b>Where did the chat go?</b></summary>
 
-Your terminal is narrower than 80 columns, so the split view hides the chat. Press `Ctrl+L` to see the chat at full width, or widen the terminal.
+Your terminal is narrower than 80 columns, so the split view hides the chat. Press `Ctrl+W l` to see the chat at full width, or widen the terminal.
 
 </details>
 
@@ -412,7 +414,7 @@ Inside tmux, the app tries the tmux buffer first. Then it tries `wl-copy`, `xcli
 
 Quit with `Ctrl+Q`, which works even while you type. `Ctrl+C` only shows the hint `To quit use Ctrl+Q`.
 
-The app runs the terminal in raw mode, so the terminal sends `Ctrl+S` and `Ctrl+Q` to the app instead of pausing output.
+Raw mode disables XON/XOFF, so Ctrl+Q reaches the quit action. Ctrl+S is unbound in the default map; the classic map keeps it as a search alias.
 
 </details>
 

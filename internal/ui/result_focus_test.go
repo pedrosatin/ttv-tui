@@ -19,7 +19,7 @@ func focusFixture(t *testing.T, src *fakeSource) Model {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat,
+	m := newClassicModel(cat,
 		WithSource(src),
 		WithFavorites([]catalog.Channel{{ID: "fav-1", Login: "xqc", DisplayName: "xQc"}}),
 		WithRecents([]catalog.Channel{{ID: "rec-1", Login: "eslcs", DisplayName: "ESLCS"}}),
@@ -224,7 +224,7 @@ func TestSearchHighlightsExactChannelAlreadyInRecents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat,
+	m := newClassicModel(cat,
 		WithSource(src),
 		WithRecents([]catalog.Channel{{ID: "recent-exact", Login: "landonorris", DisplayName: "LandoNorris"}}),
 	)
@@ -559,7 +559,7 @@ func TestEmptyCategoryAndEmptySearchKeepAValidHighlight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	bare := New(cat, WithSource(src))
+	bare := newClassicModel(cat, WithSource(src))
 	bare.list.loading = false
 	updated, cmd := bare.startSearch("ninguem")
 	bare = run(t, updated.(Model), cmd)

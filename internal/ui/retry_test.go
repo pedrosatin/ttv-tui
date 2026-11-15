@@ -134,7 +134,7 @@ func TestRetryBurstKeepsNewestRequest(t *testing.T) {
 			return catalog.Page[catalog.Category]{Items: []catalog.Category{{ID: "cat-new", Name: "New"}}}, nil
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithSource(src))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithSource(src))
 	m.width, m.height = 80, 24
 	m.list.mode = ModeCategories
 

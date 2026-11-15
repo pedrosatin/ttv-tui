@@ -229,8 +229,8 @@ func TestExpandKeys(t *testing.T) {
 	keys := defaultKeys()
 	for in, want := range map[string]string{
 		"{action.quit} quit":                       "Ctrl+Q quit",
-		"{action.home} {action.end}":               "Home/g End/G",
-		"({action.search:2} alt)":                  "(Ctrl+S alt)",
+		"{action.home} {action.end}":               "Home End/G",
+		"({action.search:2} alt)":                  "( alt)",
 		"{action.up:1}{action.down:1}":             "↑↓",
 		"{action.list_narrower/action.list_wider}": "Ctrl+←/→",
 		"{action.up:3}x":                           "x",
@@ -245,7 +245,7 @@ func TestExpandKeys(t *testing.T) {
 
 // The screen names the remapped key.
 func TestRemappedKeyReachesTheText(t *testing.T) {
-	m := New(mustCatalog(t, i18n.LangEN))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN))
 	m.keys = newKeyRegistry(defaultActions(), map[actionID][]string{actQuit: {"ctrl+g"}})
 	if got := m.t("status.quit_hint"); got != "Ctrl+G quit" {
 		t.Fatalf("status.quit_hint = %q", got)

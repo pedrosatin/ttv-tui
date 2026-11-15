@@ -20,7 +20,7 @@ func testCatalog(t *testing.T, lang string) *i18n.Catalog {
 
 func channelFilterFixture(t *testing.T) Model {
 	t.Helper()
-	m := New(testCatalog(t, i18n.LangEN))
+	m := newClassicModel(testCatalog(t, i18n.LangEN))
 	m.list.mode = ModeChannels
 	m.list.channels = []catalog.Channel{
 		{ID: "1", Login: "gaules", DisplayName: "Gaules", Language: catalog.LanguagePtr("PT"), Viewers: catalog.IntPtr(1200), Availability: catalog.AvailabilityLive},
@@ -75,7 +75,7 @@ func TestChannelFilterByLanguageAndAudience(t *testing.T) {
 }
 
 func TestChannelFilterDoesNotAffectCategories(t *testing.T) {
-	m := New(testCatalog(t, i18n.LangEN))
+	m := newClassicModel(testCatalog(t, i18n.LangEN))
 	m.list.mode = ModeCategories
 	m.list.categories = []catalog.Category{{ID: "c1", Name: "Just Chatting", Viewers: catalog.IntPtr(10)}}
 	m.list.prefs.languages = []string{"pt"}
@@ -209,7 +209,7 @@ func TestChannelFilterEmptyState(t *testing.T) {
 
 func TestChannelFilterI18nAndWidths(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
-		m := New(testCatalog(t, lang), WithChannelFilters([]string{"pt"}, 500, nil))
+		m := newClassicModel(testCatalog(t, lang), WithChannelFilters([]string{"pt"}, 500, nil))
 		m.list.mode = ModeChannels
 		m.list.channels = []catalog.Channel{
 			{ID: "1", Login: "gaules", DisplayName: "Gaules", Language: catalog.LanguagePtr("pt"), Viewers: catalog.IntPtr(900), Availability: catalog.AvailabilityLive},
@@ -243,7 +243,7 @@ func TestChannelFilterI18nAndWidths(t *testing.T) {
 }
 
 func TestWithChannelFiltersAppliedOnOpen(t *testing.T) {
-	m := New(testCatalog(t, i18n.LangEN), WithChannelFilters([]string{"PT", "en"}, 100, nil))
+	m := newClassicModel(testCatalog(t, i18n.LangEN), WithChannelFilters([]string{"PT", "en"}, 100, nil))
 	if got := m.FilterLanguages(); len(got) != 2 || got[0] != "pt" || got[1] != "en" {
 		t.Fatalf("normalized langs = %v", got)
 	}

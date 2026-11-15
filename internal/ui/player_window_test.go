@@ -17,7 +17,7 @@ func playingModel(t *testing.T, lang string, pb *fakePlayback) Model {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat, WithPlayback(pb))
+	m := newClassicModel(cat, WithPlayback(pb))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = updated.(Model)
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})

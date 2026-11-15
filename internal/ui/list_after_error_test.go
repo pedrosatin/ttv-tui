@@ -17,7 +17,7 @@ func listErrorModel(t *testing.T, lang string) Model {
 	if err != nil {
 		t.Fatalf("i18n.New: %v", err)
 	}
-	m := New(cat, WithFavorites([]catalog.Channel{
+	m := newClassicModel(cat, WithFavorites([]catalog.Channel{
 		{ID: "fav-a", Login: "alpha", DisplayName: "Alpha"},
 		{ID: "fav-b", Login: "beta", DisplayName: "Beta"},
 		{ID: "fav-c", Login: "gamma", DisplayName: "Gamma"},

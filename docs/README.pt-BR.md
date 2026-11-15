@@ -103,6 +103,8 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 
 ## Atalhos de teclado
 
+Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o chat, x troca os lados, w cicla o layout, +/- ajustam a altura e </> a largura do chat. O popup aparece após uma pausa curta; a sequência funciona na hora. Esc cancela. Ctrl+B também alterna a lista na janela; no terminal, fica para o tmux. Use g f para favoritos e g r para recentes. Configs existentes recebem um aviso único. Defina `keymap = "classic"` no config para restaurar as teclas anteriores, incluindo Ctrl+H/L/P/O, Ctrl+W para ciclar, l minúsculo, g (Home) e Ctrl+S para buscar.
+
 <details open>
 <summary>Lista e busca</summary>
 
@@ -110,16 +112,16 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | --- | --- |
 | `↑` `↓` ou `j` `k` | Move a seleção |
 | `PgUp` `PgDn` | Move uma tela |
-| `Home` / `g`, `End` / `G` | Primeiro ou último item carregado |
+| `Home`, `End` / `G` | Primeiro ou último item carregado |
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Favorita um canal ou fixa uma categoria; aperte de novo para remover |
 | `/` | Filtra a lista atual; `Enter` abre o item destacado e `Ctrl+F` busca com o texto |
-| `Ctrl+F` ou `Ctrl+S` | Busca canais e categorias na plataforma que a lista mostra, ou cola a URL de uma live |
+| `Ctrl+F` | Busca canais e categorias na plataforma que a lista mostra, ou cola a URL de uma live |
 | `p` | Troca a lista entre Twitch e Kick; o vídeo e o chat continuam |
-| `l` | Filtra canais por idioma e público |
+| `L` | Filtra canais por idioma e público |
 | `r` | Tenta de novo carregar a lista ou o vídeo |
 | `Esc` | Limpa o filtro ou volta às categorias |
-| `Ctrl+R` | Volta às categorias de qualquer lugar |
+| `g c` / `Ctrl+R` | Volta às categorias de qualquer lugar |
 | `Tab` | Alterna o foco entre a lista e o chat |
 
 </details>
@@ -149,12 +151,12 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 | `+` `-` | Sobe ou desce o volume em 5% |
 | `m` | Liga ou desliga o mudo; a barra de status mostra `mudo` no lugar do volume |
 | `Ctrl+X` | Para o vídeo sem sair do app |
-| `Ctrl+W` | Troca o layout: dividido (lista + chat), chat, lista, foco (nenhum painel) |
-| `Ctrl+H` / `Ctrl+L` | Mostra ou esconde a lista / o chat |
+| `Ctrl+W w` | Troca o layout: dividido (lista + chat), chat, lista, foco (nenhum painel) |
+| `Ctrl+W h` / `Ctrl+W l` | Mostra ou esconde a lista / o chat |
 | `?` ou `F1` | Mostra ou esconde a ajuda de atalhos. Ela abre na seção do que você está usando; `Tab` / `→` e `Shift+Tab` / `←` passam de uma seção a outra |
 | `Ctrl+Q` | Sai |
 
-Com o foco na mensagem, na busca ou no filtro, o que se digita fica no campo: `Space`, `=` e `_` entram como texto, `Ctrl+W` apaga a palavra e `Ctrl+H` não faz nada. Fora do campo, voltam a ser atalhos.
+Com o foco na mensagem, na busca ou no filtro, o que se digita fica no campo: `Space`, `=` e `_` entram como texto, `Ctrl+W` apaga a palavra e `Ctrl+H` não faz nada. Fora do campo, Ctrl+W inicia o prefixo de janela; Ctrl+H fica livre.
 
 `Space`, `+` `-` e `m` funcionam também na janela do `mpv`. As outras teclas dela não fazem nada.
 
@@ -167,10 +169,10 @@ Com o foco na mensagem, na busca ou no filtro, o que se digita fica no campo: `S
 | --- | --- |
 | `Ctrl+→` / `Ctrl+←` | Alarga / estreita a lista |
 | `Alt+←` / `Alt+→` | Alarga / estreita o chat |
-| `Ctrl+O` | Põe o chat ao lado do vídeo ou sobre ele |
+| `Ctrl+W o` | Põe o chat ao lado do vídeo ou sobre ele |
 | `Alt+↑` / `Alt+↓` | Aumenta / diminui a altura do chat sobreposto |
 | `Alt+PgUp` / `Alt+PgDn` | Aumenta / diminui a opacidade do chat sobre o vídeo |
-| `Ctrl+P` | Troca os lados da lista e do chat |
+| `Ctrl+W x` | Troca os lados da lista e do chat |
 
 O app guarda essas escolhas no `config.toml`.
 
@@ -323,7 +325,7 @@ Para fundo só atrás do texto, use `chat_overlay_backdrop = "text"` no config.
 <details>
 <summary><b>Para onde foi o chat?</b></summary>
 
-O terminal tem menos de 80 colunas, e a tela dividida esconde o chat. Aperte `Ctrl+L` para ver o chat na largura toda ou alargue o terminal.
+O terminal tem menos de 80 colunas, e a tela dividida esconde o chat. Aperte `Ctrl+W l` para ver o chat na largura toda ou alargue o terminal.
 
 </details>
 
@@ -412,7 +414,7 @@ Dentro do tmux, o app tenta primeiro o buffer do tmux. Depois tenta `wl-copy`, `
 
 Saia com `Ctrl+Q`, que funciona até durante a digitação. `Ctrl+C` só mostra o aviso `Para sair use Ctrl+Q`.
 
-O app põe o terminal em modo raw, e o terminal repassa `Ctrl+S` e `Ctrl+Q` ao app em vez de pausar a saída.
+O modo raw desliga XON/XOFF, então Ctrl+Q chega à ação de sair. Ctrl+S fica livre no mapa padrão; o classic mantém o alias de busca.
 
 </details>
 

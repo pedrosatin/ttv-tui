@@ -19,6 +19,25 @@ import (
 // - CLI command names, flag names, and flag prefixes.
 // - Internal model and state identifiers (e.g. category, channel, playback states).
 var allowedExceptions = map[string]bool{
+	// Nomes de teclas e do mapa de compatibilidade; não são texto de interface.
+	"ctrl+w w": true,
+	"ctrl+w h": true,
+	"ctrl+w l": true,
+	"ctrl+w o": true,
+	"ctrl+w x": true,
+	"ctrl+w +": true,
+	"ctrl+w -": true,
+	"ctrl+w <": true,
+	"ctrl+w >": true,
+	"L":        true,
+	"g c":      true,
+	"g f":      true,
+	"g r":      true,
+	"ctrl+b":   true,
+	"ctrl+w ":  true,
+	"g ":       true,
+	"classic":  true,
+
 	// Separador entre plataforma e StableID na identidade de uma linha.
 	":": true,
 	// Whitespace, punctuation, borders and markers

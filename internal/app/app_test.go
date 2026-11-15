@@ -219,7 +219,7 @@ func toggleEnglishFilter(t *testing.T, opts []ui.Option) ui.Model {
 	m = runCmds(t, m, m.Init())
 	m = settle(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = settle(t, m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = settle(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	m = settle(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
 	if !m.(ui.Model).ChannelFilterMenuOpen() {
 		t.Fatal("filter menu did not open")
 	}

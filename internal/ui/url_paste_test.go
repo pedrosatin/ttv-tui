@@ -14,7 +14,7 @@ func TestPasteTwitchURLInSearchOpensChannelWithChat(t *testing.T) {
 	pb := &fakePlayback{}
 	fc := &fakeChat{}
 	fs := &fakeStore{}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(fs))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(fs))
 
 	// Open search with Ctrl+F
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
@@ -60,7 +60,7 @@ func TestPasteKickURLInSearchPlaysDirectlyWithoutChat(t *testing.T) {
 			pb := &fakePlayback{}
 			fc := &fakeChat{}
 			fs := &fakeStore{}
-			m := New(cat, WithPlayback(pb), WithChat(fc), WithStore(fs))
+			m := newClassicModel(cat, WithPlayback(pb), WithChat(fc), WithStore(fs))
 
 			// Open search with Ctrl+F
 			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
@@ -104,7 +104,7 @@ func TestPasteYouTubeURLInSearchPlaysDirectly(t *testing.T) {
 	pb := &fakePlayback{}
 	fc := &fakeChat{}
 	fs := &fakeStore{}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(fs))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(fs))
 
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
 	ytURL := "https://www.youtube.com/watch?v=5qap5aO4i9A"
@@ -123,7 +123,7 @@ func TestPasteYouTubeURLInSearchPlaysDirectly(t *testing.T) {
 func TestFilterInputWithURLOpensDirectlyOnEnter(t *testing.T) {
 	pb := &fakePlayback{}
 	fc := &fakeChat{}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc))
 
 	// Open filter with /
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
@@ -148,7 +148,7 @@ func TestReopeningNonTwitchChannelFromRecentsPlaysURL(t *testing.T) {
 			URL:         "https://kick.com/xqc",
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)), WithPlatformCatalog(store.PlatformKick, kickCatalog(), nil))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)), WithPlatformCatalog(store.PlatformKick, kickCatalog(), nil))
 
 	// Highlight the recent item and press Enter
 	items := m.VisibleItems()
@@ -193,7 +193,7 @@ func TestFavoritingNonTwitchChannelWorks(t *testing.T) {
 			URL:         "https://kick.com/xqc",
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)), WithPlatformCatalog(store.PlatformKick, kickCatalog(), nil))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)), WithPlatformCatalog(store.PlatformKick, kickCatalog(), nil))
 
 	// Highlight the recent item and press 'f' to favorite
 	items := m.VisibleItems()
@@ -243,7 +243,7 @@ func TestReopeningYouTubeWithoutCatalogFromRecentsPlaysURL(t *testing.T) {
 			URL:         "https://youtube.com/watch?v=video",
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
 
 	items := m.VisibleItems()
 	var recentItem *ListItem
@@ -287,7 +287,7 @@ func TestFavoritingYouTubeWithoutCatalogWorks(t *testing.T) {
 			URL:         "https://youtube.com/watch?v=video",
 		},
 	}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithStore(fs), WithRecents(store.ToChannels(initialRecents)))
 
 	items := m.VisibleItems()
 	var recentItem *ListItem
@@ -325,7 +325,7 @@ func TestFavoritingYouTubeWithoutCatalogWorks(t *testing.T) {
 
 func TestRetryKeepsNonTwitchTarget(t *testing.T) {
 	pb := &fakePlayback{}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb))
 
 	// Open Kick URL
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
@@ -360,7 +360,7 @@ func TestPasteURLForaDaGramaticaViraBusca(t *testing.T) {
 		t.Run(link, func(t *testing.T) {
 			pb := &fakePlayback{}
 			fc := &fakeChat{}
-			m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(&fakeStore{}))
+			m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(&fakeStore{}))
 
 			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
 			m = typeRunes(m, link)
@@ -391,7 +391,7 @@ func TestColarLinkComInjecaoIRCNoFiltroNaoChamaJoin(t *testing.T) {
 			pb := &fakePlayback{}
 			fc := &fakeChat{hasToken: true, username: "tester"}
 			fs := &fakeStore{}
-			m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(fs))
+			m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(fs))
 
 			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(link), Paste: true})
@@ -412,7 +412,7 @@ func TestColarLinkComInjecaoIRCNoFiltroNaoChamaJoin(t *testing.T) {
 
 	// Controle: o mesmo caminho com um link válido chega ao Join.
 	fc := &fakeChat{hasToken: true, username: "tester"}
-	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(&fakePlayback{}), WithChat(fc), WithStore(&fakeStore{}))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithPlayback(&fakePlayback{}), WithChat(fc), WithStore(&fakeStore{}))
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("https://www.twitch.tv/dummychan"), Paste: true})
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})

@@ -52,7 +52,7 @@ func TestMultiplatformIdentity_IsPlayingAndOffline(t *testing.T) {
 	twitchXQC.Viewers = &viewersTwitch
 	kickXQC.Viewers = &viewersKick
 
-	m := New(mustCatalog(t, i18n.LangEN))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN))
 	m.list.channels = []catalog.Channel{twitchXQC, kickXQC}
 	m.list.favorites = []catalog.Channel{twitchXQC, kickXQC}
 	m.list.recents = []catalog.Channel{twitchXQC, kickXQC}
@@ -99,7 +99,7 @@ func TestMultiplatformIdentity_IsPlayingAndOffline(t *testing.T) {
 // do not overwrite the channel header or inject messages into an unsupported chat panel.
 func TestLateChatEventDoesNotOverwriteUnsupportedPanel(t *testing.T) {
 	fc := &fakeChat{}
-	m := New(mustCatalog(t, i18n.LangEN), WithChat(fc))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN), WithChat(fc))
 
 	// Start Twitch chat on gaules
 	m.startChatChannel(catalog.Channel{Login: "gaules"})
@@ -183,7 +183,7 @@ func TestNonTwitchChannel_EmptyURL_ShowsWarning(t *testing.T) {
 		t.Run(lang, func(t *testing.T) {
 			cat := mustCatalog(t, lang)
 			pb := &fakePlayback{}
-			m := New(cat, WithPlayback(pb))
+			m := newClassicModel(cat, WithPlayback(pb))
 
 			ch := catalog.Channel{
 				Platform:    platform.Kick,
@@ -213,7 +213,7 @@ func TestNonTwitchChannel_EmptyURL_ShowsWarning(t *testing.T) {
 // TestStatusBar_KickChannelDoesNotDuplicateName verifies that when playing a Kick channel,
 // the status bar matches the active channel and does not repeat the login.
 func TestStatusBar_KickChannelDoesNotDuplicateName(t *testing.T) {
-	m := New(mustCatalog(t, i18n.LangEN))
+	m := newClassicModel(mustCatalog(t, i18n.LangEN))
 	ch := catalog.Channel{
 		Platform:    platform.Kick,
 		Login:       "xqc",

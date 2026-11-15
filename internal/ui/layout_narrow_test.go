@@ -40,7 +40,7 @@ func setupHomeModel(t *testing.T, width int, fc *fakeChat) Model {
 			}}, nil
 		},
 	}
-	m := New(cat, WithSource(src), WithPlayback(&fakePlayback{}), WithChat(fc))
+	m := newClassicModel(cat, WithSource(src), WithPlayback(&fakePlayback{}), WithChat(fc))
 	updated, _ := m.Update(m.Init()())
 	return resize(updated.(Model), width, 24)
 }
@@ -401,7 +401,7 @@ func TestEscLeavesFocusModeAloneAndHelpNamesTheWayBack(t *testing.T) {
 		if err != nil {
 			t.Fatalf("i18n.New: %v", err)
 		}
-		help := New(cat)
+		help := newClassicModel(cat)
 		help.layout.helpVisible = true
 		help = resize(help, 120, 40)
 		rows := strings.Join(help.renderHelpLines(120), "\n")
