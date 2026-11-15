@@ -17,7 +17,7 @@ Live Categories
 
 
 
-New shortcuts: Ctrl+W w (h/l/w) for panels; L for languages; g c/f/r to
+New shortcuts: Ctrl+W h/l/w for panels; L for languages; g c/f/r to
 navigate. Restore the old keys with keymap = "classic" in
 /fixture/config.toml.
 Enter open · f ★ · / filter · Ctrl+F search · ? help

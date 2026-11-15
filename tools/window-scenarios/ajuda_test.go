@@ -27,9 +27,14 @@ func helpColumn(screen []string, col, cols int) []string {
 
 // W13: com o vídeo tocando, o espectador abre a ajuda com F1 e passa pelas
 // seções com →. A ajuda tem fundo opaco atrás do texto, não fala de "só TUI"
-// e mostra Ctrl+O e Ctrl+P em linhas próprias na seção Janela e layout, longe
+// e mostra as teclas do chat sobreposto (Ctrl+W o, com o apelido Ctrl+O) e da
+// troca de lados (Ctrl+W x) em linhas próprias na seção Janela e layout, longe
 // de "Largura". Dentro da janela, essas teclas não levam a marca "só na
 // janela". F1 de novo fecha a ajuda e devolve o vídeo inteiro.
+// windowHelpKeys são os rótulos das teclas só da janela que a ajuda mostra no
+// começo de uma linha, no mapa padrão.
+var windowHelpKeys = []string{"Ctrl+W o/Ctrl+O", "Ctrl+W x"}
+
 func TestJanelaAjudaLegivelSobreOVideo(t *testing.T) {
 	t.Parallel()
 	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 3}})
@@ -93,7 +98,7 @@ func TestJanelaAjudaLegivelSobreOVideo(t *testing.T) {
 			case strings.Contains(strings.ToLower(text), "só na janela"):
 				problems = append(problems, fmt.Sprintf("a marca de só na janela aparece dentro dela: %q", text))
 			}
-			for _, key := range []string{"Ctrl+O", "Ctrl+P"} {
+			for _, key := range windowHelpKeys {
 				if !strings.Contains(text, key) {
 					continue
 				}
@@ -105,7 +110,7 @@ func TestJanelaAjudaLegivelSobreOVideo(t *testing.T) {
 			}
 		}
 	}
-	for _, key := range []string{"Ctrl+O", "Ctrl+P"} {
+	for _, key := range windowHelpKeys {
 		if !sawWindowKeys[key] {
 			problems = append(problems, fmt.Sprintf("nenhuma página mostrou %s na seção Janela e layout", key))
 		}

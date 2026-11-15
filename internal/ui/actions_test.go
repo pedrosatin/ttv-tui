@@ -216,6 +216,12 @@ func TestJoinKeyLabels(t *testing.T) {
 		{[]string{"F1", "F2"}, "F1/F2"},
 		{[]string{"Space", "Space"}, "Space"},
 		{[]string{"Ctrl+F", "", "Ctrl+S"}, "Ctrl+F/S"},
+		// Uma sequência só divide o prefixo com outra do mesmo prefixo.
+		{[]string{"Ctrl+W h", "Ctrl+W l", "Ctrl+W w"}, "Ctrl+W h/l/w"},
+		{[]string{"g c", "g f", "g r"}, "g c/f/r"},
+		{[]string{"Ctrl+W o", "Ctrl+O"}, "Ctrl+W o/Ctrl+O"},
+		{[]string{"Ctrl+O", "Ctrl+W o"}, "Ctrl+O/Ctrl+W o"},
+		{[]string{"Alt+↑", "Ctrl+W +"}, "Alt+↑/Ctrl+W +"},
 		{nil, ""},
 	} {
 		if got := joinKeyLabels(tc.in); got != tc.want {

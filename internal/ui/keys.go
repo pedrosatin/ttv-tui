@@ -48,25 +48,34 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.clearKeyNotices()
+	// As teclas tratadas antes de handlePrefixKey desfazem o prefixo pendente:
+	// sem isso, o popup fica na tela e a tecla seguinte vira o fim da sequência.
 	if next, cmd, ok := m.handleAppKey(msg); ok {
-		return next, cmd
+		nm := next.(Model)
+		nm.cancelPrefix()
+		return nm, cmd
 	}
 
 	// Help is modal: past this point no key reaches the list, chat, filter or
 	// search behind it. Only the app-level Ctrl+Q and Ctrl+C above outrank it.
 	if m.helpOpen() {
+		m.cancelPrefix()
 		return m.updateHelpKey(msg)
 	}
 
 	// No campo de texto, o que se digita e as teclas de edição vão ao campo
 	// antes dos atalhos: Ctrl+H, Ctrl+W, = e _ não mexem no layout nem no volume.
 	if m.typingField() && isFieldEditKey(msg) {
+		m.cancelPrefix()
 		next, cmd, _ := m.handleModeKey(msg)
 		return next, cmd
 	}
-	if next, cmd, ok := m.handlePrefixKey(msg); ok {
+	// Sem consumir a tecla, handlePrefixKey ainda pode ter desfeito o prefixo.
+	next, cmd, ok := m.handlePrefixKey(msg)
+	if ok {
 		return next, cmd
 	}
+	m = next.(Model)
 	if next, cmd, ok := m.handleGlobalKey(msg); ok {
 		return next, cmd
 	}

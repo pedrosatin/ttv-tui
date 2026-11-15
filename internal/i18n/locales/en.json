@@ -461,8 +461,8 @@
   "footer.opacity_down": "opacity−",
   "action.favorites": "Go to favorites",
   "action.recents": "Go to recents",
-  "action.window_list": "Toggle list (window)",
+  "action.window_list": "Also show or hide the list",
   "keymap.cancel": "Esc cancel",
-  "keymap.migration": "New shortcuts: {action.cycle_layout} (h/l/w) for panels; L for languages; g c/f/r to navigate. Restore the old keys with keymap = \"classic\" in %s.",
+  "keymap.migration": "New shortcuts: {action.toggle_list/action.toggle_chat/action.cycle_layout} for panels; {action.channel_filter} for languages; {action.categories:1/action.favorites/action.recents} to navigate. Restore the old keys with keymap = \"classic\" in %s.",
   "keymap.save_error": "Save keymap migration: %w"
 }

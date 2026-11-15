@@ -1,9 +1,11 @@
 package ui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	"slices"
 	"strings"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // WithKeymap selects the legacy bindings and an optional startup notice.
@@ -22,6 +24,10 @@ func WithKeymap(classic bool, notice string) Option {
 
 type prefixPopupMsg struct{ gen uint64 }
 
+// prefixKeys são as teclas que começam uma sequência no mapa padrão: Ctrl+W, a
+// das janelas, como no vim, e g, a de ir a um lugar da lista.
+var prefixKeys = []string{"ctrl+w", "g"}
+
 func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if m.classic {
 		return m, nil, false
@@ -29,8 +35,7 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	name := keyName(msg)
 	if m.prefix != "" {
 		seq := m.prefix + " " + name
-		m.prefix, m.prefixVisible = "", false
-		m.prefixGeneration++
+		m.cancelPrefix()
 		if name == "esc" {
 			return m, nil, true
 		}
@@ -57,15 +62,30 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if next, cmd, ok := m.handleLayoutAction(m.keys.byMode[modeGlobal][seq], m.keys.byMode[modeWindow][seq]); ok {
 			return next, cmd, true
 		}
+		// Uma tecla que vale em qualquer situação (F1, Ctrl+R, Ctrl+X) desfaz o
+		// prefixo e segue para o seu trabalho; as demais acabam a sequência.
+		if m.keys.actionFor(modeGlobal, msg) != "" {
+			return m, nil, false
+		}
 		return m, nil, true
 	}
-	if name != "ctrl+w" && (name != "g" || m.typingField() || m.list.prefs.menuOpen) {
+	if !slices.Contains(prefixKeys, name) || name == "g" && (m.typingField() || m.list.prefs.menuOpen) {
 		return m, nil, false
 	}
 	m.prefix = name
 	m.prefixGeneration++
 	gen := m.prefixGeneration
 	return m, m.after(250*time.Millisecond, func(time.Time) tea.Msg { return prefixPopupMsg{gen} }), true
+}
+
+// cancelPrefix desfaz o prefixo pendente e o popup dele. O temporizador que
+// ainda vai chegar traz a geração antiga e não reabre o popup.
+func (m *Model) cancelPrefix() {
+	if m.prefix == "" && !m.prefixVisible {
+		return
+	}
+	m.prefix, m.prefixVisible = "", false
+	m.prefixGeneration++
 }
 
 func (m Model) prefixLines() []string {

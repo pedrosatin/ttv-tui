@@ -17,16 +17,19 @@ import (
 //   - Backspace e Delete apagam o caractere anterior;
 //   - Alt+Backspace (a janela manda os mesmos bytes para Ctrl+Backspace) e Ctrl+W
 //     apagam a palavra anterior, como no shell;
-//   - Ctrl+H não faz nada no campo, para não esconder a lista no meio da frase;
+//   - Ctrl+H não faz nada no campo; no mapa clássico, onde ele esconde a lista,
+//     a ajuda explica que é para ela não sumir no meio da frase;
 //   - no filtro /, ↑ e ↓ andam pela lista, porque k e j são letras do filtro.
 //
 // O Tab, mesmo como runa, continua sendo a ação de trocar o painel.
 
 // fieldKey é uma primitiva de edição como a ajuda a mostra: as teclas, que o
-// mapa do config não troca, e as linhas da ajuda onde ela aparece.
+// mapa do config não troca, e as linhas da ajuda onde ela aparece. ClassicOnly
+// é a linha que só faz sentido no mapa clássico.
 type fieldKey struct {
-	Keys []string
-	Uses []helpUse
+	Keys        []string
+	Uses        []helpUse
+	ClassicOnly bool
 }
 
 // fieldKeys são as primitivas que a ajuda cita. As runas, o texto colado e o
@@ -39,7 +42,7 @@ var fieldKeys = []fieldKey{
 	{Keys: []string{"alt+backspace", "ctrl+w"}, Uses: []helpUse{
 		{sectionSearch, ctxField, "help.field.erase_word"}, {sectionChat, ctxCompose, "help.field.erase_word"},
 	}},
-	{Keys: []string{"ctrl+h"}, Uses: []helpUse{{sectionWindow, ctxField, "help.field.ctrl_h"}}},
+	{Keys: []string{"ctrl+h"}, Uses: []helpUse{{sectionWindow, ctxField, "help.field.ctrl_h"}}, ClassicOnly: true},
 }
 
 // isFieldEditKey diz se a tecla é uma primitiva do campo de texto, a que passa

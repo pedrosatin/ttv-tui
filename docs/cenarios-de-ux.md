@@ -64,14 +64,16 @@ propriedade.
 ## Invariantes
 
 [`invariantes_test.go`](../internal/ui/invariantes_test.go) leva o app a cada modo principal (categorias, canais,
-prompt de busca, busca, filtro, chat, escrita e ajuda) em 60, 79, 80, 100 e 120 colunas e confere:
+prompt de busca, busca, filtro, chat, escrita e ajuda, e, só no mapa padrão, o popup do prefixo Ctrl+W e o aviso da
+migração) em 60, 79, 80, 100 e 120 colunas, no mapa padrão e no `classic`, e confere:
 
 - nenhuma linha passa da largura e a tela tem a altura do terminal;
-- o foco aparece: a linha destacada com `▸`, o cursor `█` da escrita, a mensagem marcada com `▌` ou o título da
-  ajuda;
+- o foco aparece: a linha destacada com `▸`, o cursor `█` da escrita, a mensagem marcada com `▌`, o título da
+  ajuda, as opções do popup com o Esc ou, no aviso, o caminho de volta ao `classic`;
 - o rodapé mostra a dica de ajuda.
 
-Um modo novo entra na lista `uxModes`, com o caminho de teclas até ele.
+Um modo novo entra na lista `uxModes`, com o caminho de teclas até ele; o que só o mapa padrão tem leva
+`defaultOnly`.
 
 ## Atualizar um golden de propósito
 

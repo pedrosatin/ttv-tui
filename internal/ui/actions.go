@@ -332,12 +332,15 @@ func classicActions() []action {
 	return actions
 }
 
-// defaultActions conserva o registro clássico como base da migração.
+// defaultActions é o mapa padrão: o clássico com Ctrl+W como prefixo das
+// janelas, como no vim, g como prefixo de ir a um lugar da lista e L no filtro de
+// idioma. Ctrl+H, Ctrl+L, Ctrl+P, Ctrl+S e o g do Home deixam de ser padrão; o
+// Ctrl+O do chat sobreposto fica como apelido de Ctrl+W o.
 func defaultActions() []action {
 	actions := classicActions()
 	bindings := map[actionID][]string{
 		actCycleLayout: {"ctrl+w w"}, actToggleList: {"ctrl+w h"}, actToggleChat: {"ctrl+w l"},
-		actChatOverlay: {"ctrl+w o"}, actSwapSides: {"ctrl+w x"},
+		actChatOverlay: {"ctrl+w o", "ctrl+o"}, actSwapSides: {"ctrl+w x"},
 		actChatTaller: {"alt+up", "ctrl+w +"}, actChatShorter: {"alt+down", "ctrl+w -"},
 		actChatWider: {"alt+left", "ctrl+w <"}, actChatNarrower: {"alt+right", "ctrl+w >"},
 		actChannelFilter: {"L"}, actCategories: {"g c", "ctrl+r"}, actSearch: {"ctrl+f"}, actHome: {"home"},
@@ -491,9 +494,25 @@ func joinKeyLabels(labels []string) string {
 	}
 	parts := []string{unique[0]}
 	for _, l := range unique[1:] {
-		parts = append(parts, l[sharedLabelPrefix(unique[0], l):])
+		parts = append(parts, trimSharedLabel(unique[0], l))
 	}
 	return strings.Join(parts, "/")
+}
+
+// trimSharedLabel é o rótulo l sem o começo que ele divide com first. Uma
+// sequência (Ctrl+W h, g c) só perde o prefixo inteiro, e só para outra do mesmo
+// prefixo: Ctrl+W h/l/w, g c/f/r. Entre uma sequência e uma tecla só, nada sai,
+// para Ctrl+W o e Ctrl+O não virarem Ctrl+W o/O.
+func trimSharedLabel(first, l string) string {
+	firstPrefix, _, firstSeq := strings.Cut(first, " ")
+	prefix, rest, seq := strings.Cut(l, " ")
+	switch {
+	case firstSeq && seq && firstPrefix == prefix:
+		return rest
+	case firstSeq || seq:
+		return l
+	}
+	return l[sharedLabelPrefix(first, l):]
 }
 
 // sharedLabelPrefix é o tamanho, em bytes de b, do maior começo comum de a e b

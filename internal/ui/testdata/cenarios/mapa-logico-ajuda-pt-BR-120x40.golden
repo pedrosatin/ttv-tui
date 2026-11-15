@@ -1,4 +1,6 @@
 === Atalhos de Teclado ===
+    Esc               Devolve o foco à lista
+  Escrevendo no chat:
     Enter             Envia a mensagem
     Tab               Vai à lista e guarda o rascunho
     Esc               Sai da escrita e guarda o rascunho
@@ -18,7 +20,7 @@
   Ctrl+W l            Mostra ou esconde o chat; abaixo de 80 colunas, abre só o chat
   Esc                 Não muda o layout; para trocá-lo, use Ctrl+W w, Ctrl+W h ou Ctrl+W l
   Só na janela:
-    Ctrl+W o          Põe o chat sobre o vídeo ou ao lado dele
+    Ctrl+W o/Ctrl+O   Põe o chat sobre o vídeo ou ao lado dele
     Ctrl+W x          Troca os lados da lista e do chat
     Alt+↑/Ctrl+W +    Aumenta a altura do chat sobreposto
     Alt+↓/Ctrl+W -    Diminui a altura do chat sobreposto
@@ -28,13 +30,11 @@
     Ctrl+←            Move a divisa da lista para a esquerda
     Alt+←/Ctrl+W <    Move a divisa do chat para a esquerda
     Alt+→/Ctrl+W >    Move a divisa do chat para a direita
-    Ctrl+B            Mostrar/esconder lista (janela)
-  Num campo de texto:
-    Ctrl+H            Não faz nada, para a lista não sumir no meio da frase
+    Ctrl+B            Também mostra ou esconde a lista
 ── Configurações ──
   Idioma: pt-BR · troque com --lang en ou --lang pt-BR
   Sem cor: NO_COLOR desliga a cor · símbolos ▸ ★ ● ▶ ‖ ✖ ! mostram o estado
   Cores: verde = ●/[ao vivo] e espectadores · amarelo = pausa e ★ favorito/fixada · ciano = foco · vermelho =
     erro/[offline] · magenta = sistema · menção com sublinhado
-Janela e layout · seção 6 de 7 · Tab/→ próxima                                                                     96/96
+Janela e layout · seção 6 de 7 · Tab/→ próxima                                                                     94/94
  ttv-tui | [pt-BR] Pronto                                                                       | ? ajuda · Ctrl+Q sair

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -39,8 +40,18 @@ var keyTypesByName = func() map[string]tea.KeyType {
 // o mesmo formato. ok é falso para um nome que não é tecla; quem mostra o erro
 // ao usuário escreve a mensagem pelo catálogo de i18n.
 func parseKeyName(name string) (tea.KeyMsg, bool) {
-	if strings.HasPrefix(name, "ctrl+w ") || strings.HasPrefix(name, "g ") {
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(name)}, true
+	if prefix, rest, ok := strings.Cut(name, " "); ok && slices.Contains(prefixKeys, prefix) {
+		// Uma sequência ("ctrl+w h", "g c") só vale com uma tecla de verdade
+		// depois do prefixo. A mensagem leva o nome que handlePrefixKey monta,
+		// para o registro indexá-la; o terminal nunca a entrega inteira.
+		if rest == "" || strings.Contains(rest, " ") {
+			return tea.KeyMsg{}, false
+		}
+		second, ok := parseKeyName(rest)
+		if !ok {
+			return tea.KeyMsg{}, false
+		}
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(prefix + " " + keyName(second))}, true
 	}
 	if t, ok := keyTypesByName[name]; ok {
 		return keyMsgOf(t, false), true

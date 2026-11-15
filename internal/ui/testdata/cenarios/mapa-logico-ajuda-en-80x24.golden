@@ -7,7 +7,7 @@
   Esc                 Leaves the layout alone; to change it, use Ctrl+W w,
                       Ctrl+W h or Ctrl+W l
   Window only:
-    Ctrl+W o          Put the chat over the video or beside it
+    Ctrl+W o/Ctrl+O   Put the chat over the video or beside it
     Ctrl+W x          Swap the sides of the list and the chat
     Alt+↑/Ctrl+W +    Increase overlay chat height
     Alt+↓/Ctrl+W -    Decrease overlay chat height
@@ -17,8 +17,8 @@
     Ctrl+←            Move the list divider to the left
     Alt+←/Ctrl+W <    Move the chat divider to the left
     Alt+→/Ctrl+W >    Move the chat divider to the right
-    Ctrl+B            Toggle list (window)
-  In a text field:
-    Ctrl+H            Does nothing, so the list does not vanish mid-sentence
-Window and layout · section 6 of 7 · Tab/→ next                           94/100
+    Ctrl+B            Also show or hide the list
+── Settings ──
+  Language: en · change it with --lang en or --lang pt-BR
+Window and layout · section 6 of 7 · Tab/→ next                            94/98
  ttv-tui | [en] Ready                                    | ? help · Ctrl+Q quit

@@ -33,7 +33,7 @@ Categorias ao vivo
 
 
 
-Novas teclas: Ctrl+W w (h/l/w) para os painéis; L para idiomas; g c/f/r para
+Novas teclas: Ctrl+W h/l/w para os painéis; L para idiomas; g c/f/r para
 navegar. Volte às teclas antigas com keymap = "classic" em
 /fixture/config.toml.
 Enter abrir · f ★ · / filtrar · Ctrl+F buscar · ? ajuda

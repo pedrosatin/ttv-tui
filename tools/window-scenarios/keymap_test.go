@@ -24,6 +24,9 @@ func TestJanelaMapaLogico(t *testing.T) {
 	w.waitState("h acompanha o painel da esquerda", 5*time.Second, func(s ui.StateReport) bool { return s.Layout == "list" })
 	w.press("ctrl+w", "h", "ctrl+w", "o", "ctrl+w", "-")
 	w.waitState("altura pelo prefixo", 5*time.Second, func(s ui.StateReport) bool { return s.Config.ChatOverlayRows > 0 && s.Config.ChatOverlay })
+	// O Ctrl+O continua apelido de Ctrl+W o no mapa padrão.
+	w.press("ctrl+o")
+	w.waitState("chat ao lado pelo Ctrl+O", 5*time.Second, func(s ui.StateReport) bool { return !s.Config.ChatOverlay })
 }
 
 func TestJanelaMapaClassicEMigracao(t *testing.T) {

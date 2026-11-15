@@ -34,9 +34,34 @@ func auditCatalog(t *testing.T, lang string) *i18n.Catalog {
 	return cat
 }
 
-func auditModel(t *testing.T, lang string, width int) Model {
+// auditKeymaps são os dois mapas que a auditoria percorre: o padrão, com o
+// prefixo Ctrl+W, e o clássico, que keymap = "classic" restaura.
+var auditKeymaps = []struct {
+	name    string
+	classic bool
+}{{"default", false}, {"classic", true}}
+
+// auditRegistry é o registro do mapa: as teclas que o texto do catálogo cita.
+func auditRegistry(classic bool) keyRegistry {
+	if classic {
+		return newKeyRegistry(classicActions(), nil)
+	}
+	return defaultKeys()
+}
+
+// auditCycleLayout aperta a tecla que cicla o layout no mapa: Ctrl+W no
+// clássico e Ctrl+W w, em duas teclas, no padrão.
+func auditCycleLayout(m Model, classic bool) Model {
+	m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})
+	if classic {
+		return m
+	}
+	return auditSend(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}})
+}
+
+func auditModel(t *testing.T, lang string, width int, classic bool) Model {
 	t.Helper()
-	m := newClassicModel(auditCatalog(t, lang))
+	m := New(auditCatalog(t, lang), WithKeymap(classic, ""))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
 	return updated.(Model)
 }
@@ -50,9 +75,9 @@ func auditPlaying(t *testing.T, lang string, width int) Model {
 
 // auditChannelOpen has a channel open, which is what gives the layouts a chat
 // to arrange; before that the layout keys only explain why they do nothing.
-func auditChannelOpen(t *testing.T, lang string, width int) Model {
+func auditChannelOpen(t *testing.T, lang string, width int, classic bool) Model {
 	t.Helper()
-	m := newClassicModel(auditCatalog(t, lang), WithPlayback(&fakePlayback{}), WithChat(&fakeChat{}))
+	m := New(auditCatalog(t, lang), WithKeymap(classic, ""), WithPlayback(&fakePlayback{}), WithChat(&fakeChat{}))
 	m = auditSend(m, tea.WindowSizeMsg{Width: width, Height: 30})
 	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
 	m = updated.(Model)
@@ -70,7 +95,7 @@ func auditSend(m Model, msg tea.Msg) Model {
 // assertResolved checks that every expected key has its own text in lang (no
 // fallback to English, no empty value), that text is on screen, and that no raw
 // key leaked.
-func assertResolved(t *testing.T, cat *i18n.Catalog, surface, screen string, want []expectKey) {
+func assertResolved(t *testing.T, cat *i18n.Catalog, keys keyRegistry, surface, screen string, want []expectKey) {
 	t.Helper()
 	if strings.TrimSpace(screen) == "" {
 		t.Fatalf("%s rendered empty", surface)
@@ -80,7 +105,7 @@ func assertResolved(t *testing.T, cat *i18n.Catalog, surface, screen string, wan
 			t.Errorf("%s: key %q has no %s text (would fall back to English)", surface, w.key, cat.Lang())
 			continue
 		}
-		text := newKeyRegistry(classicActions(), nil).expandKeys(cat.T(w.key), cat)
+		text := keys.expandKeys(cat.T(w.key), cat)
 		if len(w.args) > 0 {
 			text = fmt.Sprintf(text, w.args...)
 		}
@@ -103,16 +128,16 @@ func assertResolved(t *testing.T, cat *i18n.Catalog, surface, screen string, wan
 func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 	type scenario struct {
 		name  string
-		build func(t *testing.T, lang string) Model
+		build func(t *testing.T, lang string, classic bool) Model
 		want  func() []expectKey
 	}
 	layoutScenario := func(name string, presses int, mode string) scenario {
 		return scenario{
 			name: name,
-			build: func(t *testing.T, lang string) Model {
-				m := auditChannelOpen(t, lang, 200)
+			build: func(t *testing.T, lang string, classic bool) Model {
+				m := auditChannelOpen(t, lang, 200, classic)
 				for i := 0; i < presses; i++ {
-					m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})
+					m = auditCycleLayout(m, classic)
 				}
 				return m
 			},
@@ -122,56 +147,56 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 		}
 	}
 	scenarios := []scenario{
-		{"empty", func(t *testing.T, lang string) Model { return auditModel(t, lang, 200) }, func() []expectKey {
+		{"empty", func(t *testing.T, lang string, classic bool) Model { return auditModel(t, lang, 200, classic) }, func() []expectKey {
 			return []expectKey{ek("list.empty_action"), ek("app.title"), ek("status.help_hint"), ek("status.quit_hint")}
 		}},
-		{"layout_without_chat", func(t *testing.T, lang string) Model {
-			return auditSend(auditModel(t, lang, 200), tea.KeyMsg{Type: tea.KeyCtrlW})
+		{"layout_without_chat", func(t *testing.T, lang string, classic bool) Model {
+			return auditCycleLayout(auditModel(t, lang, 200, classic), classic)
 		}, func() []expectKey {
 			return []expectKey{ek("layout.no_chat")}
 		}},
 		layoutScenario("layout chat", 1, "chat"),
 		layoutScenario("layout list", 2, "list"),
 		layoutScenario("layout focus", 3, "focus"),
-		{"window notice and volume", func(t *testing.T, lang string) Model {
+		{"window notice and volume", func(t *testing.T, lang string, classic bool) Model {
 			return auditSend(auditPlaying(t, lang, 200), PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 80})
 		}, func() []expectKey {
 			return []expectKey{ek("player.window_notice"), ek("player.vol", 80), ek("player.playing", "gaules")}
 		}},
-		{"paused", func(t *testing.T, lang string) Model {
+		{"paused", func(t *testing.T, lang string, classic bool) Model {
 			m := auditSend(auditPlaying(t, lang, 200), PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 80})
 			return auditSend(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePaused, Login: "gaules", Volume: 80})
 		}, func() []expectKey {
 			return []expectKey{ek("player.paused", "gaules"), ek("player.vol", 80)}
 		}},
-		{"commercial break", func(t *testing.T, lang string) Model {
+		{"commercial break", func(t *testing.T, lang string, classic bool) Model {
 			m := auditSend(auditPlaying(t, lang, 200), PlayerStatusMsg{Generation: 1, State: PlayerStatePaused, Login: "gaules", Volume: 80})
 			return auditSend(m, PlayerStatusMsg{Generation: 1, State: PlayerStateBreak, Login: "gaules", Volume: 80, BreakElapsed: 0})
 		}, func() []expectKey {
 			return []expectKey{ek("player.break", 0), ek("player.vol", 80)}
 		}},
-		{"mpv keys warning", func(t *testing.T, lang string) Model {
+		{"mpv keys warning", func(t *testing.T, lang string, classic bool) Model {
 			return auditSend(auditPlaying(t, lang, 200), PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100, InputConfFailed: true})
 		}, func() []expectKey {
 			return []expectKey{ek("player.warn.input_conf")}
 		}},
-		{"channel filter menu", func(t *testing.T, lang string) Model {
-			m := auditModel(t, lang, 200)
+		{"channel filter menu", func(t *testing.T, lang string, classic bool) Model {
+			m := auditModel(t, lang, 200, classic)
 			m.list.prefs.menuOpen = true
 			return m
 		}, func() []expectKey { return []expectKey{ek("channel_filter.status_open")} }},
-		{"search prompt", func(t *testing.T, lang string) Model {
-			m := auditModel(t, lang, 200)
+		{"search prompt", func(t *testing.T, lang string, classic bool) Model {
+			m := auditModel(t, lang, 200, classic)
 			m.list.search.active, m.list.search.input = true, "doom"
 			return m
 		}, func() []expectKey { return []expectKey{ek("search.prompt", "doom")} }},
-		{"filter prompt", func(t *testing.T, lang string) Model {
-			m := auditModel(t, lang, 200)
+		{"filter prompt", func(t *testing.T, lang string, classic bool) Model {
+			m := auditModel(t, lang, 200, classic)
 			m.list.filtering, m.list.filter = true, "cs"
 			return m
 		}, func() []expectKey { return []expectKey{ek("filter.prompt", "cs")} }},
-		{"Ctrl+C hint", func(t *testing.T, lang string) Model {
-			return auditSend(auditModel(t, lang, 200), tea.KeyMsg{Type: tea.KeyCtrlC})
+		{"Ctrl+C hint", func(t *testing.T, lang string, classic bool) Model {
+			return auditSend(auditModel(t, lang, 200, classic), tea.KeyMsg{Type: tea.KeyCtrlC})
 		}, func() []expectKey { return []expectKey{ek("status.ctrl_c_hint")} }},
 	}
 	for _, failure := range []PlayerFailure{
@@ -180,7 +205,7 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 	} {
 		scenarios = append(scenarios, scenario{
 			name: "player failure " + string(failure),
-			build: func(t *testing.T, lang string) Model {
+			build: func(t *testing.T, lang string, classic bool) Model {
 				return auditSend(auditPlaying(t, lang, 200), PlayerStatusMsg{
 					Generation: 1, State: PlayerStateError, Login: "gaules", Failure: failure, LastLine: "raw tool line",
 				})
@@ -191,33 +216,47 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 		})
 	}
 
-	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
-		cat := auditCatalog(t, lang)
-		for _, sc := range scenarios {
-			t.Run(lang+"/"+sc.name, func(t *testing.T) {
-				m := sc.build(t, lang)
-				want := sc.want()
-				for i, w := range want {
-					// Layout scenarios name the mode by its identifier ("§mode");
-					// the screen must show that mode's catalog label.
-					if len(w.args) == 1 {
-						if s, ok := w.args[0].(string); ok && strings.HasPrefix(s, "§") {
-							mode := strings.TrimPrefix(s, "§")
-							want[i] = ek(w.key, cat.T("layout.mode."+mode))
-							want = append(want, ek("layout.mode."+mode))
-						}
-					}
-				}
-				assertResolved(t, cat, "status bar", ansi.Strip(m.StatusBar()), want)
-			})
+	for _, keymap := range auditKeymaps {
+		for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+			cat := auditCatalog(t, lang)
+			for _, sc := range scenarios {
+				t.Run(keymap.name+"/"+lang+"/"+sc.name, func(t *testing.T) {
+					auditStatusBar(t, cat, keymap.classic, sc.build(t, lang, keymap.classic), sc.want())
+				})
+			}
 		}
 	}
+}
+
+// auditStatusBar confere a barra de um cenário. Os de layout nomeiam o modo
+// pelo identificador ("§mode"); a tela tem de mostrar o rótulo do catálogo.
+func auditStatusBar(t *testing.T, cat *i18n.Catalog, classic bool, m Model, want []expectKey) {
+	t.Helper()
+	for i, w := range want {
+		if len(w.args) == 1 {
+			if s, ok := w.args[0].(string); ok && strings.HasPrefix(s, "§") {
+				mode := strings.TrimPrefix(s, "§")
+				want[i] = ek(w.key, cat.T("layout.mode."+mode))
+				want = append(want, ek("layout.mode."+mode))
+			}
+		}
+	}
+	assertResolved(t, cat, auditRegistry(classic), "status bar", ansi.Strip(m.StatusBar()), want)
 }
 
 // TestHelpResolvesSameKeysInBothLanguages renders the help overlay in both
 // languages: every text the registry and the edit primitives point at, every
 // section and situation, and the layout line named as the status bar names it.
 func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
+	for _, keymap := range auditKeymaps {
+		t.Run(keymap.name, func(t *testing.T) { auditHelp(t, keymap.classic) })
+	}
+}
+
+// auditHelp confere a ajuda de um mapa: as ações dele, inclusive as que só o
+// padrão tem (favoritos, recentes e o Ctrl+B da janela), e as primitivas que
+// valem nele.
+func auditHelp(t *testing.T, classic bool) {
 	helpKeys := []string{"help.title", "help.nocolor", "help.colors", "help.ctx.window_only"}
 	for _, s := range []string{"global", "nav", "search", "chat", "video", "window", "settings"} {
 		helpKeys = append(helpKeys, "help.section."+s)
@@ -225,8 +264,12 @@ func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 	for _, c := range []string{"help", "search_prompt", "filter", "menu", "chat_panel", "compose", "field"} {
 		helpKeys = append(helpKeys, "help.ctx."+c)
 	}
+	actions := defaultActions()
+	if classic {
+		actions = classicActions()
+	}
 	seen := map[string]bool{}
-	for _, a := range classicActions() {
+	for _, a := range actions {
 		for _, use := range a.helpUses() {
 			if !seen[use.Text] && use.Text != string(actSwitchPlatform) {
 				seen[use.Text] = true
@@ -234,7 +277,17 @@ func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 			}
 		}
 	}
+	if !classic {
+		for _, id := range []actionID{actFavorites, actRecents, actWindowList} {
+			if !seen[string(id)] {
+				t.Errorf("a auditoria do mapa padrão não cobre %s", id)
+			}
+		}
+	}
 	for _, f := range fieldKeys {
+		if f.ClassicOnly && !classic {
+			continue
+		}
 		for _, use := range f.Uses {
 			if !seen[use.Text] {
 				seen[use.Text] = true
@@ -245,7 +298,7 @@ func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
 		t.Run(lang, func(t *testing.T) {
 			cat := auditCatalog(t, lang)
-			m := auditModel(t, lang, 200)
+			m := auditModel(t, lang, 200, classic)
 			m = auditSend(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 			if !m.HelpVisible() {
 				t.Fatal("? did not open the help")
@@ -256,7 +309,7 @@ func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 			for _, k := range helpKeys {
 				want = append(want, ek(k))
 			}
-			assertResolved(t, cat, "help", screen, want)
+			assertResolved(t, cat, auditRegistry(classic), "help", screen, want)
 
 			// The layout line and the status bar name the layout modes the same way.
 			for _, mode := range []string{"split", "chat", "list", "focus"} {
@@ -268,6 +321,30 @@ func TestHelpResolvesSameKeysInBothLanguages(t *testing.T) {
 					t.Errorf("action.cycle_layout (%s) does not name mode %q as %q: %s", lang, mode, label, cat.T("action.cycle_layout"))
 				}
 			}
+		})
+	}
+}
+
+// O popup do prefixo e o aviso da migração, que só o mapa padrão tem, saem no
+// idioma da tela, com as teclas do registro e sem chave crua.
+func TestKeymapOverlaysResolveInBothLanguages(t *testing.T) {
+	for _, lang := range []string{i18n.LangEN, i18n.LangPTBR} {
+		t.Run(lang, func(t *testing.T) {
+			cat := auditCatalog(t, lang)
+			m := auditModel(t, lang, 200, false)
+			m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})
+			m = auditSend(m, prefixPopupMsg{m.prefixGeneration})
+			want := []expectKey{ek("keymap.cancel")}
+			for _, id := range []actionID{actToggleList, actToggleChat, actChatOverlay, actSwapSides, actCycleLayout, actChatTaller, actChatWider} {
+				want = append(want, ek(string(id)))
+			}
+			assertResolved(t, cat, defaultKeys(), "prefix popup", ansi.Strip(m.View()), want)
+
+			m = auditModel(t, lang, 200, false)
+			m.keymapNotice = fmt.Sprintf(CatalogText(cat, "keymap.migration"), "/fixture/config.toml")
+			// O aviso quebra na largura; as palavras, não.
+			notice := strings.Join(strings.Fields(ansi.Strip(m.View())), " ")
+			assertResolved(t, cat, defaultKeys(), "keymap notice", notice, []expectKey{ek("keymap.migration", "/fixture/config.toml")})
 		})
 	}
 }
@@ -288,7 +365,7 @@ func TestPTBRLayoutTokenIsPortuguese(t *testing.T) {
 		{i18n.LangEN, 3, "layout: focus"},
 	}
 	for _, tc := range cases {
-		m := auditChannelOpen(t, tc.lang, 120)
+		m := auditChannelOpen(t, tc.lang, 120, true)
 		for i := 0; i < tc.presses; i++ {
 			m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})
 		}
@@ -302,7 +379,7 @@ func TestPTBRLayoutTokenIsPortuguese(t *testing.T) {
 // volume must not push the layout label out either: the app title yields first.
 func TestPTBRLayoutTokenAndVolumeFitAt80Columns(t *testing.T) {
 	for presses, label := range map[int]string{1: "chat", 2: "lista", 3: "foco"} {
-		m := auditChannelOpen(t, i18n.LangPTBR, 80)
+		m := auditChannelOpen(t, i18n.LangPTBR, 80, true)
 		m = auditSend(m, PlayerStatusMsg{Generation: 1, State: PlayerStatePaused, Login: "gaules", Volume: 55})
 		for i := 0; i < presses; i++ {
 			m = auditSend(m, tea.KeyMsg{Type: tea.KeyCtrlW})

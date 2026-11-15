@@ -459,10 +459,10 @@
   "footer.height_down": "altura−",
   "footer.opacity_up": "opacidade+",
   "footer.opacity_down": "opacidade−",
-  "action.favorites": "Ir aos favoritos",
-  "action.recents": "Ir aos recentes",
-  "action.window_list": "Mostrar/esconder lista (janela)",
+  "action.favorites": "Vai aos favoritos",
+  "action.recents": "Vai aos recentes",
+  "action.window_list": "Também mostra ou esconde a lista",
   "keymap.cancel": "Esc cancelar",
-  "keymap.migration": "Novas teclas: {action.cycle_layout} (h/l/w) para os painéis; L para idiomas; g c/f/r para navegar. Volte às teclas antigas com keymap = \"classic\" em %s.",
+  "keymap.migration": "Novas teclas: {action.toggle_list/action.toggle_chat/action.cycle_layout} para os painéis; {action.channel_filter} para idiomas; {action.categories:1/action.favorites/action.recents} para navegar. Volte às teclas antigas com keymap = \"classic\" em %s.",
   "keymap.save_error": "Salvar migração de teclas: %w"
 }

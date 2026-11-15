@@ -132,6 +132,9 @@ func (m Model) helpEntries() []helpEntry {
 		}
 	}
 	for _, f := range fieldKeys {
+		if f.ClassicOnly && !m.classic {
+			continue
+		}
 		labels := make([]string, len(f.Keys))
 		for i, k := range f.Keys {
 			labels[i] = keyLabel(k, m.catalog)

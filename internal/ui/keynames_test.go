@@ -47,7 +47,11 @@ func TestParseKeyNameEspaco(t *testing.T) {
 }
 
 func TestParseKeyNameRecusaNomeDesconhecido(t *testing.T) {
-	for _, name := range []string{"", "ctrl+ç", "alt+", "pgbaixo", "enterr"} {
+	for _, name := range []string{
+		"", "ctrl+ç", "alt+", "pgbaixo", "enterr",
+		// Uma sequência precisa de uma tecla de verdade depois do prefixo.
+		"ctrl+w ", "ctrl+w invalida", "ctrl+w h l", "g ", "g invalida", "g ctrl+ç",
+	} {
 		if k, ok := parseKeyName(name); ok {
 			t.Errorf("parseKeyName(%q) = %q, quer erro", name, k.String())
 		}
@@ -104,5 +108,22 @@ func TestScreenDiffMostraSoAsLinhasQueMudaram(t *testing.T) {
 	}
 	if strings.Contains(diff, "linha  1") || strings.Contains(diff, "linha  3") {
 		t.Errorf("diff mostra linha igual:\n%s", diff)
+	}
+}
+
+// Uma sequência do mapa padrão é o prefixo e uma tecla, com o nome que
+// handlePrefixKey monta ao receber as duas: "ctrl+w space" vira "ctrl+w  ".
+func TestParseKeyNameSequencia(t *testing.T) {
+	for name, want := range map[string]string{
+		"ctrl+w h": "ctrl+w h", "ctrl+w +": "ctrl+w +", "ctrl+w <": "ctrl+w <",
+		"g c": "g c", "ctrl+w space": "ctrl+w  ", "ctrl+w esc": "ctrl+w esc",
+	} {
+		k, ok := parseKeyName(name)
+		if !ok {
+			t.Fatalf("parseKeyName(%q) recusou a sequência", name)
+		}
+		if got := keyName(k); got != want {
+			t.Errorf("parseKeyName(%q) = %q, quer %q", name, got, want)
+		}
 	}
 }

@@ -103,7 +103,7 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 
 ## Keyboard shortcuts
 
-Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x to swap sides, w to cycle layouts, +/- for chat height, and </> for chat width. A popup appears after a short pause; the sequence works immediately. Esc cancels. Ctrl+B also toggles the list in the window; terminal users keep their tmux prefix. Use g f for favorites and g r for recents. Existing configurations receive one migration notice. Set `keymap = "classic"` in your config to restore the previous keys, including Ctrl+H/L/P/O, Ctrl+W cycling, lowercase l, g (Home) and Ctrl+S search.
+Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x to swap sides, w to cycle layouts, +/- for chat height, and </> for chat width. A popup appears after a short pause; the sequence works immediately. Esc cancels. Ctrl+B also toggles the list in the window; terminal users keep their tmux prefix. Use g f for favorites and g r for recents. Existing configurations receive one migration notice. Ctrl+O still puts the chat over the video, next to Ctrl+W o. Set `keymap = "classic"` in your config to restore the previous keys, including Ctrl+H/L/P, Ctrl+W cycling, lowercase l, g (Home) and Ctrl+S search.
 
 <details open>
 <summary>List and search</summary>
@@ -122,6 +122,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 | `r` | Retry loading the list or the video |
 | `Esc` | Clear the filter, or go back to categories |
 | `g c` / `Ctrl+R` | Go back to categories from anywhere |
+| `g f` / `g r` | Go to favorites / recents |
 | `Tab` | Move focus between the list and the chat |
 
 </details>
@@ -135,7 +136,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 | `Enter` | Send the message |
 | `Esc` | Stop writing and keep the draft |
 | `Ctrl+W` or `Alt+Backspace` | Delete the previous word in the message, the search and the filter |
-| `↑` `↓` `PgUp` `PgDn` `Home` `g` | Scroll the history |
+| `↑` `↓` `PgUp` `PgDn` `Home` | Scroll the history |
 | `End` or `G` | Back to live messages |
 | `y` | Copy the selected message |
 | `Ctrl+T` | Reconnect to the chat |
@@ -168,11 +169,12 @@ With focus on the message, the search or the filter, what you type stays in the 
 | Key | Action |
 | --- | --- |
 | `Ctrl+→` / `Ctrl+←` | Widen / narrow the list |
-| `Alt+←` / `Alt+→` | Widen / narrow the chat |
-| `Ctrl+W o` | Put the chat beside the video or over it |
-| `Alt+↑` / `Alt+↓` | Increase / decrease overlay chat height |
+| `Alt+←` / `Alt+→` or `Ctrl+W <` / `Ctrl+W >` | Widen / narrow the chat |
+| `Ctrl+W o` or `Ctrl+O` | Put the chat beside the video or over it |
+| `Alt+↑` / `Alt+↓` or `Ctrl+W +` / `Ctrl+W -` | Increase / decrease overlay chat height |
 | `Alt+PgUp` / `Alt+PgDn` | Raise / lower overlay chat opacity |
 | `Ctrl+W x` | Swap the sides of the list and the chat |
+| `Ctrl+B` | Show or hide the list; in the terminal, Ctrl+B stays with tmux |
 
 The app saves these choices in `config.toml`.
 

@@ -103,7 +103,7 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 
 ## Atalhos de teclado
 
-Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o chat, x troca os lados, w cicla o layout, +/- ajustam a altura e </> a largura do chat. O popup aparece após uma pausa curta; a sequência funciona na hora. Esc cancela. Ctrl+B também alterna a lista na janela; no terminal, fica para o tmux. Use g f para favoritos e g r para recentes. Configs existentes recebem um aviso único. Defina `keymap = "classic"` no config para restaurar as teclas anteriores, incluindo Ctrl+H/L/P/O, Ctrl+W para ciclar, l minúsculo, g (Home) e Ctrl+S para buscar.
+Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o chat, x troca os lados, w cicla o layout, +/- ajustam a altura e </> a largura do chat. O popup aparece após uma pausa curta; a sequência funciona na hora. Esc cancela. Ctrl+B também alterna a lista na janela; no terminal, fica para o tmux. Use g f para favoritos e g r para recentes. Configs existentes recebem um aviso único. Ctrl+O continua pondo o chat sobre o vídeo, ao lado de Ctrl+W o. Defina `keymap = "classic"` no config para restaurar as teclas anteriores, incluindo Ctrl+H/L/P, Ctrl+W para ciclar, l minúsculo, g (Home) e Ctrl+S para buscar.
 
 <details open>
 <summary>Lista e busca</summary>
@@ -122,6 +122,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 | `r` | Tenta de novo carregar a lista ou o vídeo |
 | `Esc` | Limpa o filtro ou volta às categorias |
 | `g c` / `Ctrl+R` | Volta às categorias de qualquer lugar |
+| `g f` / `g r` | Vai aos favoritos / aos recentes |
 | `Tab` | Alterna o foco entre a lista e o chat |
 
 </details>
@@ -135,7 +136,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 | `Enter` | Envia a mensagem |
 | `Esc` | Sai da escrita e guarda o rascunho |
 | `Ctrl+W` ou `Alt+Backspace` | Apaga a palavra anterior na mensagem, na busca e no filtro |
-| `↑` `↓` `PgUp` `PgDn` `Home` `g` | Rola o histórico |
+| `↑` `↓` `PgUp` `PgDn` `Home` | Rola o histórico |
 | `End` ou `G` | Volta às mensagens ao vivo |
 | `y` | Copia a mensagem selecionada |
 | `Ctrl+T` | Reconecta ao chat |
@@ -168,11 +169,12 @@ Com o foco na mensagem, na busca ou no filtro, o que se digita fica no campo: `S
 | Tecla | Ação |
 | --- | --- |
 | `Ctrl+→` / `Ctrl+←` | Alarga / estreita a lista |
-| `Alt+←` / `Alt+→` | Alarga / estreita o chat |
-| `Ctrl+W o` | Põe o chat ao lado do vídeo ou sobre ele |
-| `Alt+↑` / `Alt+↓` | Aumenta / diminui a altura do chat sobreposto |
+| `Alt+←` / `Alt+→` ou `Ctrl+W <` / `Ctrl+W >` | Alarga / estreita o chat |
+| `Ctrl+W o` ou `Ctrl+O` | Põe o chat ao lado do vídeo ou sobre ele |
+| `Alt+↑` / `Alt+↓` ou `Ctrl+W +` / `Ctrl+W -` | Aumenta / diminui a altura do chat sobreposto |
 | `Alt+PgUp` / `Alt+PgDn` | Aumenta / diminui a opacidade do chat sobre o vídeo |
 | `Ctrl+W x` | Troca os lados da lista e do chat |
+| `Ctrl+B` | Mostra ou esconde a lista; no terminal, o Ctrl+B fica para o tmux |
 
 O app guarda essas escolhas no `config.toml`.
 

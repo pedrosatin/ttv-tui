@@ -390,17 +390,17 @@ func parseTOML(input string) (Config, error) {
 			fullKey = section + "." + key
 		}
 		switch fullKey {
-		case "keymap":
+		case "keymap", "ui.keymap":
 			val, err := unquoteTOML(rawVal)
 			if err != nil {
-				return Config{}, fmt.Errorf("line %d: keymap: %w", lineNum, err)
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
 			}
 			if val != "classic" && val != "default" {
 				return Config{}, fmt.Errorf("line %d: unknown keymap %q", lineNum, val)
 			}
 			cfg.Keymap = val
-		case "keymap_notice_seen":
-			cfg.KeymapNoticeSeen = rawVal == "true"
+		case "keymap_notice_seen", "ui.keymap_notice_seen":
+			cfg.KeymapNoticeSeen = strings.Trim(strings.TrimSpace(rawVal), "\"'") == "true"
 		case "language", "ui.language":
 			val, err := unquoteTOML(rawVal)
 			if err != nil {
