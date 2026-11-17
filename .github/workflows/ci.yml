@@ -55,6 +55,7 @@ jobs:
     env:
       TMPDIR: /tmp
       XDG_RUNTIME_DIR: /tmp
+      RACE_PACKAGES: ./internal/player ./internal/chat ./internal/kick ./internal/ui ./internal/store
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -79,15 +80,21 @@ jobs:
         with:
           version: v2.15.0
 
-      - name: Run tests
-        run: go test -count=1 ./...
+      # The packages in RACE_PACKAGES only run under the race detector below, so
+      # they are left out here. Every other package, including new ones, runs
+      # here. test-json.sh logs the duration of each package.
+      - name: Run tests (packages outside the race run)
+        run: |
+          packages=$(go list ./... | grep -vxFf <(go list $RACE_PACKAGES))
+          test -n "$packages"
+          .github/scripts/test-json.sh common -count=1 $packages
 
       - name: Run race detector on concurrent packages
-        run: go test -race -count=1 ./internal/player ./internal/chat ./internal/kick ./internal/ui ./internal/store
+        run: .github/scripts/test-json.sh race -race -count=1 $RACE_PACKAGES
 
       - name: Check Linux installer offline
         run: |
-          shellcheck packaging/install.sh packaging/install_test.sh
+          shellcheck packaging/install.sh packaging/install_test.sh .github/scripts/test-json.sh
           bash packaging/install_test.sh
 
   # The window is its own module: it links SDL3 and libmpv, which only some
