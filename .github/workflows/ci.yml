@@ -166,53 +166,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      # Only the bottles brew downloads are cached, never /opt/homebrew: brew still
-      # pours every formula, so the build links the same libraries. With
-      # auto-update off, the runner image fixes the formula versions, so the key
-      # follows the image, the architecture and the formulae as brew sees them.
-      - name: Key the Homebrew downloads (macOS)
-        id: brew
-        if: runner.os == 'macOS'
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: |
-          formulae="pkgconf sdl3 mpv"
-          read -ra list <<< "$formulae"
-          manifest=$(brew info --json=v2 "${list[@]}" |
-            jq -c '.formulae[] | [.full_name, .versions.stable, .revision, .bottle.stable.rebuild, .bottle.stable.files, .dependencies]' |
-            shasum -a 256 | cut -c1-16)
-          {
-            echo "formulae=$formulae"
-            echo "downloads=$(brew --cache)/downloads"
-            echo "key=brew-$ImageOS-$ImageVersion-$RUNNER_ARCH-$manifest"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Restore the Homebrew downloads (macOS)
-        id: brew-cache
-        if: runner.os == 'macOS'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.brew.outputs.downloads }}
-          key: ${{ steps.brew.outputs.key }}
-
       - name: Install SDL3 and libmpv (macOS)
         if: runner.os == 'macOS'
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-          HOMEBREW_NO_INSTALL_CLEANUP: "1"
-          FORMULAE: ${{ steps.brew.outputs.formulae }}
-        run: |
-          read -ra list <<< "$FORMULAE"
-          brew install "${list[@]}"
-
-      # Saved right after the install, so a failing test later still leaves the
-      # downloads for the next run.
-      - name: Save the Homebrew downloads (macOS)
-        if: runner.os == 'macOS' && steps.brew-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.brew.outputs.downloads }}
-          key: ${{ steps.brew.outputs.key }}
+        run: brew install pkgconf sdl3 mpv
 
       - name: Install SDL3 and libmpv (Windows)
         if: runner.os == 'Windows'
