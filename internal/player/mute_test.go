@@ -49,9 +49,9 @@ func muteCommands(t *testing.T, path string) []string {
 
 // m mutes mpv over IPC and m again brings the sound back; the events carry it.
 func TestToggleMuteReachesMpvAndEvents(t *testing.T) {
+	t.Parallel()
 	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
-	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog)
 	gen, err := mgr.Start(testTarget("mutechan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -78,9 +78,9 @@ func TestToggleMuteReachesMpvAndEvents(t *testing.T) {
 // The mute follows the viewer to the next channel; with the sound on, the new
 // session leaves mpv's mute alone.
 func TestMuteFollowsToTheNextChannel(t *testing.T) {
+	t.Parallel()
 	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
-	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog)
 	start := func(login string) uint64 {
 		t.Helper()
 		gen, err := mgr.Start(testTarget(login))
@@ -149,11 +149,10 @@ func TestInputConfMuteOSDHasNoWords(t *testing.T) {
 // Two m pressed before mpv answers the first: the second flips the wish of the
 // first, so mpv gets mute and unmute and the session ends with sound.
 func TestQuickDoubleMuteEndsWhereItStarted(t *testing.T) {
+	t.Parallel()
 	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
-	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
 	// mpv answers each command late, so the second m lands before the first reply.
-	t.Setenv("TTV_PLAYER_HELPER_REPLY_DELAY_MS", "300")
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog, "TTV_PLAYER_HELPER_REPLY_DELAY_MS=300")
 	gen, err := mgr.Start(testTarget("doublemute"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -177,10 +176,9 @@ func TestQuickDoubleMuteEndsWhereItStarted(t *testing.T) {
 // m pressed in the mpv window reaches the session through the observed
 // property, and the next m from the TUI starts from it.
 func TestMuteChangedInMPVWindowReachesEvents(t *testing.T) {
+	t.Parallel()
 	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
-	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
-	t.Setenv("TTV_PLAYER_HELPER_EXTERNAL_MUTE", "1")
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog, "TTV_PLAYER_HELPER_EXTERNAL_MUTE=1")
 	gen, err := mgr.Start(testTarget("extmute"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)

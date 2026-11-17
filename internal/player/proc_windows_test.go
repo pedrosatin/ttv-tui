@@ -70,9 +70,7 @@ func startIdle(t *testing.T) (*exec.Cmd, processGroup) {
 // job nothing would see that descendant, let alone reach it.
 func TestStreamlinkDeathLeavesDescendantForStop(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child.pid")
-	t.Setenv("TTV_PLAYER_HELPER_CHILD_PIDFILE", pidFile)
-
-	mgr := newTestManager(t, "term-parent-stubborn-child", Options{})
+	mgr := newTestManager(t, "term-parent-stubborn-child", Options{}, "TTV_PLAYER_HELPER_CHILD_PIDFILE="+pidFile)
 	gen, err := mgr.Start(testTarget("tree"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -337,8 +335,7 @@ func TestAssignAccessDeniedDegradesAndStopKillsTree(t *testing.T) {
 	t.Cleanup(func() { assignToJob = original })
 	assignToJob = func(windows.Handle, windows.Handle) error { return windows.ERROR_ACCESS_DENIED }
 	pidFile := filepath.Join(t.TempDir(), "child.pid")
-	t.Setenv("TTV_PLAYER_HELPER_CHILD_PIDFILE", pidFile)
-	mgr := newTestManager(t, "term-parent-stubborn-child", Options{})
+	mgr := newTestManager(t, "term-parent-stubborn-child", Options{}, "TTV_PLAYER_HELPER_CHILD_PIDFILE="+pidFile)
 	gen, err := mgr.Start(testTarget("restricted"))
 	if err != nil {
 		t.Fatal(err)

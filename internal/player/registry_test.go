@@ -120,10 +120,8 @@ func waitPidFile(t *testing.T, path string, timeout time.Duration) int {
 
 func TestStopKillsDescendantIgnoringTERMAfterParentExits(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child.pid")
-	t.Setenv("TTV_PLAYER_HELPER_CHILD_PIDFILE", pidFile)
-
 	const stopWait = 400 * time.Millisecond
-	mgr := newTestManager(t, "term-parent-stubborn-child", Options{StopWait: stopWait})
+	mgr := newTestManager(t, "term-parent-stubborn-child", Options{StopWait: stopWait}, "TTV_PLAYER_HELPER_CHILD_PIDFILE="+pidFile)
 	gen, err := mgr.Start(testTarget("stubborn"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)

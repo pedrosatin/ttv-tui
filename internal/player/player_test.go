@@ -38,7 +38,10 @@ func testTarget(name string) Target {
 	}
 }
 
-func helperCommand(mode string) CommandFunc {
+// helperCommand starts the helper in mode. env goes to that process alone
+// ("TTV_PLAYER_HELPER_CMDS=/tmp/x"), never to the test's own environment, so
+// tests that set it can run in parallel.
+func helperCommand(mode string, env ...string) CommandFunc {
 	return func(target Target, socketPath string) *exec.Cmd {
 		login := target.Identity()
 		cmd := exec.Command(os.Args[0], "--", login, ipcServerFlag+socketPath)
@@ -49,6 +52,7 @@ func helperCommand(mode string) CommandFunc {
 			"TTV_PLAYER_HELPER_LOGIN="+login,
 			"TTV_PLAYER_HELPER_URL="+target.URL,
 		)
+		cmd.Env = append(cmd.Env, env...)
 		return cmd
 	}
 }
@@ -62,9 +66,13 @@ func skipWithoutSocketFile(t *testing.T) {
 	}
 }
 
-func newTestManager(t *testing.T, mode string, opts Options) *Manager {
+// newTestManager runs the helper in mode, with env added to each helper
+// process (see helperCommand). An opts.Command of the test's own wins.
+func newTestManager(t *testing.T, mode string, opts Options, env ...string) *Manager {
 	t.Helper()
-	opts.Command = helperCommand(mode)
+	if opts.Command == nil {
+		opts.Command = helperCommand(mode, env...)
+	}
 	if opts.RuntimeDir == "" {
 		opts.RuntimeDir = privateRuntimeDir(t)
 	}
@@ -93,6 +101,20 @@ func privateRuntimeDir(t *testing.T) string {
 	return dir
 }
 
+// waitUntil checks cond every 20 ms until it holds or timeout passes, and
+// reports whether it held. It is for cleanup that finishes shortly after the
+// call that causes it; an absence check keeps a fixed time window instead.
+func waitUntil(timeout time.Duration, cond func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for !cond() {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return true
+}
+
 func waitForState(t *testing.T, ch <-chan Event, gen uint64, want State, timeout time.Duration) Event {
 	t.Helper()
 	deadline := time.After(timeout)
@@ -116,6 +138,7 @@ func waitForState(t *testing.T, ch <-chan Event, gen uint64, want State, timeout
 }
 
 func TestPlayingOnlyAfterIPCEvent(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play", Options{})
 	gen, err := mgr.Start(testTarget("gaules"))
 	if err != nil {
@@ -140,6 +163,7 @@ func TestPlayingOnlyAfterIPCEvent(t *testing.T) {
 }
 
 func TestChannelSwitchABCLeavesOnlyC(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play-child", Options{StopWait: 300 * time.Millisecond})
 
 	genA, err := mgr.Start(testTarget("channel-a"))
@@ -171,7 +195,8 @@ func TestChannelSwitchABCLeavesOnlyC(t *testing.T) {
 		t.Fatal("expected positive pid for C")
 	}
 
-	// Allow A/B teardown to finish.
+	// Absence window: a late A/B teardown must not reach C. It stays a fixed
+	// time on purpose, since nothing signals that something did not happen.
 	time.Sleep(400 * time.Millisecond)
 
 	if !pidExists(pid) {
@@ -185,12 +210,10 @@ func TestChannelSwitchABCLeavesOnlyC(t *testing.T) {
 		t.Fatalf("Getpgid: %v", err)
 	}
 	mgr.Stop()
-	time.Sleep(300 * time.Millisecond)
-
-	if pidExists(pid) {
+	if !waitUntil(3*time.Second, func() bool { return !pidExists(pid) }) {
 		t.Fatalf("pid %d still alive after Stop", pid)
 	}
-	if groupExists(pgid) {
+	if !waitUntil(3*time.Second, func() bool { return !groupExists(pgid) }) {
 		t.Fatalf("process group %d still reachable after Stop", pgid)
 	}
 	_ = genA
@@ -198,6 +221,7 @@ func TestChannelSwitchABCLeavesOnlyC(t *testing.T) {
 }
 
 func TestSIGTERMIgnoredEscalatesToSIGKILL(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "ignore-term", Options{StopWait: 200 * time.Millisecond})
 	gen, err := mgr.Start(testTarget("stubborn"))
 	if err != nil {
@@ -226,6 +250,7 @@ func TestSIGTERMIgnoredEscalatesToSIGKILL(t *testing.T) {
 }
 
 func TestSocketEOFBecomesEnded(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "socket-eof", Options{})
 	gen, err := mgr.Start(testTarget("eofchan"))
 	if err != nil {
@@ -241,6 +266,7 @@ func TestSocketEOFBecomesEnded(t *testing.T) {
 }
 
 func TestProcessErrorBecomesErrorWithLastLine(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "exit-error", Options{SocketWait: 2 * time.Second})
 	gen, err := mgr.Start(testTarget("badchan"))
 	// Start itself may succeed (process spawned); error arrives asynchronously.
@@ -255,6 +281,7 @@ func TestProcessErrorBecomesErrorWithLastLine(t *testing.T) {
 }
 
 func TestStaleGenerationEventsAreDiscardable(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play", Options{})
 	genA, err := mgr.Start(testTarget("aaa"))
 	if err != nil {
@@ -291,6 +318,7 @@ func TestStaleGenerationEventsAreDiscardable(t *testing.T) {
 }
 
 func TestSocketRemovedAfterExit(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	mgr := newTestManager(t, "play", Options{RuntimeDir: dir})
 	gen, err := mgr.Start(testTarget("sockchan"))
@@ -315,9 +343,7 @@ func TestSocketRemovedAfterExit(t *testing.T) {
 	}
 
 	mgr.Stop()
-	time.Sleep(100 * time.Millisecond)
-
-	if !endpointGone(socket) {
+	if !waitUntil(3*time.Second, func() bool { return endpointGone(socket) }) {
 		t.Fatalf("socket still present after Stop: %s", socket)
 	}
 	if sessionDir != "" {
@@ -331,6 +357,7 @@ func TestSocketRemovedAfterExit(t *testing.T) {
 // (paired start/end lines) while mpv is starting; the session shows the interval
 // and returns to playing on the end line.
 func TestPreRollHoldEntersAndLeavesBreak(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "ad-then-play", Options{})
 	gen, err := mgr.Start(testTarget("adchan"))
 	if err != nil {
@@ -381,6 +408,7 @@ func expectNoBreak(t *testing.T, ch <-chan Event, gen uint64, d time.Duration) {
 // TestIPCSilenceNeverEntersBreak: after the initial events the fake mpv stays
 // silent (stable idle-active/pause/volume). That is normal playback.
 func TestIPCSilenceNeverEntersBreak(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play", Options{})
 	gen, err := mgr.Start(testTarget("silentchan"))
 	if err != nil {
@@ -400,8 +428,8 @@ func TestIPCSilenceNeverEntersBreak(t *testing.T) {
 // playback enter the interval, the counter grows, and the end line returns to
 // playing with no user input.
 func TestAdHoldStartAndEndRecoversWithoutInteraction(t *testing.T) {
-	t.Setenv("TTV_PLAYER_HELPER_ADS", "hold-end")
-	mgr := newTestManager(t, "play", Options{})
+	t.Parallel()
+	mgr := newTestManager(t, "play", Options{}, "TTV_PLAYER_HELPER_ADS=hold-end")
 	gen, err := mgr.Start(testTarget("adchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -446,8 +474,8 @@ func TestAdHoldStartAndEndRecoversWithoutInteraction(t *testing.T) {
 // TestAdInfoLinesAloneDoNotClaimBreak: lines that only announce ads, without
 // streamlink's paired hold lines, do not create an interval.
 func TestAdInfoLinesAloneDoNotClaimBreak(t *testing.T) {
-	t.Setenv("TTV_PLAYER_HELPER_ADS", "info-only")
-	mgr := newTestManager(t, "play", Options{})
+	t.Parallel()
+	mgr := newTestManager(t, "play", Options{}, "TTV_PLAYER_HELPER_ADS=info-only")
 	gen, err := mgr.Start(testTarget("infochan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -462,8 +490,8 @@ func TestAdInfoLinesAloneDoNotClaimBreak(t *testing.T) {
 // TestAdHoldWithoutEndIsBounded: a hold-start line with no end line does not
 // trap the app; past BreakMaxHold it stops claiming an interval on its own.
 func TestAdHoldWithoutEndIsBounded(t *testing.T) {
-	t.Setenv("TTV_PLAYER_HELPER_ADS", "hold-only")
-	mgr := newTestManager(t, "play", Options{BreakMaxHold: 1200 * time.Millisecond})
+	t.Parallel()
+	mgr := newTestManager(t, "play", Options{BreakMaxHold: 1200 * time.Millisecond}, "TTV_PLAYER_HELPER_ADS=hold-only")
 	gen, err := mgr.Start(testTarget("holdchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -483,14 +511,20 @@ func TestAdHoldWithoutEndIsBounded(t *testing.T) {
 // TestAdHoldOldGenerationIgnored: a hold from a previous channel cannot put the
 // new generation in the interval state.
 func TestAdHoldOldGenerationIgnored(t *testing.T) {
-	t.Setenv("TTV_PLAYER_HELPER_ADS", "hold-only")
-	mgrA := newTestManager(t, "play", Options{})
+	t.Parallel()
+	// Only chan-a's streamlink prints the hold line.
+	holdA := helperCommand("play", "TTV_PLAYER_HELPER_ADS=hold-only")
+	mgrA := newTestManager(t, "play", Options{Command: func(target Target, socketPath string) *exec.Cmd {
+		if target.Identity() == "chan-a" {
+			return holdA(target, socketPath)
+		}
+		return helperCommand("play")(target, socketPath)
+	}})
 	genA, err := mgrA.Start(testTarget("chan-a"))
 	if err != nil {
 		t.Fatalf("Start A: %v", err)
 	}
 	_ = waitForState(t, mgrA.Events(), genA, StateBreak, 5*time.Second)
-	t.Setenv("TTV_PLAYER_HELPER_ADS", "")
 	genB, err := mgrA.Start(testTarget("chan-b"))
 	if err != nil {
 		t.Fatalf("Start B: %v", err)
@@ -1005,13 +1039,10 @@ func TestClampVolume(t *testing.T) {
 // paused; after IPC connect the session forces volume 100 and pause=false so the
 // status bar matches the player, then manual controls still work.
 func TestPlaybackBaselineSyncsVolumeAndPause(t *testing.T) {
+	t.Parallel()
 	cmdLog := filepath.Join(t.TempDir(), "baseline-cmds.jsonl")
-	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
-	t.Setenv("TTV_PLAYER_HELPER_INIT_VOLUME", "102")
-	t.Setenv("TTV_PLAYER_HELPER_INIT_PAUSE", "1")
-	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "0")
 
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog, "TTV_PLAYER_HELPER_INIT_VOLUME=102", "TTV_PLAYER_HELPER_INIT_PAUSE=1", "TTV_PLAYER_HELPER_DEFER_PAUSE_PROP=0")
 	gen, err := mgr.Start(testTarget("baseline"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1058,12 +1089,10 @@ func TestPlaybackBaselineSyncsVolumeAndPause(t *testing.T) {
 }
 
 func TestPauseCommandCorrelatesByRequestID(t *testing.T) {
+	t.Parallel()
 	cmdLog := filepath.Join(t.TempDir(), "cmds.jsonl")
-	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
-	t.Setenv("TTV_PLAYER_HELPER_REPLY_DELAY_MS", "200")
-	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "1")
 
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog, "TTV_PLAYER_HELPER_REPLY_DELAY_MS=200", "TTV_PLAYER_HELPER_DEFER_PAUSE_PROP=1")
 	gen, err := mgr.Start(testTarget("pausechan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1092,6 +1121,7 @@ func TestPauseCommandCorrelatesByRequestID(t *testing.T) {
 }
 
 func TestStaleRequestIDReplyIgnored(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play-control", Options{})
 	gen, err := mgr.Start(testTarget("stalechan"))
 	if err != nil {
@@ -1142,10 +1172,9 @@ func TestStaleRequestIDReplyIgnored(t *testing.T) {
 }
 
 func TestSupersededPauseReplyIgnored(t *testing.T) {
-	t.Setenv("TTV_PLAYER_HELPER_REPLY_DELAY_MS", "250")
-	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "1")
+	t.Parallel()
 
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_REPLY_DELAY_MS=250", "TTV_PLAYER_HELPER_DEFER_PAUSE_PROP=1")
 	gen, err := mgr.Start(testTarget("superchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1201,6 +1230,7 @@ func TestSupersededPauseReplyIgnored(t *testing.T) {
 }
 
 func TestPreviousGenerationEventDoesNotAffectCurrent(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play-control", Options{})
 	genA, err := mgr.Start(testTarget("gen-a"))
 	if err != nil {
@@ -1251,8 +1281,8 @@ func TestPreviousGenerationEventDoesNotAffectCurrent(t *testing.T) {
 }
 
 func TestVolumeClampOnAdjust(t *testing.T) {
-	t.Setenv("TTV_PLAYER_HELPER_DEFER_PAUSE_PROP", "0")
-	mgr := newTestManager(t, "play-control", Options{})
+	t.Parallel()
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_DEFER_PAUSE_PROP=0")
 	gen, err := mgr.Start(testTarget("volchan"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1366,9 +1396,9 @@ func lastVolumeSet(t *testing.T, path string) string {
 }
 
 func TestRestartKeepsTheVolumeOfTheSameChannel(t *testing.T) {
+	t.Parallel()
 	cmdLog := filepath.Join(t.TempDir(), "volume-cmds.jsonl")
-	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog)
 
 	start := func(login string) uint64 {
 		t.Helper()
@@ -1419,9 +1449,9 @@ func TestDefaultSocketWaitCoversASlowNetwork(t *testing.T) {
 }
 
 func TestVolumeZeroSurvivesTheRestart(t *testing.T) {
+	t.Parallel()
 	cmdLog := filepath.Join(t.TempDir(), "mute-cmds.jsonl")
-	t.Setenv("TTV_PLAYER_HELPER_CMDS", cmdLog)
-	mgr := newTestManager(t, "play-control", Options{})
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog)
 	gen, err := mgr.Start(testTarget("gaules"))
 	if err != nil {
 		t.Fatal(err)
@@ -1462,6 +1492,7 @@ func waitVolume(t *testing.T, mgr *Manager, gen uint64, want int, timeout time.D
 }
 
 func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	mgr := newTestManager(t, "play-control", Options{RuntimeDir: dir})
 	gen, err := mgr.Start(testTarget("stopchan"))
@@ -1485,14 +1516,11 @@ func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
 	mgr.Stop()
 	_ = waitForState(t, mgr.Events(), gen, StateEnded, 5*time.Second)
 
-	time.Sleep(100 * time.Millisecond)
-	if !endpointGone(socket) {
+	if !waitUntil(3*time.Second, func() bool { return endpointGone(socket) }) {
 		t.Fatalf("socket still present: %s", socket)
 	}
-	if pid > 0 {
-		if pidExists(pid) {
-			t.Fatalf("pid %d still alive", pid)
-		}
+	if pid > 0 && !waitUntil(3*time.Second, func() bool { return !pidExists(pid) }) {
+		t.Fatalf("pid %d still alive", pid)
 	}
 
 	// Manager remains usable for a new Start.
@@ -1504,6 +1532,7 @@ func TestCtrlXStopRemovesSocketKeepsManagerUsable(t *testing.T) {
 }
 
 func TestHelperExitBecomesEnded(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "exit-after-play", Options{})
 	gen, err := mgr.Start(testTarget("bye"))
 	if err != nil {
@@ -1517,6 +1546,7 @@ func TestHelperExitBecomesEnded(t *testing.T) {
 }
 
 func TestPausePropertyChangeFromMPVWindow(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play-control", Options{})
 	gen, err := mgr.Start(testTarget("extpause"))
 	if err != nil {
@@ -1712,9 +1742,7 @@ func assertLongRuntimeDirFallsBackTo(t *testing.T, longDir, base string) {
 	}
 
 	mgr.Stop()
-	time.Sleep(100 * time.Millisecond)
-
-	if !endpointGone(socket) {
+	if !waitUntil(3*time.Second, func() bool { return endpointGone(socket) }) {
 		t.Fatalf("socket still exists after Stop: %s", socket)
 	}
 	if _, err := os.Stat(sessionDir); !os.IsNotExist(err) {
@@ -1760,9 +1788,7 @@ func TestLongRuntimeDirDefaultEnvFallsBack(t *testing.T) {
 	}
 
 	mgr.Stop()
-	time.Sleep(100 * time.Millisecond)
-
-	if !endpointGone(socket) {
+	if !waitUntil(3*time.Second, func() bool { return endpointGone(socket) }) {
 		t.Fatalf("socket still exists after Stop: %s", socket)
 	}
 	if _, err := os.Stat(sessionDir); !os.IsNotExist(err) {
@@ -1890,6 +1916,7 @@ func TestManagerStartRejectsURLsStreamlinkCouldReadAsOptions(t *testing.T) {
 }
 
 func TestManagerPreservesVolumeByTargetIdentity(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play-control", Options{})
 	target := Target{
 		URL:   "https://www.twitch.tv/volchan",

@@ -180,6 +180,7 @@ func TestSessionWritesInputConfBeforeCommand(t *testing.T) {
 }
 
 func TestInputConfWriteFailureKeepsPlaying(t *testing.T) {
+	t.Parallel()
 	writeErr := errors.New("disk full")
 	var usedFallback atomic.Bool
 	mgr := newTestManager(t, "play", Options{
@@ -208,6 +209,7 @@ func TestInputConfWriteFailureKeepsPlaying(t *testing.T) {
 }
 
 func TestInputConfWriteFailureWithCustomCommandKeepsCommand(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t, "play", Options{
 		WriteInputConf: func(string) error { return errors.New("disk full") },
 	})
@@ -267,8 +269,8 @@ func TestDefaultFallbackDropsOnlyInputConf(t *testing.T) {
 }
 
 func TestVolumeChangedInMPVWindowReachesEvents(t *testing.T) {
-	t.Setenv("TTV_PLAYER_HELPER_EXTERNAL_VOLUME", "35")
-	mgr := newTestManager(t, "play-control", Options{})
+	t.Parallel()
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_EXTERNAL_VOLUME=35")
 	gen, err := mgr.Start(testTarget("extvolume"))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
