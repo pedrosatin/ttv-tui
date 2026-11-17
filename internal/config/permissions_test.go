@@ -220,9 +220,14 @@ func TestFileSymlinkOtherOwnerFails(t *testing.T) {
 		t.Error("chmod em arquivo de outro usuário")
 		return nil
 	}
+	// O aviso cita o alvo resolvido: no macOS, /etc é um link para /private/etc.
+	want, err := filepath.EvalSymlinks(other)
+	if err != nil {
+		t.Fatal(err)
+	}
 	notice, err := tightenPermissions(path, chmod)
-	if err != nil || !notice.Failed || notice.Fixed || notice.Path != other {
-		t.Fatalf("aviso inesperado: %+v, %v", notice, err)
+	if err != nil || !notice.Failed || notice.Fixed || notice.Path != want {
+		t.Fatalf("aviso inesperado: %+v, %v (alvo %s)", notice, err, want)
 	}
 }
 
