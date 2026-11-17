@@ -97,6 +97,8 @@ type window struct {
 	mark    string
 	cmd     *exec.Cmd
 	exited  chan struct{}
+	// started é quando a janela subiu, o zero das fases no log.
+	started time.Time
 	// logPath guarda stdout e stderr da janela. Um arquivo, e não um pipe: o
 	// Wait não fica preso a um neto que herdou a ponta.
 	logPath string
@@ -184,7 +186,7 @@ func openWindow(t *testing.T, s setup) *window {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("abrir a janela: %v", err)
 	}
-	w.cmd = cmd
+	w.cmd, w.started = cmd, time.Now()
 	go func() {
 		_ = cmd.Wait()
 		close(w.exited)
@@ -198,7 +200,31 @@ func openWindow(t *testing.T, s setup) *window {
 	w.waitState("catálogo de fixture na lista", 20*time.Second, func(st ui.StateReport) bool {
 		return st.Items >= 60 && (st.Highlighted == "Categoria 01" || saved && st.Highlighted != "")
 	})
+	w.phase("catálogo", w.started)
 	return w
+}
+
+// phase registra no log quanto uma fase do cenário levou desde start. As fases
+// (catálogo, abertura, primeiro quadro, saída) mostram onde o tempo de cada
+// cenário vai, no CI e na bateria local.
+func (w *window) phase(name string, start time.Time) {
+	w.t.Helper()
+	w.t.Logf("fase %s: %v", name, time.Since(start).Round(time.Millisecond))
+}
+
+// logFirstFrame registra o tempo até o primeiro quadro que a própria janela
+// mediu (ttffMs) e quantos quadros de vídeo ela desenhou, se abriu algum canal.
+func (w *window) logFirstFrame() {
+	w.t.Helper()
+	out, err := w.send("stats")
+	if err != nil {
+		return
+	}
+	var stats struct{ Sessions, TtffMs, VideoFrames int64 }
+	if json.Unmarshal([]byte(out), &stats) != nil || stats.Sessions == 0 {
+		return
+	}
+	w.t.Logf("fase primeiro quadro: %dms (%d sessões, %d quadros de vídeo)", stats.TtffMs, stats.Sessions, stats.VideoFrames)
 }
 
 // cleanEnv é o ambiente do teste sem nada que leve a janela ao compositor, ao
@@ -224,13 +250,20 @@ func cleanEnv() []string {
 // close pede para sair pelo mesmo caminho de fechar a janela, espera, e mata o
 // que sobrou com a marca deste cenário (TUI, streamlink, shim).
 func (w *window) close() {
-	_, _ = w.send("quit")
 	select {
-	case <-w.exited:
-	case <-time.After(10 * time.Second):
-		w.t.Errorf("a janela não saiu 10 s depois do quit")
-		_ = syscall.Kill(-w.cmd.Process.Pid, syscall.SIGKILL)
-		<-w.exited
+	case <-w.exited: // já fechada: um cenário pode fechar a janela antes do fim
+	default:
+		w.logFirstFrame()
+		quit := time.Now()
+		_, _ = w.send("quit")
+		select {
+		case <-w.exited:
+			w.phase("saída", quit)
+		case <-time.After(10 * time.Second):
+			w.t.Errorf("a janela não saiu 10 s depois do quit")
+			_ = syscall.Kill(-w.cmd.Process.Pid, syscall.SIGKILL)
+			<-w.exited
+		}
 	}
 	left := marked(w.mark)
 	for _, pid := range left {
@@ -435,10 +468,13 @@ func (w *window) openFirstChannel() windowState {
 	w.waitState("os canais da Categoria 01", 10*time.Second, func(s ui.StateReport) bool {
 		return s.Mode == string(ui.ModeChannels) && s.Highlighted == "FixtureUm"
 	})
+	opened := time.Now()
 	w.press("Return")
-	return w.waitState("o player tocando FixtureUm", 15*time.Second, func(s ui.StateReport) bool {
+	st := w.waitState("o player tocando FixtureUm", 15*time.Second, func(s ui.StateReport) bool {
 		return s.Player == string(ui.PlayerStatePlaying) && s.ChatChannel == "fixture_um"
 	})
+	w.phase("abertura", opened)
+	return st
 }
 
 // eventually repete check até ele passar ou o tempo acabar, e devolve o último erro.

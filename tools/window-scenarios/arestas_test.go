@@ -144,6 +144,7 @@ func TestJanelaCarregandoMostraOCanal(t *testing.T) {
 	w.waitState("os canais da Categoria 01", 10*time.Second, func(s ui.StateReport) bool {
 		return s.Mode == string(ui.ModeChannels) && s.Highlighted == "FixtureUm"
 	})
+	opened := time.Now()
 	w.press("Return")
 	w.waitState("o player abrindo", 5*time.Second, func(s ui.StateReport) bool {
 		return s.Player == string(ui.PlayerStateStarting)
@@ -168,6 +169,7 @@ func TestJanelaCarregandoMostraOCanal(t *testing.T) {
 	w.waitState("o player tocando", 15*time.Second, func(s ui.StateReport) bool {
 		return s.Player == string(ui.PlayerStatePlaying)
 	})
+	w.phase("abertura", opened)
 	expect(t, func() error {
 		st, err := w.state()
 		if err != nil {
