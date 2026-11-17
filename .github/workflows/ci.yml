@@ -170,12 +170,18 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install pkgconf sdl3 mpv
 
+      # release: false reuses the MSYS2 the runner image ships in C:\msys64,
+      # instead of extracting the action's installer and starting it from
+      # scratch. Without update, pacman installs from the sync database the image
+      # was built with, and the package files still come from the action's cache.
       - name: Install SDL3 and libmpv (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
           path-type: inherit
+          release: false
+          update: false
           install: >-
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-pkgconf
@@ -205,6 +211,42 @@ jobs:
           go vet ./...
           go test -buildvcs=false ./...
 
+      # Go's build cache does not hash the C headers and libraries cgo compiles
+      # against, so the key carries the installed SDL3, mpv, GCC and pkgconf:
+      # a new package version starts a cold cache instead of reusing objects
+      # built against the old one. A window/go.sum change alone still restores
+      # the newest entry under the same prefix, since Go hashes its own sources.
+      # The prefix names the window module, apart from the root module's cache.
+      - name: Key the window Go cache (Windows)
+        id: go-cache-key
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          manifest=$(pacman -Q mingw-w64-ucrt-x86_64-sdl3 mingw-w64-ucrt-x86_64-mpv \
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-pkgconf)
+          echo "$manifest"
+          echo "gcc $(gcc -dumpfullversion), pkg-config $(pkg-config --version)," \
+            "sdl3 $(pkg-config --modversion sdl3), mpv $(pkg-config --modversion mpv)"
+          native=$(printf '%s\n' "$manifest" | sha256sum | cut -c1-16)
+          {
+            echo "prefix=go-window-${RUNNER_OS}-${RUNNER_ARCH}-$(go env GOVERSION)-native-${native}-"
+            echo "gocache=$(go env GOCACHE)"
+            echo "gomodcache=$(go env GOMODCACHE)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore the window Go cache (Windows)
+        id: go-cache
+        if: runner.os == 'Windows'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-key.outputs.gocache }}
+            ${{ steps.go-cache-key.outputs.gomodcache }}
+          key: ${{ steps.go-cache-key.outputs.prefix }}${{ hashFiles('window/go.sum') }}
+          restore-keys: ${{ steps.go-cache-key.outputs.prefix }}
+
+      # -count=1 keeps the restored cache from replaying test results: only
+      # compiled packages come from it, and the tests run every time.
       - name: Build, vet and test (Windows)
         if: runner.os == 'Windows'
         working-directory: window
@@ -217,7 +259,19 @@ jobs:
           govulncheck ./...
           go build -buildvcs=false -o ttv-tui-window.exe .
           go vet ./...
-          go test -buildvcs=false ./...
+          go test -count=1 -buildvcs=false ./...
+
+      # Saved before packaging: the zip build compiles against a libmpv
+      # extracted to a new temporary directory on each run, so its cache entries
+      # would never be reused.
+      - name: Save the window Go cache (Windows)
+        if: runner.os == 'Windows' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-key.outputs.gocache }}
+            ${{ steps.go-cache-key.outputs.gomodcache }}
+          key: ${{ steps.go-cache-key.outputs.prefix }}${{ hashFiles('window/go.sum') }}
 
       - name: Package the Windows zip
         if: runner.os == 'Windows'
