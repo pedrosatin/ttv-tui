@@ -261,8 +261,10 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 	if pinned && maxWidth > 0 && (len(msgs) > 0 || m.chat.panel.state == ChatStateConnected) {
 		// A short panel (the overlay at its lowest) keeps room for the newest
 		// message: the warning folds into one row, then the header keeps only
-		// its first row, then the compose hint leaves. A larger panel shows
-		// them whole again.
+		// its first row, then the compose hint leaves. Below that (a panel of
+		// two to four rows), the title, the warning and the pending-new notice
+		// leave in that order. The input line always stays, so a one-row panel
+		// shows only it. A larger panel shows them whole again.
 		over := func() bool {
 			return len(headerLines)+len(notice)+len(warn)+len(hint)+1+chatMinMessageRows > maxLines
 		}
@@ -274,6 +276,15 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 		}
 		if over() {
 			hint = nil
+		}
+		if over() {
+			headerLines = nil
+		}
+		if over() {
+			warn = nil
+		}
+		if over() {
+			notice = nil
 		}
 	}
 	footer := slices.Concat(notice, warn, hint, []string{input})

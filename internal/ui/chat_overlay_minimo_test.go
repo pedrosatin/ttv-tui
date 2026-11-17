@@ -103,6 +103,39 @@ func TestChatPainelCurtoCedeAntesDasMensagens(t *testing.T) {
 	}
 }
 
+// Abaixo da altura mínima (painel de 2 a 5 linhas), com aviso de envio e com o
+// chat pausado com mensagens novas, ainda sobra uma linha para mensagem; o
+// título, o aviso e o aviso de novas mensagens saem antes dela, nessa ordem.
+// Com 1 linha, só a entrada fica.
+func TestChatPainelMuitoCurtoGuardaUmaMensagem(t *testing.T) {
+	for _, pausado := range []bool{false, true} {
+		for _, aviso := range []bool{false, true} {
+			m := overlayMinimo(t, 80, 24, false)
+			if aviso {
+				m = play(t, m, "i")
+			}
+			if pausado {
+				m.chat.panel.followLive = false
+				m.chat.panel.pendingNew = 3
+			}
+			_, chatW, _ := m.hostedWidths()
+			for altura := 1; altura <= 6; altura++ {
+				lines := m.renderChatLines(altura, chatW)
+				got := ansi.Strip(strings.Join(lines, "\n"))
+				if len(lines) != altura {
+					t.Fatalf("pausado=%v aviso=%v altura=%d: %d linhas\n%s", pausado, aviso, altura, len(lines), got)
+				}
+				if !strings.HasPrefix(ansi.Strip(lines[altura-1]), ansi.Strip(m.renderChatInputLine(chatW))[:4]) {
+					t.Fatalf("pausado=%v aviso=%v altura=%d: a última linha devia ser a entrada\n%s", pausado, aviso, altura, got)
+				}
+				if altura >= 2 && !strings.Contains(got, "Fulano: salve, chat") && !strings.Contains(got, "Ciclana: que jogada") {
+					t.Fatalf("pausado=%v aviso=%v altura=%d: nenhuma mensagem visível\n%s", pausado, aviso, altura, got)
+				}
+			}
+		}
+	}
+}
+
 // O aviso inteiro volta quando o painel tem espaço: a linha com reticências é
 // só a forma do overlay reduzido.
 func TestChatAvisoInteiroNoPainelMaior(t *testing.T) {
