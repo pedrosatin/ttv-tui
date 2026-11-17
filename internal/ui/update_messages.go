@@ -118,6 +118,11 @@ func (m Model) applySearchLoaded(msg SearchLoadedMsg) (tea.Model, tea.Cmd) {
 	m.list.loadFailed = msg.Err != nil
 	if msg.Err != nil {
 		m.list.err = msg.Err
+		if m.list.softErr() {
+			// Rows stay on screen under a soft error, the YouTube offer
+			// included, so the highlight still needs a target.
+			m.settleHighlightAfterLoad()
+		}
 		return m, nil
 	}
 	m.list.err = nil

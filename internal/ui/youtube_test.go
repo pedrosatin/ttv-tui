@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -580,5 +581,29 @@ func TestPlainTextSearchStaysOnTwitch(t *testing.T) {
 	}
 	if m.ListPlatform() != platform.Twitch {
 		t.Fatalf("ListPlatform = %q, want twitch", m.ListPlatform())
+	}
+}
+
+// A Kick recusa a busca por "@gaules" (Bloqueio, erro brando): as linhas ficam
+// na tela e a oferta do YouTube recebe o destaque, para o Enter abrir o canal.
+func TestYouTubeOfferHighlightedAfterSoftSearchError(t *testing.T) {
+	kick := kickCatalog()
+	m, w := newScenario(t, 120, 40, WithPlatformCatalog(platform.Kick, kick, kick))
+	w.chat.platforms = map[string]catalog.ChatCapabilities{
+		platform.YouTube: catalog.ReadOnlyChatCapabilities,
+	}
+	m = play(t, m, "p")
+	kick.err = &catalog.Error{Platform: platform.Kick, Kind: catalog.Bloqueio, Op: "search", StatusCode: 403, Err: errors.New("request refused by the site")}
+	m = play(t, m, "ctrl+f @gaules enter")
+
+	if !m.list.softErr() {
+		t.Fatalf("list error = %v, want a soft Bloqueio", m.list.err)
+	}
+	if it, ok := m.HighlightedItem(); !ok || it.Type != ItemTypeYouTubeOffer {
+		t.Fatalf("highlight = %+v, want the YouTube offer after the refused search", it)
+	}
+	m = play(t, m, "enter")
+	if !slices.Equal(w.playback.started, []string{"youtube:@gaules"}) {
+		t.Fatalf("playback started = %q, want [youtube:@gaules]", w.playback.started)
 	}
 }
