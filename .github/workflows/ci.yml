@@ -170,18 +170,12 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install pkgconf sdl3 mpv
 
-      # release: false reuses the MSYS2 the runner image ships in C:\msys64,
-      # instead of extracting the action's installer and starting it from
-      # scratch. Without update, pacman installs from the sync database the image
-      # was built with, and the package files still come from the action's cache.
       - name: Install SDL3 and libmpv (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
           path-type: inherit
-          release: false
-          update: false
           install: >-
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-pkgconf
