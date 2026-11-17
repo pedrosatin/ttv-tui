@@ -255,6 +255,7 @@
   "section.favorites": "Favoritos",
   "section.recents": "Recentes",
   "recents.more": "mais… (+%d)",
+  "recents.fewer": "menos… (-%d)",
   "channels.offline": "offline",
   "channels.offline_tag": "[offline]",
   "channels.live_compact": "[vivo]",

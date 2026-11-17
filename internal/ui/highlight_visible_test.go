@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
+	"slices"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -137,8 +138,9 @@ func TestHighlightMovesToNeighborWhenRetryDropsHighlightedRecent(t *testing.T) {
 	// O usuário já abriu "mais…": o último recente só aparece com a lista inteira.
 	m.list.recentsExpanded = true
 
+	// A lista expandida termina na linha "menos…"; o último recente vem antes.
 	items := m.VisibleItems()
-	m.setHighlightToItem(items, len(items)-1)
+	m.setHighlightToItem(items, slices.IndexFunc(items, func(it ListItem) bool { return it.Type == ItemTypeFewerRecents })-1)
 	if got := m.HighlightedID(); got != "rec-49" {
 		t.Fatalf("setup: highlighted %q, want rec-49", got)
 	}

@@ -217,6 +217,8 @@ func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth 
 	switch it.Type {
 	case ItemTypeMoreRecents:
 		row = fitListRow(fmt.Sprintf("%s %7s  %s", marker, "", fmt.Sprintf(m.t("recents.more"), it.Hidden)), maxWidth)
+	case ItemTypeFewerRecents:
+		row = fitListRow(fmt.Sprintf("%s %7s  %s", marker, "", fmt.Sprintf(m.t("recents.fewer"), it.Hidden)), maxWidth)
 	case ItemTypeYouTubeOffer:
 		offer := fmt.Sprintf(m.t("search.youtube_offer"), sanitizeScreenText(it.Channel.Login))
 		row = fitListRow(fmt.Sprintf("%s %7s  %s", marker, "", offer), maxWidth)

@@ -40,6 +40,9 @@ const (
 	// ItemTypeMoreRecents é a linha "mais…" da tela inicial, depois dos
 	// primeiros recentes. Enter nela mostra o resto.
 	ItemTypeMoreRecents ListItemType = "MaisRecentes"
+	// ItemTypeFewerRecents é a linha "menos…" no fim dos recentes expandidos.
+	// Enter nela volta aos primeiros, com a linha "mais…" de novo.
+	ItemTypeFewerRecents ListItemType = "MenosRecentes"
 	// ItemTypeYouTubeOffer é a última linha da busca por um @canal: Enter nela
 	// abre o canal no YouTube, que não tem catálogo próprio.
 	ItemTypeYouTubeOffer ListItemType = "OfertaYouTube"
@@ -50,6 +53,9 @@ const youtubeOfferIDPrefix = "oferta:youtube:"
 
 // moreRecentsID é o ID estável da linha "mais…".
 const moreRecentsID = "recentes:mais"
+
+// fewerRecentsID é o ID estável da linha "menos…".
+const fewerRecentsID = "recentes:menos"
 
 // ListItem represents a strongly-typed item in the navigation list.
 // Availability is the honest stream state for channel items: unknown unless
@@ -62,7 +68,8 @@ type ListItem struct {
 	// Favorite marca com ★ um canal da listagem ou da busca que está nos
 	// favoritos: ele fica no lugar dele, sem ir para a seção Favoritos.
 	Favorite bool
-	// Hidden é quantos recentes a linha "mais…" esconde.
+	// Hidden é quantos recentes a linha "mais…" esconde, ou quantos a linha
+	// "menos…" vai esconder.
 	Hidden int
 }
 
@@ -73,8 +80,11 @@ func (it ListItem) Offline() bool {
 
 // ID returns the stable identifier of the list item.
 func (it ListItem) ID() string {
-	if it.Type == ItemTypeMoreRecents {
+	switch it.Type {
+	case ItemTypeMoreRecents:
 		return moreRecentsID
+	case ItemTypeFewerRecents:
+		return fewerRecentsID
 	}
 	if it.Type == ItemTypeYouTubeOffer && it.Channel != nil {
 		return youtubeOfferIDPrefix + it.Channel.Login
@@ -344,6 +354,7 @@ func (m Model) appendFavorites(items []ListItem, p itemPass) []ListItem {
 // runs on the stored channel and on the resolved one; the seen mark comes
 // from the resolved one. Sem filtro de texto e sem o usuário ter pedido o
 // resto, vão homeRecentsLimit deles e a linha "mais…" com quantos sobram.
+// Depois do "mais…", a lista inteira termina na linha "menos…", que recolhe.
 func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 	limited := p.query == "" && !m.list.recentsExpanded
 	shown, hidden := 0, 0
@@ -366,8 +377,11 @@ func (m Model) appendRecents(items []ListItem, p itemPass) []ListItem {
 		p.markSeen(ch)
 		shown++
 	}
-	if hidden > 0 {
+	switch {
+	case hidden > 0:
 		items = append(items, ListItem{Type: ItemTypeMoreRecents, Hidden: hidden})
+	case p.query == "" && shown > homeRecentsLimit:
+		items = append(items, ListItem{Type: ItemTypeFewerRecents, Hidden: shown - homeRecentsLimit})
 	}
 	return items
 }
@@ -929,6 +943,7 @@ func (m Model) forgetRecentHighlighted() (tea.Model, tea.Cmd) {
 		m.list.pendingRecents = forget(m.list.pendingRecents)
 	}
 	m.list.recentLog.Forgot(store.FromChannel(ch))
+	m.settleRecentsExpanded()
 	items := m.VisibleItems()
 	isRecent := func(i int) bool { return i >= 0 && i < len(items) && items[i].Type == ItemTypeRecent }
 	if !isRecent(idx) && isRecent(idx-1) {
@@ -941,6 +956,33 @@ func (m Model) forgetRecentHighlighted() (tea.Model, tea.Cmd) {
 		name = ch.Login
 	}
 	return m, m.saveStoreCmd("recents.removed_named", name)
+}
+
+// settleRecentsExpanded desfaz a expansão quando os recentes que sobraram já
+// cabem sem a linha "mais…": o recente que entrar depois volta a ficar
+// escondido, em vez de abrir a lista com um "menos…" que ninguém pediu. Com
+// filtro de texto a expansão não aparece, então fica como está.
+func (m *Model) settleRecentsExpanded() {
+	if !m.list.recentsExpanded || strings.TrimSpace(m.list.filter) != "" {
+		return
+	}
+	if !slices.ContainsFunc(m.VisibleItems(), func(it ListItem) bool { return it.Type == ItemTypeFewerRecents }) {
+		m.list.recentsExpanded = false
+	}
+}
+
+// collapseRecents volta à seção Recentes com os primeiros e a linha "mais…",
+// que recebe o destaque: a janela da lista se centra nela, e a seção de baixo
+// fica logo abaixo, sem rolar a lista inteira de recentes.
+func (m Model) collapseRecents() Model {
+	m.list.recentsExpanded = false
+	items := m.VisibleItems()
+	if idx := slices.IndexFunc(items, func(it ListItem) bool { return it.Type == ItemTypeMoreRecents }); idx >= 0 {
+		m.setHighlightToItem(items, idx)
+		return m
+	}
+	m.reconcileHighlight()
+	return m
 }
 
 // listRecents são os recentes que a lista ativa mostra, os pendentes
@@ -985,7 +1027,8 @@ func (m Model) updateConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // remoção no diário, como o x: outra instância que ainda os tem na memória não
 // os traz de volta, e o canal que ela abrir depois entra. O destaque que estava
 // num recente ou no "mais…" vai ao topo da tela inicial, nas categorias
-// fixadas, nos favoritos ou no catálogo.
+// fixadas, nos favoritos ou no catálogo. O destaque na linha "menos…" conta
+// como num recente.
 func (m Model) clearRecents() (tea.Model, tea.Cmd) {
 	cleared := m.listRecents()
 	if len(cleared) == 0 {
@@ -993,7 +1036,7 @@ func (m Model) clearRecents() (tea.Model, tea.Cmd) {
 	}
 	onRecent := false
 	if it, ok := m.HighlightedItem(); ok {
-		onRecent = it.Type == ItemTypeRecent || it.Type == ItemTypeMoreRecents
+		onRecent = it.Type == ItemTypeRecent || it.Type == ItemTypeMoreRecents || it.Type == ItemTypeFewerRecents
 	}
 	keep := func(recents []catalog.Channel) []catalog.Channel {
 		return slices.DeleteFunc(slices.Clone(recents), m.savedOnList)
@@ -1036,6 +1079,9 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		m.list.recentsExpanded = true
 		m.reconcileHighlight()
 		return m, nil
+
+	case ItemTypeFewerRecents:
+		return m.collapseRecents(), nil
 
 	case ItemTypeCategory, ItemTypePinnedCategory:
 		if it.Category == nil {
