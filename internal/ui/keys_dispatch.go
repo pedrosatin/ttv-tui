@@ -239,6 +239,7 @@ func (m Model) keyFavorite() (tea.Model, tea.Cmd) {
 
 func (m Model) keyChannelFilter() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
+		m.warnStatus(m.t("feedback.channel_filter_list"))
 		return m, nil
 	}
 	return m.openChannelFilterMenu(), nil

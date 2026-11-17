@@ -46,21 +46,7 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return handled(m.keyHome())
 		}
 		if id := m.keys.byMode[modeNormal][seq]; id == actFavorites || id == actRecents {
-			next, cmd := m.returnToCategories()
-			m = next.(Model)
-			m.layout.showList = true
-			m.setFocus(FocusList)
-			kind := ItemTypeFavorite
-			if id == actRecents {
-				kind = ItemTypeRecent
-			}
-			for i, item := range m.VisibleItems() {
-				if item.Type == kind {
-					m.moveHighlight(i - m.list.indexOfHighlighted(m.VisibleItems()))
-					break
-				}
-			}
-			return m, cmd, true
+			return handled(m.keySaved(id))
 		}
 		if next, cmd, ok := m.handleLayoutAction(m.keys.byMode[modeGlobal][seq], m.keys.byMode[modeWindow][seq]); ok {
 			return next, cmd, true
@@ -132,5 +118,33 @@ func (m Model) keyCategories() (tea.Model, tea.Cmd) {
 	next, cmd := m.returnToCategories()
 	m = next.(Model)
 	m.focusLiveCatalog()
+	return m, cmd
+}
+
+// keySaved é g f e g r: volta à tela inicial e destaca o primeiro favorito ou o
+// primeiro recente. Sem nenhum na lista ativa, nada se move e a barra diz como
+// ter um. Com todos escondidos pelos filtros de canal, a tela inicial abre e a
+// barra diz que são os filtros.
+func (m Model) keySaved(id actionID) (tea.Model, tea.Cmd) {
+	kind, empty, filtered := ItemTypeFavorite, "feedback.no_favorites", "feedback.favorites_filtered"
+	if id == actRecents {
+		kind, empty, filtered = ItemTypeRecent, "feedback.no_recents", "feedback.recents_filtered"
+	}
+	if !m.hasSavedOfType(kind) {
+		m.warnStatus(m.t(empty))
+		return m, nil
+	}
+	next, cmd := m.returnToCategories()
+	m = next.(Model)
+	m.layout.showList = true
+	m.setFocus(FocusList)
+	items := m.VisibleItems()
+	for i, item := range items {
+		if item.Type == kind {
+			m.moveHighlight(i - m.list.indexOfHighlighted(items))
+			return m, cmd
+		}
+	}
+	m.warnStatus(m.t(filtered))
 	return m, cmd
 }

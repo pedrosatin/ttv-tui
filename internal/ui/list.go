@@ -999,6 +999,23 @@ func (m Model) listRecents() []catalog.Channel {
 	return out
 }
 
+// hasSavedOfType diz se a lista ativa tem algum favorito (ItemTypeFavorite) ou
+// algum recente (ItemTypeRecent) para mostrar na tela inicial, pendentes
+// inclusive, sem contar os filtros de canal. Um recente que também é favorito
+// aparece só entre os favoritos e não conta como recente.
+func (m Model) hasSavedOfType(kind ListItemType) bool {
+	named := func(ch catalog.Channel) bool { return ch.ID != "" || ch.Login != "" }
+	isFavorite := func(ch catalog.Channel) bool {
+		return slices.ContainsFunc(m.list.favorites, func(f catalog.Channel) bool {
+			return named(f) && m.savedOnList(f) && channelMatches(f, ch)
+		})
+	}
+	if kind == ItemTypeFavorite {
+		return slices.ContainsFunc(m.list.favorites, func(ch catalog.Channel) bool { return named(ch) && m.savedOnList(ch) })
+	}
+	return slices.ContainsFunc(m.listRecents(), func(ch catalog.Channel) bool { return named(ch) && !isFavorite(ch) })
+}
+
 // askClearRecents põe na barra a pergunta de limpar os recentes da lista. Sem
 // recente nenhum, a barra só diz isso.
 func (m Model) askClearRecents() (tea.Model, tea.Cmd) {

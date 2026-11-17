@@ -171,9 +171,15 @@ func (m Model) helpPlatformLine() string {
 	return fmt.Sprintf(m.t("help.platform"), strings.Join(names, ", "))
 }
 
-// keySwitchPlatform is p on the list: the next platform's categories.
+// keySwitchPlatform is p on the list: the next platform's categories. With a
+// single platform, or with the chat focused, the bar says why nothing changed.
 func (m Model) keySwitchPlatform() (tea.Model, tea.Cmd) {
+	if len(m.catalogs) < 2 {
+		m.warnStatus(m.t("feedback.single_platform"))
+		return m, nil
+	}
 	if m.Focus() == FocusChat {
+		m.warnStatus(m.t("feedback.platform_list"))
 		return m, nil
 	}
 	return m.switchPlatform()
