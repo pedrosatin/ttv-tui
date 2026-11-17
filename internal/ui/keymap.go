@@ -120,10 +120,17 @@ func (m Model) prefixLines() []string {
 	return append(lines, m.t("keymap.cancel"))
 }
 
+// keyCategories volta à tela inicial e leva o destaque à primeira categoria
+// ao vivo, abaixo das fixadas, dos favoritos e dos recentes. A recarga do
+// catálogo que vem depois mantém o destaque no topo dele. Esc, que só volta um
+// nível, continua devolvendo o destaque à categoria de onde se saiu.
 func (m Model) keyCategories() (tea.Model, tea.Cmd) {
 	if !m.classic {
 		m.layout.showList = true
 		m.setFocus(FocusList)
 	}
-	return m.returnToCategories()
+	next, cmd := m.returnToCategories()
+	m = next.(Model)
+	m.focusLiveCatalog()
+	return m, cmd
 }

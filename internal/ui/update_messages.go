@@ -72,7 +72,7 @@ func (m Model) applyCategoriesLoaded(msg CategoriesLoadedMsg) (tea.Model, tea.Cm
 	}
 	m.list.nextCursor = msg.Page.Cursor
 	m.list.hasMore = msg.Page.HasMore
-	m.reconcileHighlight()
+	m.settleHighlightAfterLoad()
 	return m, nil
 }
 

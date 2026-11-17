@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -278,6 +279,26 @@ func (l listState) rowWindow(rows []listRow, budget int) (start, end int) {
 		start = max(end-budget, 0)
 	}
 	return start, end
+}
+
+// liveCatalogBelow diz se, na tela inicial, a primeira categoria ao vivo ficou
+// abaixo da janela da lista: as fixadas, os favoritos e os recentes a
+// empurraram para fora da tela. A janela é a mesma de renderListBodyLines.
+func (m Model) liveCatalogBelow() bool {
+	if m.Mode() != ModeCategories || m.height <= 0 || !m.listVisible() || m.list.hardErr() {
+		return false
+	}
+	items := m.VisibleItems()
+	first := firstLiveCategory(items)
+	if first < 0 {
+		return false
+	}
+	listW, _ := m.panelWidths()
+	rows := m.listRowPositions(items, false, listW)
+	used := len(m.appendFilterHint(m.appendPromptLines([]string{""}, listW), listW)) + len(m.catalogUnavailableLines(listW))
+	_, end := m.list.rowWindow(rows, m.listRowBudget(used, false, listW))
+	firstID := items[first].ID()
+	return !slices.ContainsFunc(rows[:end], func(r listRow) bool { return !r.isHeader && r.itemID == firstID })
 }
 
 // appendListLoadingMore adds the line shown while another page loads. Search

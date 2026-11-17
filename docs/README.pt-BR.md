@@ -123,7 +123,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 | `L` | Filtra canais por idioma e público |
 | `r` | Tenta de novo carregar a lista ou o vídeo |
 | `Esc` | Limpa o filtro ou volta às categorias |
-| `g c` / `Ctrl+R` | Volta às categorias de qualquer lugar |
+| `g c` / `Ctrl+R` | Vai ao topo das categorias ao vivo de qualquer lugar, passando das fixadas, dos favoritos e dos recentes |
 | `g f` / `g r` | Vai aos favoritos / aos recentes |
 | `Tab` | Alterna o foco entre a lista e o chat |
 

@@ -37,6 +37,9 @@ type footerUse struct {
 	Paused   bool
 	// ListHidden: a dica só aparece com a lista escondida.
 	ListHidden bool
+	// CatalogBelow: a dica só aparece na tela inicial com a primeira categoria
+	// ao vivo abaixo da janela da lista.
+	CatalogBelow bool
 }
 
 func (m Model) footerMode() footerMode {
@@ -81,7 +84,7 @@ func (m Model) Footer() string {
 	var hints []hint
 	for _, a := range m.keys.actions {
 		for _, use := range a.Footer {
-			if use.Mode != m.footerMode() || a.ID == actSwitchPlatform && len(m.catalogs) < 2 || use.Paused && m.ChatFollowLive() || m.overlayListHint(a.ID, use) {
+			if use.Mode != m.footerMode() || a.ID == actSwitchPlatform && len(m.catalogs) < 2 || use.Paused && m.ChatFollowLive() || m.overlayListHint(a.ID, use) || use.CatalogBelow && !m.liveCatalogBelow() {
 				continue
 			}
 			label := m.footerLabel(a.ID, use.Pair)

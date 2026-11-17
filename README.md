@@ -123,7 +123,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 | `L` | Filter channels by language and audience |
 | `r` | Retry loading the list or the video |
 | `Esc` | Clear the filter, or go back to categories |
-| `g c` / `Ctrl+R` | Go back to categories from anywhere |
+| `g c` / `Ctrl+R` | Go to the top of the live categories from anywhere, past pinned categories, favorites and recents |
 | `g f` / `g r` | Go to favorites / recents |
 | `Tab` | Move focus between the list and the chat |
 

@@ -1264,9 +1264,11 @@ func (m *Model) reconcileHighlight() {
 	m.setHighlightToItem(items, m.list.highlightIndex)
 }
 
-// settleHighlightAfterLoad places the highlight after a channel or search page
-// arrives. Right after a category or search is opened, the highlight goes to
-// the first result of that screen, so Enter opens what the user just asked for.
+// settleHighlightAfterLoad places the highlight after a category, channel or
+// search page arrives. Right after a category or search is opened, the
+// highlight goes to the first result of that screen, so Enter opens what the
+// user just asked for; after the jump to the live categories, to the first of
+// them.
 // Search results are preferred
 // by catalog.PreferSearchChannels before this runs (exact login, then exact
 // display name), and firstResultID puts that hit ahead of the categories. Otherwise (refresh, next page) the
@@ -1303,6 +1305,12 @@ func (m *Model) settleHighlightAfterLoad() {
 // hidden by the preference filters has no row, so the categories take over.
 func (m Model) firstResultID() (string, bool) {
 	items := m.VisibleItems()
+	if m.Mode() == ModeCategories {
+		if i := firstLiveCategory(items); i >= 0 {
+			return items[i].ID(), true
+		}
+		return "", false
+	}
 	if m.Mode() == ModeSearch {
 		for _, ch := range m.list.channels {
 			if !catalog.ExactChannelMatch(platformSearchQuery(m.list.search.query), ch) {
@@ -1350,6 +1358,26 @@ func (m Model) firstResultID() (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// firstLiveCategory é o índice da primeira linha do catálogo ao vivo em items,
+// ou -1. Na tela inicial, as fixadas ficam na seção delas, fora do catálogo.
+func firstLiveCategory(items []ListItem) int {
+	return slices.IndexFunc(items, func(it ListItem) bool { return it.Type == ItemTypeCategory })
+}
+
+// focusLiveCatalog destaca a primeira categoria ao vivo já carregada e, com uma
+// recarga a caminho, pede que ela destaque a primeira da página nova. Uma seta
+// antes de a página chegar desfaz o pedido, como nos resultados.
+func (m *Model) focusLiveCatalog() {
+	if m.Mode() != ModeCategories || m.list.hardErr() {
+		return
+	}
+	m.list.focusResults = m.list.loading
+	items := m.VisibleItems()
+	if i := firstLiveCategory(items); i >= 0 {
+		m.setHighlightToItem(items, i)
+	}
 }
 
 func (m Model) visibleItemIDs() []string {

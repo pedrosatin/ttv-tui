@@ -348,6 +348,11 @@ func classicActions() []action {
 			a.Footer = []footerUse{{Mode: footList, Priority: 1, Text: "footer.open"}, {Mode: footSearch, Priority: 1, Text: "footer.search"}, {Mode: footFilter, Priority: 1, Text: "footer.open"}, {Mode: footCompose, Priority: 1, Text: "footer.send"}, {Mode: footMenu, Priority: 1, Text: "footer.choose"}}
 		case actFavorite:
 			a.Footer = []footerUse{{Mode: footList, Priority: 2, Text: "footer.favorite"}}
+		case actCategories:
+			// Só quando os itens salvos empurraram o catálogo ao vivo para baixo
+			// da janela da lista. Entra antes do filtro e tira a busca do
+			// rodapé, que o filtro ainda cita ao ser aberto.
+			a.Footer = []footerUse{{Mode: footList, Priority: 3, Text: "footer.categories", CatalogBelow: true}}
 		case actFilter:
 			a.Footer = []footerUse{{Mode: footList, Priority: 3, Text: "footer.filter"}}
 		case actSearch:
