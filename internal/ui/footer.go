@@ -22,6 +22,8 @@ const (
 	// lista e no chat.
 	footOverlay
 	footOverlayChat
+	// footConfirm é a pergunta da barra antes de limpar os recentes.
+	footConfirm
 )
 
 // footerUse é uma dica da ação no rodapé de um modo. Pair junta à tecla da ação
@@ -39,6 +41,8 @@ type footerUse struct {
 
 func (m Model) footerMode() footerMode {
 	switch {
+	case m.list.confirmClear:
+		return footConfirm
 	case m.LayoutMode() == LayoutFocus:
 		return footFocus
 	case m.list.prefs.menuOpen:
@@ -87,13 +91,18 @@ func (m Model) Footer() string {
 		}
 	}
 	slices.SortStableFunc(hints, func(a, b hint) int { return cmp.Compare(a.priority, b.priority) })
-	help := m.t("status.help_hint")
-	if m.footerMode() == footSearch || m.footerMode() == footFilter || m.footerMode() == footCompose || m.footerMode() == footMenu {
-		help = m.t("footer.help_field")
+	// A pergunta da barra só aceita a resposta: a ajuda não abre com ela.
+	var help []string
+	switch m.footerMode() {
+	case footConfirm:
+	case footSearch, footFilter, footCompose, footMenu:
+		help = []string{m.t("footer.help_field")}
+	default:
+		help = []string{m.t("status.help_hint")}
 	}
 	parts := []string{}
 	for _, h := range hints {
-		candidate := strings.Join(append(append([]string{}, parts...), h.text, help), statusSep)
+		candidate := strings.Join(append(append(slices.Clone(parts), h.text), help...), statusSep)
 		if m.width > 0 && ansi.StringWidth(candidate) > m.width {
 			continue
 		}
@@ -102,7 +111,7 @@ func (m Model) Footer() string {
 			break
 		}
 	}
-	return padToWidth(strings.Join(append(parts, help), statusSep), m.width)
+	return padToWidth(strings.Join(append(parts, help...), statusSep), m.width)
 }
 
 // footerLabel é a tecla principal de id e, com pair, também a de pair, juntas

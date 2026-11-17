@@ -62,6 +62,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cancelPrefix()
 		return m.updateHelpKey(msg)
 	}
+	// A pergunta de limpar os recentes também é modal: até a resposta, nenhuma
+	// outra tecla mexe na tela.
+	if m.list.confirmClear {
+		m.cancelPrefix()
+		return m.updateConfirmKey(msg)
+	}
 
 	// No campo de texto, o que se digita e as teclas de edição vão ao campo
 	// antes dos atalhos: Ctrl+H, Ctrl+W, = e _ não mexem no layout nem no volume.
@@ -104,7 +110,7 @@ func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
 		return false
 	}
 	switch m.keys.actionFor(modeNormal, msg) {
-	case actFilter, actSearch, actFavorite, actForgetRecent, actChannelFilter, actSwitchPlatform:
+	case actFilter, actSearch, actFavorite, actForgetRecent, actClearRecents, actChannelFilter, actSwitchPlatform:
 		return true
 	case actRetry:
 		return !m.canRetryPlayer()

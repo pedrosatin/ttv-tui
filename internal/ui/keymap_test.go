@@ -441,7 +441,10 @@ var classicKeysAt6b74874 = map[actionID][]string{
 // classicKeysAdded são as ações que o classic ganhou depois de 6b74874, com as
 // teclas delas. Nenhuma toca as teclas antigas.
 var classicKeysAdded = map[actionID][]string{
-	actForgetRecent: {"x"},
+	actForgetRecent:  {"x"},
+	actClearRecents:  {"X"},
+	actConfirm:       {"y"},
+	actCancelConfirm: {"esc", "n"},
 }
 
 func assertClassicKeys(t *testing.T, keys keyRegistry) {

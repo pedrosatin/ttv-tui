@@ -19,7 +19,7 @@ import (
 // janela vêm logo depois das gerais: dentro dela, onde não levam marca, elas
 // continuam as linhas sem título que as antecedem.
 var helpContextOrder = []helpContext{
-	ctxAny, ctxWindowOnly, ctxHelp, ctxSearchPrompt, ctxFilter, ctxMenu, ctxChatPanel, ctxCompose, ctxField,
+	ctxAny, ctxWindowOnly, ctxConfirm, ctxHelp, ctxSearchPrompt, ctxFilter, ctxMenu, ctxChatPanel, ctxCompose, ctxField,
 }
 
 // helpEntry é uma linha da ajuda antes de quebrar na largura.
@@ -317,6 +317,8 @@ func (m Model) helpContextLabel(c helpContext) string {
 		return m.t("help.ctx.compose")
 	case ctxField:
 		return m.t("help.ctx.field")
+	case ctxConfirm:
+		return m.t("help.ctx.confirm")
 	case ctxWindowOnly:
 		if m.hosted.host == nil {
 			return m.t("help.ctx.window_only")

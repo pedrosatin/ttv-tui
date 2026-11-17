@@ -61,6 +61,11 @@ func (m Model) statusParts() statusContent {
 // statusLead picks the lead by priority: what blocks the screen, one-shot
 // notices, the player and loading, then what is selected.
 func (m Model) statusLead() statusLead {
+	if m.list.confirmClear && m.notices.ctrlC == "" {
+		// A pergunta espera a resposta: só a dica do Ctrl+C a cobre, até a
+		// tecla seguinte.
+		return statusLead{primary: m.t("recents.clear_confirm"), tone: toneWarning}
+	}
 	if m.notices.favorite && m.notices.status != "" && !m.notices.statusWarns {
 		return statusLead{primary: m.notices.status}
 	}

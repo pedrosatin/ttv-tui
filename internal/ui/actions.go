@@ -64,6 +64,9 @@ const (
 	actCopyMessage    actionID = "action.copy_message"
 	actFavorite       actionID = "action.favorite"
 	actForgetRecent   actionID = "action.forget_recent"
+	actClearRecents   actionID = "action.clear_recents"
+	actConfirm        actionID = "action.confirm"
+	actCancelConfirm  actionID = "action.cancel_confirm"
 )
 
 // keyMode é um contexto de despacho. Uma tecla pode disparar ações diferentes em
@@ -75,6 +78,9 @@ const (
 	modeApp keyMode = iota
 	// modeHelp é a ajuda aberta, que consome toda tecla.
 	modeHelp
+	// modeConfirm é uma pergunta na barra (limpar os recentes), que também
+	// consome toda tecla até a resposta.
+	modeConfirm
 	// modeGlobal vale em qualquer modo, até digitando.
 	modeGlobal
 	// modeWindow vale em qualquer modo, só na janela única.
@@ -95,6 +101,7 @@ const (
 // consulta. Dentro de um contexto, cada tecla dispara no máximo uma ação.
 var keyContexts = [][]keyMode{
 	{modeApp, modeHelp},
+	{modeApp, modeConfirm},
 	{modeApp, modeGlobal, modeWindow, modeSearch},
 	{modeApp, modeGlobal, modeWindow, modeFilter},
 	{modeApp, modeGlobal, modeWindow, modeMenu},
@@ -135,6 +142,8 @@ const (
 	ctxChatPanel
 	ctxCompose
 	ctxField
+	// ctxConfirm é a pergunta da barra antes de limpar os recentes.
+	ctxConfirm
 	// ctxWindowOnly agrupa as ações que só a janela única tem. A ajuda o deduz
 	// dos modos da ação; nenhuma o declara.
 	ctxWindowOnly
@@ -259,6 +268,11 @@ func classicActions() []action {
 		{ID: actFavorite, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"f"}},
 		// x tira dos recentes o canal destacado na seção Recentes.
 		{ID: actForgetRecent, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"x"}},
+		// X limpa os recentes da lista depois de uma pergunta na barra, que só y
+		// confirma; Esc ou n a desfazem sem mudar nada.
+		{ID: actClearRecents, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"X"}},
+		{ID: actConfirm, Modes: []keyMode{modeConfirm}, Section: sectionNav, Context: ctxConfirm, Default: []string{"y"}},
+		{ID: actCancelConfirm, Modes: []keyMode{modeConfirm}, Section: sectionNav, Context: ctxConfirm, Default: []string{"esc", "n"}},
 
 		{ID: actFilter, Modes: []keyMode{modeNormal}, Section: sectionSearch, Default: []string{"/"}},
 		// Ctrl+F é a tecla da busca; Ctrl+S, um apelido. O modo raw desliga o
@@ -346,6 +360,10 @@ func classicActions() []action {
 			a.Footer = []footerUse{{Mode: footChat, Priority: 1, Text: "footer.compose"}}
 		case actCopyMessage:
 			a.Footer = []footerUse{{Mode: footChat, Priority: 2, Text: "footer.copy"}}
+		case actConfirm:
+			a.Footer = []footerUse{{Mode: footConfirm, Priority: 1, Text: "footer.clear"}}
+		case actCancelConfirm:
+			a.Footer = []footerUse{{Mode: footConfirm, Priority: 2, Text: "footer.cancel"}}
 		case actSwitchFocus:
 			a.Footer = []footerUse{
 				{Mode: footChat, Priority: 3, Text: "footer.list"}, {Mode: footCompose, Priority: 3, Text: "footer.list"},

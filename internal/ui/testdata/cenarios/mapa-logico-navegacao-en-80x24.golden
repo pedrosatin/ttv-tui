@@ -12,13 +12,13 @@
   g c/Ctrl+R          Back to categories from anywhere
   f                   Favorite the channel or pin the category; again to undo
   x                   Remove the highlighted channel from recents
+  X                   Clear every recent on the list, after confirming
   g f                 Go to favorites
   g r                 Go to recents
+  On a question in the bar:
+    y                 Answer yes
+    Esc/n             Answer no; nothing changes
 ── Search and filters ──
   /                   Filter the list
-  Ctrl+F              Search categories and channels
-  L                   Open the language and audience filters
-  In the search prompt:
-    Enter Ctrl+F      Search for what you typed
-Navigation · section 2 of 7 · Tab/→ next                                   33/99
+Navigation · section 2 of 7 · Tab/→ next                                  33/103
  ttv-tui | [en] Ready                                    | ? help · Ctrl+Q quit

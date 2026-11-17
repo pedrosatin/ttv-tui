@@ -943,6 +943,78 @@ func (m Model) forgetRecentHighlighted() (tea.Model, tea.Cmd) {
 	return m, m.saveStoreCmd("recents.removed_named", name)
 }
 
+// listRecents são os recentes que a lista ativa mostra, os pendentes
+// inclusive: os da plataforma dela e, na lista inicial, os de plataforma sem
+// catálogo. Cada plataforma tem a própria tela inicial com os próprios
+// recentes, então limpar não toca os de outra.
+func (m Model) listRecents() []catalog.Channel {
+	var out []catalog.Channel
+	for _, ch := range slices.Concat(m.list.recents, m.list.pendingRecents) {
+		if m.savedOnList(ch) && !slices.ContainsFunc(out, func(o catalog.Channel) bool { return channelMatches(o, ch) }) {
+			out = append(out, ch)
+		}
+	}
+	return out
+}
+
+// askClearRecents põe na barra a pergunta de limpar os recentes da lista. Sem
+// recente nenhum, a barra só diz isso.
+func (m Model) askClearRecents() (tea.Model, tea.Cmd) {
+	if len(m.listRecents()) == 0 {
+		m.warnStatus(m.t("recents.clear_none"))
+		return m, nil
+	}
+	m.list.confirmClear = true
+	return m, nil
+}
+
+// updateConfirmKey responde à pergunta da barra: y limpa, Esc ou n a desfazem
+// sem mudar nada, e o resto das teclas espera a resposta.
+func (m Model) updateConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.keys.actionFor(modeConfirm, msg) {
+	case actConfirm:
+		m.list.confirmClear = false
+		return m.clearRecents()
+	case actCancelConfirm:
+		m.list.confirmClear = false
+	}
+	return m, nil
+}
+
+// clearRecents tira da lista os recentes dela e grava. Cada um vira uma
+// remoção no diário, como o x: outra instância que ainda os tem na memória não
+// os traz de volta, e o canal que ela abrir depois entra. O destaque que estava
+// num recente ou no "mais…" vai ao topo da tela inicial, nas categorias
+// fixadas, nos favoritos ou no catálogo.
+func (m Model) clearRecents() (tea.Model, tea.Cmd) {
+	cleared := m.listRecents()
+	if len(cleared) == 0 {
+		return m, nil
+	}
+	onRecent := false
+	if it, ok := m.HighlightedItem(); ok {
+		onRecent = it.Type == ItemTypeRecent || it.Type == ItemTypeMoreRecents
+	}
+	keep := func(recents []catalog.Channel) []catalog.Channel {
+		return slices.DeleteFunc(slices.Clone(recents), m.savedOnList)
+	}
+	m.list.recents = keep(m.list.recents)
+	if m.list.pendingRecents != nil {
+		m.list.pendingRecents = keep(m.list.pendingRecents)
+	}
+	for _, ch := range cleared {
+		m.list.recentLog.Forgot(store.FromChannel(ch))
+	}
+	m.list.recentsExpanded = false
+	if onRecent {
+		m.setHighlightToItem(m.VisibleItems(), 0)
+	} else {
+		m.reconcileHighlight()
+	}
+	m.clearStatusNotice()
+	return m, m.saveStoreCmd("recents.cleared")
+}
+
 func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 	it, ok := m.HighlightedItem()
 	if !ok {

@@ -12,8 +12,12 @@
   g c/Ctrl+R          Back to categories from anywhere
   f                   Favorite the channel or pin the category; again to undo
   x                   Remove the highlighted channel from recents
+  X                   Clear every recent on the list, after confirming
   g f                 Go to favorites
   g r                 Go to recents
+  On a question in the bar:
+    y                 Answer yes
+    Esc/n             Answer no; nothing changes
 ── Search and filters ──
   /                   Filter the list
   Ctrl+F              Search categories and channels
@@ -32,9 +36,5 @@
     Enter Space       Turn the option on or off
     Esc L             Close the menu
   In a text field:
-    Backspace/Delete  Delete the previous character
-    Alt+Backspace/Ctrl+W
-                      Delete the previous word
-── Chat ──
-Navigation · section 2 of 7 · Tab/→ next                                                                           49/95
+Navigation · section 2 of 7 · Tab/→ next                                                                           49/99
  ttv-tui | [en] Ready                                                                            | ? help · Ctrl+Q quit

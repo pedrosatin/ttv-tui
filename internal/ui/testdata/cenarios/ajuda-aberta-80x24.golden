@@ -12,13 +12,13 @@
   Ctrl+R              Volta às categorias de qualquer lugar
   f                   Favorita o canal ou fixa a categoria; de novo, desfaz
   x                   Tira o canal destacado dos recentes
+  X                   Limpa todos os recentes da lista, depois de confirmar
+  Numa pergunta da barra:
+    y                 Responde sim
+    Esc/n             Responde não, sem mudar nada
 ── Busca e filtros ──
   /                   Filtra a lista
   Ctrl+F/S            Busca categorias e canais
   l                   Abre os filtros de idioma e audiência
-  No prompt de busca:
-    Enter Ctrl+F/S    Busca o texto digitado
-    Esc               Cancela a busca
-  No filtro /:
-Navegação · seção 2 de 7 · Tab/→ próxima                                   33/97
+Navegação · seção 2 de 7 · Tab/→ próxima                                  33/101
  ttv-tui | [pt-BR] Pronto                               | ? ajuda · Ctrl+Q sair

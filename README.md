@@ -116,6 +116,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 | `Enter` | Open the category or watch the channel |
 | `f` | Favorite a channel or pin a category; press again to remove |
 | `x` | Remove the highlighted channel from recents |
+| `X` | Clear every recent on the list; `y` confirms, `Esc` or `n` keeps them |
 | `/` | Filter the current list; `Enter` opens the highlighted item and `Ctrl+F` searches with the text |
 | `Ctrl+F` | Search channels and categories on the platform the list shows, or paste a stream URL |
 | `p` | Switch the list between Twitch and Kick; the video and the chat keep going |
@@ -222,7 +223,7 @@ Run `ttv-tui doctor` afterwards. It lists what is missing.
 <details>
 <summary><b>How do favorites and recent channels work?</b></summary>
 
-Press `f` on a channel to add it to favorites, or on a category to pin it. Press it again to remove it. Each platform's start screen lists its pinned categories at the top. Enter opens their channels. Viewer counts come from the loaded catalog; categories without a fresh count show `[unverified]`. Search results mark pinned categories with ★. Every channel you open goes to the recent list, which keeps the last 50. The start screen shows the favorites, the 6 latest recent channels and a `more…` line that opens the rest. `x` on a recent channel removes it from the list, and it stays removed when you reopen the app. Inside a category or a search the results come first, and a favorite stays in its place, marked with ★.
+Press `f` on a channel to add it to favorites, or on a category to pin it. Press it again to remove it. Each platform's start screen lists its pinned categories at the top. Enter opens their channels. Viewer counts come from the loaded catalog; categories without a fresh count show `[unverified]`. Search results mark pinned categories with ★. Every channel you open goes to the recent list, which keeps the last 50. The start screen shows the favorites, the 6 latest recent channels and a `more…` line that opens the rest. `x` on a recent channel removes it from the list, and it stays removed when you reopen the app. `X` clears every recent on the platform's list after you answer `y`; the other platforms keep theirs. Inside a category or a search the results come first, and a favorite stays in its place, marked with ★.
 
 In a new session, those channels show `[unverified]` until you open them or they show up in a live list. They are stored in `state.json`, not on your Twitch account.
 

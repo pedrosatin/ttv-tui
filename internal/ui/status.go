@@ -153,7 +153,7 @@ type statusContent struct {
 // chat channel. Player actions, errors, search/filter and one-shot notices keep
 // the lead (ticket 07 / orientation).
 func (m Model) softStatusPrimary() bool {
-	if m.list.hardErr() || m.list.search.active || m.list.filtering || m.list.prefs.menuOpen || m.list.loading {
+	if m.list.hardErr() || m.list.search.active || m.list.filtering || m.list.prefs.menuOpen || m.list.loading || m.list.confirmClear {
 		return false
 	}
 	if m.notices.auth != "" || m.notices.corrupt != "" || m.chat.copyNotice != "" || m.notices.status != "" || m.notices.ctrlC != "" {
@@ -234,7 +234,7 @@ func (m Model) includeLayoutStatus() bool {
 	if m.LayoutMode() == LayoutSplit {
 		return false
 	}
-	if m.list.hardErr() || m.list.prefs.menuOpen || m.list.search.active || m.list.filtering {
+	if m.list.hardErr() || m.list.prefs.menuOpen || m.list.search.active || m.list.filtering || m.list.confirmClear {
 		return false
 	}
 	if m.player.state == PlayerStateError {
@@ -269,6 +269,10 @@ func (m Model) statusLadder(lang string) []statusChrome {
 	// The window is narrow exactly when this hint matters: it outlasts the help hint.
 	if m.hosted.host != nil && m.shouldShowNarrowChatNotice() {
 		last = fmt.Sprintf(" | %s · %s ", m.t("status.chat_narrow"), quit)
+		hints, focusHints = last, last
+	}
+	// A pergunta de limpar os recentes só aceita a resposta: a ajuda não abre.
+	if m.list.confirmClear {
 		hints, focusHints = last, last
 	}
 	return []statusChrome{

@@ -195,6 +195,9 @@ func (m Model) handleCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case actForgetRecent:
 		return handled(m.forgetRecentHighlighted())
 
+	case actClearRecents:
+		return handled(m.askClearRecents())
+
 	case actChannelFilter:
 		return handled(m.keyChannelFilter())
 

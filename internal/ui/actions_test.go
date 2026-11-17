@@ -183,7 +183,7 @@ func TestTabRuneIsTab(t *testing.T) {
 // if the text took it from the registry.
 func uniqueKeys(t *testing.T) map[actionID][]string {
 	t.Helper()
-	runes := []rune("αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ")
+	runes := []rune("αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩжщэюя")
 	actions := defaultActions()
 	if len(actions) > len(runes) {
 		t.Fatalf("%d ações para %d teclas", len(actions), len(runes))

@@ -12,8 +12,12 @@
   g c/Ctrl+R          Volta às categorias de qualquer lugar
   f                   Favorita o canal ou fixa a categoria; de novo, desfaz
   x                   Tira o canal destacado dos recentes
+  X                   Limpa todos os recentes da lista, depois de confirmar
   g f                 Vai aos favoritos
   g r                 Vai aos recentes
+  Numa pergunta da barra:
+    y                 Responde sim
+    Esc/n             Responde não, sem mudar nada
 ── Busca e filtros ──
   /                   Filtra a lista
   Ctrl+F              Busca categorias e canais
@@ -32,9 +36,5 @@
     Enter Espaço      Liga ou desliga a opção
     Esc L             Fecha o menu
   Num campo de texto:
-    Backspace/Delete  Apaga o caractere anterior
-    Alt+Backspace/Ctrl+W
-                      Apaga a palavra anterior
-── Chat ──
-Navegação · seção 2 de 7 · Tab/→ próxima                                                                           49/95
+Navegação · seção 2 de 7 · Tab/→ próxima                                                                           49/99
  ttv-tui | [pt-BR] Pronto                                                                       | ? ajuda · Ctrl+Q sair

@@ -116,6 +116,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Favorita um canal ou fixa uma categoria; aperte de novo para remover |
 | `x` | Tira o canal destacado dos recentes |
+| `X` | Limpa todos os recentes da lista; `y` confirma, `Esc` ou `n` os mantém |
 | `/` | Filtra a lista atual; `Enter` abre o item destacado e `Ctrl+F` busca com o texto |
 | `Ctrl+F` | Busca canais e categorias na plataforma que a lista mostra, ou cola a URL de uma live |
 | `p` | Troca a lista entre Twitch e Kick; o vídeo e o chat continuam |
@@ -222,7 +223,7 @@ Depois, rode `ttv-tui doctor`. Ele lista o que falta.
 <details>
 <summary><b>Como funcionam os favoritos e os canais recentes?</b></summary>
 
-Aperte `f` num canal para pô-lo nos favoritos ou numa categoria para fixá-la. Aperte de novo para remover. As categorias fixadas aparecem no topo da tela inicial da própria plataforma. Enter abre os canais dela. A audiência vem do catálogo carregado; sem contagem atual, a categoria mostra `[não verificado]`. Na busca, categorias fixadas aparecem com ★. Todo canal que você abre entra nos recentes, que guardam os últimos 50. A tela inicial mostra os favoritos, os 6 recentes mais novos e uma linha `mais…` que abre o resto. O `x` num recente o tira da lista, e ele não volta quando você reabre o app. Numa categoria ou numa busca, os resultados vêm primeiro, e um favorito fica no lugar dele, marcado com ★.
+Aperte `f` num canal para pô-lo nos favoritos ou numa categoria para fixá-la. Aperte de novo para remover. As categorias fixadas aparecem no topo da tela inicial da própria plataforma. Enter abre os canais dela. A audiência vem do catálogo carregado; sem contagem atual, a categoria mostra `[não verificado]`. Na busca, categorias fixadas aparecem com ★. Todo canal que você abre entra nos recentes, que guardam os últimos 50. A tela inicial mostra os favoritos, os 6 recentes mais novos e uma linha `mais…` que abre o resto. O `x` num recente o tira da lista, e ele não volta quando você reabre o app. O `X` limpa todos os recentes da lista da plataforma depois que você responde `y`; as outras plataformas mantêm os delas. Numa categoria ou numa busca, os resultados vêm primeiro, e um favorito fica no lugar dele, marcado com ★.
 
 Numa sessão nova, esses canais aparecem com `[não verificado]` até você abri-los ou eles surgirem numa lista ao vivo. Eles ficam no `state.json`, não na sua conta da Twitch.
 
