@@ -292,6 +292,8 @@ var allowedExceptions = map[string]bool{
 	"CanalExato":      true,
 	"MaisRecentes":    true,
 	"recentes:mais":   true,
+	"OfertaYouTube":   true,
+	"oferta:youtube:": true,
 	"iniciando":       true,
 	"tocando":         true,
 	"pausado":         true,

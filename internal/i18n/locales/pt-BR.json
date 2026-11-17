@@ -33,6 +33,8 @@
   "search.section_categories": "Categorias",
   "search.section_channels": "Canais",
   "search.section_exact": "Canal exato",
+  "search.section_other_platform": "Outra plataforma",
+  "search.youtube_offer": "Abrir %s no YouTube",
   "filter.prompt": "Filtro: %s",
   "filter.empty": "Nenhum item corresponde ao filtro atual.",
   "filter.search_hint": "{action.select} ou {action.search:1} busca na Twitch: %s",

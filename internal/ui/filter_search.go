@@ -123,24 +123,10 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	if q == "" {
 		return m, nil
 	}
-	if info, ok := streamurl.ParseInput(q); ok {
-		var ch catalog.Channel
-		if info.IsTwitch {
-			ch = catalog.Channel{
-				Platform:    platform.Twitch,
-				ID:          info.Login,
-				Login:       info.Login,
-				DisplayName: info.DisplayName,
-			}
-		} else {
-			ch = catalog.Channel{
-				Platform:    info.Platform,
-				ID:          info.Label,
-				Login:       info.Login,
-				DisplayName: info.DisplayName,
-				URL:         info.URL,
-			}
-		}
+	// Só uma URL colada abre direto. Um @canal busca na plataforma da lista,
+	// e o YouTube vira uma linha dos resultados (youtubeOffer).
+	if info, ok := streamurl.Parse(q); ok {
+		ch := streamChannel(info)
 		m.clearHighlight()
 		m.clearStaleStatusErrors()
 		m.list.enters++
@@ -175,7 +161,10 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	m.list.hasMore = false
 	m.clearStaleStatusErrors()
 	if m.searcher == nil && m.browser == nil {
+		// Sem catálogo, a busca termina vazia na hora; a oferta do YouTube,
+		// se houver, recebe o destaque como receberia depois da resposta.
 		m.list.loading = false
+		m.settleHighlightAfterLoad()
 		return m, nil
 	}
 	m.list.tracker.cancelActive()
@@ -184,7 +173,58 @@ func (m Model) startSearch(query string) (tea.Model, tea.Cmd) {
 	return m, m.fetchSearchCmd(m.list.generation, q)
 }
 
+// streamChannel monta o canal de uma URL colada ou de um @canal do YouTube.
+func streamChannel(info streamurl.Info) catalog.Channel {
+	if info.IsTwitch {
+		return catalog.Channel{
+			Platform:    platform.Twitch,
+			ID:          info.Login,
+			Login:       info.Login,
+			DisplayName: info.DisplayName,
+		}
+	}
+	return catalog.Channel{
+		Platform:    info.Platform,
+		ID:          info.Label,
+		Login:       info.Login,
+		DisplayName: info.DisplayName,
+		URL:         info.URL,
+	}
+}
+
+// platformSearchQuery é o texto que vai à busca da plataforma da lista. Na
+// Twitch e na Kick, @nome é como se chama alguém, e login e slug não têm @:
+// o @ da frente sai para "@gaules" achar gaules.
+func platformSearchQuery(query string) string {
+	q := strings.TrimSpace(query)
+	if strings.HasPrefix(q, string('@')) {
+		if rest := strings.TrimSpace(q[1:]); rest != "" {
+			return rest
+		}
+	}
+	return q
+}
+
+// youtubeOffer devolve o canal do YouTube que a busca oferece na última linha
+// dos resultados: só com a busca já respondida e quando o texto buscado é um
+// @canal pela gramática do YouTube. Ele só abre se o usuário escolher a linha.
+func (m Model) youtubeOffer() (catalog.Channel, bool) {
+	if m.Mode() != ModeSearch || m.list.loading {
+		return catalog.Channel{}, false
+	}
+	q := strings.TrimSpace(m.list.search.query)
+	if !platform.ValidYouTubeHandle(q) {
+		return catalog.Channel{}, false
+	}
+	info, ok := streamurl.ParseInput(q)
+	if !ok || info.Platform != platform.YouTube {
+		return catalog.Channel{}, false
+	}
+	return streamChannel(info), true
+}
+
 func (m Model) fetchSearchCmd(gen uint64, query string) tea.Cmd {
+	query = platformSearchQuery(query)
 	searcher := m.searcher
 	browser := m.browser
 	tracker := m.list.tracker

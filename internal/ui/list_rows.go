@@ -152,7 +152,7 @@ func listHasSections(items []ListItem, isSearch bool) bool {
 		switch it.Type {
 		case ItemTypePinnedCategory, ItemTypeFavorite, ItemTypeRecent:
 			return true
-		case ItemTypeCategory, ItemTypeChannel, ItemTypeExactChannel:
+		case ItemTypeCategory, ItemTypeChannel, ItemTypeExactChannel, ItemTypeYouTubeOffer:
 			if isSearch {
 				return true
 			}
@@ -165,7 +165,7 @@ func listHasSections(items []ListItem, isSearch bool) bool {
 func (m Model) listTagWidth(items []ListItem) int {
 	tagWidth := 0
 	for _, it := range items {
-		if it.Channel != nil {
+		if it.Channel != nil && it.Type != ItemTypeYouTubeOffer {
 			tagWidth = max(tagWidth, ansi.StringWidth(m.channelRowTag(*it.Channel, it.Availability)))
 		}
 	}
@@ -189,6 +189,8 @@ func (m Model) listSectionTitle(itemType ListItemType, isSearch bool) (string, b
 		return m.t("categories.title"), true
 	case ItemTypeExactChannel:
 		return m.t("search.section_exact"), true
+	case ItemTypeYouTubeOffer:
+		return m.t("search.section_other_platform"), true
 	case ItemTypeChannel:
 		if isSearch {
 			return m.t("search.section_channels"), true
@@ -215,6 +217,9 @@ func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth 
 	switch it.Type {
 	case ItemTypeMoreRecents:
 		row = fitListRow(fmt.Sprintf("%s %7s  %s", marker, "", fmt.Sprintf(m.t("recents.more"), it.Hidden)), maxWidth)
+	case ItemTypeYouTubeOffer:
+		offer := fmt.Sprintf(m.t("search.youtube_offer"), sanitizeScreenText(it.Channel.Login))
+		row = fitListRow(fmt.Sprintf("%s %7s  %s", marker, "", offer), maxWidth)
 	case ItemTypeCategory, ItemTypePinnedCategory:
 		if it.Type == ItemTypePinnedCategory && it.Category.Viewers == nil {
 			tag := m.t("channels.unverified_tag")

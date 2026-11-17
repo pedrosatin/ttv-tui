@@ -40,7 +40,13 @@ const (
 	// ItemTypeMoreRecents é a linha "mais…" da tela inicial, depois dos
 	// primeiros recentes. Enter nela mostra o resto.
 	ItemTypeMoreRecents ListItemType = "MaisRecentes"
+	// ItemTypeYouTubeOffer é a última linha da busca por um @canal: Enter nela
+	// abre o canal no YouTube, que não tem catálogo próprio.
+	ItemTypeYouTubeOffer ListItemType = "OfertaYouTube"
 )
+
+// youtubeOfferIDPrefix separa o ID da oferta do YouTube do de qualquer canal.
+const youtubeOfferIDPrefix = "oferta:youtube:"
 
 // moreRecentsID é o ID estável da linha "mais…".
 const moreRecentsID = "recentes:mais"
@@ -69,6 +75,9 @@ func (it ListItem) Offline() bool {
 func (it ListItem) ID() string {
 	if it.Type == ItemTypeMoreRecents {
 		return moreRecentsID
+	}
+	if it.Type == ItemTypeYouTubeOffer && it.Channel != nil {
+		return youtubeOfferIDPrefix + it.Channel.Login
 	}
 	if it.Category != nil {
 		return it.Category.ID
@@ -375,10 +384,21 @@ func (m Model) appendContent(items []ListItem, p itemPass) []ListItem {
 		items = m.appendListed(items, p, ItemTypeExactChannel)
 		items = m.appendCategories(items, m.list.search.categories, p)
 		items = m.appendListed(items, p, ItemTypeChannel)
+		items = m.appendYouTubeOffer(items, p)
 	case ModeChannels:
 		items = m.appendListed(items, p, ItemTypeChannel)
 	}
 	return items
+}
+
+// appendYouTubeOffer põe, depois dos resultados da plataforma, a linha que
+// oferece abrir no YouTube o @canal buscado. Ela fica mesmo sem resultado.
+func (m Model) appendYouTubeOffer(items []ListItem, p itemPass) []ListItem {
+	ch, ok := m.youtubeOffer()
+	if !ok || !p.matchesFilter(ch.Login, "", "") {
+		return items
+	}
+	return append(items, ListItem{Type: ItemTypeYouTubeOffer, Channel: &ch})
 }
 
 // appendCategories aplica o filtro e marca as fixadas na busca. Na tela
@@ -402,7 +422,7 @@ func (m Model) appendCategories(items []ListItem, cats []catalog.Category, p ite
 // channels the search query names exactly.
 func (m Model) appendListed(items []ListItem, p itemPass, itemType ListItemType) []ListItem {
 	for i, ch := range m.list.channels {
-		if itemType == ItemTypeExactChannel && !catalog.ExactChannelMatch(m.list.search.query, ch) {
+		if itemType == ItemTypeExactChannel && !catalog.ExactChannelMatch(platformSearchQuery(m.list.search.query), ch) {
 			continue
 		}
 		if p.isSeen(ch) || !p.passes(ch) {
@@ -865,7 +885,7 @@ func (m Model) toggleFavoriteHighlighted() (tea.Model, tea.Cmd) {
 	if it.Category != nil {
 		return m.toggleCategory(*it.Category)
 	}
-	if it.Channel == nil {
+	if it.Channel == nil || it.Type == ItemTypeYouTubeOffer {
 		return m, nil
 	}
 	ch := *it.Channel
@@ -937,7 +957,7 @@ func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 		m.list.loading = true
 		return m, m.fetchChannelsCmd(m.list.generation, selected, "", false)
 
-	default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
+	default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent, ItemTypeYouTubeOffer
 		if it.Channel == nil {
 			return m, nil
 		}
@@ -1120,7 +1140,7 @@ func (m Model) firstResultID() (string, bool) {
 	items := m.VisibleItems()
 	if m.Mode() == ModeSearch {
 		for _, ch := range m.list.channels {
-			if !catalog.ExactChannelMatch(m.list.search.query, ch) {
+			if !catalog.ExactChannelMatch(platformSearchQuery(m.list.search.query), ch) {
 				continue
 			}
 			for _, it := range items {

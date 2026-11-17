@@ -227,13 +227,6 @@ func TestPasteYouTubeURLsAndHandlesInSearch(t *testing.T) {
 			wantURL:   "https://www.youtube.com/@LofiGirl/live",
 			wantJoin:  "@LofiGirl",
 		},
-		{
-			name:      "bare @handle",
-			input:     "@LofiGirl",
-			wantStart: "youtube:@LofiGirl",
-			wantURL:   "https://www.youtube.com/@LofiGirl/live",
-			wantJoin:  "@LofiGirl",
-		},
 	}
 
 	for _, tc := range tests {
@@ -266,7 +259,164 @@ func TestPasteYouTubeURLsAndHandlesInSearch(t *testing.T) {
 	}
 }
 
-func TestFilterBareHandleOpensWhenNoLocalMatch(t *testing.T) {
+// A bare @handle is how one calls someone on Twitch and Kick, so the search
+// goes to the list's platform and YouTube is only an offer: nothing plays until
+// Enter lands on that row.
+func TestSearchBareHandleOffersYouTube(t *testing.T) {
+	pb := &fakePlayback{}
+	fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{
+		platform.YouTube: catalog.ReadOnlyChatCapabilities,
+	}}
+	m := New(mustCatalog(t, i18n.LangEN), WithPlayback(pb), WithChat(fc), WithStore(&fakeStore{}))
+	m = resize(m, 120, 24)
+
+	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
+	m = typeRunes(m, "@LofiGirl")
+	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = drainAll(t, m, cmd)
+
+	if len(pb.started) != 0 {
+		t.Fatalf("playback started = %v before the user chose the YouTube row", pb.started)
+	}
+	if m.Mode() != ModeSearch || m.SearchQuery() != "@LofiGirl" {
+		t.Fatalf("mode = %v, query = %q, want search for @LofiGirl", m.Mode(), m.SearchQuery())
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "Open @LofiGirl on YouTube") {
+		t.Fatalf("search results do not offer YouTube:\n%s", ansi.Strip(m.View()))
+	}
+
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	_ = drainAll(t, m, cmd)
+	if !slices.Equal(pb.started, []string{"youtube:@LofiGirl"}) {
+		t.Fatalf("playback started = %v, want [youtube:@LofiGirl]", pb.started)
+	}
+	if got := pb.targets[0].Channel.URL; got != "https://www.youtube.com/@LofiGirl/live" {
+		t.Fatalf("target URL = %q, want the @LofiGirl live URL", got)
+	}
+	if !slices.Equal(fc.joined, []string{"@LofiGirl"}) {
+		t.Fatalf("chat joined = %v, want [@LofiGirl]", fc.joined)
+	}
+}
+
+// Only a valid handle gets the offer: plain text, a lone @ and a handle
+// followed by more words search the platform alone.
+func TestSearchOffersYouTubeOnlyForValidHandle(t *testing.T) {
+	for _, q := range []string{"LofiGirl", "@", "@Lofi Girl", "@a/b"} {
+		t.Run(q, func(t *testing.T) {
+			m := New(mustCatalog(t, i18n.LangEN), WithPlayback(&fakePlayback{}))
+			m = resize(m, 120, 24)
+			m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyCtrlF})
+			m = typeRunes(m, q)
+			m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+			m = drainAll(t, m, cmd)
+			if strings.Contains(ansi.Strip(m.View()), "on YouTube") {
+				t.Fatalf("search for %q offered YouTube:\n%s", q, ansi.Strip(m.View()))
+			}
+			for _, it := range m.VisibleItems() {
+				if it.Type == ItemTypeYouTubeOffer {
+					t.Fatalf("search for %q listed the YouTube offer", q)
+				}
+			}
+		})
+	}
+}
+
+// The "Open @channel on YouTube" row is the last item of a @channel search on
+// both Twitch and Kick. It is not highlighted first, "f" does not favorite it,
+// and Enter on it plays the YouTube channel while the list stays on its
+// platform.
+func TestYouTubeOfferRowOpensChannelFromEachPlatform(t *testing.T) {
+	for _, plat := range []string{platform.Twitch, platform.Kick} {
+		t.Run(plat, func(t *testing.T) {
+			kick := kickCatalog()
+			m, w := newScenario(t, 120, 40, WithPlatformCatalog(platform.Kick, kick, kick))
+			w.chat.platforms = map[string]catalog.ChatCapabilities{
+				platform.Twitch:  catalog.TwitchChatCapabilities,
+				platform.YouTube: catalog.ReadOnlyChatCapabilities,
+			}
+			if plat == platform.Kick {
+				m = play(t, m, "p")
+			}
+			m = play(t, m, "ctrl+f @gaules enter")
+
+			if plat == platform.Twitch && !slices.Equal(w.searched, []string{"gaules"}) {
+				t.Fatalf("Twitch searches = %q, want [gaules]", w.searched)
+			}
+			if plat == platform.Kick && (len(w.searched) != 0 || !slices.Contains(kick.calls(), "search:gaules")) {
+				t.Fatalf("Twitch searches = %q, Kick calls = %q, want only the Kick search for gaules", w.searched, kick.calls())
+			}
+
+			items := m.VisibleItems()
+			if len(items) < 2 {
+				t.Fatalf("got %d items, want platform results plus the YouTube offer", len(items))
+			}
+			last := items[len(items)-1]
+			if last.Type != ItemTypeYouTubeOffer || last.Channel == nil {
+				t.Fatalf("last item = %+v, want the YouTube offer", last)
+			}
+			if last.Channel.Platform != platform.YouTube || last.Channel.Login != "@gaules" {
+				t.Fatalf("offer channel = %+v, want YouTube @gaules", *last.Channel)
+			}
+			if got := last.ID(); got != youtubeOfferIDPrefix+"@gaules" {
+				t.Fatalf("offer ID = %q, want %q", got, youtubeOfferIDPrefix+"@gaules")
+			}
+			for _, it := range items[:len(items)-1] {
+				if it.Type == ItemTypeYouTubeOffer {
+					t.Fatalf("YouTube offer listed before the end: %+v", items)
+				}
+			}
+			if it, ok := m.HighlightedItem(); !ok || it.Type == ItemTypeYouTubeOffer {
+				t.Fatalf("highlight = %+v, want a platform result first", it)
+			}
+
+			m = play(t, m, "end")
+			if it, ok := m.HighlightedItem(); !ok || it.Type != ItemTypeYouTubeOffer {
+				t.Fatalf("highlight after End = %+v, want the YouTube offer", it)
+			}
+			favs := len(m.list.favorites)
+			m = play(t, m, "f")
+			if len(m.list.favorites) != favs {
+				t.Fatal("f favorited the YouTube offer row")
+			}
+			if len(w.playback.started) != 0 {
+				t.Fatalf("playback started = %q before Enter", w.playback.started)
+			}
+
+			m = play(t, m, "enter")
+			if !slices.Equal(w.playback.started, []string{"youtube:@gaules"}) {
+				t.Fatalf("playback started = %q, want [youtube:@gaules]", w.playback.started)
+			}
+			if got := w.playback.targets[0].Channel.URL; got != "https://www.youtube.com/@gaules/live" {
+				t.Fatalf("target URL = %q, want the @gaules live URL", got)
+			}
+			if !slices.Equal(w.chat.joined, []string{"@gaules"}) {
+				t.Fatalf("chat joined = %q, want [@gaules]", w.chat.joined)
+			}
+			if m.ListPlatform() != plat {
+				t.Fatalf("list platform = %q, want it to stay on %q", m.ListPlatform(), plat)
+			}
+		})
+	}
+}
+
+// The platform search drops the @ in front, so "@gaules" finds gaules.
+func TestPlatformSearchQueryDropsLeadingAt(t *testing.T) {
+	for in, want := range map[string]string{
+		"@gaules":   "gaules",
+		" @gaules ": "gaules",
+		"gaules":    "gaules",
+		"@":         "@",
+		"a@b":       "a@b",
+	} {
+		if got := platformSearchQuery(in); got != want {
+			t.Errorf("platformSearchQuery(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// With no local match, Enter in the filter runs the platform search, as for any
+// text; the YouTube offer waits there and never opens on its own.
+func TestFilterBareHandleOffersYouTubeWhenNoLocalMatch(t *testing.T) {
 	pb := &fakePlayback{}
 	fc := &fakeChat{platforms: map[string]catalog.ChatCapabilities{
 		platform.YouTube: catalog.ReadOnlyChatCapabilities,
@@ -277,8 +427,16 @@ func TestFilterBareHandleOpensWhenNoLocalMatch(t *testing.T) {
 	m, _ = pressKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = typeRunes(m, "@LofiGirl")
 	m, cmd := pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	_ = drainAll(t, m, cmd)
+	m = drainAll(t, m, cmd)
 
+	if len(pb.started) != 0 {
+		t.Fatalf("playback started = %v from the filter without a choice", pb.started)
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "Open @LofiGirl on YouTube") {
+		t.Fatalf("filter search does not offer YouTube:\n%s", ansi.Strip(m.View()))
+	}
+	m, cmd = pressKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	_ = drainAll(t, m, cmd)
 	if !slices.Equal(pb.started, []string{"youtube:@LofiGirl"}) {
 		t.Fatalf("playback started = %v, want [youtube:@LofiGirl]", pb.started)
 	}

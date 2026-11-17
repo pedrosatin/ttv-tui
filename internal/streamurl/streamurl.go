@@ -250,7 +250,8 @@ func parseYouTubeURL(host, rawPath string, query url.Values) (slug, display stri
 
 // ParseInput parses a pasted stream URL (via Parse) or a bare YouTube @channel
 // handle. Leading/trailing spaces are NOT trimmed; callers normalize whitespace
-// before invoking it, matching Parse.
+// before invoking it, matching Parse. The search uses it only for the row that
+// offers the handle on YouTube: a typed handle never opens on its own.
 func ParseInput(raw string) (Info, bool) {
 	if info, ok := Parse(raw); ok {
 		return info, true
