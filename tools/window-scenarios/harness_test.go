@@ -84,8 +84,11 @@ type setup struct {
 	irc     fixture.IRCConfig
 	catalog *fixture.Catalog
 	// env são variáveis a mais para a janela e o que ela abre (a TUI, o
-	// streamlink falso), como fixture.OpenDelayEnv.
+	// streamlink falso).
 	env []string
+	// openGate segura o streamlink falso antes de abrir o player até o
+	// cenário chamar w.gate.Release (fixture.OpenGateEnv).
+	openGate bool
 }
 
 // window é uma janela de teste em execução, com os fixtures dela.
@@ -96,6 +99,7 @@ type window struct {
 	cfgPath string
 	mark    string
 	cmd     *exec.Cmd
+	gate    *fixture.Gate
 	exited  chan struct{}
 	// started é quando a janela subiu, o zero das fases no log.
 	started time.Time
@@ -176,6 +180,13 @@ func openWindow(t *testing.T, s setup) *window {
 		"TTV_CENARIOS_RUN="+w.mark,
 	)
 	cmd.Env = append(cmd.Env, s.env...)
+	if s.openGate {
+		if w.gate, err = fixture.NewGate(filepath.Join(dir, "g.sock")); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(w.gate.Close)
+		cmd.Env = append(cmd.Env, w.gate.Env())
+	}
 	logf, err := os.Create(w.logPath)
 	if err != nil {
 		t.Fatalf("log da janela: %v", err)

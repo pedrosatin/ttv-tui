@@ -136,16 +136,21 @@ func TestJanelaTelaInicialFalaDoDestacado(t *testing.T) {
 
 // W9: enquanto o streamlink procura a live, a área do vídeo diz "Abrindo
 // <canal>…" em vez de ficar preta. A janela só abre o buraco do vídeo com o
-// primeiro quadro.
+// primeiro quadro. O streamlink falso fica no gate até a tela de carregamento
+// ser conferida, e só então abre o player.
 func TestJanelaCarregandoMostraOCanal(t *testing.T) {
 	t.Parallel()
-	w := openWindow(t, setup{env: []string{fixture.OpenDelayEnv + "=3s"}})
+	w := openWindow(t, setup{openGate: true})
 	w.press("Return")
 	w.waitState("os canais da Categoria 01", 10*time.Second, func(s ui.StateReport) bool {
 		return s.Mode == string(ui.ModeChannels) && s.Highlighted == "FixtureUm"
 	})
 	opened := time.Now()
 	w.press("Return")
+	if err := w.gate.Arrived(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	w.phase("streamlink no gate", opened)
 	w.waitState("o player abrindo", 5*time.Second, func(s ui.StateReport) bool {
 		return s.Player == string(ui.PlayerStateStarting)
 	})
@@ -155,7 +160,7 @@ func TestJanelaCarregandoMostraOCanal(t *testing.T) {
 			return err
 		}
 		if st.TUI.Player != string(ui.PlayerStateStarting) {
-			return fmt.Errorf("o player saiu de starting (%s) antes de a tela ser lida", st.TUI.Player)
+			return fmt.Errorf("o player saiu de starting (%s) com o streamlink parado no gate", st.TUI.Player)
 		}
 		if st.Window.HoleOn {
 			return fmt.Errorf("a janela abriu o buraco do vídeo antes do primeiro quadro")
@@ -166,6 +171,9 @@ func TestJanelaCarregandoMostraOCanal(t *testing.T) {
 		return nil
 	})
 
+	if err := w.gate.Release(); err != nil {
+		t.Fatal(err)
+	}
 	w.waitState("o player tocando", 15*time.Second, func(s ui.StateReport) bool {
 		return s.Player == string(ui.PlayerStatePlaying)
 	})
