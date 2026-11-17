@@ -319,6 +319,9 @@ func (w *window) reportOnFailure() {
 	if st, err := w.send("state"); err == nil {
 		w.t.Logf("state no fim: %s", st)
 	}
+	if st, err := w.send("stats"); err == nil {
+		w.t.Logf("stats no fim: %s", st)
+	}
 	if out, err := os.ReadFile(w.logPath); err == nil {
 		w.t.Logf("saída da janela:\n%s", out)
 	}
@@ -481,12 +484,61 @@ func (w *window) openFirstChannel() windowState {
 	})
 	opened := time.Now()
 	w.press("Return")
-	st := w.waitState("o player tocando FixtureUm", 15*time.Second, func(s ui.StateReport) bool {
+	w.waitState("o player tocando FixtureUm", 15*time.Second, func(s ui.StateReport) bool {
 		return s.Player == string(ui.PlayerStatePlaying) && s.ChatChannel == "fixture_um"
 	})
 	w.phase("abertura", opened)
-	return st
+	return w.waitFirstFrame()
 }
+
+// waitFirstFrame espera a janela abrir o buraco do vídeo, o que ela só faz
+// com o primeiro quadro desenhado. O player tocando vem do IPC do mpv e pode
+// chegar antes do quadro.
+func (w *window) waitFirstFrame() windowState {
+	w.t.Helper()
+	var last windowState
+	err := eventually(10*time.Second, func() error {
+		st, err := w.state()
+		if err != nil {
+			return err
+		}
+		last = st
+		if !st.Window.HoleOn {
+			return fmt.Errorf("a janela ainda sem o buraco do vídeo: %+v", st.Window)
+		}
+		return nil
+	})
+	if err != nil {
+		w.t.Fatalf("esperava o primeiro quadro: %v", err)
+	}
+	return last
+}
+
+// waitVideoFrames zera os contadores da janela e espera n quadros de vídeo
+// novos: o vídeo está chegando agora, e um pixel lido depois é de um quadro
+// recente, não do primeiro.
+func (w *window) waitVideoFrames(n int) {
+	w.t.Helper()
+	w.must("stats", "reset")
+	err := eventually(passTimeout, func() error {
+		var stats struct{ VideoFrames int }
+		if err := json.Unmarshal([]byte(w.must("stats")), &stats); err != nil {
+			return err
+		}
+		if stats.VideoFrames < n {
+			return fmt.Errorf("%d quadros de vídeo desde o reset, quer %d", stats.VideoFrames, n)
+		}
+		return nil
+	})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+}
+
+// pollEvery é o intervalo entre duas leituras de eventually. Cada leitura é
+// uma conexão ao socket de teste: curto o bastante para a fase seguinte
+// começar logo depois do sinal, sem disputar a CPU com a pintura da janela.
+const pollEvery = 25 * time.Millisecond
 
 // eventually repete check até ele passar ou o tempo acabar, e devolve o último erro.
 func eventually(timeout time.Duration, check func() error) error {
@@ -496,7 +548,7 @@ func eventually(timeout time.Duration, check func() error) error {
 		if err == nil || time.Now().After(end) {
 			return err
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(pollEvery)
 	}
 }
 

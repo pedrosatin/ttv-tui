@@ -11,6 +11,7 @@ import (
 )
 
 func TestJanelaMapaLogico(t *testing.T) {
+	t.Parallel()
 	w := openWindow(t, setup{})
 	w.openFirstChannel()
 	w.press("ctrl+w")
@@ -30,6 +31,7 @@ func TestJanelaMapaLogico(t *testing.T) {
 }
 
 func TestJanelaMapaClassicEMigracao(t *testing.T) {
+	t.Parallel()
 	w := openWindow(t, setup{config: "language = \"pt-BR\"\n"})
 	w.waitScreen("classic", 5*time.Second)
 	expect(t, func() error {

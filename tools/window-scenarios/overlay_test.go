@@ -18,6 +18,7 @@ func TestJanelaAlturaEFundoDoChat(t *testing.T) {
 			w := openWindow(t, setup{config: fmt.Sprintf("chat_overlay = true\nchat_overlay_rows = 60\nchat_overlay_backdrop = %q\n", backdrop), irc: fixture.IRCConfig{Messages: 3}})
 			st := w.openFirstChannel()
 			w.waitScreen(fixture.MessageText(3), 5*time.Second)
+			w.waitVideoFrames(5)
 			rows := st.Window.Hole[3]
 			expected := max(6, (rows*60+50)/100)
 			if st.Window.OverlayRows != expected {

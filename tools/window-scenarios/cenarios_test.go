@@ -3,7 +3,6 @@
 package windowscenarios
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -21,6 +20,9 @@ func TestJanelaAbreCanalComVideoEChat(t *testing.T) {
 	t.Parallel()
 	w := openWindow(t, setup{irc: fixture.IRCConfig{Messages: 5}})
 	w.openFirstChannel()
+	// O vídeo segue chegando antes da leitura do pixel: com os quadros
+	// parados, a falha diz isso, e não "pixel preto".
+	w.waitVideoFrames(5)
 
 	expect(t, func() error {
 		st, err := w.state()
@@ -50,18 +52,8 @@ func TestJanelaAbreCanalComVideoEChat(t *testing.T) {
 		return nil
 	})
 
-	// O vídeo segue chegando: stats reset zera a contagem e ela volta a subir.
-	w.must("stats", "reset")
-	expect(t, func() error {
-		var stats struct{ VideoFrames int }
-		if err := json.Unmarshal([]byte(w.must("stats")), &stats); err != nil {
-			return err
-		}
-		if stats.VideoFrames < 5 {
-			return fmt.Errorf("%d quadros de vídeo desde o reset", stats.VideoFrames)
-		}
-		return nil
-	})
+	// O vídeo segue chegando com o chat na tela.
+	w.waitVideoFrames(5)
 
 	w.press("ctrl+w", "o")
 	w.waitState("o chat sobre o vídeo", 5*time.Second, func(s ui.StateReport) bool { return s.Config.ChatOverlay })
