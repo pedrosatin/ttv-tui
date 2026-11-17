@@ -85,12 +85,16 @@ jobs:
       # here. test-json.sh logs the duration of each package.
       - name: Run tests (packages outside the race run)
         run: |
-          packages=$(go list ./... | grep -vxFf <(go list $RACE_PACKAGES))
-          test -n "$packages"
-          .github/scripts/test-json.sh common -count=1 $packages
+          read -ra race <<< "$RACE_PACKAGES"
+          list=$(go list ./... | grep -vxFf <(go list "${race[@]}"))
+          test -n "$list"
+          mapfile -t packages <<< "$list"
+          .github/scripts/test-json.sh common -count=1 "${packages[@]}"
 
       - name: Run race detector on concurrent packages
-        run: .github/scripts/test-json.sh race -race -count=1 $RACE_PACKAGES
+        run: |
+          read -ra race <<< "$RACE_PACKAGES"
+          .github/scripts/test-json.sh race -race -count=1 "${race[@]}"
 
       - name: Check Linux installer offline
         run: |
