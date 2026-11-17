@@ -412,7 +412,11 @@ type chatState struct {
 	copyNotice      string
 	copyNoticeGen   uint64
 	copyNoticeUntil time.Time
-	nowFunc         func() time.Time
+	// warnGen invalidates stale expiry ticks of the send warning; warnUntil is
+	// when the warning of a viewer who cannot send leaves (zero: it stays).
+	warnGen   uint64
+	warnUntil time.Time
+	nowFunc   func() time.Time
 }
 
 // layoutState is the focus, the help modal and the session layout flags.
@@ -664,6 +668,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case copyNoticeClearMsg:
 		return m.clearCopyNoticeIfExpired(msg.gen), nil
+
+	case sendWarningExpiredMsg:
+		return m.expireSendWarning(msg.gen), nil
 
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height

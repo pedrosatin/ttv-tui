@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -14,6 +15,10 @@ import (
 
 const (
 	defaultChatPreviewLines = 10
+	// chatMinMessageRows is the room a pinned panel keeps for messages, however
+	// short it gets: the send warning, the header and the compose hint give way
+	// before the messages do.
+	chatMinMessageRows = 1
 )
 
 func (c chatState) hasPanel() bool {
@@ -224,36 +229,54 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 	// pinned to the bottom of the panel: messages fill the space above it and
 	// blank rows pad the gap, so the input line is always the panel's last row
 	// whatever the message count.
-	var footer []string
-	if notice := m.renderChatPendingNotice(maxWidth); notice != "" {
-		footer = append(footer, notice)
+	var notice, hint []string
+	if line := m.renderChatPendingNotice(maxWidth); line != "" {
+		notice = []string{line}
 	}
+	var warn []string
 	if m.chat.panel.sendWarning != "" {
 		if maxWidth <= 0 {
-			warnLine := "  ! " + styleWarning(sanitizeScreenText(m.chat.panel.sendWarning))
-			footer = append(footer, warnLine)
+			warn = []string{"  ! " + styleWarning(sanitizeScreenText(m.chat.panel.sendWarning))}
 		} else {
-			warnRows := wrapChatRow("  ! ", sanitizeScreenText(m.chat.panel.sendWarning), maxWidth)
-			for _, r := range warnRows {
-				footer = append(footer, styleWarning(r))
+			for _, r := range wrapChatRow("  ! ", sanitizeScreenText(m.chat.panel.sendWarning), maxWidth) {
+				warn = append(warn, styleWarning(r))
 			}
 		}
 	}
 	if m.chat.composing && m.chat.hasToken() {
-		hint := m.renderComposeHintLine(maxWidth)
+		line := m.renderComposeHintLine(maxWidth)
 		if m.chat.draftOverLimit() {
-			footer = append(footer, styleWarning(hint))
+			hint = []string{styleWarning(line)}
 		} else {
-			footer = append(footer, lipgloss.NewStyle().Faint(true).Render(hint))
+			hint = []string{lipgloss.NewStyle().Faint(true).Render(line)}
 		}
 	}
-	footer = append(footer, TruncateVisual(m.renderChatInputLine(maxWidth), maxWidth))
+	input := TruncateVisual(m.renderChatInputLine(maxWidth), maxWidth)
 
 	msgs := m.ChatMessages()
 	pinned := maxLines > 0 && m.height > 0
 	if maxLines <= 0 {
 		maxLines = defaultChatPreviewLines
 	}
+	if pinned && maxWidth > 0 && (len(msgs) > 0 || m.chat.panel.state == ChatStateConnected) {
+		// A short panel (the overlay at its lowest) keeps room for the newest
+		// message: the warning folds into one row, then the header keeps only
+		// its first row, then the compose hint leaves. A larger panel shows
+		// them whole again.
+		over := func() bool {
+			return len(headerLines)+len(notice)+len(warn)+len(hint)+1+chatMinMessageRows > maxLines
+		}
+		if over() && len(warn) > 1 {
+			warn = []string{styleWarning(TruncateVisual("  ! "+sanitizeScreenText(m.chat.panel.sendWarning), maxWidth))}
+		}
+		if over() && len(headerLines) > 1 {
+			headerLines = headerLines[:1]
+		}
+		if over() {
+			hint = nil
+		}
+	}
+	footer := slices.Concat(notice, warn, hint, []string{input})
 	msgBudget := maxLines - len(headerLines) - len(footer)
 	if msgBudget < 0 {
 		msgBudget = 0

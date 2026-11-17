@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -180,6 +181,46 @@ func (c chatState) hasToken() bool {
 	return false
 }
 
+// canSend reports whether this viewer can send to the chat on screen: the chat
+// has sending and the viewer is logged in.
+func (c chatState) canSend() bool {
+	return c.panel.caps.CanSend && c.hasToken()
+}
+
+// sendWarningTTL is how long a send warning stays for a viewer who cannot send.
+const sendWarningTTL = 6 * time.Second
+
+// sendWarningExpiredMsg ends the send warning that scheduled it, if it is still
+// the one on screen.
+type sendWarningExpiredMsg struct{ gen uint64 }
+
+// setSendWarning shows text above the input line. A viewer who cannot send has
+// nothing to do about the warning, and with the video playing may press no key
+// for a long while, so for them it leaves after sendWarningTTL; the input line
+// keeps saying, in short, why sending is off.
+func (m *Model) setSendWarning(text string) tea.Cmd {
+	m.chat.panel.sendWarning = text
+	m.chat.warnGen++
+	m.chat.warnUntil = time.Time{}
+	if text == "" || m.chat.canSend() {
+		return nil
+	}
+	m.chat.warnUntil = m.chat.now().Add(sendWarningTTL)
+	gen := m.chat.warnGen
+	return m.after(sendWarningTTL, func(time.Time) tea.Msg { return sendWarningExpiredMsg{gen: gen} })
+}
+
+// expireSendWarning drops the warning gen scheduled. A tick for an older warning,
+// or one that arrives before warnUntil by the injected clock, changes nothing.
+func (m Model) expireSendWarning(gen uint64) Model {
+	if gen != m.chat.warnGen || m.chat.warnUntil.IsZero() || m.chat.now().Before(m.chat.warnUntil) {
+		return m
+	}
+	m.chat.panel.sendWarning = ""
+	m.chat.warnUntil = time.Time{}
+	return m
+}
+
 func (c chatState) hasPendingOutgoing() bool {
 	if c.panel.buf == nil {
 		return false
@@ -350,17 +391,16 @@ func (m *Model) startChatChannel(ch catalog.Channel) tea.Cmd {
 	}
 	m.chat.panel.state = ChatStateConnecting
 	m.chat.panel.errText = ""
+	warn := ""
 	if hadPending {
-		m.chat.panel.sendWarning = m.t("chat.warn.channel_switched")
-	} else {
-		m.chat.panel.sendWarning = ""
+		warn = m.t("chat.warn.channel_switched")
 	}
 	m.chat.panel.roomState = ChatRoomState{FollowersOnly: -1}
 	m.chat.panel.switching = true
 	m.chat.panel.gapPending = false
 	m.resetChatScroll()
 	if m.chat.session == nil {
-		return nil
+		return m.setSendWarning(warn)
 	}
 	// Join first: the sender answers for the chat of the channel joined last.
 	cmd := m.chat.session.Join(ch)
@@ -368,7 +408,7 @@ func (m *Model) startChatChannel(ch catalog.Channel) tea.Cmd {
 		m.chat.panel.anonymous = !sender.HasToken()
 		m.chat.panel.username = sender.Username()
 	}
-	return cmd
+	return tea.Batch(cmd, m.setSendWarning(warn))
 }
 
 func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
@@ -382,20 +422,17 @@ func (m Model) submitComposeMessage() (tea.Model, tea.Cmd) {
 	}
 
 	if !m.chat.hasToken() {
-		m.chat.panel.sendWarning = m.t("chat.no_token")
-		return m, nil
+		return m, m.setSendWarning(m.t("chat.no_token"))
 	}
 
 	if catalog.IsBlockedCommand(body) {
 		// Keep the draft and stay in compose mode: sending would publish it.
-		m.chat.panel.sendWarning = m.t("chat.warn.command_blocked")
-		return m, nil
+		return m, m.setSendWarning(m.t("chat.warn.command_blocked"))
 	}
 
 	if limit := m.chat.maxRuneLength(); limit > 0 && utf8.RuneCountInString(body) > limit {
 		// Keep the draft and stay in compose mode; never truncate on send.
-		m.chat.panel.sendWarning = m.t("chat.warn.too_long")
-		return m, nil
+		return m, m.setSendWarning(m.t("chat.warn.too_long"))
 	}
 
 	if m.chat.panel.unsupported || m.chat.panel.switching || m.chat.panel.channel == "" || m.chat.session == nil {
@@ -531,8 +568,9 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		appended := m.chat.panel.buf.Append(m.moderationClearMsgMessage(msg))
 		m.noteChatAppend(beforeLen, appended)
 	}
+	var cmds []tea.Cmd
 	for _, upd := range msg.SendUpdates {
-		m.applySendUpdate(upd)
+		cmds = append(cmds, m.applySendUpdate(upd))
 	}
 	for _, item := range msg.Messages {
 		if item.ReceivedAt.IsZero() {
@@ -550,7 +588,7 @@ func (m Model) handleChatEvent(msg ChatEventMsg) (tea.Model, tea.Cmd) {
 		appended := m.chat.panel.buf.Append(item)
 		m.noteChatAppend(beforeLen, appended)
 	}
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 // adoptChatGeneration moves the panel to the session of msg. Every reconnect
@@ -725,7 +763,7 @@ func (m Model) formatBanDuration(secs int) string {
 	return fmt.Sprintf(m.t("chat.mod.dur_h_m"), hours, mins)
 }
 
-func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {
+func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) tea.Cmd {
 	if upd.Generation == 0 {
 		upd.Generation = m.chat.panel.gen
 	}
@@ -739,17 +777,18 @@ func (m *Model) applySendUpdate(upd ChatSendStatusUpdate) {
 				m.chat.composeDraft = upd.Body
 			}
 		case catalog.ChatRejectRateLimited:
-			m.chat.panel.sendWarning = m.t("chat.warn.rate_limit")
+			return m.setSendWarning(m.t("chat.warn.rate_limit"))
 		case catalog.ChatRejectChannelSwitched:
-			m.chat.panel.sendWarning = m.t("chat.warn.channel_switched")
+			return m.setSendWarning(m.t("chat.warn.channel_switched"))
 		case catalog.ChatRejectReconnected:
-			m.chat.panel.sendWarning = m.t("chat.warn.reconnected")
+			return m.setSendWarning(m.t("chat.warn.reconnected"))
 		}
 	case catalog.ChatDeliveryRejected:
 		if upd.Reason == catalog.ChatRejectUnauthenticated {
-			m.chat.panel.sendWarning = m.t("chat.no_token")
+			return m.setSendWarning(m.t("chat.no_token"))
 		}
 	}
+	return nil
 }
 
 // ChatState returns the current UI-facing chat connection state.

@@ -163,8 +163,7 @@ func (m Model) enterCompose() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if !m.chat.hasToken() && (m.chat.session != nil || m.chat.panel.channel != "") {
-		m.chat.panel.sendWarning = m.t("chat.no_token")
-		return m, nil
+		return m, m.setSendWarning(m.t("chat.no_token"))
 	}
 	m.setFocus(FocusChat)
 	m.chat.composing = true
