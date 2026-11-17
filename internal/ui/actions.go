@@ -307,38 +307,47 @@ func classicActions() []action {
 	for i := range actions {
 		a := &actions[i]
 		switch a.ID {
+		// No chat sobreposto, a navegação vem antes da altura e da opacidade
+		// (veja Footer); cada par de ações opostas ocupa uma dica só.
 		case actChatTaller:
-			a.Footer = []footerUse{{footOverlay, 1, "footer.height_up"}}
-		case actChatShorter:
-			a.Footer = []footerUse{{footOverlay, 2, "footer.height_down"}}
+			a.Footer = []footerUse{
+				{Mode: footOverlay, Priority: 3, Text: "footer.height", Pair: actChatShorter},
+				{Mode: footOverlayChat, Priority: 3, Text: "footer.height", Pair: actChatShorter},
+			}
 		case actChatMoreOpaque:
-			a.Footer = []footerUse{{footOverlay, 3, "footer.opacity_up"}}
-		case actChatLessOpaque:
-			a.Footer = []footerUse{{footOverlay, 4, "footer.opacity_down"}}
+			a.Footer = []footerUse{
+				{Mode: footOverlay, Priority: 4, Text: "footer.opacity", Pair: actChatLessOpaque},
+				{Mode: footOverlayChat, Priority: 4, Text: "footer.opacity", Pair: actChatLessOpaque},
+			}
+		case actEnd:
+			a.Footer = []footerUse{{Mode: footOverlayChat, Priority: 1, Text: "footer.live", Paused: true}}
 		case actCycleLayout:
-			a.Footer = []footerUse{{footFocus, 1, "footer.layouts"}}
+			a.Footer = []footerUse{{Mode: footFocus, Priority: 1, Text: "footer.layouts"}}
 		case actToggleList:
-			a.Footer = []footerUse{{footFocus, 2, "footer.list"}}
+			a.Footer = []footerUse{{Mode: footFocus, Priority: 2, Text: "footer.list"}}
 		case actToggleChat:
-			a.Footer = []footerUse{{footFocus, 3, "layout.mode.chat"}}
+			a.Footer = []footerUse{{Mode: footFocus, Priority: 3, Text: "layout.mode.chat"}}
 		case actSelect:
-			a.Footer = []footerUse{{footList, 1, "footer.open"}, {footSearch, 1, "footer.search"}, {footFilter, 1, "footer.open"}, {footCompose, 1, "footer.send"}, {footMenu, 1, "footer.choose"}}
+			a.Footer = []footerUse{{Mode: footList, Priority: 1, Text: "footer.open"}, {Mode: footSearch, Priority: 1, Text: "footer.search"}, {Mode: footFilter, Priority: 1, Text: "footer.open"}, {Mode: footCompose, Priority: 1, Text: "footer.send"}, {Mode: footMenu, Priority: 1, Text: "footer.choose"}}
 		case actFavorite:
-			a.Footer = []footerUse{{footList, 2, "footer.favorite"}}
+			a.Footer = []footerUse{{Mode: footList, Priority: 2, Text: "footer.favorite"}}
 		case actFilter:
-			a.Footer = []footerUse{{footList, 3, "footer.filter"}}
+			a.Footer = []footerUse{{Mode: footList, Priority: 3, Text: "footer.filter"}}
 		case actSearch:
-			a.Footer = []footerUse{{footList, 4, "footer.search"}, {footFilter, 2, "footer.search"}}
+			a.Footer = []footerUse{{Mode: footList, Priority: 4, Text: "footer.search"}, {Mode: footFilter, Priority: 2, Text: "footer.search"}}
 		case actSwitchPlatform:
-			a.Footer = []footerUse{{footList, 5, "footer.platform"}}
+			a.Footer = []footerUse{{Mode: footList, Priority: 5, Text: "footer.platform"}}
 		case actBack:
-			a.Footer = []footerUse{{footSearch, 2, "footer.cancel"}, {footFilter, 3, "footer.clear"}, {footCompose, 2, "footer.cancel"}, {footMenu, 2, "footer.close"}}
+			a.Footer = []footerUse{{Mode: footSearch, Priority: 2, Text: "footer.cancel"}, {Mode: footFilter, Priority: 3, Text: "footer.clear"}, {Mode: footCompose, Priority: 2, Text: "footer.cancel"}, {Mode: footMenu, Priority: 2, Text: "footer.close"}}
 		case actCompose:
-			a.Footer = []footerUse{{footChat, 1, "footer.compose"}}
+			a.Footer = []footerUse{{Mode: footChat, Priority: 1, Text: "footer.compose"}}
 		case actCopyMessage:
-			a.Footer = []footerUse{{footChat, 2, "footer.copy"}}
+			a.Footer = []footerUse{{Mode: footChat, Priority: 2, Text: "footer.copy"}}
 		case actSwitchFocus:
-			a.Footer = []footerUse{{footChat, 3, "footer.list"}, {footCompose, 3, "footer.list"}}
+			a.Footer = []footerUse{
+				{Mode: footChat, Priority: 3, Text: "footer.list"}, {Mode: footCompose, Priority: 3, Text: "footer.list"},
+				{Mode: footOverlay, Priority: 2, Text: "footer.chat"}, {Mode: footOverlayChat, Priority: 2, Text: "footer.list"},
+			}
 		}
 	}
 	return actions

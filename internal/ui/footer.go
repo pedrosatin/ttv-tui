@@ -18,13 +18,21 @@ const (
 	footCompose
 	footMenu
 	footFocus
+	// footOverlay e footOverlayChat são o chat sobre o vídeo, com o foco na
+	// lista e no chat.
 	footOverlay
+	footOverlayChat
 )
 
+// footerUse é uma dica da ação no rodapé de um modo. Pair junta à tecla da ação
+// a de outra, oposta (Alt+↑/↓ altura). Paused mostra a dica só com o chat fora
+// do ao vivo.
 type footerUse struct {
 	Mode     footerMode
 	Priority int
 	Text     string
+	Pair     actionID
+	Paused   bool
 }
 
 func (m Model) footerMode() footerMode {
@@ -40,6 +48,9 @@ func (m Model) footerMode() footerMode {
 	case m.Focus() == FocusChat && m.chat.composing:
 		return footCompose
 	case m.hosted.host != nil && m.hosted.chatOverlay && m.chatColumnVisible():
+		if m.Focus() == FocusChat {
+			return footOverlayChat
+		}
 		return footOverlay
 	case m.Focus() == FocusChat:
 		return footChat
@@ -50,6 +61,12 @@ func (m Model) footerMode() footerMode {
 
 // Footer reserva espaço para a ajuda antes de acrescentar as ações por prioridade.
 // As teclas vêm do mapa efetivo, inclusive quando uma ação está desligada.
+//
+// No chat sobreposto, a navegação vem antes do ajuste do overlay: com o chat
+// pausado, a tecla do ao vivo; depois, a troca de foco; por último, altura e
+// opacidade. Uma dica que não cabe sai, e as de menor prioridade ainda entram se
+// couberem: em 80 colunas cabem todas, e numa largura menor quem sai primeiro é a
+// opacidade.
 func (m Model) Footer() string {
 	type hint struct {
 		priority int
@@ -58,13 +75,10 @@ func (m Model) Footer() string {
 	var hints []hint
 	for _, a := range m.keys.actions {
 		for _, use := range a.Footer {
-			if use.Mode != m.footerMode() || a.ID == actSwitchPlatform && len(m.catalogs) < 2 {
+			if use.Mode != m.footerMode() || a.ID == actSwitchPlatform && len(m.catalogs) < 2 || use.Paused && m.ChatFollowLive() {
 				continue
 			}
-			label := ""
-			if keys := m.keys.keys[a.ID]; len(keys) > 0 {
-				label = keyLabel(keys[0], m.catalog)
-			}
+			label := m.footerLabel(a.ID, use.Pair)
 			if label != "" {
 				hints = append(hints, hint{use.Priority, label + " " + m.t(m.footerText(a.ID, use))})
 			}
@@ -87,6 +101,18 @@ func (m Model) Footer() string {
 		}
 	}
 	return padToWidth(strings.Join(append(parts, help), statusSep), m.width)
+}
+
+// footerLabel é a tecla principal de id e, com pair, também a de pair, juntas
+// como na ajuda: Alt+↑/↓. Uma ação sem tecla não entra.
+func (m Model) footerLabel(id, pair actionID) string {
+	var labels []string
+	for _, a := range []actionID{id, pair} {
+		if keys := m.keys.keys[a]; a != "" && len(keys) > 0 {
+			labels = append(labels, keyLabel(keys[0], m.catalog))
+		}
+	}
+	return joinKeyLabels(labels)
 }
 
 // footerText é o texto da dica. No mapa padrão, Ctrl+W h e Ctrl+W l seguem o
