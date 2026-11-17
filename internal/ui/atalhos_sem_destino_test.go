@@ -4,6 +4,7 @@ package ui
 // onde ir diz por quê e qual o próximo passo, em vez de parecer quebrado.
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"strings"
 	"testing"
 
@@ -110,6 +111,36 @@ func TestGRComRecenteQueEhFavorito(t *testing.T) {
 	got := play(t, m, "g r")
 	assertStill(t, m, got)
 	assertWarns(t, got, "feedback.no_recents")
+}
+
+// No limite de 50, abrir um favorito tira dos pendentes o último recente sem
+// estrela. A tela inicial mostra os pendentes, então g r diz que não há
+// recente, e não que os filtros o escondem.
+func TestGRContaOsRecentesPendentes(t *testing.T) {
+	chs := scenarioChannels()
+	fav, antigo := chs[0], chs[1]
+	m, _ := newScenario(t, 80, 24, WithFavorites([]catalog.Channel{fav}), WithRecents([]catalog.Channel{antigo}))
+	m.list.pendingRecents = []catalog.Channel{fav}
+	assertWarns(t, play(t, m, "g r"), "feedback.no_recents")
+}
+
+// Uma tecla remapeada longa não é cortada da barra em 80 colunas, em
+// português e em inglês: a tecla vem primeiro, e só a primeira tecla da ação.
+func TestAvisoDeFiltroComTeclaLongaCabe(t *testing.T) {
+	for _, lang := range []string{i18n.LangPTBR, i18n.LangEN} {
+		for _, kind := range []struct {
+			keys, msg string
+			opt       Option
+		}{
+			{"g f", "feedback.favorites_filtered", WithFavorites([]catalog.Channel{{ID: "ch-off", Login: "fora_do_ar"}})},
+			{"g r", "feedback.recents_filtered", WithRecents([]catalog.Channel{{ID: "ch-off", Login: "fora_do_ar"}})},
+		} {
+			m, _ := newScenario(t, 80, 24, kind.opt, WithChannelFilters(nil, 1000, nil))
+			m.catalog = mustCatalog(t, lang)
+			m.keys = newKeyRegistry(defaultActions(), map[actionID][]string{actChannelFilter: {"ctrl+w alt+shift+tab", "L"}})
+			assertWarns(t, play(t, m, kind.keys), kind.msg)
+		}
+	}
 }
 
 // Os recentes de outra plataforma não contam na lista da Twitch.

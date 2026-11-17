@@ -1013,7 +1013,13 @@ func (m Model) hasSavedOfType(kind ListItemType) bool {
 	if kind == ItemTypeFavorite {
 		return slices.ContainsFunc(m.list.favorites, func(ch catalog.Channel) bool { return named(ch) && m.savedOnList(ch) })
 	}
-	return slices.ContainsFunc(m.listRecents(), func(ch catalog.Channel) bool { return named(ch) && !isFavorite(ch) })
+	// A tela inicial troca os recentes pelos pendentes ao abrir
+	// (applyPendingRecents): conta o que ela vai mostrar, e não a união dos dois.
+	recents := m.list.recents
+	if m.list.pendingRecents != nil {
+		recents = m.list.pendingRecents
+	}
+	return slices.ContainsFunc(recents, func(ch catalog.Channel) bool { return named(ch) && m.savedOnList(ch) && !isFavorite(ch) })
 }
 
 // askClearRecents põe na barra a pergunta de limpar os recentes da lista. Sem
