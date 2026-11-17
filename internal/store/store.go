@@ -135,6 +135,9 @@ type favoriteSnapshot struct {
 	mu         sync.Mutex
 	favorites  []Channel
 	categories []Category
+	// recents é a lista de recentes da última carga ou gravação bem-sucedida.
+	// O que saiu dela desde então foi tirado aqui e sai também do disco.
+	recents []Channel
 }
 
 // AddRecent prepends ch to recents, removing any prior duplicate, and clamps to maxRecents.
@@ -153,6 +156,18 @@ func (s *State) AddRecent(ch Channel, maxRecents int) {
 	if len(s.Recents) > maxRecents {
 		s.Recents = s.Recents[:maxRecents]
 	}
+}
+
+// ForgetRecent tira ch dos recentes e diz se ele estava lá. Num estado carregado,
+// a próxima gravação tira o canal também do disco.
+func (s *State) ForgetRecent(ch Channel) bool {
+	ch.Platform = ch.CanonicalPlatform()
+	kept := withoutChannels(s.Recents, []Channel{ch})
+	if len(kept) == len(s.Recents) {
+		return false
+	}
+	s.Recents = kept
+	return true
 }
 
 // ToggleFavorite toggles ch in favorites. If present, removes it and returns false.
@@ -248,21 +263,26 @@ func loadFrom(path string) (State, error) {
 	st.Recents, dropRec = validChannels(normalizeChannels(st.Recents))
 	st.discarded = dropFav + dropRec
 	st.FavoriteCategories = normalizeCategories(st.FavoriteCategories)
-	st.snapshot = &favoriteSnapshot{favorites: append([]Channel(nil), st.Favorites...), categories: append([]Category(nil), st.FavoriteCategories...)}
+	st.snapshot = &favoriteSnapshot{
+		favorites:  append([]Channel(nil), st.Favorites...),
+		categories: append([]Category(nil), st.FavoriteCategories...),
+		recents:    append([]Channel(nil), st.Recents...),
+	}
 	return st, nil
 }
 
 // SaveTo merges state with the latest disk contents under an exclusive lock.
 // Loaded states apply only changes since the last successful load/save, so stale
 // favorites cannot resurrect another pane's removals. Untracked literals add their
-// favorites to disk. Incoming recents precede disk-only recents.
+// favorites to disk. Incoming recents precede disk-only recents; see mergeRecents
+// for how a loaded state forgets a recent.
 func SaveTo(path string, st State) error {
 	return saveTo(path, st, DefaultMaxRecents)
 }
 
 func saveTo(path string, st State, maxRecents int) error {
 	if st.snapshot == nil {
-		return mergeTo(path, st, maxRecents, st.Favorites, nil, st.FavoriteCategories, nil)
+		return mergeTo(path, st, maxRecents, changes{added: st.Favorites, addedCategories: st.FavoriteCategories})
 	}
 	st.snapshot.mu.Lock()
 	defer st.snapshot.mu.Unlock()
@@ -273,17 +293,32 @@ func saveTo(path string, st State, maxRecents int) error {
 // channels added by another pane must not become implicit local additions.
 // The caller holds snapshot.mu.
 func saveSnapshot(path string, st State, maxRecents int, snapshot *favoriteSnapshot) error {
-	added := withoutChannels(st.Favorites, snapshot.favorites)
-	removed := withoutChannels(snapshot.favorites, st.Favorites)
-	if err := mergeTo(path, st, maxRecents, added, removed, withoutCategories(st.FavoriteCategories, snapshot.categories), withoutCategories(snapshot.categories, st.FavoriteCategories)); err != nil {
+	c := changes{
+		added:             withoutChannels(st.Favorites, snapshot.favorites),
+		removed:           withoutChannels(snapshot.favorites, st.Favorites),
+		addedCategories:   withoutCategories(st.FavoriteCategories, snapshot.categories),
+		removedCategories: withoutCategories(snapshot.categories, st.FavoriteCategories),
+		ackedRecents:      snapshot.recents,
+	}
+	if err := mergeTo(path, st, maxRecents, c); err != nil {
 		return err
 	}
 	snapshot.favorites = append([]Channel(nil), st.Favorites...)
 	snapshot.categories = append([]Category(nil), st.FavoriteCategories...)
+	snapshot.recents = append([]Channel(nil), st.Recents...)
 	return nil
 }
 
-func mergeTo(path string, st State, maxRecents int, added, removed []Channel, addedCategories, removedCategories []Category) (err error) {
+// changes é o que uma gravação aplica sobre o disco: os favoritos e as
+// categorias que entraram e saíram desde a última confirmação, e os recentes
+// confirmados até ela (nil num estado que não veio do disco).
+type changes struct {
+	added, removed                     []Channel
+	addedCategories, removedCategories []Category
+	ackedRecents                       []Channel
+}
+
+func mergeTo(path string, st State, maxRecents int, c changes) (err error) {
 	release, err := lockState(path)
 	if err != nil {
 		return err
@@ -296,16 +331,56 @@ func mergeTo(path string, st State, maxRecents int, added, removed []Channel, ad
 	if errors.Is(err, ErrCorrupt) {
 		// The file went to .bak; the session state is the only source left.
 		// Another pane's changes since our load stay in .bak only.
-		added = st.Favorites
-		addedCategories = st.FavoriteCategories
+		c.added = st.Favorites
+		c.addedCategories = st.FavoriteCategories
+		c.ackedRecents = nil
 	}
-	st.Favorites = unionChannels(withoutChannels(disk.Favorites, removed), added)
-	st.FavoriteCategories = unionCategories(withoutCategories(disk.FavoriteCategories, removedCategories), addedCategories)
-	st.Recents = unionChannels(st.Recents, disk.Recents)
+	st.Favorites = unionChannels(withoutChannels(disk.Favorites, c.removed), c.added)
+	st.FavoriteCategories = unionCategories(withoutCategories(disk.FavoriteCategories, c.removedCategories), c.addedCategories)
+	st.Recents = mergeRecents(st.Recents, c.ackedRecents, disk.Recents)
 	if len(st.Recents) > maxRecents {
 		st.Recents = st.Recents[:maxRecents]
 	}
 	return writeState(path, st)
+}
+
+// mergeRecents junta os recentes locais aos do disco. Os que este estado
+// abriu desde a última confirmação (acked) vêm na frente; o disco completa a
+// lista, na ordem dele, sem os que saíram da lista local desde acked. Um
+// recente local que ninguém abriu desde então não traz informação nova: fica
+// onde o disco o tem e, se outro processo o esqueceu, não volta.
+//
+// Os abertos são o começo da lista local até o último que não está em acked
+// ou que subiu de posição em relação a ela, porque abrir um canal o põe na
+// frente (State.AddRecent). Sem acked (estado montado na mão, ou o disco
+// corrompido), todo recente local conta como aberto e a gravação só
+// acrescenta.
+func mergeRecents(local, acked, disk []Channel) []Channel {
+	forgotten := withoutChannels(acked, local)
+	return unionChannels(local[:touchedRecents(local, acked)], withoutChannels(disk, forgotten))
+}
+
+// touchedRecents diz quantos recentes do começo de local foram abertos depois
+// de acked: o resto de local aparece em acked e na mesma ordem relativa.
+func touchedRecents(local, acked []Channel) int {
+	next := len(acked)
+	for i := len(local) - 1; i >= 0; i-- {
+		at := indexChannel(acked, local[i])
+		if at < 0 || at >= next {
+			return i + 1
+		}
+		next = at
+	}
+	return 0
+}
+
+func indexChannel(channels []Channel, ch Channel) int {
+	for i, other := range channels {
+		if other.Matches(ch) {
+			return i
+		}
+	}
+	return -1
 }
 
 // withoutChannels uses the same identity rules for removals and additions.
@@ -491,6 +566,7 @@ func (s *Store) Load() (State, error) {
 	if err == nil || errors.Is(err, ErrCorrupt) {
 		s.snapshot.favorites = append([]Channel(nil), st.Favorites...)
 		s.snapshot.categories = append([]Category(nil), st.FavoriteCategories...)
+		s.snapshot.recents = append([]Channel(nil), st.Recents...)
 	}
 	return st, err
 }
