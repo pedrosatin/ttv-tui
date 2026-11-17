@@ -166,9 +166,53 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      # Only the bottles brew downloads are cached, never /opt/homebrew: brew still
+      # pours every formula, so the build links the same libraries. With
+      # auto-update off, the runner image fixes the formula versions, so the key
+      # follows the image, the architecture and the formulae as brew sees them.
+      - name: Key the Homebrew downloads (macOS)
+        id: brew
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          formulae="pkgconf sdl3 mpv"
+          read -ra list <<< "$formulae"
+          manifest=$(brew info --json=v2 "${list[@]}" |
+            jq -c '.formulae[] | [.full_name, .versions.stable, .revision, .bottle.stable.rebuild, .bottle.stable.files, .dependencies]' |
+            shasum -a 256 | cut -c1-16)
+          {
+            echo "formulae=$formulae"
+            echo "downloads=$(brew --cache)/downloads"
+            echo "key=brew-$ImageOS-$ImageVersion-$RUNNER_ARCH-$manifest"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Homebrew downloads (macOS)
+        id: brew-cache
+        if: runner.os == 'macOS'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.brew.outputs.downloads }}
+          key: ${{ steps.brew.outputs.key }}
+
       - name: Install SDL3 and libmpv (macOS)
         if: runner.os == 'macOS'
-        run: brew install pkgconf sdl3 mpv
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+          FORMULAE: ${{ steps.brew.outputs.formulae }}
+        run: |
+          read -ra list <<< "$FORMULAE"
+          brew install "${list[@]}"
+
+      # Saved right after the install, so a failing test later still leaves the
+      # downloads for the next run.
+      - name: Save the Homebrew downloads (macOS)
+        if: runner.os == 'macOS' && steps.brew-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.brew.outputs.downloads }}
+          key: ${{ steps.brew.outputs.key }}
 
       - name: Install SDL3 and libmpv (Windows)
         if: runner.os == 'Windows'
@@ -277,6 +321,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
+    # The Windows handshake runs the official mpv build from the mpv release
+    # itself, the same release packaging/window-windows.sh takes libmpv from. Its
+    # assets come with a maintainer's signature (.asc); the SHA-256 below is the
+    # one GitHub lists for the asset and is checked on every run, cached or not.
+    env:
+      MPV_VERSION: v0.42.0
+      MPV_ASSET: mpv-v0.42.0-x86_64-pc-windows-msvc.zip
+      MPV_SHA256: 8dd69cbab079086765fa5d873c09513b2834b85d146c1301718a757e8c0595ef
     defaults:
       run:
         shell: bash
@@ -326,66 +378,46 @@ jobs:
       - name: Run tests
         run: go test -count=1 ./...
 
-      # Installing depends on a third-party mirror, so a failed install only skips
-      # the check. Chocolatey edits the machine PATH, which the running shell never
-      # sees, so the next step finds mpv.exe and hands its directory to later steps.
-      - name: Install mpv
-        id: mpv
+      # The zip is cached by version and hash, and mpv lands in a fixed
+      # directory under the runner's temp, so no step has to search for mpv.exe.
+      - name: Restore the portable mpv
+        id: mpv-cache
         if: runner.os == 'Windows'
-        continue-on-error: true
-        timeout-minutes: 4
-        run: choco install mpv --no-progress -y
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/mpv-zip
+          key: mpv-windows-${{ env.MPV_VERSION }}-${{ env.MPV_SHA256 }}
 
-      - name: Put mpv on PATH
-        id: mpvpath
-        if: runner.os == 'Windows' && steps.mpv.outcome == 'success'
-        timeout-minutes: 2
-        run: |
-          choco_root="${ChocolateyInstall:-C:\\ProgramData\\chocolatey}"
-          root="$(cygpath -u "$choco_root")"
-          for dir in "$root/lib/mpvio.install/tools" "$root/bin"; do
-            if [ -f "$dir/mpv.exe" ]; then
-              win_dir="$(cygpath -w "$dir")"
-              echo "$win_dir" >> "$GITHUB_PATH"
-              echo "mpv.exe found in $win_dir"
-              exit 0
-            fi
-          done
-          found="$(find "$root/lib" -iname mpv.exe 2>/dev/null | head -n 1)"
-          if [ -n "$found" ]; then
-            win_dir="$(cygpath -w "$(dirname "$found")")"
-            echo "$win_dir" >> "$GITHUB_PATH"
-            echo "mpv.exe found in $win_dir"
-            exit 0
-          fi
-          echo "::warning::mpv.exe not found under $choco_root after choco install"
-
-      # Only a mpv that answers --version turns the handshake on; otherwise the
-      # step warns and skips, so the log never claims a test that did not run.
-      - name: Run the IPC handshake against a real mpv
-        if: runner.os == 'Windows' && steps.mpv.outcome == 'success'
+      - name: Install the portable mpv
+        if: runner.os == 'Windows'
         timeout-minutes: 3
         run: |
-          choco_root="${ChocolateyInstall:-C:\\ProgramData\\chocolatey}"
-          root="$(cygpath -u "$choco_root")"
-          candidates=("$root/lib/mpvio.install/tools/mpv.exe" "$root/bin/mpv.exe")
-          while IFS= read -r found; do
-            candidates+=("$found")
-          done < <(find "$root/lib" -iname mpv.exe -type f 2>/dev/null)
-          for candidate in "${candidates[@]}"; do
-            [ -f "$candidate" ] || continue
-            export PATH="$(dirname "$candidate"):$PATH"
-            echo "Checking $candidate --version"
-            if "$candidate" --version; then
-              export TTV_TEST_REAL_MPV=1
-              go test -count=1 -v -run '^TestRealMPVHandshake$' ./internal/player
-              exit $?
-            else
-              status=$?
-              echo "::warning::mpv at $candidate failed --version (exit $status); trying the next candidate"
-            fi
-          done
-          echo "::warning::No runnable mpv.exe found under $choco_root; the real-mpv handshake was NOT run"
+          tmp="$(cygpath -u "$RUNNER_TEMP")"
+          zip="$tmp/mpv-zip/$MPV_ASSET"
+          if [ ! -f "$zip" ]; then
+            mkdir -p "$tmp/mpv-zip"
+            curl -fsSL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 \
+              -o "$zip.part" "https://github.com/mpv-player/mpv/releases/download/$MPV_VERSION/$MPV_ASSET"
+            mv "$zip.part" "$zip"
+          fi
+          echo "$MPV_SHA256 *$zip" | sha256sum -c -
+          7z x -y -bso0 -bsp0 -o"$(cygpath -w "$tmp/mpv")" "$(cygpath -w "$zip")"
+          test -f "$tmp/mpv/mpv.exe"
+          cygpath -w "$tmp/mpv" >> "$GITHUB_PATH"
+
+      - name: Save the portable mpv
+        if: runner.os == 'Windows' && steps.mpv-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/mpv-zip
+          key: mpv-windows-${{ env.MPV_VERSION }}-${{ env.MPV_SHA256 }}
+
+      - name: Run the IPC handshake against a real mpv
+        if: runner.os == 'Windows'
+        timeout-minutes: 3
+        run: |
+          mpv --version
+          TTV_TEST_REAL_MPV=1 go test -count=1 -v -run '^TestRealMPVHandshake$' ./internal/player
 
       # go test hides t.Logf of a passing test, so this step prints what the kernel
       # answered whether the run above passed or not.
