@@ -16,7 +16,10 @@ func overlayComChat(t *testing.T, width, height, n int, classic bool) Model {
 	if classic {
 		m, _ = hostedScenarioClassic(t, width, height)
 	} else {
-		m, _ = hostedScenario(t, width, height)
+		// hostedScenario monta o mapa clássico; o padrão precisa do newScenario.
+		exactCellWidths = true
+		t.Cleanup(func() { exactCellWidths = false })
+		m, _ = newScenario(t, width, height, WithVideoHost(&recordingHost{}))
 	}
 	m = play(t, m, "ctrl+f gaules enter enter ctrl+o")
 	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
@@ -95,6 +98,45 @@ func TestCenarioRodapeSobrepostoPausado(t *testing.T) {
 		}
 		return m
 	})
+}
+
+// Com a lista escondida (Ctrl+W h no padrão, Ctrl+H no clássico), Tab não leva o
+// foco a ela: o rodapé oferece a tecla que mostra a lista de novo.
+func TestRodapeSobrepostoSemListaNaoOfereceTab(t *testing.T) {
+	for _, classic := range []bool{true, false} {
+		m := play(t, overlayComChat(t, 80, 24, 45, classic), "tab")
+		if classic {
+			m = play(t, m, "ctrl+h")
+		} else {
+			m = play(t, m, "ctrl+w h")
+		}
+		if m.listVisible() {
+			t.Fatalf("classic=%v: a lista continua visível", classic)
+		}
+		rodapeSem(t, m, "Tab lista")
+		want := "Ctrl+W h lista"
+		if classic {
+			want = "Ctrl+H lista"
+		}
+		rodapeTem(t, m, want, "Alt+↑/↓ altura", "? ajuda")
+		if m = play(t, m, strings.ToLower(strings.TrimSuffix(want, " lista"))); !m.listVisible() {
+			t.Fatalf("classic=%v: %s não mostrou a lista", classic, want)
+		}
+	}
+}
+
+// No mapa padrão com os lados trocados, a lista fica à direita e volta com
+// Ctrl+W l: é essa a tecla que o rodapé oferece.
+func TestRodapeSobrepostoSemListaLadosTrocados(t *testing.T) {
+	m := play(t, overlayComChat(t, 80, 24, 45, false), "ctrl+w x tab ctrl+w l")
+	if m.listVisible() || !m.hosted.panelsSwapped {
+		t.Fatalf("lista visível = %v, lados trocados = %v; quero a lista escondida com os lados trocados", m.listVisible(), m.hosted.panelsSwapped)
+	}
+	rodapeSem(t, m, "Tab lista")
+	rodapeTem(t, m, "Ctrl+W l lista")
+	if m = play(t, m, "ctrl+w l"); !m.listVisible() {
+		t.Fatal("Ctrl+W l não mostrou a lista")
+	}
 }
 
 // O mapa padrão e o clássico dão as mesmas teclas a essas dicas; uma tecla

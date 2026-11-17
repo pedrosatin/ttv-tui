@@ -33,6 +33,8 @@ type footerUse struct {
 	Text     string
 	Pair     actionID
 	Paused   bool
+	// ListHidden: a dica só aparece com a lista escondida.
+	ListHidden bool
 }
 
 func (m Model) footerMode() footerMode {
@@ -64,9 +66,9 @@ func (m Model) footerMode() footerMode {
 //
 // No chat sobreposto, a navegação vem antes do ajuste do overlay: com o chat
 // pausado, a tecla do ao vivo; depois, a troca de foco; por último, altura e
-// opacidade. Uma dica que não cabe sai, e as de menor prioridade ainda entram se
-// couberem: em 80 colunas cabem todas, e numa largura menor quem sai primeiro é a
-// opacidade.
+// opacidade. As dicas entram nessa ordem enquanto couberem junto da ajuda: uma
+// que não cabe fica de fora e a seguinte ainda entra se couber. Em 80 colunas
+// cabem todas.
 func (m Model) Footer() string {
 	type hint struct {
 		priority int
@@ -75,7 +77,7 @@ func (m Model) Footer() string {
 	var hints []hint
 	for _, a := range m.keys.actions {
 		for _, use := range a.Footer {
-			if use.Mode != m.footerMode() || a.ID == actSwitchPlatform && len(m.catalogs) < 2 || use.Paused && m.ChatFollowLive() {
+			if use.Mode != m.footerMode() || a.ID == actSwitchPlatform && len(m.catalogs) < 2 || use.Paused && m.ChatFollowLive() || m.overlayListHint(a.ID, use) {
 				continue
 			}
 			label := m.footerLabel(a.ID, use.Pair)
@@ -113,6 +115,27 @@ func (m Model) footerLabel(id, pair actionID) string {
 		}
 	}
 	return joinKeyLabels(labels)
+}
+
+// overlayListHint diz se a dica sai do rodapé do chat sobreposto por causa da
+// lista escondida. Com a lista escondida, Tab não leva o foco a ela: no lugar de
+// "Tab lista" entra a tecla que mostra a lista de novo. No mapa padrão com os
+// lados trocados, essa tecla é a do painel da direita (Ctrl+W l).
+func (m Model) overlayListHint(id actionID, use footerUse) bool {
+	if use.Mode != footOverlayChat {
+		return false
+	}
+	if id == actSwitchFocus {
+		return !m.listVisible()
+	}
+	if !use.ListHidden {
+		return false
+	}
+	toggle := actToggleList
+	if !m.classic && m.hosted.panelsSwapped {
+		toggle = actToggleChat
+	}
+	return m.listVisible() || id != toggle
 }
 
 // footerText é o texto da dica. No mapa padrão, Ctrl+W h e Ctrl+W l seguem o

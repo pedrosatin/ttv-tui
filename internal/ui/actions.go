@@ -324,9 +324,9 @@ func classicActions() []action {
 		case actCycleLayout:
 			a.Footer = []footerUse{{Mode: footFocus, Priority: 1, Text: "footer.layouts"}}
 		case actToggleList:
-			a.Footer = []footerUse{{Mode: footFocus, Priority: 2, Text: "footer.list"}}
+			a.Footer = []footerUse{{Mode: footFocus, Priority: 2, Text: "footer.list"}, {Mode: footOverlayChat, Priority: 2, Text: "footer.list", ListHidden: true}}
 		case actToggleChat:
-			a.Footer = []footerUse{{Mode: footFocus, Priority: 3, Text: "layout.mode.chat"}}
+			a.Footer = []footerUse{{Mode: footFocus, Priority: 3, Text: "layout.mode.chat"}, {Mode: footOverlayChat, Priority: 2, Text: "footer.list", ListHidden: true}}
 		case actSelect:
 			a.Footer = []footerUse{{Mode: footList, Priority: 1, Text: "footer.open"}, {Mode: footSearch, Priority: 1, Text: "footer.search"}, {Mode: footFilter, Priority: 1, Text: "footer.open"}, {Mode: footCompose, Priority: 1, Text: "footer.send"}, {Mode: footMenu, Priority: 1, Text: "footer.choose"}}
 		case actFavorite:
