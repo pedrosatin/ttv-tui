@@ -184,6 +184,28 @@ func (l *RecentLog) record(ch Channel, forgot bool) {
 	l.entries = append(entries, recentEntry{ch: ch, forgot: forgot, seq: recentSeq.Add(1)})
 }
 
+// LastSeq é a sequência do evento mais novo, ou 0 sem eventos. Depois de uma
+// gravação bem-sucedida de um estado com este diário, todos os eventos até ela
+// estão no disco.
+func (l RecentLog) LastSeq() uint64 { return l.lastSeq() }
+
+// Prune tira do diário os eventos até acked, que o disco já recebeu. A gravação
+// só usa os eventos posteriores ao que confirmou, então tirar os anteriores não
+// muda o resultado e impede o diário de crescer com cada canal visitado na
+// sessão. Monta uma lista nova, sem tocar na que uma cópia em gravação usa.
+func (l *RecentLog) Prune(acked uint64) {
+	var entries []recentEntry
+	for _, e := range l.entries {
+		if e.seq > acked {
+			entries = append(entries, e)
+		}
+	}
+	l.entries = entries
+}
+
+// Len é o número de canais com evento no diário.
+func (l RecentLog) Len() int { return len(l.entries) }
+
 // lastSeq é a sequência do evento mais novo, ou 0 sem eventos.
 func (l RecentLog) lastSeq() uint64 {
 	if len(l.entries) == 0 {

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -244,5 +245,24 @@ func TestReabrirPrimeiroRecenteDepoisDeOutraInstanciaTirar(t *testing.T) {
 	_ = play(t, m, "enter")
 	if got, want := storedRecents(t, s), logins(recs); !slices.Equal(got, want) {
 		t.Fatalf("depois de reabrir, recentes no disco = %q, quer %q", got, want)
+	}
+}
+
+// Uma gravação bem-sucedida descarta do diário os eventos que ela levou ao
+// disco; uma que falhou os mantém para a próxima.
+func TestGravacaoConfirmadaEsvaziaODiarioDeRecentes(t *testing.T) {
+	_, recs := savedForScenario()
+	m, _ := newScenario(t, 120, 40, WithStore(recentsStore(t, recs[:3])), WithRecents(recs[:3]))
+	for _, ch := range recs[:3] {
+		m.list.recentLog.Opened(store.FromChannel(ch))
+	}
+	acked := m.list.recentLog.LastSeq()
+
+	if m = feed(t, m, storeSavedMsg{Err: errors.New("disco cheio"), RecentsAcked: acked}); m.list.recentLog.Len() != 3 {
+		t.Fatalf("depois de uma gravação que falhou, diário com %d canais, quero 3", m.list.recentLog.Len())
+	}
+	m.list.recentLog.Forgot(store.FromChannel(recs[0]))
+	if m = feed(t, m, storeSavedMsg{RecentsAcked: acked}); m.list.recentLog.Len() != 1 {
+		t.Fatalf("depois de uma gravação confirmada, diário com %d canais, quero só a remoção posterior", m.list.recentLog.Len())
 	}
 }

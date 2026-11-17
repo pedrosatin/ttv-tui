@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -67,5 +68,38 @@ func TestRecentLog(t *testing.T) {
 	// A cópia registra o próprio evento sem mudar o original.
 	if _, forgotten := copied.pending(acked); !slices.Equal(recentSpecs(State{Recents: forgotten}), []string{"b", "A"}) {
 		t.Fatalf("removidos na cópia = %q", recentSpecs(State{Recents: forgotten}))
+	}
+}
+
+// Prune tira os eventos já confirmados e deixa os pendentes iguais; uma cópia
+// tirada antes continua com os dela. Numa sessão longa, com cada abertura
+// gravada e confirmada, o diário não cresce.
+func TestRecentLogPrune(t *testing.T) {
+	var log RecentLog
+	log.Opened(Channel{Login: "a"})
+	log.Forgot(Channel{Login: "b"})
+	acked := log.LastSeq()
+	log.Opened(Channel{Login: "c"})
+	before := log
+
+	log.Prune(acked)
+	if log.Len() != 1 {
+		t.Fatalf("diário com %d canais depois do Prune, quero só o pendente", log.Len())
+	}
+	opened, forgotten := log.pending(acked)
+	if got := recentSpecs(State{Recents: opened}); !slices.Equal(got, []string{"c"}) || len(forgotten) != 0 {
+		t.Fatalf("pendentes depois do Prune: abertos %q, removidos %d", got, len(forgotten))
+	}
+	if before.Len() != 3 {
+		t.Fatalf("a cópia anterior ficou com %d canais, quero 3", before.Len())
+	}
+
+	var long RecentLog
+	for i := range 1000 {
+		long.Opened(Channel{Login: fmt.Sprintf("canal%04d", i)})
+		long.Prune(long.LastSeq())
+	}
+	if long.Len() != 0 {
+		t.Fatalf("diário com %d canais depois de 1000 aberturas confirmadas", long.Len())
 	}
 }

@@ -858,6 +858,9 @@ type storeSavedMsg struct {
 	Err    error
 	Notice string
 	Name   string
+	// RecentsAcked é o último evento de recente do estado gravado; com a
+	// gravação bem-sucedida, o diário da UI descarta os eventos até ele.
+	RecentsAcked uint64
 }
 
 func (m Model) saveStoreCmd(notice ...string) tea.Cmd {
@@ -875,7 +878,7 @@ func (m Model) saveStoreCmd(notice ...string) tea.Cmd {
 		if len(notice) > 1 {
 			name = notice[1]
 		}
-		return storeSavedMsg{Err: s.Save(st), Notice: confirmation, Name: name}
+		return storeSavedMsg{Err: s.Save(st), Notice: confirmation, Name: name, RecentsAcked: st.RecentLog.LastSeq()}
 	})
 }
 

@@ -266,6 +266,9 @@ func needsStreamLookup(ch catalog.Channel) bool {
 }
 
 func (m Model) applyStoreSaved(msg storeSavedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err == nil {
+		m.list.recentLog.Prune(msg.RecentsAcked)
+	}
 	if msg.Err != nil {
 		m.warnStatus(m.t("store.save_failed"))
 	} else if msg.Notice != "" {
