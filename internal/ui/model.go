@@ -325,6 +325,9 @@ type listState struct {
 	// VisibleItems keeps using recents until the next list load (refresh, back
 	// to categories, reopen) applies this slice, so selection does not jump rows.
 	pendingRecents []catalog.Channel
+	// recentLog registra os recentes abertos e tirados nesta sessão; a
+	// gravação leva ao disco só esses eventos, não a lista inteira.
+	recentLog store.RecentLog
 }
 
 // searchState is the Ctrl+F search over the list.

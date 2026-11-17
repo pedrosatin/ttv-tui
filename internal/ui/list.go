@@ -816,6 +816,7 @@ func (m *Model) queueRecent(ch catalog.Channel) {
 	if len(m.list.pendingRecents) > defaultMaxRecents {
 		m.list.pendingRecents = m.list.pendingRecents[:defaultMaxRecents]
 	}
+	m.list.recentLog.Opened(store.FromChannel(ch))
 }
 
 // applyPendingRecents promotes the store-ordered recents into the visible list.
@@ -849,6 +850,7 @@ func (l listState) toStoreState() store.State {
 		Favorites:          store.FromChannels(l.favorites),
 		FavoriteCategories: append([]store.Category(nil), l.favoriteCategories...),
 		Recents:            store.FromChannels(recs),
+		RecentLog:          l.recentLog,
 	}
 }
 
@@ -923,6 +925,7 @@ func (m Model) forgetRecentHighlighted() (tea.Model, tea.Cmd) {
 	if m.list.pendingRecents != nil {
 		m.list.pendingRecents = forget(m.list.pendingRecents)
 	}
+	m.list.recentLog.Forgot(store.FromChannel(ch))
 	items := m.VisibleItems()
 	isRecent := func(i int) bool { return i >= 0 && i < len(items) && items[i].Type == ItemTypeRecent }
 	if !isRecent(idx) && isRecent(idx-1) {

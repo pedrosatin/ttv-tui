@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/config"
@@ -117,6 +118,11 @@ type State struct {
 	Favorites          []Channel  `json:"favorites"`
 	FavoriteCategories []Category `json:"favorite_categories"`
 	Recents            []Channel  `json:"recents"`
+	// RecentLog registra os recentes abertos e removidos nesta sessão. Não vai
+	// para o arquivo: a gravação o usa para levar ao disco só o que esta
+	// instância fez desde a última confirmação. AddRecent e ForgetRecent o
+	// preenchem; quem monta o State a cada gravação (a UI) passa o seu.
+	RecentLog RecentLog `json:"-"`
 	// snapshot is local bookkeeping, never serialized. Copies share successful-save
 	// acknowledgements because SaveTo accepts State by value.
 	snapshot *favoriteSnapshot
@@ -135,9 +141,72 @@ type favoriteSnapshot struct {
 	mu         sync.Mutex
 	favorites  []Channel
 	categories []Category
-	// recents é a lista de recentes da última carga ou gravação bem-sucedida.
-	// O que saiu dela desde então foi tirado aqui e sai também do disco.
-	recents []Channel
+	// recentsSynced diz que uma carga ou gravação confirmou os recentes: a
+	// partir daí o disco é a referência e só o RecentLog pendente o altera.
+	// Antes disso (estado montado na mão), a lista local inteira entra.
+	recentsSynced bool
+	// recentsAcked é a maior sequência do RecentLog já gravada no disco.
+	recentsAcked uint64
+}
+
+// recentSeq numera os eventos de todos os RecentLog do processo. Por ser
+// global e crescente, um evento registrado depois de uma carga tem sempre
+// número maior que o confirmado por ela.
+var recentSeq atomic.Uint64
+
+// RecentLog guarda, para cada canal, o último evento de recente desta sessão:
+// aberto ou removido. Copiar o valor é seguro: cada registro monta uma lista
+// nova, sem tocar na que outra cópia ainda usa.
+type RecentLog struct {
+	entries []recentEntry
+}
+
+type recentEntry struct {
+	ch     Channel
+	forgot bool
+	seq    uint64
+}
+
+// Opened registra que ch foi aberto agora.
+func (l *RecentLog) Opened(ch Channel) { l.record(ch, false) }
+
+// Forgot registra que ch foi tirado dos recentes agora.
+func (l *RecentLog) Forgot(ch Channel) { l.record(ch, true) }
+
+func (l *RecentLog) record(ch Channel, forgot bool) {
+	ch.Platform = ch.CanonicalPlatform()
+	entries := make([]recentEntry, 0, len(l.entries)+1)
+	for _, e := range l.entries {
+		if !e.ch.Matches(ch) {
+			entries = append(entries, e)
+		}
+	}
+	l.entries = append(entries, recentEntry{ch: ch, forgot: forgot, seq: recentSeq.Add(1)})
+}
+
+// lastSeq é a sequência do evento mais novo, ou 0 sem eventos.
+func (l RecentLog) lastSeq() uint64 {
+	if len(l.entries) == 0 {
+		return 0
+	}
+	return l.entries[len(l.entries)-1].seq
+}
+
+// pending separa os eventos posteriores a acked: os canais abertos, do mais
+// novo ao mais antigo, e os removidos.
+func (l RecentLog) pending(acked uint64) (opened, forgotten []Channel) {
+	for i := len(l.entries) - 1; i >= 0; i-- {
+		e := l.entries[i]
+		if e.seq <= acked {
+			break
+		}
+		if e.forgot {
+			forgotten = append(forgotten, e.ch)
+		} else {
+			opened = append(opened, e.ch)
+		}
+	}
+	return opened, forgotten
 }
 
 // AddRecent prepends ch to recents, removing any prior duplicate, and clamps to maxRecents.
@@ -156,10 +225,11 @@ func (s *State) AddRecent(ch Channel, maxRecents int) {
 	if len(s.Recents) > maxRecents {
 		s.Recents = s.Recents[:maxRecents]
 	}
+	s.RecentLog.Opened(ch)
 }
 
-// ForgetRecent tira ch dos recentes e diz se ele estava lá. Num estado carregado,
-// a próxima gravação tira o canal também do disco.
+// ForgetRecent tira ch dos recentes e diz se ele estava lá. A próxima gravação
+// tira o canal também do disco, a menos que alguém o abra de novo antes dela.
 func (s *State) ForgetRecent(ch Channel) bool {
 	ch.Platform = ch.CanonicalPlatform()
 	kept := withoutChannels(s.Recents, []Channel{ch})
@@ -167,6 +237,7 @@ func (s *State) ForgetRecent(ch Channel) bool {
 		return false
 	}
 	s.Recents = kept
+	s.RecentLog.Forgot(ch)
 	return true
 }
 
@@ -223,7 +294,7 @@ func loadFrom(path string) (State, error) {
 	emptyState := State{
 		Favorites: []Channel{},
 		Recents:   []Channel{},
-		snapshot:  &favoriteSnapshot{},
+		snapshot:  &favoriteSnapshot{recentsSynced: true, recentsAcked: recentSeq.Load()},
 	}
 
 	data, err := os.ReadFile(path)
@@ -264,9 +335,10 @@ func loadFrom(path string) (State, error) {
 	st.discarded = dropFav + dropRec
 	st.FavoriteCategories = normalizeCategories(st.FavoriteCategories)
 	st.snapshot = &favoriteSnapshot{
-		favorites:  append([]Channel(nil), st.Favorites...),
-		categories: append([]Category(nil), st.FavoriteCategories...),
-		recents:    append([]Channel(nil), st.Recents...),
+		favorites:     append([]Channel(nil), st.Favorites...),
+		categories:    append([]Category(nil), st.FavoriteCategories...),
+		recentsSynced: true,
+		recentsAcked:  recentSeq.Load(),
 	}
 	return st, nil
 }
@@ -282,7 +354,10 @@ func SaveTo(path string, st State) error {
 
 func saveTo(path string, st State, maxRecents int) error {
 	if st.snapshot == nil {
-		return mergeTo(path, st, maxRecents, changes{added: st.Favorites, addedCategories: st.FavoriteCategories})
+		// Sem snapshot não há onde confirmar: cada gravação reaplica todos os
+		// eventos do RecentLog, e a lista local entra inteira.
+		opened, forgotten := st.RecentLog.pending(0)
+		return mergeTo(path, st, maxRecents, changes{added: st.Favorites, addedCategories: st.FavoriteCategories, openedRecents: opened, forgottenRecents: forgotten})
 	}
 	st.snapshot.mu.Lock()
 	defer st.snapshot.mu.Unlock()
@@ -293,29 +368,36 @@ func saveTo(path string, st State, maxRecents int) error {
 // channels added by another pane must not become implicit local additions.
 // The caller holds snapshot.mu.
 func saveSnapshot(path string, st State, maxRecents int, snapshot *favoriteSnapshot) error {
+	opened, forgotten := st.RecentLog.pending(snapshot.recentsAcked)
 	c := changes{
 		added:             withoutChannels(st.Favorites, snapshot.favorites),
 		removed:           withoutChannels(snapshot.favorites, st.Favorites),
 		addedCategories:   withoutCategories(st.FavoriteCategories, snapshot.categories),
 		removedCategories: withoutCategories(snapshot.categories, st.FavoriteCategories),
-		ackedRecents:      snapshot.recents,
+		openedRecents:     opened,
+		forgottenRecents:  forgotten,
+		recentsSynced:     snapshot.recentsSynced,
 	}
 	if err := mergeTo(path, st, maxRecents, c); err != nil {
 		return err
 	}
 	snapshot.favorites = append([]Channel(nil), st.Favorites...)
 	snapshot.categories = append([]Category(nil), st.FavoriteCategories...)
-	snapshot.recents = append([]Channel(nil), st.Recents...)
+	snapshot.recentsSynced = true
+	snapshot.recentsAcked = max(snapshot.recentsAcked, st.RecentLog.lastSeq())
 	return nil
 }
 
 // changes é o que uma gravação aplica sobre o disco: os favoritos e as
 // categorias que entraram e saíram desde a última confirmação, e os recentes
-// confirmados até ela (nil num estado que não veio do disco).
+// abertos e removidos desde ela.
 type changes struct {
 	added, removed                     []Channel
 	addedCategories, removedCategories []Category
-	ackedRecents                       []Channel
+	openedRecents, forgottenRecents    []Channel
+	// recentsSynced diz que o disco já reflete a lista local até a última
+	// confirmação; sem isso, a lista local inteira entra na gravação.
+	recentsSynced bool
 }
 
 func mergeTo(path string, st State, maxRecents int, c changes) (err error) {
@@ -333,54 +415,41 @@ func mergeTo(path string, st State, maxRecents int, c changes) (err error) {
 		// Another pane's changes since our load stay in .bak only.
 		c.added = st.Favorites
 		c.addedCategories = st.FavoriteCategories
-		c.ackedRecents = nil
+		c.recentsSynced = false
 	}
 	st.Favorites = unionChannels(withoutChannels(disk.Favorites, c.removed), c.added)
 	st.FavoriteCategories = unionCategories(withoutCategories(disk.FavoriteCategories, c.removedCategories), c.addedCategories)
-	st.Recents = mergeRecents(st.Recents, c.ackedRecents, disk.Recents)
-	if len(st.Recents) > maxRecents {
-		st.Recents = st.Recents[:maxRecents]
+	var local []Channel
+	if !c.recentsSynced {
+		local = st.Recents
 	}
+	st.Recents = mergeRecents(c.openedRecents, c.forgottenRecents, local, disk.Recents, maxRecents)
 	return writeState(path, st)
 }
 
-// mergeRecents junta os recentes locais aos do disco. Os que este estado
-// abriu desde a última confirmação (acked) vêm na frente; o disco completa a
-// lista, na ordem dele, sem os que saíram da lista local desde acked. Um
-// recente local que ninguém abriu desde então não traz informação nova: fica
-// onde o disco o tem e, se outro processo o esqueceu, não volta.
+// mergeRecents monta a lista de recentes gravada, nesta ordem:
 //
-// Os abertos são o começo da lista local até o último que não está em acked
-// ou que subiu de posição em relação a ela, porque abrir um canal o põe na
-// frente (State.AddRecent). Sem acked (estado montado na mão, ou o disco
-// corrompido), todo recente local conta como aberto e a gravação só
-// acrescenta.
-func mergeRecents(local, acked, disk []Channel) []Channel {
-	forgotten := withoutChannels(acked, local)
-	return unionChannels(local[:touchedRecents(local, acked)], withoutChannels(disk, forgotten))
-}
-
-// touchedRecents diz quantos recentes do começo de local foram abertos depois
-// de acked: o resto de local aparece em acked e na mesma ordem relativa.
-func touchedRecents(local, acked []Channel) int {
-	next := len(acked)
-	for i := len(local) - 1; i >= 0; i-- {
-		at := indexChannel(acked, local[i])
-		if at < 0 || at >= next {
-			return i + 1
-		}
-		next = at
+//  1. os canais abertos desde a última confirmação, do mais novo ao mais
+//     antigo, mesmo os que o limite já tirou da lista local;
+//  2. a lista local, só num estado que ainda não confirmou recentes (montado
+//     na mão, ou com o disco corrompido); num estado confirmado ela não traz
+//     nada que o disco e os abertos já não digam;
+//  3. o disco, na ordem dele.
+//
+// Os removidos desde a confirmação saem de 2 e 3, e o limite vale só no fim.
+// Assim um canal que o limite tirou da lista local continua no disco se
+// couber, e só a remoção explícita apaga o que outra instância manteve ou
+// reabriu. Um evento guarda só o último estado do canal: aberto depois de
+// removido, ele volta na frente.
+func mergeRecents(opened, forgotten, local, disk []Channel, maxRecents int) []Channel {
+	if maxRecents <= 0 {
+		maxRecents = DefaultMaxRecents
 	}
-	return 0
-}
-
-func indexChannel(channels []Channel, ch Channel) int {
-	for i, other := range channels {
-		if other.Matches(ch) {
-			return i
-		}
+	merged := unionChannels(unionChannels(opened, withoutChannels(local, forgotten)), withoutChannels(disk, forgotten))
+	if len(merged) > maxRecents {
+		merged = merged[:maxRecents]
 	}
-	return -1
+	return merged
 }
 
 // withoutChannels uses the same identity rules for removals and additions.
@@ -566,7 +635,8 @@ func (s *Store) Load() (State, error) {
 	if err == nil || errors.Is(err, ErrCorrupt) {
 		s.snapshot.favorites = append([]Channel(nil), st.Favorites...)
 		s.snapshot.categories = append([]Category(nil), st.FavoriteCategories...)
-		s.snapshot.recents = append([]Channel(nil), st.Recents...)
+		s.snapshot.recentsSynced = true
+		s.snapshot.recentsAcked = recentSeq.Load()
 	}
 	return st, err
 }

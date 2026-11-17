@@ -210,3 +210,39 @@ func TestEsquecerRecenteMantemFavoritosEMais(t *testing.T) {
 		t.Fatalf("recentes no disco = %q", got)
 	}
 }
+
+// Outra instância tira recente01 e grava. Esta, que ainda o tem como primeiro
+// recente, abre o canal: a abertura conta mesmo sem mudar a posição, e o
+// recente01 volta ao topo do disco. Antes disso, gravar um favorito não traz o
+// canal de volta.
+func TestReabrirPrimeiroRecenteDepoisDeOutraInstanciaTirar(t *testing.T) {
+	favs, recs := savedForScenario()
+	recs = recs[:3]
+	s := recentsStore(t, recs)
+	other := store.New(s.Path())
+	st, err := other.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.ForgetRecent(store.FromChannel(recs[0]))
+	if err := other.Save(st); err != nil {
+		t.Fatal(err)
+	}
+
+	m, _ := newScenario(t, 120, 40, WithStore(s), WithRecents(recs))
+	if got := highlightedLogin(m); got != "recente01" {
+		t.Fatalf("preparação: destaque em %q, quer recente01", got)
+	}
+	m.ToggleFavorite(favs[0])
+	if err := s.Save(m.list.toStoreState()); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := storedRecents(t, s), logins(recs[1:]); !slices.Equal(got, want) {
+		t.Fatalf("depois de gravar só um favorito, recentes no disco = %q, quer %q", got, want)
+	}
+
+	_ = play(t, m, "enter")
+	if got, want := storedRecents(t, s), logins(recs); !slices.Equal(got, want) {
+		t.Fatalf("depois de reabrir, recentes no disco = %q, quer %q", got, want)
+	}
+}

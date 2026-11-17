@@ -254,34 +254,3 @@ func TestStore_ForgetRecentWhenDiskCorrupted(t *testing.T) {
 		t.Fatalf("recentes = %q, quer [alpha beta]", logins)
 	}
 }
-
-// Os recentes abertos desde a carga vêm na frente e o disco completa a lista,
-// na ordem dele. Um estado montado na mão, sem carga, só acrescenta.
-func TestMergeRecents(t *testing.T) {
-	ch := func(logins ...string) []Channel {
-		out := make([]Channel, len(logins))
-		for i, l := range logins {
-			out[i] = Channel{Login: l}
-		}
-		return out
-	}
-	for _, tc := range []struct {
-		name               string
-		local, acked, disk []Channel
-		want               []string
-	}{
-		{"sem carga", ch("new", "b"), nil, ch("a", "b", "c"), []string{"new", "b", "a", "c"}},
-		{"nada mudou", ch("a", "b"), ch("a", "b"), ch("d", "a", "b"), []string{"d", "a", "b"}},
-		{"subiu o segundo", ch("b", "a", "c"), ch("a", "b", "c"), ch("d", "a", "b", "c"), []string{"b", "d", "a", "c"}},
-		{"esqueceu no meio", ch("a", "c"), ch("a", "b", "c"), ch("a", "b", "c"), []string{"a", "c"}},
-		{"outro esqueceu", ch("a", "b", "c"), ch("a", "b", "c"), ch("a", "c"), []string{"a", "c"}},
-		{"abriu o que outro esqueceu", ch("b", "a", "c"), ch("a", "b", "c"), ch("a", "c"), []string{"b", "a", "c"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := recentLogins(State{Recents: mergeRecents(tc.local, tc.acked, tc.disk)})
-			if !slices.Equal(got, tc.want) {
-				t.Fatalf("mergeRecents = %q, quer %q", got, tc.want)
-			}
-		})
-	}
-}
