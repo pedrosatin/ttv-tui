@@ -177,7 +177,8 @@ func (m Model) chatFillDown(msgs []ChatMessage, from, budget, maxWidth int) int 
 
 // pageChatUp moves one page toward older messages: the message just above the
 // oldest one on screen becomes the bottom one, so no message is skipped. A
-// message cut at the top of the page stays on the next one, whole. From the
+// message cut at the top becomes the bottom message on the next page; a
+// message taller than the page still shows only its last rows. From the
 // oldest page it stays on the oldest page, paused.
 func (m Model) pageChatUp() Model {
 	msgs := m.ChatMessages()

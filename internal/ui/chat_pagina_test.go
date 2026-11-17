@@ -214,7 +214,7 @@ func withMessagesAppend(t *testing.T, m Model, n int) Model {
 
 // PgUp do ao vivo até o topo e PgDn de Home até o ao vivo passam por todas as
 // mensagens, de uma ou de várias linhas, no overlay e no painel lateral. Home
-// mostra a mais antiga inteira.
+// mostra a mais antiga inteira nas variantes em que ela cabe na página.
 func TestChatPaginasPercorremTodasAsMensagens(t *testing.T) {
 	const n = 45
 	for _, size := range scenarioSizes {
