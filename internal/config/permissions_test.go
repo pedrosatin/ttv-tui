@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -39,7 +40,7 @@ func TestChmodFailureIsNotice(t *testing.T) {
 				t.Fatal(err)
 			}
 			calls := 0
-			denied := func(string, os.FileMode) error { calls++; return errors.New("chmod denied") }
+			denied := func(*os.File, os.FileMode) error { calls++; return errors.New("chmod denied") }
 			notice, err := tightenPermissions(path, denied)
 			if err != nil || !notice.Failed || calls != 1 {
 				t.Fatal("chmod failure interrupted load or lost notice")
@@ -62,7 +63,7 @@ func TestChmodFailureIsNotice(t *testing.T) {
 func TestPrivateDirectoryNeedsNoChmod(t *testing.T) {
 	path := permissionFixture(t)
 	calls := 0
-	chmod := func(string, os.FileMode) error { calls++; return nil }
+	chmod := func(*os.File, os.FileMode) error { calls++; return nil }
 	if _, err := tightenPermissions(path, chmod); err != nil {
 		t.Fatal(err)
 	}
@@ -74,66 +75,231 @@ func TestPrivateDirectoryNeedsNoChmod(t *testing.T) {
 	}
 }
 
-func TestSymlinksDoNotChmodTargets(t *testing.T) {
-	for _, target := range []string{"file", "directory"} {
-		t.Run(target, func(t *testing.T) {
-			path := permissionFixture(t)
-			real := filepath.Join(t.TempDir(), "target")
-			if target == "file" {
-				if err := os.Rename(path, real); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(real, 0o644); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Symlink(real, path); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				dir := filepath.Dir(path)
-				if err := os.Rename(dir, real); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(real, 0o755); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(filepath.Join(real, "config.toml"), 0o644); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Symlink(real, dir); err != nil {
-					t.Fatal(err)
-				}
-			}
-			chmod := func(name string, mode os.FileMode) error {
-				if target != "directory" || name != path || mode != 0o600 {
-					t.Error("chmod aplicado ao componente errado")
-				}
-				return os.Chmod(name, mode)
-			}
-			if _, err := tightenPermissions(path, chmod); err != nil {
-				t.Fatal(err)
-			}
-			if target == "directory" {
-				info, err := os.Stat(path)
-				if err != nil || info.Mode().Perm() != 0o600 {
-					t.Fatal("arquivo regular no diretório-symlink não foi restringido")
-				}
-			}
-			if _, err := saveTo(path, Config{}, chmod); err != nil {
-				t.Fatal(err)
-			}
-			info, err := os.Stat(real)
+// symlinkFixture troca o config padrão por um symlink para real, criado por make.
+func symlinkFixture(t *testing.T, make func(real string)) (path, real, resolved string) {
+	t.Helper()
+	path = permissionFixture(t)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	real = filepath.Join(t.TempDir(), "target")
+	make(real)
+	if err := os.Symlink(real, path); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(filepath.Dir(real))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path, real, filepath.Join(resolved, filepath.Base(real))
+}
+
+func writeLeakyConfig(t *testing.T, name string) {
+	t.Helper()
+	if err := os.WriteFile(name, []byte("access_token = \"velho\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(name, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertSymlink(t *testing.T, path, real string) {
+	t.Helper()
+	link, err := os.Readlink(path)
+	if err != nil || link != real {
+		t.Fatal("symlink do config não foi preservado")
+	}
+}
+
+func TestFileSymlinkTightensOwnTarget(t *testing.T) {
+	path, real, resolved := symlinkFixture(t, func(real string) { writeLeakyConfig(t, real) })
+	var chmodded []string
+	chmod := func(f *os.File, mode os.FileMode) error {
+		chmodded = append(chmodded, f.Name())
+		return fchmod(f, mode)
+	}
+	notice, err := tightenPermissions(path, chmod)
+	if err != nil || !notice.Fixed || notice.Failed || notice.Path != resolved {
+		t.Fatalf("aviso inesperado: %+v, %v", notice, err)
+	}
+	if len(chmodded) != 1 || chmodded[0] != resolved {
+		t.Fatalf("chmod aplicado a %v", chmodded)
+	}
+	info, err := os.Stat(real)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatal("alvo do symlink continua legível")
+	}
+	assertSymlink(t, path, real)
+	notice, err = Secure(path)
+	if err != nil || notice != (PermissionNotice{}) {
+		t.Fatal("alvo já restrito não deve repetir o aviso")
+	}
+}
+
+func TestSaveToFileSymlinkReplacesTarget(t *testing.T) {
+	path, real, _ := symlinkFixture(t, func(real string) { writeLeakyConfig(t, real) })
+	if err := SaveTo(path, Config{AccessToken: "novo"}); err != nil {
+		t.Fatal(err)
+	}
+	assertSymlink(t, path, real)
+	info, err := os.Stat(real)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatal("alvo gravado sem 0600")
+	}
+	cfg, err := LoadFrom(path)
+	if err != nil || cfg.AccessToken != "novo" {
+		t.Fatal("conteúdo novo não chegou ao alvo")
+	}
+	for _, dir := range []string{filepath.Dir(path), filepath.Dir(real)} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			name := filepath.Join(dir, entry.Name())
+			info, err := os.Lstat(name)
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := os.FileMode(0o644)
-			if target == "directory" {
-				want = 0o755
+			if info.Mode()&os.ModeSymlink != 0 {
+				continue
 			}
-			if info.Mode().Perm() != want {
-				t.Fatal("symlink target permissions changed")
+			if name != real {
+				t.Fatalf("arquivo extra após gravar: %s", name)
 			}
-		})
+			data, err := os.ReadFile(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(data), "velho") || info.Mode().Perm()&0o077 != 0 {
+				t.Fatalf("token exposto em %s", name)
+			}
+		}
+	}
+}
+
+func TestFileSymlinkNonRegularTargetFails(t *testing.T) {
+	path, real, resolved := symlinkFixture(t, func(real string) {
+		if err := os.Mkdir(real, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	})
+	chmod := func(*os.File, os.FileMode) error {
+		t.Error("chmod em alvo que não é arquivo regular")
+		return nil
+	}
+	notice, err := tightenPermissions(path, chmod)
+	if err != nil || !notice.Failed || notice.Fixed || notice.Path != resolved {
+		t.Fatalf("aviso inesperado: %+v, %v", notice, err)
+	}
+	if _, err := saveTo(path, Config{AccessToken: "novo"}, chmod); err == nil {
+		t.Fatal("gravação sobre alvo que não é arquivo deve falhar")
+	}
+	assertSymlink(t, path, real)
+	info, err := os.Stat(real)
+	if err != nil || !info.IsDir() || info.Mode().Perm() != 0o755 {
+		t.Fatal("alvo não regular foi alterado")
+	}
+}
+
+func TestFileSymlinkOtherOwnerFails(t *testing.T) {
+	const other = "/etc/hosts"
+	info, err := os.Lstat(other)
+	if err != nil || !info.Mode().IsRegular() || ownedByCurrentUser(info) || info.Mode().Perm()&0o077 == 0 {
+		t.Skip("sem arquivo regular legível de outro usuário")
+	}
+	path := permissionFixture(t)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, path); err != nil {
+		t.Fatal(err)
+	}
+	chmod := func(*os.File, os.FileMode) error {
+		t.Error("chmod em arquivo de outro usuário")
+		return nil
+	}
+	notice, err := tightenPermissions(path, chmod)
+	if err != nil || !notice.Failed || notice.Fixed || notice.Path != other {
+		t.Fatalf("aviso inesperado: %+v, %v", notice, err)
+	}
+}
+
+func TestSaveToDanglingSymlinkFails(t *testing.T) {
+	path, real, _ := symlinkFixture(t, func(string) {})
+	if err := SaveTo(path, Config{AccessToken: "novo"}); err == nil {
+		t.Fatal("symlink quebrado deve falhar")
+	}
+	if _, err := os.Lstat(real); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("gravação criou o alvo do symlink quebrado")
+	}
+	notice, err := Secure(path)
+	if err != nil || notice != (PermissionNotice{}) {
+		t.Fatal("symlink quebrado não guarda segredo e deve ser ignorado")
+	}
+}
+
+func TestDirectorySymlinkTightensRegularFile(t *testing.T) {
+	path := permissionFixture(t)
+	dir := filepath.Dir(path)
+	real := filepath.Join(t.TempDir(), "target")
+	if err := os.Rename(dir, real); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(real, "config.toml"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, dir); err != nil {
+		t.Fatal(err)
+	}
+	chmod := func(f *os.File, mode os.FileMode) error {
+		if f.Name() != path || mode != 0o600 {
+			t.Error("chmod aplicado ao componente errado")
+		}
+		return fchmod(f, mode)
+	}
+	notice, err := tightenPermissions(path, chmod)
+	if err != nil || !notice.Fixed || notice.Failed || notice.Path != "" {
+		t.Fatalf("aviso inesperado: %+v, %v", notice, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatal("arquivo regular no diretório-symlink não foi restringido")
+	}
+	if _, err := saveTo(path, Config{}, chmod); err != nil {
+		t.Fatal(err)
+	}
+	info, err = os.Stat(real)
+	if err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatal("diretório alvo do symlink foi alterado")
+	}
+}
+
+func TestRestrictRefusesSwappedPath(t *testing.T) {
+	path := permissionFixture(t)
+	other := filepath.Join(t.TempDir(), "other")
+	writeLeakyConfig(t, other)
+	want, err := os.Lstat(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(other, link); err != nil {
+		t.Fatal(err)
+	}
+	chmod := func(*os.File, os.FileMode) error {
+		t.Error("chmod depois da troca do caminho")
+		return nil
+	}
+	if err := restrict(path, want, 0o600, chmod); !errors.Is(err, errFileChanged) {
+		t.Fatalf("arquivo trocado não foi detectado: %v", err)
+	}
+	if err := restrict(link, want, 0o600, chmod); err == nil {
+		t.Fatal("restrict seguiu symlink")
 	}
 }
 

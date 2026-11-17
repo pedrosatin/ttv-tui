@@ -593,7 +593,11 @@ func migrateKeymap(cfg *config.Config, path string, cat *i18n.Catalog) (string, 
 }
 
 // logConfigPermissions escreve em logw o aviso de permissões do config, se houver.
+// Quando o config é symlink, o aviso cita o alvo em notice.Path.
 func logConfigPermissions(logw io.Writer, path string, notice config.PermissionNotice, cat *i18n.Catalog) {
+	if notice.Path != "" {
+		path = notice.Path
+	}
 	key := ""
 	if notice.Failed {
 		key = "app.warn_config_permissions_failed"

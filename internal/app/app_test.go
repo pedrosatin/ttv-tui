@@ -638,12 +638,18 @@ func TestConfigPermissionWarning(t *testing.T) {
 			{config.PermissionNotice{Fixed: true}, "app.warn_config_permissions_fixed"},
 			{config.PermissionNotice{Failed: true}, "app.warn_config_permissions_failed"},
 			{config.PermissionNotice{Fixed: true, Failed: true}, "app.warn_config_permissions_failed"},
+			{config.PermissionNotice{Fixed: true, Path: "/alvo.toml"}, "app.warn_config_permissions_fixed"},
+			{config.PermissionNotice{Failed: true, Path: "/alvo.toml"}, "app.warn_config_permissions_failed"},
 		} {
 			var log bytes.Buffer
 			logConfigPermissions(&log, "/config.toml", tc.notice, cat)
 			want := ""
 			if tc.key != "" {
-				want = fmt.Sprintf(cat.T(tc.key), "/config.toml") + "\n"
+				cited := "/config.toml"
+				if tc.notice.Path != "" {
+					cited = tc.notice.Path
+				}
+				want = fmt.Sprintf(cat.T(tc.key), cited) + "\n"
 			}
 			if log.String() != want {
 				t.Fatal("aviso de permissões inesperado")
@@ -676,6 +682,65 @@ func TestRunReportsPermissionsBeforeTerminalCheck(t *testing.T) {
 	}
 	if log.String() != fmt.Sprintf(cat.T("app.warn_config_permissions_fixed"), path)+"\n" {
 		t.Fatal("startup warning missing or repeated")
+	}
+}
+
+// TestRunReportsSymlinkTargetPermissions cobre o config apontado por symlink:
+// alvo regular é restringido e citado; alvo legível que não é arquivo regular
+// (/dev/null) avisa a falha e a inicialização segue.
+func TestRunReportsSymlinkTargetPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permissões Unix")
+	}
+	cat, err := i18n.New("en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		key  string
+	}{
+		{"file", "app.warn_config_permissions_fixed"},
+		{"device", "app.warn_config_permissions_failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			real := os.DevNull
+			if tc.name == "file" {
+				real = filepath.Join(t.TempDir(), "real")
+				if err := os.WriteFile(real, []byte("access_token = \"abc\"\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(real, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			} else if info, err := os.Stat(real); err != nil || info.Mode().IsRegular() {
+				t.Skip("sem dispositivo legível para alvo não regular")
+			}
+			resolved, err := filepath.EvalSymlinks(real)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "config.toml")
+			if err := os.Symlink(real, path); err != nil {
+				t.Fatal(err)
+			}
+			var log, output bytes.Buffer
+			err = Run(Options{ConfigPath: path, Lang: "en", Terminal: true, Input: &bytes.Buffer{}, Output: &output, Log: &log})
+			if err == nil || err.Error() != cat.T("app.err_tty_required") {
+				t.Fatalf("startup stopped before terminal check: %v", err)
+			}
+			if log.String() != fmt.Sprintf(cat.T(tc.key), resolved)+"\n" {
+				t.Fatal("aviso não cita o alvo do symlink")
+			}
+			if tc.name == "file" {
+				info, err := os.Stat(real)
+				if err != nil || info.Mode().Perm() != 0o600 {
+					t.Fatal("alvo do symlink continua legível")
+				}
+			}
+		})
 	}
 }
 

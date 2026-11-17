@@ -209,7 +209,8 @@ func Save(cfg Config) error {
 }
 
 // SaveTo recusa credenciais inválidas e grava por rename de um arquivo temporário
-// 0600. Só tenta restringir o diretório padrão; falhas de chmod não abortam a gravação.
+// 0600. Se path é symlink, o link fica e o alvo regular é substituído. Só tenta
+// restringir o diretório padrão; falhas de chmod não abortam a gravação.
 func SaveTo(path string, cfg Config) error {
 	_, err := SaveToWithNotice(path, cfg)
 	return err
@@ -217,7 +218,7 @@ func SaveTo(path string, cfg Config) error {
 
 // SaveToWithNotice grava como SaveTo e devolve o aviso de permissões.
 func SaveToWithNotice(path string, cfg Config) (PermissionNotice, error) {
-	return saveTo(path, cfg, os.Chmod)
+	return saveTo(path, cfg, fchmod)
 }
 
 func saveTo(path string, cfg Config, chmod chmodFunc) (notice PermissionNotice, err error) {
@@ -241,9 +242,14 @@ func saveTo(path string, cfg Config, chmod chmodFunc) (notice PermissionNotice, 
 	if err := tightenConfigDir(dir, chmod, &notice); err != nil {
 		return notice, err
 	}
-	tmp, err := os.CreateTemp(dir, ".config-*.toml.tmp")
+	target, err := saveTarget(path)
 	if err != nil {
-		return notice, fmt.Errorf("create temp config in %s: %w", dir, err)
+		return notice, err
+	}
+	targetDir := filepath.Dir(target)
+	tmp, err := os.CreateTemp(targetDir, ".config-*.toml.tmp")
+	if err != nil {
+		return notice, fmt.Errorf("create temp config in %s: %w", targetDir, err)
 	}
 	tmpName := tmp.Name()
 	cleanup := true
@@ -268,12 +274,40 @@ func saveTo(path string, cfg Config, chmod chmodFunc) (notice PermissionNotice, 
 		return notice, fmt.Errorf("close temp config: %w", err)
 	}
 
-	if err := os.Rename(tmpName, path); err != nil {
-		return notice, fmt.Errorf("rename temp config to %s: %w", path, err)
+	if err := os.Rename(tmpName, target); err != nil {
+		return notice, fmt.Errorf("rename temp config to %s: %w", target, err)
 	}
 	cleanup = false
 
 	return notice, nil
+}
+
+// saveTarget devolve onde gravar o config. Um symlink é preservado e o rename
+// substitui o alvo, para não sobrar a cópia anterior do token; um alvo que não
+// resolve ou não é arquivo regular é recusado.
+func saveTarget(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return path, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("stat config %s: %w", path, err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return path, nil
+	}
+	target, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve config symlink %s: %w", path, err)
+	}
+	info, err = os.Lstat(target)
+	if err != nil {
+		return "", fmt.Errorf("stat config symlink target %s: %w", target, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("config symlink target %s is not a regular file", target)
+	}
+	return target, nil
 }
 
 func formatTOML(cfg Config) string {
