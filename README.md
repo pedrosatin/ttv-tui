@@ -84,7 +84,7 @@ ttv-tui login --import twt  # optional: reuse your twitch-tui token to send chat
 ttv-tui doctor              # check dependencies, paths and token presence
 ```
 
-Pick a category with `Enter`, then a channel with `Enter`. The list opens on Twitch; `p` switches it to Kick and back. You can also press `Ctrl+F` (or `/` when nothing in the list matches) and paste a stream URL (Twitch, Kick, YouTube) or a YouTube `@channel` handle to play directly. The stream starts and its chat opens on the right: Twitch, Kick and YouTube have chat, and the Kick and YouTube ones are read-only. Press `?` for the shortcut list.
+Pick a category with `Enter`, then a channel with `Enter`. The list opens on Twitch; `p` switches it to Kick and back. You can also press `Ctrl+F` (or `/` when nothing in the list matches) and paste a stream URL (Twitch, Kick, YouTube) to play directly. The stream starts and its chat opens on the right: Twitch, Kick and YouTube have chat, and the Kick and YouTube ones are read-only. Typing `@channel` searches the platform the list shows, since `@name` is how people call each other on Twitch and Kick; the last row of the results offers to open `@channel` on YouTube. Press `?` for the shortcut list.
 
 ## Platforms
 
@@ -116,7 +116,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 | `Enter` | Open the category or watch the channel |
 | `f` | Favorite a channel or pin a category; press again to remove |
 | `/` | Filter the current list; `Enter` opens the highlighted item and `Ctrl+F` searches with the text |
-| `Ctrl+F` | Search channels and categories on the platform the list shows, or paste a stream URL or YouTube `@channel` |
+| `Ctrl+F` | Search channels and categories on the platform the list shows, or paste a stream URL |
 | `p` | Switch the list between Twitch and Kick; the video and the chat keep going |
 | `L` | Filter channels by language and audience |
 | `r` | Retry loading the list or the video |
@@ -268,7 +268,7 @@ Kick has no public API for any of this without an account. The app reads the JSO
 <details>
 <summary><b>Can I watch YouTube?</b></summary>
 
-Yes, by URL or `@channel`, with no catalog to browse. Press `Ctrl+F` (or `/`) and paste a live link (`youtube.com/watch?v=...`, `youtu.be/...`, `youtube.com/live/...`, `youtube.com/@channel/live`) or type `@channel`. The app checks whether the stream is live, passes `@channel` to `streamlink` as `/@channel/live`, and opens the live chat beside the video without an account.
+Yes, by URL or `@channel`, with no catalog to browse. Press `Ctrl+F` (or `/`) and paste a live link (`youtube.com/watch?v=...`, `youtu.be/...`, `youtube.com/live/...`, `youtube.com/@channel/live`), which opens right away. Typing `@channel` searches Twitch or Kick, whichever the list shows, and the results end with an "Open @channel on YouTube" row; `Enter` on it opens the channel, and the row stays even when the platform finds nothing. The app checks whether the stream is live, passes `@channel` to `streamlink` as `/@channel/live`, and opens the live chat beside the video without an account.
 
 The YouTube chat is read-only and polls innertube at the interval YouTube asks for, backing off on errors. The status bar never shows an ad break on YouTube because `streamlink`'s YouTube plugin emits no verifiable ad signal.
 

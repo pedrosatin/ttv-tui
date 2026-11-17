@@ -84,7 +84,7 @@ ttv-tui login --import twt  # opcional: usa o token do twitch-tui para enviar me
 ttv-tui doctor              # confere dependências, caminhos e se há token
 ```
 
-Escolha uma categoria com `Enter` e depois um canal com `Enter`. A lista abre na Twitch; o `p` troca para a Kick e volta. Você também pode apertar `Ctrl+F` (ou `/` quando nada na lista combina) e colar a URL de uma transmissão (Twitch, Kick, YouTube) ou um `@canal` do YouTube para tocar direto. A live começa e o chat abre à direita: Twitch, Kick e YouTube têm chat, e os da Kick e do YouTube são só leitura. Aperte `?` para ver os atalhos.
+Escolha uma categoria com `Enter` e depois um canal com `Enter`. A lista abre na Twitch; o `p` troca para a Kick e volta. Você também pode apertar `Ctrl+F` (ou `/` quando nada na lista combina) e colar a URL de uma transmissão (Twitch, Kick, YouTube) para tocar direto. A live começa e o chat abre à direita: Twitch, Kick e YouTube têm chat, e os da Kick e do YouTube são só leitura. Digitar `@canal` busca na plataforma que a lista mostra, porque na Twitch e na Kick `@nome` é como se chama alguém; a última linha dos resultados oferece abrir o `@canal` no YouTube. Aperte `?` para ver os atalhos.
 
 ## Plataformas
 
@@ -116,7 +116,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 | `Enter` | Abre a categoria ou assiste ao canal |
 | `f` | Favorita um canal ou fixa uma categoria; aperte de novo para remover |
 | `/` | Filtra a lista atual; `Enter` abre o item destacado e `Ctrl+F` busca com o texto |
-| `Ctrl+F` | Busca canais e categorias na plataforma que a lista mostra, ou cola uma URL de live ou um `@canal` do YouTube |
+| `Ctrl+F` | Busca canais e categorias na plataforma que a lista mostra, ou cola a URL de uma live |
 | `p` | Troca a lista entre Twitch e Kick; o vídeo e o chat continuam |
 | `L` | Filtra canais por idioma e público |
 | `r` | Tenta de novo carregar a lista ou o vídeo |
@@ -268,7 +268,7 @@ A Kick não tem API pública para nada disso sem conta. O app lê o JSON que o p
 <details>
 <summary><b>Dá para assistir YouTube?</b></summary>
 
-Dá, por URL ou `@canal`, sem catálogo para navegar. Aperte `Ctrl+F`, ou `/`, e cole um link de live, como `youtube.com/watch?v=...`, `youtu.be/...`, `youtube.com/live/...` ou `youtube.com/@canal/live`, ou digite `@canal`. O app confere se a transmissão está ao vivo, entrega `@canal` ao `streamlink` como `/@canal/live` e abre o chat ao vivo ao lado do vídeo sem exigir conta.
+Dá, por URL ou `@canal`, sem catálogo para navegar. Aperte `Ctrl+F`, ou `/`, e cole um link de live, como `youtube.com/watch?v=...`, `youtu.be/...`, `youtube.com/live/...` ou `youtube.com/@canal/live`, que abre na hora. Digitar `@canal` busca na Twitch ou na Kick, a que a lista mostrar, e os resultados terminam com a linha "Abrir @canal no YouTube"; `Enter` nela abre o canal, e a linha fica mesmo quando a plataforma não acha nada. O app confere se a transmissão está ao vivo, entrega `@canal` ao `streamlink` como `/@canal/live` e abre o chat ao vivo ao lado do vídeo sem exigir conta.
 
 O chat do YouTube é só leitura e consulta o innertube no intervalo que a própria resposta pede, com espera crescente em caso de erro. A barra de status nunca mostra intervalo comercial no YouTube porque o plugin do YouTube no `streamlink` não emite sinal verificável de anúncio.
 
