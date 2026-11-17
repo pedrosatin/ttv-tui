@@ -16,9 +16,9 @@ import (
 //                         the live bottom (drives the "N new ↓" notice).
 //
 // Scroll keys (chat focus, not composing): ↑/k one message up, ↓/j one toward
-// live, PgUp one page up, Home oldest page, End/G resume live. Mouse is not
-// captured. The compose input stays pinned to the panel footer; the buffer
-// keeps its line/byte limits.
+// live, PgUp/PgDn one page of drawn rows up or down, Home oldest page, End/G
+// resume live. Mouse is not captured. The compose input stays pinned to the
+// panel footer; the buffer keeps its line/byte limits.
 
 // SelectedChatMessage returns the chat message currently selected for actions
 // such as copy. Selection is the message on the bottom-most visible row of the
@@ -121,37 +121,100 @@ func (m *Model) noteChatAppend(beforeLen int, appended bool) {
 	}
 }
 
-func (m Model) chatPageSize() int {
-	// Approximate the message-area row budget without relying on View mutations
-	// (tea.Model.View receives a copy). Header ~2, footer ~2, status bar 1.
-	height := m.height
-	if m.hosted.host != nil && m.hosted.chatOverlay {
-		available := max(m.height-1-m.footerRows(), 1)
-		return max(m.overlayHeight(available)-len(m.renderChatHeaderLines(0))-1, 1)
+// chatViewport returns the rows and the width View draws the chat panel with
+// at the current terminal size: the overlay's height with the host, the whole
+// body otherwise, and the unsized preview without a terminal size.
+func (m Model) chatViewport() (rows, width int) {
+	if m.width <= 0 && m.height <= 0 {
+		return defaultChatPreviewLines, 0
 	}
-	if height > 6 {
-		return height - 6
+	available := m.height - 1 - m.footerRows()
+	if m.hosted.host != nil && m.width > 0 && m.height > 1 {
+		_, chatW, _ := m.hostedWidths()
+		return m.chatPanelRows(available), chatW
 	}
-	return defaultChatPreviewLines
+	if m.height <= 0 {
+		available = 20
+	}
+	_, chatW := m.panelWidths()
+	return available, chatW
 }
 
-func (m Model) chatHomeBottomIdx(msgs []ChatMessage, budget, maxWidth int) int {
-	if len(msgs) == 0 || budget <= 0 {
-		return 0
+// chatPageSize is how many message rows the chat panel draws now: the panel's
+// rows minus the header, the footer and the notices, as renderChatLines lays
+// them out. Never below one.
+func (m Model) chatPageSize() int {
+	budget, _ := m.chatPage()
+	return max(budget, 1)
+}
+
+// chatPage returns the message rows the chat panel draws now and the width it
+// wraps them to.
+func (m Model) chatPage() (budget, width int) {
+	rows, width := m.chatViewport()
+	return m.chatLayout(rows, width).msgBudget, width
+}
+
+// chatFillDown returns the newest message index such that msgs[from..index]
+// fit together in budget rows, so a page ending there shows all of them whole.
+// It is at least from, even for a message taller than the page.
+func (m Model) chatFillDown(msgs []ChatMessage, from, budget, maxWidth int) int {
+	if from >= len(msgs) {
+		return len(msgs) - 1
 	}
-	rows := 0
-	last := 0
-	for i, msg := range msgs {
-		// Ignore selection styling when estimating the home page; lead width
-		// must stay stable so the first page fills the budget predictably.
-		lead, content := m.formatChatMessageParts(msg, false)
-		rows += len(wrapChatRow(lead, content, maxWidth))
-		last = i
-		if rows >= budget {
+	rows, last := 0, from
+	for i := from; i < len(msgs); i++ {
+		// The highlight lead is never wider than the plain one, so measuring
+		// without it can only leave a spare row, never hide a message.
+		rows += len(m.chatMessageWrapped(msgs[i], false, maxWidth))
+		if rows > budget && i > from {
 			break
 		}
+		last = i
 	}
 	return last
+}
+
+// pageChatUp moves one page toward older messages: the message just above the
+// oldest one on screen becomes the bottom one, so no message is skipped. A
+// message cut at the top of the page stays on the next one, whole. From the
+// oldest page it stays on the oldest page, paused.
+func (m Model) pageChatUp() Model {
+	msgs := m.ChatMessages()
+	if len(msgs) == 0 {
+		return m
+	}
+	budget, width := m.chatPage()
+	bottom := m.chat.selectedIndex(len(msgs))
+	top, cut := m.chatViewportTop(msgs[:bottom+1], budget, width, bottom)
+	next := top - 1
+	if cut {
+		next = top
+	}
+	if next >= bottom {
+		next = bottom - 1
+	}
+	if next < 0 {
+		return m.scrollChatHome()
+	}
+	return m.scrollChatUp(bottom - next)
+}
+
+// pageChatDown moves one page toward live: the page starts at the message just
+// below the bottom one and holds as many whole messages as fit. Reaching the
+// newest message resumes live.
+func (m Model) pageChatDown() Model {
+	if m.chat.panel.followLive {
+		return m
+	}
+	msgs := m.ChatMessages()
+	if len(msgs) == 0 {
+		return m.scrollChatDown(1)
+	}
+	bottom := m.chat.selectedIndex(len(msgs))
+	budget, width := m.chatPage()
+	next := m.chatFillDown(msgs, bottom+1, budget, width)
+	return m.scrollChatDown(next - bottom)
 }
 
 func (m Model) scrollChatUp(by int) Model {
@@ -206,9 +269,8 @@ func (m Model) scrollChatHome() Model {
 		return m
 	}
 	m.chat.panel.followLive = false
-	_, chatW := m.panelWidths()
-	budget := m.chatPageSize()
-	m.chat.panel.bottomIdx = m.chatHomeBottomIdx(msgs, budget, chatW)
+	budget, width := m.chatPage()
+	m.chat.panel.bottomIdx = m.chatFillDown(msgs, 0, budget, width)
 	return m
 }
 

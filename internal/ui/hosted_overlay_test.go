@@ -97,7 +97,9 @@ func TestHostedOverlayReducedPageKeys(t *testing.T) {
 	m.hosted.host = hostedModel(t, 120, 24, true).hosted.host
 	m.hosted.chatOverlay = true
 	m.hosted.overlayPreferences.Rows = 40
-	const budget = 7 // 22 body rows * 40%, rounded, minus header and input.
+	// 22 body rows * 40% = 9, minus the header (two rows at this width) and
+	// the input.
+	const budget = 6
 	if got := m.chatPageSize(); got != budget {
 		t.Errorf("page size %d, want %d", got, budget)
 	}
@@ -141,7 +143,7 @@ func TestCenarioOverlayHomeReduzido(t *testing.T) {
 	m = withMessages(t, m, 40)
 	m.hosted.overlayPreferences.Rows = 40
 	m = play(t, m, "tab home")
-	if m.chat.panel.bottomIdx != 12 {
+	if m.chat.panel.bottomIdx != 11 {
 		t.Fatalf("Home bottom %d", m.chat.panel.bottomIdx)
 	}
 	assertGolden(t, "chat-sobreposto-home-120x40", screen(m))

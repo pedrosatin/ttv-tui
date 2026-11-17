@@ -414,10 +414,7 @@ func (m Model) hostedView(available int, overlay []string, status string) string
 		chatW = 0
 	}
 	if chatW > 0 {
-		rows := available
-		if m.hosted.chatOverlay {
-			rows = m.overlayHeight(available)
-		}
+		rows := m.chatPanelRows(available)
 		chat = m.renderChatLines(rows, chatW)
 		if rows < available {
 			chat = append(make([]string, available-rows), chat...)
@@ -492,6 +489,15 @@ type OverlayPreferences struct {
 // WithHostedOverlay restores the overlay preferences independently of column widths.
 func WithHostedOverlay(p OverlayPreferences) Option {
 	return func(m *Model) { m.hosted.overlayPreferences = p }
+}
+
+// chatPanelRows is the height of the chat panel with the host: the overlay's
+// rows when the chat lies over the video, the whole column otherwise.
+func (m Model) chatPanelRows(available int) int {
+	if m.hosted.chatOverlay {
+		return m.overlayHeight(available)
+	}
+	return available
 }
 
 func (m Model) overlayHeight(available int) int {

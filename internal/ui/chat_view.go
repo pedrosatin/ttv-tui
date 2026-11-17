@@ -223,75 +223,10 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 		}
 		return lines
 	}
-	headerLines := m.renderChatHeaderLines(maxWidth)
-
-	// The footer (pending-new notice, warning, compose hint, input line) is
-	// pinned to the bottom of the panel: messages fill the space above it and
-	// blank rows pad the gap, so the input line is always the panel's last row
-	// whatever the message count.
-	var notice, hint []string
-	if line := m.renderChatPendingNotice(maxWidth); line != "" {
-		notice = []string{line}
-	}
-	var warn []string
-	if m.chat.panel.sendWarning != "" {
-		if maxWidth <= 0 {
-			warn = []string{"  ! " + styleWarning(sanitizeScreenText(m.chat.panel.sendWarning))}
-		} else {
-			for _, r := range wrapChatRow("  ! ", sanitizeScreenText(m.chat.panel.sendWarning), maxWidth) {
-				warn = append(warn, styleWarning(r))
-			}
-		}
-	}
-	if m.chat.composing && m.chat.hasToken() {
-		line := m.renderComposeHintLine(maxWidth)
-		if m.chat.draftOverLimit() {
-			hint = []string{styleWarning(line)}
-		} else {
-			hint = []string{lipgloss.NewStyle().Faint(true).Render(line)}
-		}
-	}
-	input := TruncateVisual(m.renderChatInputLine(maxWidth), maxWidth)
-
+	layout := m.chatLayout(maxLines, maxWidth)
+	headerLines, footer, msgBudget, pinned := layout.header, layout.footer, layout.msgBudget, layout.pinned
+	maxLines = layout.maxLines
 	msgs := m.ChatMessages()
-	pinned := maxLines > 0 && m.height > 0
-	if maxLines <= 0 {
-		maxLines = defaultChatPreviewLines
-	}
-	if pinned && maxWidth > 0 && (len(msgs) > 0 || m.chat.panel.state == ChatStateConnected) {
-		// A short panel (the overlay at its lowest) keeps room for the newest
-		// message: the warning folds into one row, then the header keeps only
-		// its first row, then the compose hint leaves. Below that (a panel of
-		// two to four rows), the title, the warning and the pending-new notice
-		// leave in that order. The input line always stays, so a one-row panel
-		// shows only it. A larger panel shows them whole again.
-		over := func() bool {
-			return len(headerLines)+len(notice)+len(warn)+len(hint)+1+chatMinMessageRows > maxLines
-		}
-		if over() && len(warn) > 1 {
-			warn = []string{styleWarning(TruncateVisual("  ! "+sanitizeScreenText(m.chat.panel.sendWarning), maxWidth))}
-		}
-		if over() && len(headerLines) > 1 {
-			headerLines = headerLines[:1]
-		}
-		if over() {
-			hint = nil
-		}
-		if over() {
-			headerLines = nil
-		}
-		if over() {
-			warn = nil
-		}
-		if over() {
-			notice = nil
-		}
-	}
-	footer := slices.Concat(notice, warn, hint, []string{input})
-	msgBudget := maxLines - len(headerLines) - len(footer)
-	if msgBudget < 0 {
-		msgBudget = 0
-	}
 
 	body := make([]string, 0, msgBudget)
 	if len(msgs) == 0 {
@@ -323,6 +258,93 @@ func (m Model) renderChatLines(maxLines int, maxWidth int) []string {
 		lines = lines[len(lines)-maxLines:]
 	}
 	return lines
+}
+
+// chatPanelLayout is how a chat panel shares its rows: the header on top, the
+// footer pinned to the bottom and msgBudget message rows between them.
+type chatPanelLayout struct {
+	header, footer []string
+	msgBudget      int
+	maxLines       int
+	pinned         bool
+}
+
+// chatLayout lays out a chat panel of maxLines rows and maxWidth cells. The
+// view draws from it and the scroll keys size a page from it, so a page is
+// exactly the message rows on screen.
+func (m Model) chatLayout(maxLines, maxWidth int) chatPanelLayout {
+	headerLines := m.renderChatHeaderLines(maxWidth)
+
+	// The footer (pending-new notice, warning, compose hint, input line) is
+	// pinned to the bottom of the panel: messages fill the space above it and
+	// blank rows pad the gap, so the input line is always the panel's last row
+	// whatever the message count.
+	var notice, hint []string
+	if line := m.renderChatPendingNotice(maxWidth); line != "" {
+		notice = []string{line}
+	}
+	var warn []string
+	if m.chat.panel.sendWarning != "" {
+		if maxWidth <= 0 {
+			warn = []string{"  ! " + styleWarning(sanitizeScreenText(m.chat.panel.sendWarning))}
+		} else {
+			for _, r := range wrapChatRow("  ! ", sanitizeScreenText(m.chat.panel.sendWarning), maxWidth) {
+				warn = append(warn, styleWarning(r))
+			}
+		}
+	}
+	if m.chat.composing && m.chat.hasToken() {
+		line := m.renderComposeHintLine(maxWidth)
+		if m.chat.draftOverLimit() {
+			hint = []string{styleWarning(line)}
+		} else {
+			hint = []string{lipgloss.NewStyle().Faint(true).Render(line)}
+		}
+	}
+	input := TruncateVisual(m.renderChatInputLine(maxWidth), maxWidth)
+
+	hasMsgs := m.chat.panel.buf != nil && m.chat.panel.buf.Len() > 0
+	pinned := maxLines > 0 && m.height > 0
+	if maxLines <= 0 {
+		maxLines = defaultChatPreviewLines
+	}
+	if pinned && maxWidth > 0 && (hasMsgs || m.chat.panel.state == ChatStateConnected) {
+		// A short panel (the overlay at its lowest) keeps room for the newest
+		// message: the warning folds into one row, then the header keeps only
+		// its first row, then the compose hint leaves. Below that (a panel of
+		// two to four rows), the title, the warning and the pending-new notice
+		// leave in that order. The input line always stays, so a one-row panel
+		// shows only it. A larger panel shows them whole again.
+		over := func() bool {
+			return len(headerLines)+len(notice)+len(warn)+len(hint)+1+chatMinMessageRows > maxLines
+		}
+		if over() && len(warn) > 1 {
+			warn = []string{styleWarning(TruncateVisual("  ! "+sanitizeScreenText(m.chat.panel.sendWarning), maxWidth))}
+		}
+		if over() && len(headerLines) > 1 {
+			headerLines = headerLines[:1]
+		}
+		if over() {
+			hint = nil
+		}
+		if over() {
+			headerLines = nil
+		}
+		if over() {
+			warn = nil
+		}
+		if over() {
+			notice = nil
+		}
+	}
+	footer := slices.Concat(notice, warn, hint, []string{input})
+	return chatPanelLayout{
+		header:    headerLines,
+		footer:    footer,
+		msgBudget: max(maxLines-len(headerLines)-len(footer), 0),
+		maxLines:  maxLines,
+		pinned:    pinned,
+	}
 }
 
 // composeCursor marks the insertion point; it is drawn only while composing.
@@ -475,19 +497,7 @@ func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth, selectedIdx
 	var rows []string
 	var starts []bool
 	for i := len(msgs) - 1; i >= 0 && len(rows) < budget; i-- {
-		msg := msgs[i]
-		lead, content := m.formatChatMessageParts(msg, i == selectedIdx)
-		limit := maxWidth
-		if limit > 1 && hasWideRune(lead+content) && !exactCellWidths {
-			limit--
-		}
-		// Drop the secondary author badge before it would force content to wrap.
-		// Reformat a local copy so the stored IRC metadata remains intact.
-		if maxWidth > 0 && m.authorBadge(msg.Badges) != "" && ansi.StringWidth(lead+content) > limit {
-			msg.Badges = nil
-			lead, content = m.formatChatMessageParts(msg, i == selectedIdx)
-		}
-		wrapped := wrapChatRow(lead, content, maxWidth)
+		wrapped := m.chatMessageWrapped(msgs[i], i == selectedIdx, maxWidth)
 		first := make([]bool, len(wrapped))
 		first[0] = true
 		rows = append(wrapped, rows...)
@@ -500,6 +510,44 @@ func (m Model) chatMessageRows(msgs []ChatMessage, budget, maxWidth, selectedIdx
 		rows = rows[len(rows)-budget:]
 	}
 	return rows
+}
+
+// chatMessageWrapped is the rows one message takes in a column maxWidth cells
+// wide. selected draws the scroll highlight on it.
+func (m Model) chatMessageWrapped(msg ChatMessage, selected bool, maxWidth int) []string {
+	lead, content := m.formatChatMessageParts(msg, selected)
+	limit := maxWidth
+	if limit > 1 && hasWideRune(lead+content) && !exactCellWidths {
+		limit--
+	}
+	// Drop the secondary author badge before it would force content to wrap.
+	// Reformat a local copy so the stored IRC metadata remains intact.
+	if maxWidth > 0 && m.authorBadge(msg.Badges) != "" && ansi.StringWidth(lead+content) > limit {
+		msg.Badges = nil
+		lead, content = m.formatChatMessageParts(msg, selected)
+	}
+	return wrapChatRow(lead, content, maxWidth)
+}
+
+// chatViewportTop returns the oldest message chatMessageRows shows when it lays
+// msgs out in budget rows, and whether that message shows only its last rows.
+// With the host, a message cut at the top leaves the screen whole (see
+// trimToMessageStart), so the top is the message below it, unless it is the
+// only one on screen.
+func (m Model) chatViewportTop(msgs []ChatMessage, budget, maxWidth, selectedIdx int) (top int, cut bool) {
+	top = len(msgs)
+	rows := 0
+	for i := len(msgs) - 1; i >= 0 && rows < budget; i-- {
+		rows += len(m.chatMessageWrapped(msgs[i], i == selectedIdx, maxWidth))
+		top = i
+	}
+	if rows <= budget {
+		return top, false
+	}
+	if m.hosted.host != nil && top < len(msgs)-1 {
+		return top + 1, false
+	}
+	return top, true
 }
 
 // trimToMessageStart keeps the last budget rows without opening on the tail of a

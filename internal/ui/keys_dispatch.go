@@ -403,7 +403,7 @@ func (m Model) keyPageUp() (tea.Model, tea.Cmd) {
 	if m.Focus() != FocusChat {
 		return m.moveListPage(-1)
 	}
-	return m.scrollChatUp(m.chatPageSize()), nil
+	return m.pageChatUp(), nil
 }
 
 func (m Model) keyHome() (tea.Model, tea.Cmd) {
@@ -440,7 +440,7 @@ func (m Model) keySelect() (tea.Model, tea.Cmd) {
 
 func (m Model) keyPageDown() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
-		return m.scrollChatDown(m.chatPageSize()), nil
+		return m.pageChatDown(), nil
 	}
 	return m.moveListPage(1)
 }
