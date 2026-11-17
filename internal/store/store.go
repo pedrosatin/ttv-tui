@@ -203,6 +203,19 @@ func (l *RecentLog) Prune(acked uint64) {
 	l.entries = entries
 }
 
+// OpenedChannels lista os canais cujo último evento no diário é uma abertura, inclusive
+// os que o limite já tirou da lista em memória: ainda vão ao disco na próxima
+// gravação.
+func (l RecentLog) OpenedChannels() []Channel {
+	var out []Channel
+	for _, e := range l.entries {
+		if !e.forgot {
+			out = append(out, e.ch)
+		}
+	}
+	return out
+}
+
 // Len é o número de canais com evento no diário.
 func (l RecentLog) Len() int { return len(l.entries) }
 

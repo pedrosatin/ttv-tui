@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/pedrosatin/ttv-tui/internal/store"
 	"slices"
 	"strings"
 	"testing"
@@ -202,6 +203,25 @@ func TestLimparRecentesSoDaPlataformaDaLista(t *testing.T) {
 	m = pressP(t, m)
 	if m.ListPlatform() != platform.Kick || !strings.Contains(screen(m), "kickzinho") {
 		t.Fatalf("a lista da Kick não mostra o recente dela:\n%s", screen(m))
+	}
+}
+
+// Uma abertura que o limite tirou da lista em memória, mas que ainda não foi
+// gravada, também sai: senão ela voltaria ao disco na gravação da limpeza. A
+// abertura da Kick fica.
+func TestLimparRecentesLevaAberturaExpulsaPeloLimite(t *testing.T) {
+	recs := []catalog.Channel{
+		{ID: "ch-a", Login: "alpha", Platform: platform.Twitch},
+		{ID: "ch-b", Login: "beta", Platform: platform.Twitch},
+	}
+	s := recentsStore(t, recs)
+	m := twoPlatforms(t, i18n.LangPTBR, &countingSource{}, &countingSource{}, WithStore(s), WithRecents(recs))
+	m.width, m.height = 120, 40
+	m.list.recentLog.Opened(store.FromChannel(catalog.Channel{ID: "ch-expulso", Login: "expulso", Platform: platform.Twitch}))
+	m.list.recentLog.Opened(store.FromChannel(catalog.Channel{ID: "kickaberto", Login: "kickaberto", Platform: platform.Kick}))
+	m = play(t, m, "X y")
+	if got := storedRecents(t, s); !slices.Equal(got, []string{"kickaberto"}) {
+		t.Fatalf("recentes no disco = %q, quer só a abertura da Kick", got)
 	}
 }
 

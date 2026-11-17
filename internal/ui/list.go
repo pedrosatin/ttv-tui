@@ -1005,6 +1005,14 @@ func (m Model) clearRecents() (tea.Model, tea.Cmd) {
 	for _, ch := range cleared {
 		m.list.recentLog.Forgot(store.FromChannel(ch))
 	}
+	// Uma abertura ainda não gravada cujo canal o limite de 50 já tirou da
+	// lista em memória iria ao disco na próxima gravação: sai também, se for
+	// desta lista.
+	for _, ch := range m.list.recentLog.OpenedChannels() {
+		if m.savedOnList(ch.ToChannel()) {
+			m.list.recentLog.Forgot(ch)
+		}
+	}
 	m.list.recentsExpanded = false
 	if onRecent {
 		m.setHighlightToItem(m.VisibleItems(), 0)
