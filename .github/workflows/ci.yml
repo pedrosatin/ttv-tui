@@ -86,7 +86,10 @@ jobs:
       - name: Run tests (packages outside the race run)
         run: |
           read -ra race <<< "$RACE_PACKAGES"
-          list=$(go list ./... | grep -vxFf <(go list "${race[@]}"))
+          # Fora do <(...): uma falha do go list aqui encerra o passo, em vez de
+          # deixar a exclusão vazia e rodar os cinco pacotes de novo.
+          exclude=$(go list "${race[@]}")
+          list=$(go list ./... | grep -vxFf <(printf '%s\n' "$exclude"))
           test -n "$list"
           mapfile -t packages <<< "$list"
           .github/scripts/test-json.sh common -count=1 "${packages[@]}"
