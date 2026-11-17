@@ -1,8 +1,16 @@
 name: CI
 
 on:
+  # Push só na main: nas demais branches o pull_request já valida o mesmo SHA,
+  # e filtrar por branches também deixa as tags (Release) fora do CI.
   push:
+    branches: [main]
   pull_request:
+
+# Um push novo no mesmo PR cancela o run anterior. Na main cada push termina.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   govulncheck:
