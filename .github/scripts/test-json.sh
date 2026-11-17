@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs `go test -json` and prints one line per package with its duration, slowest
 # first, so a slow package shows in the job log without reading the raw events.
-# A failure prints the output of the failed tests and packages.
+# A failure prints the output of the failed tests and packages, and of tests
+# that never finished (a -timeout panic).
 # Usage: test-json.sh <label> <go test arguments...>
 set -uo pipefail
 
@@ -28,10 +29,18 @@ echo "::endgroup::"
 if [ "$status" -ne 0 ]; then
   jq -rs '
     ([.[] | select(.Action == "fail" and .Test != null) | .Package + " " + .Test]) as $failed
+    | ([.[] | select(.Test != null and (.Action | IN("pass", "fail", "skip"))) | .Package + " " + .Test]) as $ended
     | .[]
     | select(
         .Action == "build-output"
-        or (.Action == "output" and (.Test == null or ((.Package + " " + .Test) | IN($failed[]))))
+        or (.Action == "output" and (
+          .Test == null
+          or ((.Package + " " + .Test) | IN($failed[]))
+          # Um teste que estourou o -timeout nunca recebe "fail": o pânico com a
+          # pilha sai na saída dele, e só aparece se a saída dos que não
+          # terminaram também for impressa.
+          or (((.Package + " " + .Test) | IN($ended[])) | not)
+        ))
       )
     | .Output
   ' -j "$out"
