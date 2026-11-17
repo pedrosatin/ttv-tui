@@ -11,6 +11,7 @@
   Esc                 Go back one level; from a search, to where it began
   Ctrl+R              Back to categories from anywhere
   f                   Favorite the channel or pin the category; again to undo
+  x                   Remove the highlighted channel from recents
 ── Search and filters ──
   /                   Filter the list
   Ctrl+F/S            Search categories and channels
@@ -19,6 +20,5 @@
     Enter Ctrl+F/S    Search for what you typed
     Esc               Cancel the search
   In the / filter:
-    ↑/↓ PgUp PgDn     Move through the list while typing
-Navigation · section 2 of 7 · Tab/→ next                                   33/97
+Navigation · section 2 of 7 · Tab/→ next                                   33/98
  ttv-tui | [en] Ready                                    | ? help · Ctrl+Q quit

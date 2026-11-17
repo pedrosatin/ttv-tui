@@ -104,7 +104,7 @@ func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
 		return false
 	}
 	switch m.keys.actionFor(modeNormal, msg) {
-	case actFilter, actSearch, actFavorite, actChannelFilter, actSwitchPlatform:
+	case actFilter, actSearch, actFavorite, actForgetRecent, actChannelFilter, actSwitchPlatform:
 		return true
 	case actRetry:
 		return !m.canRetryPlayer()

@@ -438,10 +438,21 @@ var classicKeysAt6b74874 = map[actionID][]string{
 	actChatNarrower:   {"alt+right"},
 }
 
+// classicKeysAdded são as ações que o classic ganhou depois de 6b74874, com as
+// teclas delas. Nenhuma toca as teclas antigas.
+var classicKeysAdded = map[actionID][]string{
+	actForgetRecent: {"x"},
+}
+
 func assertClassicKeys(t *testing.T, keys keyRegistry) {
 	t.Helper()
-	if len(keys.keys) != len(classicKeysAt6b74874) {
-		t.Errorf("o classic tem %d ações, o mapa de 6b74874 tinha %d", len(keys.keys), len(classicKeysAt6b74874))
+	if len(keys.keys) != len(classicKeysAt6b74874)+len(classicKeysAdded) {
+		t.Errorf("o classic tem %d ações, o mapa de 6b74874 tinha %d e ganhou %d", len(keys.keys), len(classicKeysAt6b74874), len(classicKeysAdded))
+	}
+	for id, want := range classicKeysAdded {
+		if got := keys.keys[id]; !slices.Equal(got, want) {
+			t.Errorf("classic mudou %s: %q, quer %q", id, got, want)
+		}
 	}
 	for id, want := range classicKeysAt6b74874 {
 		if got := keys.keys[id]; !slices.Equal(got, want) {

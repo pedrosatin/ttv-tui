@@ -11,6 +11,7 @@
   Esc                 Volta um nível; da busca, à tela de onde ela saiu
   g c/Ctrl+R          Volta às categorias de qualquer lugar
   f                   Favorita o canal ou fixa a categoria; de novo, desfaz
+  x                   Tira o canal destacado dos recentes
   g f                 Vai aos favoritos
   g r                 Vai aos recentes
 ── Busca e filtros ──
@@ -35,6 +36,5 @@
     Alt+Backspace/Ctrl+W
                       Apaga a palavra anterior
 ── Chat ──
-  i                   Escreve uma mensagem no chat
-Navegação · seção 2 de 7 · Tab/→ próxima                                                                           49/94
+Navegação · seção 2 de 7 · Tab/→ próxima                                                                           49/95
  ttv-tui | [pt-BR] Pronto                                                                       | ? ajuda · Ctrl+Q sair

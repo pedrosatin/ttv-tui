@@ -11,6 +11,7 @@
   Esc                 Volta um nível; da busca, à tela de onde ela saiu
   g c/Ctrl+R          Volta às categorias de qualquer lugar
   f                   Favorita o canal ou fixa a categoria; de novo, desfaz
+  x                   Tira o canal destacado dos recentes
   g f                 Vai aos favoritos
   g r                 Vai aos recentes
 ── Busca e filtros ──
@@ -19,6 +20,5 @@
   L                   Abre os filtros de idioma e audiência
   No prompt de busca:
     Enter Ctrl+F      Busca o texto digitado
-    Esc               Cancela a busca
-Navegação · seção 2 de 7 · Tab/→ próxima                                   33/97
+Navegação · seção 2 de 7 · Tab/→ próxima                                   33/98
  ttv-tui | [pt-BR] Pronto                               | ? ajuda · Ctrl+Q sair

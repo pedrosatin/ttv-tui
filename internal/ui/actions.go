@@ -63,6 +63,7 @@ const (
 	actCompose        actionID = "action.compose"
 	actCopyMessage    actionID = "action.copy_message"
 	actFavorite       actionID = "action.favorite"
+	actForgetRecent   actionID = "action.forget_recent"
 )
 
 // keyMode é um contexto de despacho. Uma tecla pode disparar ações diferentes em
@@ -256,6 +257,8 @@ func classicActions() []action {
 		// p troca a lista para a próxima plataforma; o vídeo e o chat ficam.
 		{ID: actSwitchPlatform, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"p"}},
 		{ID: actFavorite, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"f"}},
+		// x tira dos recentes o canal destacado na seção Recentes.
+		{ID: actForgetRecent, Modes: []keyMode{modeNormal}, Section: sectionNav, Default: []string{"x"}},
 
 		{ID: actFilter, Modes: []keyMode{modeNormal}, Section: sectionSearch, Default: []string{"/"}},
 		// Ctrl+F é a tecla da busca; Ctrl+S, um apelido. O modo raw desliga o

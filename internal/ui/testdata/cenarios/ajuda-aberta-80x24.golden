@@ -11,6 +11,7 @@
   Esc                 Volta um nível; da busca, à tela de onde ela saiu
   Ctrl+R              Volta às categorias de qualquer lugar
   f                   Favorita o canal ou fixa a categoria; de novo, desfaz
+  x                   Tira o canal destacado dos recentes
 ── Busca e filtros ──
   /                   Filtra a lista
   Ctrl+F/S            Busca categorias e canais
@@ -19,6 +20,5 @@
     Enter Ctrl+F/S    Busca o texto digitado
     Esc               Cancela a busca
   No filtro /:
-    ↑/↓ PgUp PgDn     Anda pela lista enquanto se digita
-Navegação · seção 2 de 7 · Tab/→ próxima                                   33/96
+Navegação · seção 2 de 7 · Tab/→ próxima                                   33/97
  ttv-tui | [pt-BR] Pronto                               | ? ajuda · Ctrl+Q sair

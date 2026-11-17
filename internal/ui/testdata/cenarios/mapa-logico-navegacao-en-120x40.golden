@@ -11,6 +11,7 @@
   Esc                 Go back one level; from a search, to where it began
   g c/Ctrl+R          Back to categories from anywhere
   f                   Favorite the channel or pin the category; again to undo
+  x                   Remove the highlighted channel from recents
   g f                 Go to favorites
   g r                 Go to recents
 ── Search and filters ──
@@ -35,6 +36,5 @@
     Alt+Backspace/Ctrl+W
                       Delete the previous word
 ── Chat ──
-  i                   Write a message in the chat
-Navigation · section 2 of 7 · Tab/→ next                                                                           49/94
+Navigation · section 2 of 7 · Tab/→ next                                                                           49/95
  ttv-tui | [en] Ready                                                                            | ? help · Ctrl+Q quit

@@ -904,6 +904,39 @@ func (m Model) toggleFavoriteHighlighted() (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// forgetRecentHighlighted tira dos recentes o canal destacado na seção Recentes
+// e grava a lista. O destaque fica na mesma linha, agora no recente seguinte;
+// sem recente abaixo, vai ao de cima; sem nenhum, à linha que veio para o
+// lugar, já da seção seguinte.
+func (m Model) forgetRecentHighlighted() (tea.Model, tea.Cmd) {
+	it, ok := m.HighlightedItem()
+	if m.Focus() == FocusChat || !ok || it.Type != ItemTypeRecent || it.Channel == nil {
+		m.warnStatus(m.t("feedback.forget_recent"))
+		return m, nil
+	}
+	ch := *it.Channel
+	idx := m.list.indexOfHighlighted(m.VisibleItems())
+	forget := func(recents []catalog.Channel) []catalog.Channel {
+		return slices.DeleteFunc(slices.Clone(recents), func(r catalog.Channel) bool { return channelMatches(r, ch) })
+	}
+	m.list.recents = forget(m.list.recents)
+	if m.list.pendingRecents != nil {
+		m.list.pendingRecents = forget(m.list.pendingRecents)
+	}
+	items := m.VisibleItems()
+	isRecent := func(i int) bool { return i >= 0 && i < len(items) && items[i].Type == ItemTypeRecent }
+	if !isRecent(idx) && isRecent(idx-1) {
+		idx--
+	}
+	m.setHighlightToItem(items, idx)
+	m.clearStatusNotice()
+	name := ch.DisplayName
+	if name == "" {
+		name = ch.Login
+	}
+	return m, m.saveStoreCmd("recents.removed_named", name)
+}
+
 func (m Model) selectHighlighted() (tea.Model, tea.Cmd) {
 	it, ok := m.HighlightedItem()
 	if !ok {
