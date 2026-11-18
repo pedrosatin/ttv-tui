@@ -226,7 +226,7 @@ jobs:
             "sdl3 $(pkg-config --modversion sdl3), mpv $(pkg-config --modversion mpv)"
           native=$(printf '%s\n' "$manifest" | sha256sum | cut -c1-16)
           {
-            echo "prefix=go-window-${RUNNER_OS}-${RUNNER_ARCH}-$(go env GOVERSION)-native-${native}-"
+            echo "prefix=go-window-zip-${RUNNER_OS}-${RUNNER_ARCH}-$(go env GOVERSION)-native-${native}-"
             echo "gocache=$(go env GOCACHE)"
             echo "gomodcache=$(go env GOMODCACHE)"
           } >> "$GITHUB_OUTPUT"
@@ -257,18 +257,6 @@ jobs:
           go vet ./...
           go test -count=1 -buildvcs=false ./...
 
-      # Saved before packaging: the zip build compiles against a libmpv
-      # extracted to a new temporary directory on each run, so its cache entries
-      # would never be reused.
-      - name: Save the window Go cache (Windows)
-        if: runner.os == 'Windows' && steps.go-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ${{ steps.go-cache-key.outputs.gocache }}
-            ${{ steps.go-cache-key.outputs.gomodcache }}
-          key: ${{ steps.go-cache-key.outputs.prefix }}${{ hashFiles('window/go.sum') }}
-
       - name: Package the Windows zip
         if: runner.os == 'Windows'
         shell: msys2 {0}
@@ -278,6 +266,25 @@ jobs:
         run: |
           mkdir -p dist-window
           packaging/window-windows.sh dist-window/ttv-tui-window.zip
+
+      # Saved after packaging on purpose. The zip builds with -trimpath, which
+      # gives every package, the standard library included, another cache key
+      # than the test build above, so the packaging build would compile all of
+      # them on each run. Saved here, the cache also holds those -trimpath
+      # objects and the next run takes them from it. Only the main package is
+      # compiled again: it builds against a libmpv extracted to a new temporary
+      # directory on each run. The prefix carries "zip" so that the entries
+      # saved before this change, which lack the -trimpath objects and would
+      # keep answering with an exact hit that never saves again, are not
+      # restored.
+      - name: Save the window Go cache (Windows)
+        if: runner.os == 'Windows' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-key.outputs.gocache }}
+            ${{ steps.go-cache-key.outputs.gomodcache }}
+          key: ${{ steps.go-cache-key.outputs.prefix }}${{ hashFiles('window/go.sum') }}
 
       # Without MSYS2 on PATH, a DLL missing from the zip stops the process before
       # main. Any other probe result is fine: the runner may lack a usable GPU.
