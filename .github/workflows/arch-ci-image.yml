@@ -1,0 +1,89 @@
+name: Arch CI image
+
+# Builds .github/images/arch-ci and publishes it to GHCR. It never runs on a
+# pull request: the jobs pin the image by digest, so a new image only reaches
+# them through a commit that changes that digest. The monthly run keeps a fresh
+# image ready; .github/images/arch-ci/README.md explains how to adopt it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 3 * *'
+
+permissions: {}
+
+concurrency:
+  group: arch-ci-image
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The only job in the repository that can write packages.
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/pedrosatin/ttv-tui-arch-ci
+    # An explicit bash runs with pipefail, so a failure before a tee fails the step.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Build the image
+        id: build
+        run: |
+          tag="$(date -u +%Y%m%d)-${GITHUB_RUN_NUMBER}"
+          docker build --pull --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -t "${IMAGE}:${tag}" .github/images/arch-ci
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      # The versions the cgo build of the window depends on, recorded before the
+      # image is published.
+      - name: List the native package versions
+        env:
+          TAG: ${{ steps.build.outputs.tag }}
+        run: |
+          docker run --rm "${IMAGE}:${TAG}" sh -c \
+            'pacman -Q sdl3 mpv gcc pkgconf && pkg-config --modversion sdl3 mpv' | tee versions.txt
+
+      - name: Publish the image
+        id: publish
+        env:
+          TAG: ${{ steps.build.outputs.tag }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "${IMAGE}:${TAG}" | tee push.log
+          docker logout ghcr.io
+          digest=$(grep -oE 'digest: sha256:[0-9a-f]{64}' push.log | tail -n1 | cut -d' ' -f2)
+          test -n "$digest"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Published ${IMAGE}:${TAG} as ${IMAGE}@${digest}"
+
+      - name: Summarize
+        env:
+          TAG: ${{ steps.build.outputs.tag }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          {
+            echo "## Arch CI image ${TAG}"
+            echo
+            echo "Pin it in ci.yml and release.yml (see .github/images/arch-ci/README.md):"
+            echo
+            echo '```yaml'
+            echo "container: ${IMAGE}@${DIGEST}"
+            echo '```'
+            echo
+            echo "Native packages:"
+            echo
+            echo '```'
+            cat versions.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

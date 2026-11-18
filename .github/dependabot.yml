@@ -4,3 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # The base of the Arch CI image (.github/images/arch-ci/README.md).
+  - package-ecosystem: docker
+    directory: /.github/images/arch-ci
+    schedule:
+      interval: monthly
