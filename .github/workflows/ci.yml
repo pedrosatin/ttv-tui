@@ -272,6 +272,7 @@ jobs:
       - name: Package the Windows zip
         if: runner.os == 'Windows'
         shell: msys2 {0}
+        timeout-minutes: 6
         env:
           CGO_ENABLED: "1"
         run: |

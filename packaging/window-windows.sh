@@ -50,7 +50,10 @@ cached_zip="$cache_dir/$MPV_ASSET"
 phase download
 if [[ ! -f "$cached_zip" ]] || ! (cd "$cache_dir" && echo "$MPV_SHA256 *$MPV_ASSET" | sha256sum -c - >/dev/null 2>&1); then
   echo "Downloading $MPV_URL..."
-  curl -sSL -f -o "$cached_zip.tmp" "$MPV_URL"
+  # Bounded so a stalled connection fails (or retries) instead of hanging the job:
+  # 3 attempts of at most 90 s each.
+  curl -sSL -f --connect-timeout 15 --max-time 90 --retry 2 --retry-delay 2 --retry-all-errors \
+    -o "$cached_zip.tmp" "$MPV_URL"
   (cd "$cache_dir" && echo "$MPV_SHA256 *$MPV_ASSET.tmp" | sha256sum -c -)
   mv "$cached_zip.tmp" "$cached_zip"
 fi
@@ -205,7 +208,9 @@ done
 
 phase compressão
 rm -f "$out"
-(cd "$work" && zip -qr "$out" ttv-tui-window)
+# Level 1 instead of the default 6: on a tree of about 140 MB (libmpv-2.dll is 120 MB)
+# it takes about a third of the time for a zip about 8% larger.
+(cd "$work" && zip -qr -1 "$out" ttv-tui-window)
 phase_end
 echo "fase total: $SECONDS s"
 echo "$out: $(ls "$stage" | wc -l) files, $(du -sh "$stage" | cut -f1) unpacked"
