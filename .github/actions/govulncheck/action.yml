@@ -1,0 +1,62 @@
+name: Install govulncheck
+description: >-
+  Puts govulncheck on PATH from the cache, keyed by the govulncheck version, the
+  runner OS and architecture and the Go version. go install runs only when the
+  cache is empty. Only the binary is cached: the analysis runs on every job.
+inputs:
+  version:
+    description: Version of golang.org/x/vuln/cmd/govulncheck.
+    default: v1.9.0
+runs:
+  using: composite
+  steps:
+    # setup-go already puts GOPATH/bin on PATH, which is where go install
+    # writes the binary, so a restored one is found the same way.
+    - name: Key the govulncheck cache
+      id: key
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        {
+          echo "bin=$(go env GOPATH)/bin/govulncheck$(go env GOEXE)"
+          echo "key=govulncheck-${VERSION}-${RUNNER_OS}-${RUNNER_ARCH}-$(go env GOVERSION)"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Restore govulncheck
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.key.outputs.bin }}
+        key: ${{ steps.key.outputs.key }}
+
+    - name: Build govulncheck
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        CGO_ENABLED: "0"
+      run: go install "golang.org/x/vuln/cmd/govulncheck@${VERSION}"
+
+    # Fails on a binary of another version, cached or built, before it is saved.
+    - name: Check the govulncheck version
+      shell: bash
+      env:
+        BIN: ${{ steps.key.outputs.bin }}
+        VERSION: ${{ inputs.version }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit == 'true' }}
+      run: |
+        go version -m "$BIN"
+        got=$(go version -m "$BIN" | awk '$1 == "mod" && $2 == "golang.org/x/vuln" { print $3 }')
+        if [ "$got" != "$VERSION" ]; then
+          echo "::error::govulncheck is $got, expected $VERSION"
+          exit 1
+        fi
+        echo "govulncheck $got, from the cache: $CACHE_HIT"
+
+    - name: Save govulncheck
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.key.outputs.bin }}
+        key: ${{ steps.key.outputs.key }}
