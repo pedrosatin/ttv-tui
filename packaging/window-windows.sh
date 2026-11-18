@@ -15,6 +15,24 @@ trap 'rm -rf "$work"' EXIT
 stage="$work/ttv-tui-window"
 mkdir -p "$stage"
 
+# Logs how long each phase takes, in a form that is easy to grep:
+#   fase <name>: <N> s
+phase_name=""
+phase_start=0
+phase_end() {
+  if [[ -n "$phase_name" ]]; then
+    echo "fase ${phase_name}: $((SECONDS - phase_start)) s ($(date -u +%H:%M:%S) UTC)"
+    phase_name=""
+  fi
+}
+phase() {
+  phase_end
+  phase_name="$1"
+  phase_start=$SECONDS
+  echo "fase ${phase_name}: início ($(date -u +%H:%M:%S) UTC)"
+}
+SECONDS=0
+
 MPV_VERSION="v0.42.0"
 MPV_SEMVER="${MPV_VERSION#v}"
 MPV_ASSET="libmpv-${MPV_VERSION}-x86_64-w64-mingw32-lgpl.zip"
@@ -29,6 +47,7 @@ cache_dir="${MPV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/ttv-tui}"
 mkdir -p "$cache_dir"
 cached_zip="$cache_dir/$MPV_ASSET"
 
+phase download
 if [[ ! -f "$cached_zip" ]] || ! (cd "$cache_dir" && echo "$MPV_SHA256 *$MPV_ASSET" | sha256sum -c - >/dev/null 2>&1); then
   echo "Downloading $MPV_URL..."
   curl -sSL -f -o "$cached_zip.tmp" "$MPV_URL"
@@ -39,6 +58,7 @@ fi
 echo "Verifying $MPV_ASSET..."
 (cd "$cache_dir" && echo "$MPV_SHA256 *$MPV_ASSET" | sha256sum -c -)
 
+phase extração
 mpv_work="$work/mpv"
 mkdir -p "$mpv_work"
 unzip -q "$cached_zip" -d "$mpv_work"
@@ -78,9 +98,11 @@ if [[ "$actual_pc_dir" != "$expected_pc_dir" ]]; then
   exit 1
 fi
 
+phase build
 # Build ttv-tui-window.exe against the official libmpv headers and import library.
 (cd "$root/window" && PKG_CONFIG_PATH="$mpv_work/pkgconfig:${PKG_CONFIG_PATH:-}" CGO_ENABLED=1 go build -buildvcs=false -trimpath -ldflags "-s -w" -o "$stage/ttv-tui-window.exe" .)
 
+phase licenças
 # Put the official LGPL libmpv-2.dll and LICENSE.LGPL in place.
 cp "$mpv_work/libmpv-2.dll" "$stage/"
 cp "$mpv_work/LICENSE.LGPL" "$stage/"
@@ -101,6 +123,7 @@ fi
 cp "$iconv_lic" "$stage/"
 iconv_lic_name="$(basename "$iconv_lic")"
 
+phase dlls
 # ntldd -R walks the import tables; system DLLs live outside /ucrt64/bin.
 # With libmpv-2.dll already in $stage, ntldd resolves it locally and sees only
 # system DLL imports. Only SDL3 and its runtime support come from /ucrt64/bin.
@@ -113,6 +136,7 @@ while IFS= read -r dll; do
   cp "$(cygpath -u "$dll")" "$stage/"
 done < "$work/dlls.txt"
 
+phase verificação-e-third-party
 # Whitelist of allowed DLLs in the package.
 allowed_dlls=("libmpv-2.dll" "SDL3.dll" "libiconv-2.dll")
 for dll_path in "$stage"/*.dll; do
@@ -179,8 +203,11 @@ done
   cat "$mpv_work/LICENSE.LGPL"
 } > "$stage/THIRD-PARTY.txt"
 
+phase compressão
 rm -f "$out"
 (cd "$work" && zip -qr "$out" ttv-tui-window)
+phase_end
+echo "fase total: $SECONDS s"
 echo "$out: $(ls "$stage" | wc -l) files, $(du -sh "$stage" | cut -f1) unpacked"
 echo "Zip archive contents:"
 unzip -l "$out"
