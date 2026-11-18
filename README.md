@@ -25,16 +25,16 @@ Shortcut help, opened with `?`:
 
 You need `streamlink` and `mpv` to play video. On Linux and Windows, `streamlink` is downloaded automatically on first playback if missing. On Windows, the single window plays video without `mpv`; only the terminal mode needs it. The [FAQ](#faq) has the install command for each system.
 
-**Linux and macOS.** The script verifies the SHA-256 checksum and installs to `~/.local/bin`:
+**Linux and macOS.** The script installs the latest release, verifies the SHA-256 checksum and installs to `~/.local/bin`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash
 ```
 
-**Windows x64.** From a checkout, in PowerShell:
+**Windows x64.** From a checkout, in PowerShell. The script installs the latest release:
 
 ```powershell
-.\packaging\install.ps1 -Version 0.9.0
+.\packaging\install.ps1
 winget install --id shinchiro.mpv -e
 winget install --id streamlink.streamlink -e
 ```
@@ -42,12 +42,12 @@ winget install --id streamlink.streamlink -e
 <details>
 <summary>Other ways to install</summary>
 
-**Release archive.** Download the archive for your OS and `checksums.txt` from the [v0.9.0 release](https://github.com/pedrosatin/ttv-tui/releases/tag/v0.9.0). Check the SHA-256 with `sha256sum`, `shasum -a 256` or `Get-FileHash -Algorithm SHA256`, then put `ttv-tui` in your `PATH`.
+**Release archive.** Download the archive for your OS and `checksums.txt` from the [latest release](https://github.com/pedrosatin/ttv-tui/releases/latest). Check the SHA-256 with `sha256sum`, `shasum -a 256` or `Get-FileHash -Algorithm SHA256`, then put `ttv-tui` in your `PATH`.
 
 **Go 1.27 or newer:**
 
 ```bash
-go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@v0.9.0
+go install github.com/pedrosatin/ttv-tui/cmd/ttv-tui@latest
 ```
 
 **Arch Linux.** The AUR package is not published yet. Build it from the PKGBUILD:
@@ -65,7 +65,7 @@ CGO_ENABLED=0 go build -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 
 **Homebrew and Scoop.** The [formula](packaging/homebrew/README.md) and the [Scoop manifest](packaging/scoop/ttv-tui.json) are ready but not published yet.
 
-**Install script options.** Pass a version such as `install.sh 0.9.0`, preview with `--dry-run`, or change the target with `--prefix`. On Windows, `install.ps1 -DryRun` previews the plan.
+**Install script options.** Without arguments the scripts install the latest release. To pin a version, pass it as an argument: `install.sh 0.10.2` or `install.ps1 -Version 0.10.2`. These version numbers are only an example; pick one from the [releases](https://github.com/pedrosatin/ttv-tui/releases). Preview with `--dry-run`, or change the target with `--prefix`. On Windows, `install.ps1 -DryRun` previews the plan.
 
 **Desktop shortcut.** `install.sh` installs the desktop entry and icon only from the checksum-verified release tarball. If the tarball lacks either file, as releases up to v0.1.7 do, it warns and installs neither. The PKGBUILD also installs them. After `go install` or `go build`, copy them yourself:
 
