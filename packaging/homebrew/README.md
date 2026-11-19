@@ -1,13 +1,18 @@
 # Homebrew tap
 
-A fórmula é um ponto de partida fixado no commit 37b50d0 (versão provisória
-0.0.0), compilado a partir do código-fonte. Ela ainda não foi publicada nem
-validada no macOS. A release 0.1.9 não contém arquivos Darwin.
+Decisão (2026-11-19): a fórmula publicada usa os **binários** Darwin e Linux
+das releases. A v0.10.2 já inclui `ttv-tui_*_darwin_{arm64,amd64}.tar.gz` (e os
+equivalentes Linux). Compilar do fonte, como este README sugeria quando as
+releases ainda não tinham Darwin, fica de fora. O GoReleaser gera a fórmula e
+atualiza o tap `pedrosatin/homebrew-tap` a cada tag `v*`, com deploy key
+(`HOMEBREW_TAP_DEPLOY_KEY`). O ensaio `workflow_dispatch` gera a fórmula em
+`dist/homebrew/Formula/ttv-tui.rb` e não escreve no tap.
 
-Após publicar uma release com suporte a macOS, atualize `url`, `version` e
-`sha256` para o arquivo de código-fonte dessa tag e confira o hash baixado.
-Teste `brew install --build-from-source ./packaging/homebrew/ttv-tui.rb` e
-`brew test ttv-tui` em macOS. Crie o repositório `pedrosatin/homebrew-tap`,
-copie a fórmula para `Formula/ttv-tui.rb` e publique-o. Então usuários poderão
-instalar com `brew install pedrosatin/tap/ttv-tui`. Repita a atualização da
-fórmula a cada release; o GoReleaser atual não publica no tap automaticamente.
+Instalação:
+
+```bash
+brew install pedrosatin/tap/ttv-tui
+```
+
+A fórmula declara `mpv` e `streamlink` como dependências. O arquivo
+`ttv-tui.rb` neste diretório é só referência local; a fonte publicada é o tap.
