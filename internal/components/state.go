@@ -21,7 +21,9 @@ const (
 )
 
 // UpdateState is the persistent update bookkeeping of the managed streamlink,
-// kept beside the version directories. It never holds credentials.
+// kept beside the version directories. It never holds credentials. Older files
+// without trial_unrecognized_channels load as an empty list (compatible
+// migration).
 type UpdateState struct {
 	// LastCheck is when the latest release was last fetched, zero when never.
 	LastCheck time.Time `json:"last_check,omitzero"`
@@ -29,6 +31,11 @@ type UpdateState struct {
 	// yet. Only a version on trial can be undone: an older, long-working version
 	// failing later is not the update's fault.
 	Trial string `json:"trial,omitempty"`
+	// TrialUnrecognizedChannels lists distinct channel identities that produced
+	// an unrecognized non-zero exit while Trial is set. A second distinct
+	// channel during the same trial blames the build (ADR 0014, D1(c)). Cleared
+	// when the trial ends or the version is marked bad.
+	TrialUnrecognizedChannels []string `json:"trial_unrecognized_channels,omitempty"`
 	// Bad lists versions that failed on trial and are never downloaded or used
 	// again.
 	Bad []string `json:"bad,omitempty"`

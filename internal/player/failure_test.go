@@ -108,6 +108,7 @@ func TestOnlyStreamlinkFailuresBlameTheBuild(t *testing.T) {
 		FailureBotCheck:          false,
 		FailureLoginRequired:     false,
 		FailureUnknown:           false,
+		FailureUnrecognizedExit:  false,
 		FailureStreamlinkBroken:  true,
 	}
 	for f, want := range cases {
@@ -131,7 +132,9 @@ func TestRealFailuresOfflineAndNetworkDoNotBlameTheBuild(t *testing.T) {
 		{"error-exit-now", false},
 		{"timeout-error", false},
 		{"plugin-error", true},
-		{"exit-silent", true},
+		// A silent non-zero exit is not immediate evidence against the build:
+		// the managed trial needs two distinct channels (ADR 0014).
+		{"exit-silent", false},
 	}
 	for _, c := range cases {
 		t.Run(c.mode, func(t *testing.T) {
@@ -244,9 +247,10 @@ func TestProcessFailuresAreClassified(t *testing.T) {
 		{"mpv-missing", 30 * time.Second, FailureMPVMissing},
 		{"silent-hang", 300 * time.Millisecond, FailureTimeout},
 		// An error status before any stream reached the player, with nothing
-		// that blames the channel or the network, is the streamlink build's.
-		{"exit-error", 30 * time.Second, FailureStreamlinkBroken},
-		{"exit-silent", 30 * time.Second, FailureStreamlinkBroken},
+		// that blames the channel, the network or a known build defect, is an
+		// unrecognized exit (two-channel rule during a managed trial).
+		{"exit-error", 30 * time.Second, FailureUnrecognizedExit},
+		{"exit-silent", 30 * time.Second, FailureUnrecognizedExit},
 		{"plugin-error", 30 * time.Second, FailureStreamlinkBroken},
 		{"python-traceback", 30 * time.Second, FailureStreamlinkBroken},
 		// The browser line comes before the 403 that streamlink raises next:

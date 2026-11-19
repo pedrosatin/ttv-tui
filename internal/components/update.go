@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,9 @@ const (
 	// keepVersions is how many managed versions stay on disk: the current one
 	// and the one to go back to.
 	keepVersions = 2
+	// unrecognizedExitBlameThreshold is how many distinct channels must produce
+	// an unrecognized non-zero exit during a trial before the build is blamed.
+	unrecognizedExitBlameThreshold = 2
 
 	// DefaultUseStaleAge is how long a process's use marker survives without a
 	// heartbeat. Pruning treats a version as free once every marker is older.
@@ -210,9 +214,12 @@ func (d *Downloader) UpdateStreamlink(ctx context.Context) (UpdateResult, error)
 func (d *Downloader) recordTrial(version string) beforePromoteFunc {
 	return func(ctx context.Context) (func(), error) {
 		previous := ""
+		previousChannels := []string(nil)
 		if err := d.updateState(ctx, func(st *UpdateState) (bool, error) {
 			previous = st.Trial
+			previousChannels = slices.Clone(st.TrialUnrecognizedChannels)
 			st.Trial = version
+			st.TrialUnrecognizedChannels = nil
 			return true, nil
 		}); err != nil {
 			return nil, fmt.Errorf("record trial: %w", err)
@@ -224,6 +231,7 @@ func (d *Downloader) recordTrial(version string) beforePromoteFunc {
 					return false, nil
 				}
 				st.Trial = previous
+				st.TrialUnrecognizedChannels = previousChannels
 				return true, nil
 			})
 		}
@@ -242,8 +250,33 @@ func (d *Downloader) ConfirmStreamlink(ctx context.Context, version string) erro
 			return false, nil
 		}
 		st.Trial = ""
+		st.TrialUnrecognizedChannels = nil
 		return true, nil
 	})
+}
+
+// RecordUnrecognizedExit notes that channel produced an unrecognized non-zero
+// exit while version is on trial. The same channel counted twice does not
+// advance the counter. ready is true when distinct channels reach
+// unrecognizedExitBlameThreshold, so the caller can mark the version bad.
+// It returns ErrNotOnTrial when version is not on trial; the state is unchanged.
+func (d *Downloader) RecordUnrecognizedExit(ctx context.Context, version, channel string) (ready bool, err error) {
+	if channel == "" {
+		channel = "?"
+	}
+	err = d.updateState(ctx, func(st *UpdateState) (bool, error) {
+		if st.Trial != version {
+			return false, ErrNotOnTrial
+		}
+		if slices.Contains(st.TrialUnrecognizedChannels, channel) {
+			ready = len(st.TrialUnrecognizedChannels) >= unrecognizedExitBlameThreshold
+			return false, nil
+		}
+		st.TrialUnrecognizedChannels = append(st.TrialUnrecognizedChannels, channel)
+		ready = len(st.TrialUnrecognizedChannels) >= unrecognizedExitBlameThreshold
+		return true, nil
+	})
+	return ready, err
 }
 
 // MarkStreamlinkBad records that version, an update still on trial, failed on
@@ -251,8 +284,8 @@ func (d *Downloader) ConfirmStreamlink(ctx context.Context, version string) erro
 // version to use instead. It returns ErrNotOnTrial for a version that is not on
 // trial and ErrNoPrevious when nothing else is installed; nothing changes then.
 // Callers decide what counts as a failure of the build itself (see
-// player.Failure.BlamesStreamlink). The bad version's files go away on the next
-// PruneStreamlink, once no process uses them.
+// player.Failure.BlamesStreamlink and RecordUnrecognizedExit). The bad
+// version's files go away on the next PruneStreamlink, once no process uses them.
 func (d *Downloader) MarkStreamlinkBad(ctx context.Context, version string) (Result, error) {
 	resolver := d.resolver()
 	var res Result
@@ -264,6 +297,7 @@ func (d *Downloader) MarkStreamlinkBad(ctx context.Context, version string) (Res
 			st.Bad = append(st.Bad, version)
 		}
 		st.Trial = ""
+		st.TrialUnrecognizedChannels = nil
 		installed := resolver.installedStreamlinks(*st)
 		if len(installed) == 0 {
 			return false, ErrNoPrevious

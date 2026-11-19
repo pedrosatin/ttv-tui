@@ -112,7 +112,8 @@ func (b *playbackBridge) markInUse(res components.Result) {
 
 // observePlayer watches player events for what they say about the managed
 // streamlink: a first successful playback ends the trial of an updated
-// version, and a failure of the build itself on trial undoes the update.
+// version, a recognized build failure on trial undoes the update at once, and
+// an unrecognized non-zero exit only undoes it after two distinct channels.
 func (b *playbackBridge) observePlayer(ev player.Event) {
 	b.mu.Lock()
 	res, ok := b.resolved, b.hasResolved
@@ -135,6 +136,18 @@ func (b *playbackBridge) observePlayer(ev player.Event) {
 		// a failure right after the first playback from marking a good
 		// version bad.
 		b.rollbackAsync(res.Version)
+	case ev.State == player.StateError && ev.Failure == player.FailureUnrecognizedExit && !confirmed:
+		channel := ev.Login
+		if channel == "" {
+			channel = ev.Target.Identity()
+		}
+		b.background(func(ctx context.Context) {
+			ready, err := b.downloader().RecordUnrecognizedExit(ctx, res.Version, channel)
+			if err != nil || !ready {
+				return
+			}
+			b.rollback(ctx, res.Version)
+		})
 	}
 }
 

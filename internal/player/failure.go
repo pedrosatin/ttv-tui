@@ -51,20 +51,27 @@ const (
 	FailureLoginRequired Failure = "login_required"
 	// FailureStreamlinkBroken: this streamlink build failed on its own, not
 	// because of the channel or the network: a plugin or Python runtime error,
-	// a binary that cannot run, or an exit with an error status before any
-	// stream reached the player. It is the only class that counts against a
-	// freshly updated managed streamlink (see BlamesStreamlink).
+	// or a binary that cannot run. It is the only class that immediately counts
+	// against a freshly updated managed streamlink (see BlamesStreamlink).
 	FailureStreamlinkBroken Failure = "streamlink_broken"
+	// FailureUnrecognizedExit: streamlink exited with an error status before
+	// any stream reached the player, and no output line explained it as the
+	// channel, the network, or a known build defect. A single occurrence may
+	// come from a pasted link's server; during a managed update trial the app
+	// only blames the build when this repeats on two different channels (see
+	// ADR 0014).
+	FailureUnrecognizedExit Failure = "unrecognized_exit"
 	// FailureUnknown: an error without a recognized cause.
 	FailureUnknown Failure = "unknown"
 )
 
-// BlamesStreamlink reports whether f is evidence that the streamlink build in
-// use is broken. Offline channels, network and timeout failures, a URL no plugin
-// handles, a request the site refused, missing tools and unclassified errors say
-// nothing about the build, so
-// they never count: an update must not be undone because the channel is offline
-// or the network is down.
+// BlamesStreamlink reports whether f is immediate evidence that the streamlink
+// build in use is broken. Offline channels, network and timeout failures, a URL
+// no plugin handles, a request the site refused, missing tools, unclassified
+// errors and an unrecognized non-zero exit say nothing conclusive about the
+// build on their own, so they never count here: an update must not be undone
+// because the channel is offline or the network is down. Unrecognized exits
+// are tracked separately during a trial (two distinct channels).
 func (f Failure) BlamesStreamlink() bool {
 	return f == FailureStreamlinkBroken
 }
