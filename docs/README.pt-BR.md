@@ -25,13 +25,13 @@ Ajuda de atalhos, aberta com `?`:
 
 Para tocar vídeo, `streamlink` e `mpv` são necessários. No Linux e no Windows, o `streamlink` é baixado sozinho na primeira reprodução quando não for encontrado. No Windows, a janela única toca o vídeo sem o `mpv`; só o modo terminal precisa dele. As [perguntas frequentes](#perguntas-frequentes) trazem o comando de instalação de cada sistema.
 
-**Linux e macOS.** O script instala a release mais recente, confere o SHA-256 e instala em `~/.local/bin`:
+**Linux e macOS.** O script instala a release mais recente, confere o SHA-256, verifica a attestation de proveniência do GitHub quando o `gh` está no `PATH` (e avisa quando não está) e instala em `~/.local/bin`. Com o `gh` presente ele precisa estar autenticado (`gh auth login`); sem login o instalador falha fechado:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash
 ```
 
-**Windows x64.** A partir de um checkout, no PowerShell. O script instala a release mais recente:
+**Windows x64.** A partir de um checkout, no PowerShell. O script instala a release mais recente, confere o SHA-256 e a attestation quando o `gh` está no `PATH` (autenticado; falha fechado sem login):
 
 ```powershell
 .\packaging\install.ps1
@@ -42,7 +42,15 @@ winget install --id streamlink.streamlink -e
 <details>
 <summary>Outras formas de instalar</summary>
 
-**Arquivo da release.** Baixe o arquivo do seu sistema e o `checksums.txt` na [release mais recente](https://github.com/pedrosatin/ttv-tui/releases/latest). Confira o SHA-256 com `sha256sum`, `shasum -a 256` ou `Get-FileHash -Algorithm SHA256` e coloque o `ttv-tui` no `PATH`.
+**Arquivo da release.** Baixe o arquivo do seu sistema e o `checksums.txt` na [release mais recente](https://github.com/pedrosatin/ttv-tui/releases/latest). Confira o SHA-256 com `sha256sum`, `shasum -a 256` ou `Get-FileHash -Algorithm SHA256`. Com o [GitHub CLI](https://cli.github.com/) instalado e autenticado (`gh auth login`), confira também a proveniência do build contra o workflow de release:
+
+```bash
+gh attestation verify ttv-tui_<versão>_<os>_<arch>.tar.gz \
+  --repo pedrosatin/ttv-tui \
+  --signer-workflow pedrosatin/ttv-tui/.github/workflows/release.yml
+```
+
+Depois coloque o `ttv-tui` no `PATH`.
 
 **Go 1.27 ou mais novo:**
 

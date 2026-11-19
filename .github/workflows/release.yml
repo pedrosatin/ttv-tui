@@ -222,33 +222,8 @@ jobs:
           merge-multiple: true
           path: dist-window
 
-      # Deploy keys só na publicação por tag. O ensaio (workflow_dispatch) não
-      # recebe as chaves e o GoReleaser roda com --skip=publish; o tap e o
-      # bucket não são escritos. Caminhos vazios no ensaio evitam falha do
-      # template {{ .Env.*_KEY_PATH }} sem a variável definida.
-      - name: Prepare tap and bucket key paths
-        env:
-          PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
-          # Segredos só entram no ambiente na publicação por tag.
-          HOMEBREW_TAP_DEPLOY_KEY: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && secrets.HOMEBREW_TAP_DEPLOY_KEY || '' }}
-          SCOOP_BUCKET_DEPLOY_KEY: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && secrets.SCOOP_BUCKET_DEPLOY_KEY || '' }}
-        run: |
-          set -euo pipefail
-          if [[ "$PUBLISH" == true ]]; then
-            umask 077
-            printf '%s\n' "$HOMEBREW_TAP_DEPLOY_KEY" > "$RUNNER_TEMP/homebrew_tap_key"
-            printf '%s\n' "$SCOOP_BUCKET_DEPLOY_KEY" > "$RUNNER_TEMP/scoop_bucket_key"
-            {
-              echo "HOMEBREW_TAP_KEY_PATH=$RUNNER_TEMP/homebrew_tap_key"
-              echo "SCOOP_BUCKET_KEY_PATH=$RUNNER_TEMP/scoop_bucket_key"
-            } >> "$GITHUB_ENV"
-          else
-            {
-              echo "HOMEBREW_TAP_KEY_PATH="
-              echo "SCOOP_BUCKET_KEY_PATH="
-            } >> "$GITHUB_ENV"
-          fi
-
+      # GoReleaser gera fórmula e manifesto em dist/ com skip_upload: true;
+      # não escreve no tap nem no bucket. Na tag v* sobe a release em rascunho.
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
@@ -258,8 +233,6 @@ jobs:
         env:
           GORELEASER_CURRENT_TAG: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # HOMEBREW_TAP_KEY_PATH e SCOOP_BUCKET_KEY_PATH vêm do GITHUB_ENV
-          # do passo anterior (caminho do arquivo na tag; vazios no ensaio).
 
       - name: Require host version check
         run: test -f dist/version-checked
@@ -276,7 +249,8 @@ jobs:
           subject-checksums: dist/checksums.txt
 
       # Promove o rascunho só depois dos uploads (extra_files LGPL inclusos)
-      # e da attestation. Falha no meio deixa o rascunho sem publicar.
+      # e da attestation. Falha no meio deixa o rascunho sem publicar e o
+      # tap/bucket intactos.
       - name: Publish draft release
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
         env:
@@ -285,6 +259,62 @@ jobs:
           set -euo pipefail
           gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false
           echo "Release ${GITHUB_REF_NAME} publicada."
+
+      # Depois da promoção: URLs da release já resolvem. Publica fórmula e
+      # manifesto com as deploy keys só neste passo. Falha antes da promoção
+      # deixa tap e bucket intactos.
+      - name: Publish Homebrew tap and Scoop bucket
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          SCOOP_BUCKET_DEPLOY_KEY: ${{ secrets.SCOOP_BUCKET_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          version="${GITHUB_REF_NAME}"
+          formula="dist/homebrew/Formula/ttv-tui.rb"
+          manifest="dist/scoop/ttv-tui.json"
+          test -f "$formula"
+          test -f "$manifest"
+
+          publish_repo() {
+            local key_content="$1" key_file="$2" repo_ssh="$3" dest_dir="$4" src_file="$5" dest_rel="$6"
+            printf '%s\n' "$key_content" > "$key_file"
+            chmod 600 "$key_file"
+            export GIT_SSH_COMMAND="ssh -i ${key_file} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+            rm -rf "$dest_dir"
+            git clone --depth 1 "$repo_ssh" "$dest_dir"
+            mkdir -p "$(dirname "$dest_dir/$dest_rel")"
+            cp "$src_file" "$dest_dir/$dest_rel"
+            git -C "$dest_dir" config user.name "github-actions[bot]"
+            git -C "$dest_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$dest_dir" add -- "$dest_rel"
+            if git -C "$dest_dir" diff --cached --quiet; then
+              echo "Sem mudança em $dest_rel; nada a publicar."
+            else
+              git -C "$dest_dir" commit -m "ttv-tui ${version}"
+              git -C "$dest_dir" push origin HEAD
+              echo "Publicado $dest_rel em $repo_ssh."
+            fi
+            unset GIT_SSH_COMMAND
+            rm -f "$key_file"
+          }
+
+          publish_repo \
+            "$HOMEBREW_TAP_DEPLOY_KEY" \
+            "$RUNNER_TEMP/homebrew_tap_key" \
+            "git@github.com:pedrosatin/homebrew-tap.git" \
+            "$RUNNER_TEMP/homebrew-tap" \
+            "$formula" \
+            "Formula/ttv-tui.rb"
+
+          publish_repo \
+            "$SCOOP_BUCKET_DEPLOY_KEY" \
+            "$RUNNER_TEMP/scoop_bucket_key" \
+            "git@github.com:pedrosatin/scoop-bucket.git" \
+            "$RUNNER_TEMP/scoop-bucket" \
+            "$manifest" \
+            "ttv-tui.json"
 
       # No ensaio (workflow_dispatch), confere que o conjunto de artefatos
       # normalizado bate com a última release publicada. Checksums e binários

@@ -82,8 +82,8 @@ release:
 
 # Fórmula Homebrew: binários das releases (Darwin e Linux). A v0.10.2 já
 # publica ttv-tui_*_darwin_{arm64,amd64}.tar.gz; compilar do fonte fica de fora.
-# Publicação no tap só com tag v* (deploy key). Snapshot gera o .rb em dist/
-# sem escrever no repositório.
+# skip_upload: true sempre: o GoReleaser só gera dist/homebrew/Formula/ttv-tui.rb.
+# O workflow publica no tap depois da attestation e da promoção do rascunho.
 brews:
   - name: ttv-tui
     ids:
@@ -92,8 +92,7 @@ brews:
     description: "Browse and watch Twitch in the terminal"
     license: MIT
     directory: Formula
-    commit_msg_template: "ttv-tui {{ .Tag }}"
-    skip_upload: "{{ .IsSnapshot }}"
+    skip_upload: true
     dependencies:
       - name: mpv
       - name: streamlink
@@ -102,15 +101,10 @@ brews:
     repository:
       owner: pedrosatin
       name: homebrew-tap
-      branch: main
-      git:
-        # Vazio no snapshot: o GoReleaser não clona nem faz push no tap.
-        url: "{{ if .IsSnapshot }}{{ else }}ssh://git@github.com/pedrosatin/homebrew-tap.git{{ end }}"
-        # Caminho para o arquivo da chave (nunca o conteúdo inline).
-        private_key: "{{ .Env.HOMEBREW_TAP_KEY_PATH }}"
 
 # Manifesto Scoop: zip Windows da release, com mpv e streamlink via depends.
-# Mesma regra de publicação do brew (só tag v*, deploy key).
+# Mesma regra: geração local em dist/scoop/; publicação no bucket pelo workflow
+# depois da promoção do rascunho.
 scoops:
   - name: ttv-tui
     ids:
@@ -118,15 +112,10 @@ scoops:
     homepage: "https://github.com/pedrosatin/ttv-tui"
     description: "Terminal UI for Twitch"
     license: MIT
-    commit_msg_template: "ttv-tui {{ .Tag }}"
-    skip_upload: "{{ .IsSnapshot }}"
+    skip_upload: true
     depends:
       - extras/mpv
       - extras/streamlink
     repository:
       owner: pedrosatin
       name: scoop-bucket
-      branch: main
-      git:
-        url: "{{ if .IsSnapshot }}{{ else }}ssh://git@github.com/pedrosatin/scoop-bucket.git{{ end }}"
-        private_key: "{{ .Env.SCOOP_BUCKET_KEY_PATH }}"

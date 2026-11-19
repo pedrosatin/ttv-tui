@@ -174,14 +174,15 @@ warn_path() {
 }
 
 # Attestation de proveniência do GitHub (raiz além do checksums.txt).
-# Com gh presente, falha se a attestation for inválida. Sem gh, avisa uma
-# vez e segue com a conferência por checksums.txt.
+# Com gh presente e autenticado, falha se a attestation for inválida (ou se
+# o login faltar). Sem gh, avisa uma vez e segue com checksums.txt.
+SIGNER_WORKFLOW="${REPO}/.github/workflows/release.yml"
 attestation_warned=false
 verify_attestation() {
   local file="$1"
   if command -v gh >/dev/null 2>&1; then
     info "Verificando attestation de proveniência de $(basename "$file")..."
-    if ! gh attestation verify "$file" --repo "$REPO"; then
+    if ! gh attestation verify "$file" --repo "$REPO" --signer-workflow "$SIGNER_WORKFLOW"; then
       die "attestation inválida para $(basename "$file")"
     fi
   elif [[ "$attestation_warned" != true ]]; then
@@ -202,7 +203,7 @@ if [[ "$dry_run" == true ]]; then
   printf '  2. Baixar checksums: curl -fsSLO "%s"\n' "$checksums_url"
   printf '  3. Verificar SHA-256 de %s com %s -c\n' "$tarball" "${checksum_cmd[*]:-sha256sum ou shasum -a 256 (não encontrado)}"
   if command -v gh >/dev/null 2>&1; then
-    printf '  4. Verificar attestation: gh attestation verify %s --repo %s\n' "$tarball" "$REPO"
+    printf '  4. Verificar attestation: gh attestation verify %s --repo %s --signer-workflow %s\n' "$tarball" "$REPO" "$SIGNER_WORKFLOW"
   else
     printf '  4. gh não encontrado: pular attestation e seguir só com checksums.txt\n'
   fi

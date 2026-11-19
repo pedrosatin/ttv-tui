@@ -25,13 +25,13 @@ Shortcut help, opened with `?`:
 
 You need `streamlink` and `mpv` to play video. On Linux and Windows, `streamlink` is downloaded automatically on first playback if missing. On Windows, the single window plays video without `mpv`; only the terminal mode needs it. The [FAQ](#faq) has the install command for each system.
 
-**Linux and macOS.** The script installs the latest release, verifies the SHA-256 checksum, checks the GitHub build provenance attestation when `gh` is on `PATH` (and warns when it is not), then installs to `~/.local/bin`:
+**Linux and macOS.** The script installs the latest release, verifies the SHA-256 checksum, checks the GitHub build provenance attestation when `gh` is on `PATH` (and warns when it is not), then installs to `~/.local/bin`. When `gh` is present it must be authenticated (`gh auth login`); without a login the installer fails closed:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pedrosatin/ttv-tui/main/packaging/install.sh | bash
 ```
 
-**Windows x64.** From a checkout, in PowerShell. The script installs the latest release, verifies the SHA-256 checksum, and checks the GitHub build provenance attestation when `gh` is on `PATH`:
+**Windows x64.** From a checkout, in PowerShell. The script installs the latest release, verifies the SHA-256 checksum, and checks the GitHub build provenance attestation when `gh` is on `PATH` (authenticated; fails closed without a login):
 
 ```powershell
 .\packaging\install.ps1
@@ -42,10 +42,12 @@ winget install --id streamlink.streamlink -e
 <details>
 <summary>Other ways to install</summary>
 
-**Release archive.** Download the archive for your OS and `checksums.txt` from the [latest release](https://github.com/pedrosatin/ttv-tui/releases/latest). Check the SHA-256 with `sha256sum`, `shasum -a 256` or `Get-FileHash -Algorithm SHA256`. With the [GitHub CLI](https://cli.github.com/) installed, also verify build provenance:
+**Release archive.** Download the archive for your OS and `checksums.txt` from the [latest release](https://github.com/pedrosatin/ttv-tui/releases/latest). Check the SHA-256 with `sha256sum`, `shasum -a 256` or `Get-FileHash -Algorithm SHA256`. With the [GitHub CLI](https://cli.github.com/) installed and authenticated (`gh auth login`), also verify build provenance against the release workflow:
 
 ```bash
-gh attestation verify ttv-tui_<version>_<os>_<arch>.tar.gz --repo pedrosatin/ttv-tui
+gh attestation verify ttv-tui_<version>_<os>_<arch>.tar.gz \
+  --repo pedrosatin/ttv-tui \
+  --signer-workflow pedrosatin/ttv-tui/.github/workflows/release.yml
 ```
 
 Then put `ttv-tui` in your `PATH`.
