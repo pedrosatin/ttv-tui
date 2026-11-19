@@ -19,7 +19,7 @@ const (
 	PreviewStatePlaying  PreviewState = "tocando"
 	PreviewStateBreak    PreviewState = "intervalo"
 	PreviewStateOffline  PreviewState = "offline"
-	PreviewStateFailed   PreviewState = "falhou"
+	PreviewStateFailed   PreviewState = "erro"
 	PreviewStateEnded    PreviewState = "encerrado"
 )
 
