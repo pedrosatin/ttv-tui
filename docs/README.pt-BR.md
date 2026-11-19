@@ -63,7 +63,20 @@ git clone https://github.com/pedrosatin/ttv-tui.git && cd ttv-tui
 CGO_ENABLED=0 go build -o ~/.local/bin/ttv-tui ./cmd/ttv-tui
 ```
 
-**Homebrew e Scoop.** A [fórmula](../packaging/homebrew/README.md) e o [manifesto do Scoop](../packaging/scoop/ttv-tui.json) estão prontos, mas ainda não foram publicados.
+**Homebrew:**
+
+```bash
+brew install pedrosatin/tap/ttv-tui
+```
+
+**Scoop:**
+
+```powershell
+scoop bucket add pedrosatin https://github.com/pedrosatin/scoop-bucket.git
+scoop install pedrosatin/ttv-tui
+```
+
+Detalhes: [Homebrew](../packaging/homebrew/README.md), [Scoop](../packaging/scoop/README.md).
 
 **Opções do script.** Sem argumentos, os scripts instalam a release mais recente. Para fixar uma versão, passe-a como argumento: `install.sh 0.10.2` ou `install.ps1 -Version 0.10.2`. Esses números de versão são só um exemplo; escolha uma das [releases](https://github.com/pedrosatin/ttv-tui/releases). Veja o plano com `--dry-run` ou mude o destino com `--prefix`. No Windows, `install.ps1 -DryRun` mostra o plano.
 
