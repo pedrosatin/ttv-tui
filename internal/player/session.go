@@ -853,7 +853,22 @@ func (s *Session) toggleMute() error {
 	if s.hasWantMuted {
 		base = s.wantMuted
 	}
-	want := !base
+	return s.setMuteLocked(!base)
+}
+
+// setMute sets mpv's mute to muted.
+func (s *Session) setMute(muted bool) error {
+	s.mu.Lock()
+	if s.stopped || s.state == StateEnded || s.state == StateError {
+		s.mu.Unlock()
+		return fmt.Errorf("player: session not controllable")
+	}
+	return s.setMuteLocked(muted)
+}
+
+// setMuteLocked records the wish and sends the IPC command. Caller holds s.mu
+// on entry; it is released before the write.
+func (s *Session) setMuteLocked(want bool) error {
 	prevWant, prevHas := s.wantMuted, s.hasWantMuted
 	s.wantMuted, s.hasWantMuted = want, true
 	s.wantMutedSeq++

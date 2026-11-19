@@ -495,5 +495,22 @@
   "action.window_list": "Show or hide the list",
   "keymap.cancel": "Esc cancel",
   "keymap.migration": "New shortcuts: {action.toggle_list/action.toggle_chat/action.cycle_layout} for panels; {action.channel_filter} for languages; {action.categories:1/action.favorites/action.recents} to navigate. Restore the old keys with keymap = \"classic\" in %s.",
-  "keymap.save_error": "Save keymap migration: %w"
+  "keymap.save_error": "Save keymap migration: %w",
+  "preview.starting": "Preview loading...",
+  "preview.starting_channel": "Preview loading %s...",
+  "preview.playing": "Preview %s",
+  "preview.break": "Preview ad break (%ds)",
+  "preview.offline": "Preview: channel offline",
+  "preview.fail.network": "Preview failed: network",
+  "preview.fail.timeout": "Preview failed: timed out",
+  "preview.fail.streamlink_missing": "Preview failed: streamlink missing",
+  "preview.fail.mpv_missing": "Preview failed: mpv missing",
+  "preview.fail.no_plugin": "Preview failed: unsupported URL",
+  "preview.fail.blocked": "Preview failed: site refused (HTTP 403)",
+  "preview.fail.browser_missing": "Preview failed: no browser for Kick",
+  "preview.fail.vod": "Preview failed: on-demand video",
+  "preview.fail.bot_check": "Preview failed: bot check",
+  "preview.fail.login_required": "Preview failed: sign-in required",
+  "preview.fail.unknown": "Preview failed",
+  "preview.channels_only": "Preview is only for channels"
 }

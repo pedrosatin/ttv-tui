@@ -40,7 +40,9 @@ type Options struct {
 	Source     catalog.Source
 	Validate   func(ctx context.Context, token string) (auth.Validation, error)
 	Player     *player.Manager
-	Chat       *chat.Manager
+	// PreviewPlayer replaces the preview Manager (nil: a NewPreview beside Player).
+	PreviewPlayer *player.Manager
+	Chat          *chat.Manager
 	// Kick replaces the Kick provider, so a test can run without the network
 	// (nil: the real one, built from the config).
 	Kick *kick.Provider
@@ -166,11 +168,18 @@ func Run(opts Options) error {
 		logPlayerNotes(logw, playerMgr.Notes(), appCat)
 	}()
 
+	previewMgr, stopPreview := previewManager(opts.PreviewPlayer, registryDir)
+	defer func() {
+		stopPreview()
+		logPlayerNotes(logw, previewMgr.Notes(), appCat)
+	}()
+
 	appStore := store.New(statePath)
 	st, corruptNotice := loadState(appStore, appCat)
 
 	dataDir, _ := config.DataDir()
 	playback := newPlaybackBridge(playerMgr, cfg.StreamlinkPath, dataDir)
+	playback.setPreview(previewMgr)
 	playback.setRegistry(providerRegistry)
 	playback.setContext(ctx)
 	defer func() {
@@ -212,6 +221,7 @@ func Run(opts Options) error {
 	)
 	playback.setSender(p.Send)
 	go forwardPlayerEvents(ctx, p, playerMgr, playback.observePlayer)
+	go forwardPreviewEvents(ctx, p, previewMgr)
 	playback.startUpdateCheck()
 	go chats.forward(ctx, p.Send)
 	final, runErr := p.Run()
@@ -354,6 +364,15 @@ func playerManager(injected *player.Manager, registryDir string) (*player.Manage
 		return injected, injected.Stop
 	}
 	mgr := player.New(player.Options{RegistryDir: registryDir})
+	return mgr, mgr.Close
+}
+
+// previewManager is playerManager for the live preview session.
+func previewManager(injected *player.Manager, registryDir string) (*player.Manager, func()) {
+	if injected != nil {
+		return injected, injected.Stop
+	}
+	mgr := player.NewPreview(player.Options{RegistryDir: registryDir})
 	return mgr, mgr.Close
 }
 

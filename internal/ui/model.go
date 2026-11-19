@@ -261,6 +261,7 @@ type Model struct {
 	playback         Playback
 	list             listState
 	player           playbackState
+	preview          previewState
 	chat             chatState
 	layout           layoutState
 	hosted           hostedState
@@ -706,6 +707,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case PlayerStatusMsg:
 		return m.applyPlayerStatus(msg)
+
+	case PreviewStatusMsg:
+		return m.applyPreviewStatus(msg)
+
+	case previewSwitchMsg:
+		return m.applyPreviewSwitch(msg)
 
 	case ComponentProgressMsg:
 		return m.applyComponentProgress(msg)

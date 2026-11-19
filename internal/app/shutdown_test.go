@@ -111,14 +111,23 @@ func runTUIHelper() int {
 	dir := os.Getenv("TTV_APP_DIR")
 	mgr := player.New(helperPlayerOptions(dir))
 	defer mgr.Close()
-	if _, err := mgr.Start(twitchTarget("hup")); err != nil {
-		return 3
+	previewMode := os.Getenv("TTV_APP_PREVIEW") == "1"
+	// Ticket 01 PTY: no main video yet, so Space can open a preview.
+	if !previewMode {
+		if _, err := mgr.Start(twitchTarget("hup")); err != nil {
+			return 3
+		}
 	}
 	opts := Options{
 		ConfigPath: filepath.Join(dir, "config.toml"),
 		StatePath:  filepath.Join(dir, "state", "state.json"),
 		Source:     emptySource{},
 		Player:     mgr,
+	}
+	if previewMode {
+		previewMgr := player.NewPreview(helperPlayerOptions(dir))
+		defer previewMgr.Close()
+		opts.PreviewPlayer = previewMgr
 	}
 	// Kick without the network: a fixed room, a chat that plays a recorded
 	// session and a channel the site would report as live.
@@ -146,7 +155,7 @@ func runTUIHelper() int {
 			return 3
 		}
 	}
-	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" || os.Getenv("TTV_APP_RECENT_ORDER") == "1" || os.Getenv("TTV_APP_SEARCH_ESC") == "1" || os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" || os.Getenv("TTV_APP_FILTER_SCROLL") == "1" {
+	if os.Getenv("TTV_APP_RICH") == "1" || os.Getenv("TTV_APP_PREVIEW") == "1" || os.Getenv("TTV_APP_FILTER_CLEAR") == "1" || os.Getenv("TTV_APP_RECENT_ORDER") == "1" || os.Getenv("TTV_APP_SEARCH_ESC") == "1" || os.Getenv("TTV_APP_CHANNEL_FILTER") == "1" || os.Getenv("TTV_APP_FILTER_SCROLL") == "1" {
 		// Logged-in chat whose dial never reaches the network, so every UI
 		// mode can be entered from the PTY.
 		opts.Source = oneChannelSource{}
@@ -378,8 +387,13 @@ func startTUIOnPTY(t *testing.T, extraEnv ...string) *ptyTUI {
 		}
 	})
 
-	p.playerPid = waitPid(t, filepath.Join(dir, "player.pid"), 10*time.Second)
-	p.childPid = waitPid(t, filepath.Join(dir, "child.pid"), 10*time.Second)
+	previewOnly := false
+	for _, e := range extraEnv {
+		if e == "TTV_APP_PREVIEW=1" {
+			previewOnly = true
+			break
+		}
+	}
 	// Alternate-screen enter is written by tea.Program.Run, after Run has
 	// installed its signal handling.
 	deadline := time.Now().Add(15 * time.Second)
@@ -389,6 +403,12 @@ func startTUIOnPTY(t *testing.T, extraEnv ...string) *ptyTUI {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	if previewOnly {
+		// Ticket 01: no main video at start; the preview player appears on Space.
+		return p
+	}
+	p.playerPid = waitPid(t, filepath.Join(dir, "player.pid"), 10*time.Second)
+	p.childPid = waitPid(t, filepath.Join(dir, "child.pid"), 10*time.Second)
 	if !alive(p.playerPid) || !alive(p.childPid) {
 		t.Fatal("player group not running before the test action")
 	}

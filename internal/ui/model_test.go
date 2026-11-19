@@ -810,13 +810,19 @@ func TestInvalidTokenWarnsOnceInStatusBarWithoutCrashingApp(t *testing.T) {
 }
 
 type fakePlayback struct {
-	started     []string
-	targets     []PlayTarget
-	stopped     int
-	pauses      int
-	volDeltas   []int
-	muteToggles int
-	startMsg    PlayerStatusMsg
+	started          []string
+	targets          []PlayTarget
+	stopped          int
+	pauses           int
+	volDeltas        []int
+	muteToggles      int
+	startMsg         PlayerStatusMsg
+	previewStarted   []string
+	previewTargets   []PlayTarget
+	previewStopped   int
+	mainMutedForPrev bool
+	mainMuteRestored bool
+	previewStartMsg  PreviewStatusMsg
 }
 
 func (f *fakePlayback) Start(login string, selection uint64) tea.Cmd {
@@ -869,6 +875,40 @@ func (f *fakePlayback) ToggleMute() tea.Cmd {
 }
 
 func (f *fakePlayback) Listen() tea.Cmd { return nil }
+
+func (f *fakePlayback) StartPreview(target PlayTarget, selection uint64) tea.Cmd {
+	label := target.Channel.PlayerLabel()
+	if label == "" {
+		label = target.Channel.Login
+	}
+	f.previewStarted = append(f.previewStarted, label)
+	f.previewTargets = append(f.previewTargets, target)
+	msg := f.previewStartMsg
+	if msg.State == "" {
+		msg = PreviewStatusMsg{Generation: uint64(len(f.previewStarted)), State: PreviewStateStarting, Login: label, Selection: selection}
+	} else {
+		msg.Selection = selection
+		msg.Login = label
+	}
+	return func() tea.Msg { return msg }
+}
+
+func (f *fakePlayback) StopPreview() tea.Cmd {
+	f.previewStopped++
+	return func() tea.Msg {
+		return PreviewStatusMsg{State: PreviewStateEnded}
+	}
+}
+
+func (f *fakePlayback) MuteMainForPreview() tea.Cmd {
+	f.mainMutedForPrev = true
+	return func() tea.Msg { return nil }
+}
+
+func (f *fakePlayback) RestoreMainMute() tea.Cmd {
+	f.mainMuteRestored = true
+	return func() tea.Msg { return nil }
+}
 
 func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {
 	catEN, err := i18n.New(i18n.LangEN)

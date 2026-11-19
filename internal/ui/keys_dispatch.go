@@ -54,6 +54,9 @@ func (m Model) quit() (tea.Model, tea.Cmd) {
 	m.quitting = true
 	var cmds []tea.Cmd
 	if m.playback != nil {
+		if m.previewActive() {
+			cmds = append(cmds, m.playback.StopPreview())
+		}
 		cmds = append(cmds, m.playback.Stop())
 	}
 	if m.chat.session != nil {
@@ -89,11 +92,18 @@ func (m Model) keyStopVideo() (tea.Model, tea.Cmd) {
 	if m.playback == nil {
 		return m, nil
 	}
+	var cmds []tea.Cmd
+	if m.previewOpen() {
+		if stop := m.closePreview(); stop != nil {
+			cmds = append(cmds, stop)
+		}
+	}
 	if m.player.state == PlayerStateNone || m.player.state == PlayerStateEnded {
-		return m, nil
+		return m, tea.Batch(cmds...)
 	}
 	m.player.stopAfterStart = m.player.awaiting != 0
-	return m, m.playback.Stop()
+	cmds = append(cmds, m.playback.Stop())
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) keyReconnectChat() (tea.Model, tea.Cmd) {
@@ -246,11 +256,14 @@ func (m Model) keyChannelFilter() (tea.Model, tea.Cmd) {
 }
 
 // keyClear is Esc outside any input mode: it leaves the chat, then clears the
-// filter, then steps back one level.
+// filter, then steps back one level. An open preview closes first and stops there.
 func (m Model) keyClear() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
 		m.setFocus(FocusList)
 		return m, nil
+	}
+	if m.previewOpen() {
+		return m, m.closePreview()
 	}
 	if m.list.filter != "" {
 		m.list.filter = ""
@@ -289,13 +302,24 @@ func (m Model) keyFilter() (tea.Model, tea.Cmd) {
 
 func (m Model) keySearch() (tea.Model, tea.Cmd) {
 	m.setFocus(FocusList)
+	var cmds []tea.Cmd
+	if m.previewOpen() {
+		if stop := m.closePreview(); stop != nil {
+			cmds = append(cmds, stop)
+		}
+	}
 	if q := strings.TrimSpace(m.list.filter); q != "" {
-		return m.startSearch(q)
+		next, cmd := m.startSearch(q)
+		m = next.(Model)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
 	}
 	m.clearStaleStatusErrors()
 	m.list.search.active = true
 	m.list.search.input = ""
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 // canRetryPlayer reports whether r restarts the player. A player error takes
@@ -337,7 +361,15 @@ func (m Model) keyMute() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) keyPause() (tea.Model, tea.Cmd) {
-	if m.playback == nil || !m.player.controllable() {
+	if m.playback == nil {
+		return m, nil
+	}
+	// Ticket 01: with the list focused and no main video, Space is preview.
+	// Ticket 02 will make Space always preview on the list, even with video.
+	if m.Focus() == FocusList && !m.mainVideoActive() {
+		return m.togglePreview()
+	}
+	if !m.player.controllable() {
 		return m, nil
 	}
 	return m, m.playback.TogglePause()
@@ -378,7 +410,7 @@ func (m Model) keyUp() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.moveHighlight(-1)
-	return m, nil
+	return m.schedulePreviewSwitch()
 }
 
 // keyDown also asks for the next page when the highlight nears the end.
@@ -390,7 +422,10 @@ func (m Model) keyDown() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.moveHighlight(1)
-	return m.loadNextPageIfNeeded()
+	next, cmd := m.loadNextPageIfNeeded()
+	m = next.(Model)
+	m, switchCmd := m.schedulePreviewSwitch()
+	return m, tea.Batch(switchCmd, cmd)
 }
 
 // loadNextPageIfNeeded carrega a próxima página quando o destaque chega ao fim.
@@ -418,7 +453,7 @@ func (m Model) keyHome() (tea.Model, tea.Cmd) {
 		if !m.list.hardErr() {
 			m.moveHighlight(-m.totalItemCount())
 		}
-		return m, nil
+		return m.schedulePreviewSwitch()
 	}
 	return m.scrollChatHome(), nil
 }
@@ -429,7 +464,10 @@ func (m Model) keyGoLive() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.moveHighlight(m.totalItemCount())
-		return m.loadNextPageIfNeeded()
+		next, cmd := m.loadNextPageIfNeeded()
+		m = next.(Model)
+		m, switchCmd := m.schedulePreviewSwitch()
+		return m, tea.Batch(switchCmd, cmd)
 	}
 	m.chatFollowLiveNow()
 	return m, nil
@@ -442,7 +480,18 @@ func (m Model) keySelect() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
 		return m.enterCompose()
 	}
-	return m.selectHighlighted()
+	var cmds []tea.Cmd
+	if m.previewOpen() {
+		if stop := m.closePreview(); stop != nil {
+			cmds = append(cmds, stop)
+		}
+	}
+	next, cmd := m.selectHighlighted()
+	m = next.(Model)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) keyPageDown() (tea.Model, tea.Cmd) {
@@ -487,8 +536,11 @@ func (m Model) moveListPage(direction int) (tea.Model, tea.Cmd) {
 			break
 		}
 	}
+	m, switchCmd := m.schedulePreviewSwitch()
 	if direction > 0 {
-		return m.loadNextPageIfNeeded()
+		next, cmd := m.loadNextPageIfNeeded()
+		m = next.(Model)
+		return m, tea.Batch(switchCmd, cmd)
 	}
-	return m, nil
+	return m, switchCmd
 }

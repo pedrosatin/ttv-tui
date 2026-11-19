@@ -109,6 +109,17 @@ type Playback interface {
 	AdjustVolume(delta int) tea.Cmd
 	// ToggleMute mutes or unmutes the active playback. Status arrives via PlayerStatusMsg.
 	ToggleMute() tea.Cmd
+	// StartPreview opens a muted low-quality preview of target. Status arrives
+	// as PreviewStatusMsg. selection grows with each call, like StartTarget.
+	StartPreview(target PlayTarget, selection uint64) tea.Cmd
+	// StopPreview ends the active preview and returns a Cmd that yields a
+	// terminal PreviewStatusMsg.
+	StopPreview() tea.Cmd
+	// MuteMainForPreview silences the main player while a preview is open and
+	// remembers the prior mute for RestoreMainMute (ticket 02).
+	MuteMainForPreview() tea.Cmd
+	// RestoreMainMute restores the mute saved by MuteMainForPreview.
+	RestoreMainMute() tea.Cmd
 	// Listen is optional; implementations that push events via the tea program
 	// may return nil.
 	Listen() tea.Cmd

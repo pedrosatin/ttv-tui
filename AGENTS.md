@@ -28,7 +28,9 @@ arquitetura.
    facilitar a migração, mas o app nunca depende desse arquivo.
 
 4. **Um processo para a TUI, o vídeo fora dela.** O player roda em processo
-   separado e é encerrado quando a TUI sai ou troca de canal. Um canal por vez.
+   separado e é encerrado quando a TUI sai ou troca de canal. Um canal principal
+   por vez; a prévia ao vivo é a única exceção, numa segunda sessão muda e leve
+   ([ADR 0018](docs/adr/0018-previa-ao-vivo.md)), e nunca há mais de uma prévia.
 
 5. **Silêncio de IPC não é evidência de anúncio.** O estado de intervalo só existe
    com início e fim verificáveis; ausência de eventos do mpv por alguns segundos é

@@ -83,6 +83,9 @@ func (b *playbackBridge) adopt(res components.Result) {
 	b.resolved = res
 	b.hasResolved = true
 	b.mgr.SetStreamlink(res.Path, res.Env...)
+	if b.preview != nil {
+		b.preview.SetStreamlink(res.Path, res.Env...)
+	}
 	b.mu.Unlock()
 	b.markInUse(res)
 }
