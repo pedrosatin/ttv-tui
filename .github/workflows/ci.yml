@@ -175,7 +175,11 @@ jobs:
 
       - name: Install SDL3 and libmpv (macOS)
         if: runner.os == 'macOS'
-        run: brew install pkgconf sdl3 mpv
+        run: |
+          brew install pkgconf sdl3 mpv
+          # O mpv.pc exige libarchive, que o Homebrew instala keg-only, fora do
+          # caminho padrão do pkg-config.
+          echo "PKG_CONFIG_PATH=$(brew --prefix libarchive)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
 
       - name: Install SDL3 and libmpv (Windows)
         if: runner.os == 'Windows'
