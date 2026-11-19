@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -151,7 +150,7 @@ func Run(opts Options) error {
 	// preview manager nests its records under registryDir/preview.
 	interactive := isInteractive(input)
 	handleOrphans(registryDir, input, output, logw, interactive, appCat)
-	handleOrphans(filepath.Join(registryDir, "preview"), input, output, logw, interactive, appCat)
+	handleOrphans(player.PreviewRegistryDir(registryDir), input, output, logw, interactive, appCat)
 
 	// From here on a player may exist. Catch the termination signals ourselves
 	// (Bubble Tea's handler ignores SIGHUP, whose default action would kill us

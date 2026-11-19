@@ -14,6 +14,16 @@ const PreviewQuality = "worst"
 // single window. The compositor still places the window (ADR 0006).
 const PreviewAutofit = "480x270"
 
+// previewSubdir nests the preview runtime and registry directories under the
+// main ones, so the two managers never share a session path.
+const previewSubdir = "preview"
+
+// PreviewRegistryDir is where NewPreview keeps its registry records for a
+// main registryDir; startup cleanup scans it for orphans too.
+func PreviewRegistryDir(registryDir string) string {
+	return filepath.Join(registryDir, previewSubdir)
+}
+
 // NewPreview builds a Manager with the preview profile: lowest quality, muted
 // mpv, no input.conf, a small-window hint, and no focus steal when mpv accepts
 // --focus-on=never. Generations are independent of the main Manager. Runtime
@@ -22,12 +32,12 @@ const PreviewAutofit = "480x270"
 func NewPreview(opts Options) *Manager {
 	opts.Preview = true
 	if opts.RuntimeDir == "" {
-		opts.RuntimeDir = filepath.Join(defaultRuntimeDir(), "preview")
+		opts.RuntimeDir = filepath.Join(defaultRuntimeDir(), previewSubdir)
 	} else {
-		opts.RuntimeDir = filepath.Join(opts.RuntimeDir, "preview")
+		opts.RuntimeDir = filepath.Join(opts.RuntimeDir, previewSubdir)
 	}
 	if opts.RegistryDir != "" {
-		opts.RegistryDir = filepath.Join(opts.RegistryDir, "preview")
+		opts.RegistryDir = PreviewRegistryDir(opts.RegistryDir)
 	}
 	// Preview never needs mpv key bindings: skip writing input.conf entirely.
 	if opts.WriteInputConf == nil {
