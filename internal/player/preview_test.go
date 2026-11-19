@@ -151,11 +151,10 @@ exit 1
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, err := filepath.EvalSymlinks(filepath.Join(runtimeDir, "preview"))
-	if err != nil {
-		// Runtime may not exist as symlink root; fall back to joined path.
-		root = filepath.Join(runtimeDir, "preview")
-	}
+	// pwd reports the resolved path (/private/tmp on macOS) while the manager
+	// builds paths from runtimeDir as given, and the session tree is gone by
+	// now: compare paths with their existing prefix resolved.
+	root := resolveExistingPrefix(t, filepath.Join(runtimeDir, "preview"))
 	cwd := strings.TrimSpace(string(pwd))
 	if filepath.Dir(cwd) != root && !strings.HasPrefix(cwd, root) {
 		t.Fatalf("streamlink ran in %q, want a session under %q", cwd, root)
@@ -175,18 +174,7 @@ exit 1
 	if i < 0 || filepath.Base(argv[i+1]) != pluginDirName {
 		t.Fatalf("--plugin-dir missing or wrong in %q", argv)
 	}
-	// pwd reports the resolved path (/private/tmp on macOS) while argv keeps
-	// the one the manager built (/tmp). The session is gone by now, so resolve
-	// the runtime root, which still exists, and compare with that prefix.
-	resolvedRuntime, err := filepath.EvalSymlinks(runtimeDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pluginParent := filepath.Dir(argv[i+1])
-	if rest, ok := strings.CutPrefix(pluginParent, runtimeDir); ok {
-		pluginParent = resolvedRuntime + rest
-	}
-	if pluginParent != cwd {
+	if pluginParent := resolveExistingPrefix(t, filepath.Dir(argv[i+1])); pluginParent != cwd {
 		t.Fatalf("--plugin-dir %q not inside session %q", argv[i+1], cwd)
 	}
 }
@@ -249,5 +237,23 @@ func TestPreviewCloseLeavesNoOrphan(t *testing.T) {
 	}
 	if processAlive(pid) {
 		t.Fatalf("preview process %d still alive after Close", pid)
+	}
+}
+
+// resolveExistingPrefix resolves symlinks in the longest prefix of path that
+// still exists and appends the rest unchanged, so a path under a removed
+// session can be compared with one reported by the process (pwd).
+func resolveExistingPrefix(t *testing.T, path string) string {
+	t.Helper()
+	rest := ""
+	for dir := path; ; dir = filepath.Dir(dir) {
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return path
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
 	}
 }
