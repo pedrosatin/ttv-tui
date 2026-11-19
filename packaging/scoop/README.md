@@ -1,9 +1,10 @@
 # Scoop bucket
 
-O GoReleaser gera o manifesto e atualiza o bucket `pedrosatin/scoop-bucket` a
-cada tag `v*`, com deploy key (`SCOOP_BUCKET_DEPLOY_KEY`). O ensaio
-`workflow_dispatch` gera o manifesto em `dist/scoop/ttv-tui.json` e não escreve
-no bucket. O manifesto declara `extras/mpv` e `extras/streamlink` em `depends`.
+O GoReleaser só gera o manifesto em `dist/scoop/ttv-tui.json` (`skip_upload:
+true`). Depois da attestation e da promoção do rascunho, o workflow publica no
+bucket `pedrosatin/scoop-bucket` com a deploy key `SCOOP_BUCKET_DEPLOY_KEY`. O
+ensaio `workflow_dispatch` gera e confere o manifesto e não escreve no bucket.
+O manifesto declara `extras/mpv` e `extras/streamlink` em `depends`.
 
 Instalação:
 

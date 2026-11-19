@@ -36,12 +36,30 @@ CURL
 chmod +x "$work/bin/curl"
 # gh mockado: os fixtures não têm attestation real. O cenário sem gh
 # remove este binário; o de attestation inválida troca por um que falha.
+# Exige --repo e --signer-workflow iguais aos do instalador.
 cat > "$work/bin/gh" <<'GH'
 #!/usr/bin/env bash
 set -euo pipefail
-# Aceita: gh attestation verify <arquivo> --repo pedrosatin/ttv-tui
+# Aceita: gh attestation verify <arquivo> --repo pedrosatin/ttv-tui --signer-workflow pedrosatin/ttv-tui/.github/workflows/release.yml
 [[ "${1:-}" == attestation && "${2:-}" == verify ]] || { echo "gh mock: comando inesperado: $*" >&2; exit 2; }
-echo "gh mock: attestation OK para $3"
+file="${3:-}"
+shift 3 || true
+repo=""
+signer=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo) repo="${2:-}"; shift 2 ;;
+    --signer-workflow) signer="${2:-}"; shift 2 ;;
+    *) echo "gh mock: flag inesperada: $1" >&2; exit 2 ;;
+  esac
+done
+[[ -n "$file" ]] || { echo "gh mock: arquivo ausente" >&2; exit 2; }
+[[ "$repo" == "pedrosatin/ttv-tui" ]] || { echo "gh mock: --repo inesperado: $repo" >&2; exit 2; }
+[[ "$signer" == "pedrosatin/ttv-tui/.github/workflows/release.yml" ]] || {
+  echo "gh mock: --signer-workflow inesperado: $signer" >&2
+  exit 2
+}
+echo "gh mock: attestation OK para $file"
 exit 0
 GH
 chmod +x "$work/bin/gh"

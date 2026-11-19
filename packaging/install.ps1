@@ -22,7 +22,7 @@ if ($DryRun) {
     Write-Host "Plan: version $Version; destination $binDir\ttv-tui.exe"
     if ($versionNumber -eq 'latest') { Write-Host 'Resolve the latest version on GitHub before downloading.' }
     else { Write-Host "Download $base/$archive and $base/checksums.txt" }
-    Write-Host 'Verify SHA-256, then build provenance with gh attestation verify when gh is available (warn and continue on checksums.txt alone when it is not).'
+    Write-Host 'Verify SHA-256, then build provenance with gh attestation verify --repo pedrosatin/ttv-tui --signer-workflow pedrosatin/ttv-tui/.github/workflows/release.yml when gh is available and authenticated (warn and continue on checksums.txt alone when gh is missing; fail closed when gh is present but unauthenticated or the attestation is invalid).'
     Write-Host 'Extract the binary, and add the directory to the user PATH if needed.'
     Write-Host "When the release has it, install the single window from ttv-tui-window_${versionNumber}_windows_amd64.zip into $binDir\ttv-tui-window"
     return
@@ -45,6 +45,7 @@ function Invoke-DownloadWithRetry {
 }
 function Test-Attestation {
     param([string]$FilePath)
+    $signerWorkflow = "$repo/.github/workflows/release.yml"
     $gh = Get-Command gh -ErrorAction SilentlyContinue
     if ($null -eq $gh) {
         if (-not $script:AttestationWarned) {
@@ -54,7 +55,7 @@ function Test-Attestation {
         return
     }
     Write-Host "Verifying build provenance attestation for $(Split-Path -Leaf $FilePath)..."
-    & gh attestation verify $FilePath --repo $repo
+    & gh attestation verify $FilePath --repo $repo --signer-workflow $signerWorkflow
     if ($LASTEXITCODE -ne 0) {
         throw "Invalid attestation for $(Split-Path -Leaf $FilePath)."
     }
