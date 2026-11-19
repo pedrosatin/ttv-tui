@@ -34,6 +34,17 @@ case "$url" in
 esac
 CURL
 chmod +x "$work/bin/curl"
+# gh mockado: os fixtures não têm attestation real. O cenário sem gh
+# remove este binário; o de attestation inválida troca por um que falha.
+cat > "$work/bin/gh" <<'GH'
+#!/usr/bin/env bash
+set -euo pipefail
+# Aceita: gh attestation verify <arquivo> --repo pedrosatin/ttv-tui
+[[ "${1:-}" == attestation && "${2:-}" == verify ]] || { echo "gh mock: comando inesperado: $*" >&2; exit 2; }
+echo "gh mock: attestation OK para $3"
+exit 0
+GH
+chmod +x "$work/bin/gh"
 export PATH="$work/bin:$PATH"
 
 # fail mostra o log do instalador antes de sair: o trap apaga o diretório de trabalho.
@@ -98,3 +109,55 @@ if grep -q 'raw.githubusercontent.com' "$CURL_LOG"; then
   exit 1
 fi
 echo 'OK: tarballs antigos, atuais, layout plano, asset ausente e dry-run.'
+
+# --- Attestation: gh presente e válida (já coberta no loop com o mock) ---
+grep -q 'Verificando attestation de proveniência' "$work/0.2.0.log" ||
+  fail 'gh presente sem verificação de attestation' "$work/0.2.0.log"
+grep -q 'gh mock: attestation OK' "$work/0.2.0.log" ||
+  fail 'gh presente sem attestation válida' "$work/0.2.0.log"
+echo 'OK: gh presente com attestation válida.'
+
+# --- Attestation: gh presente e inválida (deve falhar) ---
+cat > "$work/bin/gh" <<'GH'
+#!/usr/bin/env bash
+echo "gh mock: attestation inválida" >&2
+exit 1
+GH
+chmod +x "$work/bin/gh"
+if bash "$work/shared/install.sh" --prefix "$work/prefix-bad-attest" 0.2.0 > "$work/bad-attest.log" 2>&1; then
+  fail 'attestation inválida deveria falhar' "$work/bad-attest.log"
+fi
+grep -q 'attestation inválida' "$work/bad-attest.log" ||
+  fail 'saída sem mensagem de attestation inválida' "$work/bad-attest.log"
+# Não instalou o binário após a falha.
+[[ ! -e "$work/prefix-bad-attest/bin/ttv-tui" ]] ||
+  fail 'binário instalado após attestation inválida' "$work/bad-attest.log"
+echo 'OK: gh presente com attestation inválida falha.'
+
+# --- Attestation: gh ausente (aviso e segue com checksums) ---
+# PATH sem nenhum diretório que tenha um gh executável (o da máquina ou o mock).
+mkdir -p "$work/path-no-gh"
+for f in "$work/bin"/*; do
+  base="$(basename "$f")"
+  [[ "$base" == gh ]] && continue
+  ln -s "$f" "$work/path-no-gh/$base"
+done
+path_no_gh="$work/path-no-gh"
+old_ifs="$IFS"
+IFS=':'
+for d in $PATH; do
+  [[ -z "$d" || "$d" == "$work/bin" || "$d" == "$work/path-no-gh" ]] && continue
+  [[ -x "$d/gh" ]] && continue
+  path_no_gh="$path_no_gh:$d"
+done
+IFS="$old_ifs"
+if ! env PATH="$path_no_gh" bash "$work/shared/install.sh" --prefix "$work/prefix-no-gh" 0.2.0 > "$work/no-gh.log" 2>&1; then
+  fail 'sem gh deveria seguir com checksums.txt' "$work/no-gh.log"
+fi
+grep -q 'Aviso: gh não encontrado; pulando verificação de attestation' "$work/no-gh.log" ||
+  fail 'sem gh sem o aviso de attestation' "$work/no-gh.log"
+[[ -x "$work/prefix-no-gh/bin/ttv-tui" ]] ||
+  fail 'sem gh não instalou o binário' "$work/no-gh.log"
+echo 'OK: gh ausente avisa e segue com checksums.txt.'
+
+echo 'OK: attestation (válida, inválida, ausente).'
