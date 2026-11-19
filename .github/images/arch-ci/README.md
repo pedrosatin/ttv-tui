@@ -2,7 +2,7 @@
 
 `ghcr.io/pedrosatin/ttv-tui-arch-ci` traz o Arch com os pacotes que os jobs da janela instalavam com `pacman -Syu` a cada execução: SDL3, libmpv, GCC, pkgconf, mesa, as fontes e o git. O Go fica de fora; os jobs continuam instalando a versão do `go.mod` com o `actions/setup-go`.
 
-Quem usa a imagem (depois que a primeira for publicada e o digest entrar nos workflows; até lá os jobs seguem em `archlinux:latest`): os jobs `Govulncheck (root and window)` e `Window (Arch)` do `ci.yml` e `Window binary` do `release.yml`. Eles a referenciam pelo digest (`@sha256:…`), nunca por tag, então uma imagem nova só chega ao CI num commit que troca o digest.
+Quem usa a imagem: os jobs `Govulncheck (root and window)` e `Window (Arch)` do `ci.yml` e `Window binary` do `release.yml`. Eles a referenciam pelo digest (`@sha256:…`), nunca por tag, então uma imagem nova só chega ao CI num commit que troca o digest.
 
 ## Como a imagem é publicada
 
