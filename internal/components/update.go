@@ -270,12 +270,20 @@ func (d *Downloader) RecordUnrecognizedExit(ctx context.Context, version, channe
 		if st.Trial != version {
 			return false, ErrNotOnTrial
 		}
+		// Drops anything that is not an opaque key: a list written before the
+		// keys were hashed (or edited by hand) would compare a raw channel with
+		// its hash, count the same channel twice and keep the raw text on disk.
+		kept := slices.DeleteFunc(slices.Clone(st.TrialUnrecognizedChannels), func(entry string) bool {
+			return !isUnrecognizedChannelKey(entry)
+		})
+		cleaned := len(kept) != len(st.TrialUnrecognizedChannels)
+		st.TrialUnrecognizedChannels = kept
 		if len(st.TrialUnrecognizedChannels) >= unrecognizedExitBlameThreshold {
 			ready = true
-			return false, nil
+			return cleaned, nil
 		}
 		if slices.Contains(st.TrialUnrecognizedChannels, key) {
-			return false, nil
+			return cleaned, nil
 		}
 		st.TrialUnrecognizedChannels = append(st.TrialUnrecognizedChannels, key)
 		ready = len(st.TrialUnrecognizedChannels) >= unrecognizedExitBlameThreshold

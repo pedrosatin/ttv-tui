@@ -36,7 +36,7 @@ func canonicalizeUnrecognizedChannel(raw string) string {
 			return canonicalFromInfo(info.Platform, info.Login)
 		}
 		if u, err := url.Parse(cleaned); err == nil && u.Host != "" {
-			host := strings.ToLower(strings.TrimPrefix(u.Hostname(), "www."))
+			host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 			path := strings.ToLower(strings.Trim(u.EscapedPath(), "/"))
 			if path == "" {
 				return host
@@ -70,7 +70,7 @@ func canonicalFromInfo(plat, id string) string {
 			id = platform.LowerASCII(id)
 		}
 	default:
-		plat = strings.ToLower(strings.TrimPrefix(plat, "www."))
+		plat = strings.TrimPrefix(strings.ToLower(plat), "www.")
 		id = strings.ToLower(id)
 	}
 	if id == "" {
@@ -108,4 +108,18 @@ func stripURLSecrets(raw string) (string, bool) {
 	u.RawQuery = ""
 	u.Fragment = ""
 	return u.Scheme + "://" + u.Host + u.EscapedPath(), true
+}
+
+// isUnrecognizedChannelKey reports whether entry has the shape
+// UnrecognizedChannelKey produces: 64 lowercase hexadecimal characters.
+func isUnrecognizedChannelKey(entry string) bool {
+	if len(entry) != 64 {
+		return false
+	}
+	for _, r := range entry {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return false
+		}
+	}
+	return true
 }

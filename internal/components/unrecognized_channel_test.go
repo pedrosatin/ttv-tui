@@ -155,3 +155,42 @@ func TestRecordUnrecognizedExitStopsGrowingAtThreshold(t *testing.T) {
 		t.Fatalf("grew past threshold: %v", got)
 	}
 }
+
+func TestRecordUnrecognizedExitDropsRawLegacyEntries(t *testing.T) {
+	dataDir := t.TempDir()
+	d := NewDownloader(dataDir)
+	ctx := context.Background()
+	raw := "https://user:s3cret@www.twitch.tv/gaules?token=abc"
+	// A list written before the keys were hashed: raw channel text on disk.
+	if err := saveUpdateState(dataDir, UpdateState{
+		Trial:                     "8.7.0",
+		TrialUnrecognizedChannels: []string{"gaules", raw},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The same channel failing again is one channel, not a second one.
+	ready, err := d.RecordUnrecognizedExit(ctx, "8.7.0", "gaules")
+	if err != nil || ready {
+		t.Fatalf("same channel after legacy list = ready %v err %v; want not ready", ready, err)
+	}
+	got := LoadUpdateState(dataDir).TrialUnrecognizedChannels
+	if len(got) != 1 || got[0] != UnrecognizedChannelKey("gaules") {
+		t.Fatalf("list = %v, want only the opaque key of gaules", got)
+	}
+	data, err := os.ReadFile(stateFilePath(dataDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, part := range []string{"s3cret", "token", "gaules"} {
+		if strings.Contains(string(data), part) {
+			t.Fatalf("state.json still contains %q: %s", part, data)
+		}
+	}
+}
+
+func TestUnrecognizedChannelKeyIgnoresUppercaseWWW(t *testing.T) {
+	if UnrecognizedChannelKey("https://WWW.Example.com/live") != UnrecognizedChannelKey("https://example.com/live") {
+		t.Fatal("WWW.Example.com and example.com give different keys")
+	}
+}
