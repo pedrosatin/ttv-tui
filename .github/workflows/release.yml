@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # The window links SDL3 and libmpv, so it builds where those are packaged.
@@ -74,7 +74,7 @@ jobs:
 
       - name: Package
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == push && "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="snapshot"
@@ -152,7 +152,7 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == push && "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="snapshot"
@@ -181,6 +181,8 @@ jobs:
     name: Release
     needs: [window, window-windows]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 15
     steps:
       - name: Checkout repository
@@ -206,9 +208,9 @@ jobs:
         with:
           distribution: goreleaser
           version: v2.20.2
-          args: ${{ startsWith(github.ref, 'refs/tags/v') && 'release --clean' || 'release --snapshot --clean --skip=publish' }}
+          args: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release --clean' || 'release --snapshot --clean --skip=publish' }}
         env:
-          GORELEASER_CURRENT_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          GORELEASER_CURRENT_TAG: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Require host version check
@@ -218,7 +220,7 @@ jobs:
       # normalizado bate com a última release publicada. Checksums e binários
       # diferem por versão e ldflags; o que importa é o inventário.
       - name: Compare snapshot artifacts with latest release
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
