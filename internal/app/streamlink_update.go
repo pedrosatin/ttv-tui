@@ -137,6 +137,8 @@ func (b *playbackBridge) observePlayer(ev player.Event) {
 		// version bad.
 		b.rollbackAsync(res.Version)
 	case ev.State == player.StateError && ev.Failure == player.FailureUnrecognizedExit && !confirmed:
+		// Login/Identity may be a URL; RecordUnrecognizedExit stores only an
+		// opaque canonical hash (never userinfo or query).
 		channel := ev.Login
 		if channel == "" {
 			channel = ev.Target.Identity()

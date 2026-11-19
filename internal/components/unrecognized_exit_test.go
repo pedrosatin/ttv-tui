@@ -17,6 +17,7 @@ func TestRecordUnrecognizedExitNeedsTwoDistinctChannels(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	keyA := UnrecognizedChannelKey("chan-a")
 	ready, err := d.RecordUnrecognizedExit(ctx, "8.7.0", "chan-a")
 	if err != nil || ready {
 		t.Fatalf("first channel = ready %v, err %v; want not ready", ready, err)
@@ -25,8 +26,8 @@ func TestRecordUnrecognizedExitNeedsTwoDistinctChannels(t *testing.T) {
 	if err != nil || ready {
 		t.Fatalf("same channel again = ready %v, err %v; want not ready", ready, err)
 	}
-	if got := LoadUpdateState(dataDir).TrialUnrecognizedChannels; len(got) != 1 || got[0] != "chan-a" {
-		t.Fatalf("channels = %v, want [chan-a]", got)
+	if got := LoadUpdateState(dataDir).TrialUnrecognizedChannels; len(got) != 1 || got[0] != keyA {
+		t.Fatalf("channels = %v, want [%s]", got, keyA)
 	}
 
 	ready, err = d.RecordUnrecognizedExit(ctx, "8.7.0", "chan-b")
@@ -71,7 +72,7 @@ func TestConfirmStreamlinkClearsUnrecognizedChannels(t *testing.T) {
 	d := NewDownloader(dataDir)
 	if err := saveUpdateState(dataDir, UpdateState{
 		Trial:                     "8.7.0",
-		TrialUnrecognizedChannels: []string{"chan-a"},
+		TrialUnrecognizedChannels: []string{UnrecognizedChannelKey("chan-a")},
 	}); err != nil {
 		t.Fatal(err)
 	}

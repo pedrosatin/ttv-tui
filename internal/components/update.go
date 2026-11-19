@@ -256,23 +256,28 @@ func (d *Downloader) ConfirmStreamlink(ctx context.Context, version string) erro
 }
 
 // RecordUnrecognizedExit notes that channel produced an unrecognized non-zero
-// exit while version is on trial. The same channel counted twice does not
-// advance the counter. ready is true when distinct channels reach
-// unrecognizedExitBlameThreshold, so the caller can mark the version bad.
-// It returns ErrNotOnTrial when version is not on trial; the state is unchanged.
+// exit while version is on trial. channel may be a login, label or URL: only
+// UnrecognizedChannelKey(channel) is stored. The same channel counted twice
+// does not advance the counter. When the list already reached
+// unrecognizedExitBlameThreshold (for example MarkStreamlinkBad returned
+// ErrNoPrevious), ready is true and the state is left unchanged so the list
+// cannot grow without bound. ready is also true when a newly recorded channel
+// reaches the threshold, so the caller can mark the version bad. It returns
+// ErrNotOnTrial when version is not on trial; the state is unchanged.
 func (d *Downloader) RecordUnrecognizedExit(ctx context.Context, version, channel string) (ready bool, err error) {
-	if channel == "" {
-		channel = "?"
-	}
+	key := UnrecognizedChannelKey(channel)
 	err = d.updateState(ctx, func(st *UpdateState) (bool, error) {
 		if st.Trial != version {
 			return false, ErrNotOnTrial
 		}
-		if slices.Contains(st.TrialUnrecognizedChannels, channel) {
-			ready = len(st.TrialUnrecognizedChannels) >= unrecognizedExitBlameThreshold
+		if len(st.TrialUnrecognizedChannels) >= unrecognizedExitBlameThreshold {
+			ready = true
 			return false, nil
 		}
-		st.TrialUnrecognizedChannels = append(st.TrialUnrecognizedChannels, channel)
+		if slices.Contains(st.TrialUnrecognizedChannels, key) {
+			return false, nil
+		}
+		st.TrialUnrecognizedChannels = append(st.TrialUnrecognizedChannels, key)
 		ready = len(st.TrialUnrecognizedChannels) >= unrecognizedExitBlameThreshold
 		return true, nil
 	})
