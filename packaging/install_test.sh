@@ -135,29 +135,34 @@ grep -q 'attestation inválida' "$work/bad-attest.log" ||
 echo 'OK: gh presente com attestation inválida falha.'
 
 # --- Attestation: gh ausente (aviso e segue com checksums) ---
-# PATH sem nenhum diretório que tenha um gh executável (o da máquina ou o mock).
+# PATH só com mocks (sem gh) e symlinks absolutos das ferramentas
+# necessárias. Não reaproveita /usr/bin inteiro: no runner o gh mora
+# no mesmo diretório que o bash.
 mkdir -p "$work/path-no-gh"
 for f in "$work/bin"/*; do
   base="$(basename "$f")"
   [[ "$base" == gh ]] && continue
   ln -s "$f" "$work/path-no-gh/$base"
 done
-path_no_gh="$work/path-no-gh"
-old_ifs="$IFS"
-IFS=':'
-for d in $PATH; do
-  [[ -z "$d" || "$d" == "$work/bin" || "$d" == "$work/path-no-gh" ]] && continue
-  [[ -x "$d/gh" ]] && continue
-  path_no_gh="$path_no_gh:$d"
+bash_bin="$(command -v bash)"
+for cmd in bash sh tar gzip sha256sum shasum install awk mkdir chmod \
+  cmp grep sed head mktemp cat printf true cp rm ln uname dirname basename \
+  sort uniq tr cut wc date sleep touch; do
+  p="$(command -v "$cmd" || true)"
+  [[ -n "$p" && ! -e "$work/path-no-gh/$cmd" ]] && ln -s "$p" "$work/path-no-gh/$cmd"
 done
-IFS="$old_ifs"
-if ! env PATH="$path_no_gh" bash "$work/shared/install.sh" --prefix "$work/prefix-no-gh" 0.2.0 > "$work/no-gh.log" 2>&1; then
+if ! env PATH="$work/path-no-gh" "$bash_bin" "$work/shared/install.sh" --prefix "$work/prefix-no-gh" 0.2.0 > "$work/no-gh.log" 2>&1; then
   fail 'sem gh deveria seguir com checksums.txt' "$work/no-gh.log"
 fi
 grep -q 'Aviso: gh não encontrado; pulando verificação de attestation' "$work/no-gh.log" ||
   fail 'sem gh sem o aviso de attestation' "$work/no-gh.log"
 [[ -x "$work/prefix-no-gh/bin/ttv-tui" ]] ||
   fail 'sem gh não instalou o binário' "$work/no-gh.log"
+# Confirma que o PATH isolado realmente não vê o gh.
+if env PATH="$work/path-no-gh" "$bash_bin" -c 'command -v gh' >/dev/null 2>&1; then
+  echo 'FALHOU: PATH isolado ainda encontra gh' >&2
+  exit 1
+fi
 echo 'OK: gh ausente avisa e segue com checksums.txt.'
 
 echo 'OK: attestation (válida, inválida, ausente).'
