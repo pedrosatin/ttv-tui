@@ -182,7 +182,18 @@ func (m Model) keySwitchPlatform() (tea.Model, tea.Cmd) {
 		m.warnStatus(m.t("feedback.platform_list"))
 		return m, nil
 	}
-	return m.switchPlatform()
+	var cmds []tea.Cmd
+	if m.previewOpen() {
+		if stop := m.closePreview(); stop != nil {
+			cmds = append(cmds, stop)
+		}
+	}
+	next, cmd := m.switchPlatform()
+	m = next.(Model)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
 }
 
 // switchPlatform shows the live categories of the next platform. What plays

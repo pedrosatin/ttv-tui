@@ -241,6 +241,22 @@ func playerTone(state PlayerState) statusTone {
 	}
 }
 
+// previewTone maps an open preview onto its status tone.
+func previewTone(state PreviewState) statusTone {
+	switch state {
+	case PreviewStateStarting:
+		return toneStarting
+	case PreviewStatePlaying:
+		return tonePlaying
+	case PreviewStateBreak:
+		return toneBreak
+	case PreviewStateOffline, PreviewStateFailed:
+		return toneError
+	default:
+		return toneNeutral
+	}
+}
+
 // glyph is the shape that tells this state apart without color, or "" when the
 // message's own words already do.
 func (t statusTone) glyph() string {

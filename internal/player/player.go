@@ -241,6 +241,10 @@ type Options struct {
 	StreamlinkPath string
 	// StreamlinkEnv adds environment variables to streamlink execution.
 	StreamlinkEnv []string
+	// Preview selects the preview profile for the default streamlink+mpv
+	// command: quality worst, muted small window, no input.conf. Custom
+	// Command values are left unchanged; use NewPreview to nest runtime paths.
+	Preview bool
 }
 
 const (
@@ -469,7 +473,11 @@ func (m *Manager) start(target Target, order uint64) (uint64, error) {
 	if err == nil && m.defaultCommand {
 		var inv streamlinkInvocation
 		inv, err = m.invocation(found, streamlinkPath, streamlinkEnv)
-		command, noInputConf = inv.command, inv.commandNoInputConf
+		if m.opts.Preview {
+			command, noInputConf = inv.previewCommand, inv.previewCommand
+		} else {
+			command, noInputConf = inv.command, inv.commandNoInputConf
+		}
 	}
 	if err != nil {
 		m.emit(Event{
@@ -556,9 +564,13 @@ func (m *Manager) keepVolume(sess *Session) {
 }
 
 // startMuted is the mute a new session opens with: where the last one left it.
+// A preview session is always muted.
 func (m *Manager) startMuted() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.opts.Preview {
+		return true
+	}
 	return m.keptMuted
 }
 
@@ -740,6 +752,18 @@ func (m *Manager) ToggleMute() error {
 		return fmt.Errorf("player: no active session")
 	}
 	return sess.toggleMute()
+}
+
+// SetMute sets the mute of the active session to muted. No session is a no-op
+// error so callers can restore a saved mute without a live player.
+func (m *Manager) SetMute(muted bool) error {
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
+	if sess == nil {
+		return fmt.Errorf("player: no active session")
+	}
+	return sess.setMute(muted)
 }
 
 // Muted returns the mute of the active session, or false without one.

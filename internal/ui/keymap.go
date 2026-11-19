@@ -115,10 +115,19 @@ func (m Model) keyCategories() (tea.Model, tea.Cmd) {
 		m.layout.showList = true
 		m.setFocus(FocusList)
 	}
+	var cmds []tea.Cmd
+	if m.previewOpen() {
+		if stop := m.closePreview(); stop != nil {
+			cmds = append(cmds, stop)
+		}
+	}
 	next, cmd := m.returnToCategories()
 	m = next.(Model)
 	m.focusLiveCatalog()
-	return m, cmd
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
 }
 
 // keySaved é g f e g r: volta à tela inicial e destaca o primeiro favorito ou o

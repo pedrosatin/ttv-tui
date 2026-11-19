@@ -148,6 +148,9 @@ func (m Model) noticeStatusLead() (statusLead, bool) {
 func (m Model) activityStatusLead() (statusLead, bool) {
 	lead := statusLead{}
 	switch {
+	case m.previewOpen():
+		lead.primary = m.previewStatusText()
+		lead.tone = previewTone(m.preview.state)
 	case m.player.windowNoticeShown():
 		lead.primary = m.t("player.window_notice")
 		lead.tone = playerTone(m.player.state)

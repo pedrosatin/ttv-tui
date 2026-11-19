@@ -23,6 +23,7 @@ import (
 // Events are forwarded with tea.Program.Send from a single goroutine started in Run.
 type playbackBridge struct {
 	mgr           *player.Manager
+	preview       *player.Manager
 	registry      *provider.Registry
 	cfgStreamlink string
 	dataDir       string
@@ -44,6 +45,12 @@ type playbackBridge struct {
 	useMu      sync.Mutex
 	useVersion string
 	useRelease func() error
+
+	// mainMuteBeforePreview is the main mute saved by MuteMainForPreview
+	// (ticket 02). hasMainMuteBefore is set when a value was saved.
+	mainMuteMu            sync.Mutex
+	mainMuteBeforePreview bool
+	hasMainMuteBefore     bool
 }
 
 func newPlaybackBridge(mgr *player.Manager, opts ...string) *playbackBridge {
@@ -76,6 +83,12 @@ func (b *playbackBridge) setSender(send func(tea.Msg)) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.sender = send
+}
+
+func (b *playbackBridge) setPreview(mgr *player.Manager) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.preview = mgr
 }
 
 func (b *playbackBridge) ensureStreamlink(ctx context.Context) error {
@@ -298,9 +311,164 @@ func (b *playbackBridge) AdjustVolume(delta int) tea.Cmd {
 	}
 }
 
+func (b *playbackBridge) StartPreview(target ui.PlayTarget, selection uint64) tea.Cmd {
+	b.mu.Lock()
+	mgr := b.preview
+	reg := b.registry
+	b.mu.Unlock()
+	if mgr == nil {
+		return func() tea.Msg {
+			return ui.PreviewStatusMsg{State: ui.PreviewStateFailed, Failure: ui.PlayerFailureUnknown, LastLine: "preview manager missing", Selection: selection}
+		}
+	}
+	if reg == nil {
+		reg = provider.NewRegistry(twitch.NewProvider(nil), provider.NewURLProvider())
+	}
+	ch := target.Channel
+	pTarget, err := reg.StreamTarget(ch)
+	if err != nil {
+		label := ch.PlayerLabel()
+		if label == "" {
+			label = ch.Login
+		}
+		return func() tea.Msg {
+			return ui.PreviewStatusMsg{
+				State: ui.PreviewStateFailed, Login: label, LastLine: err.Error(),
+				Failure: ui.PlayerFailureUnknown, Selection: selection,
+			}
+		}
+	}
+	playTarget := player.Target{
+		URL: pTarget.URL, ExtraArgs: pTarget.ExtraArgs, Plugins: playerPlugins(pTarget.Plugins),
+		Label: pTarget.Label, NoAdSignal: pTarget.NoAdSignal,
+	}
+	identity := playTarget.Identity()
+	return func() tea.Msg {
+		b.mu.Lock()
+		appCtx := b.ctx
+		if appCtx == nil {
+			appCtx = context.Background()
+		}
+		b.mu.Unlock()
+		if err := b.ensureStreamlink(appCtx); err != nil {
+			gen := mgr.Generation()
+			lastLine := err.Error()
+			var missing *player.MissingToolError
+			if errors.As(err, &missing) {
+				lastLine = missing.Error()
+			}
+			return ui.PreviewStatusMsg{
+				Generation: gen, State: ui.PreviewStateFailed, Login: identity,
+				LastLine: lastLine, Failure: ui.PlayerFailureStreamlinkMissing, Selection: selection,
+			}
+		}
+		gen, err := mgr.StartInOrder(playTarget, selection)
+		if err != nil {
+			failure := ui.PlayerFailure(player.FailureOf(err))
+			state := ui.PreviewStateFailed
+			if failure == ui.PlayerFailureOffline {
+				state = ui.PreviewStateOffline
+			}
+			return ui.PreviewStatusMsg{
+				Generation: gen, State: state, Login: identity,
+				LastLine: err.Error(), Failure: failure, Selection: selection,
+			}
+		}
+		return ui.PreviewStatusMsg{
+			Generation: gen, State: ui.PreviewStateStarting, Login: identity, Selection: selection,
+		}
+	}
+}
+
+func (b *playbackBridge) StopPreview() tea.Cmd {
+	b.mu.Lock()
+	mgr := b.preview
+	b.mu.Unlock()
+	if mgr == nil {
+		return func() tea.Msg { return ui.PreviewStatusMsg{State: ui.PreviewStateEnded} }
+	}
+	gen := mgr.Generation()
+	return func() tea.Msg {
+		_ = mgr.StopGeneration(gen)
+		return ui.PreviewStatusMsg{Generation: gen, State: ui.PreviewStateEnded}
+	}
+}
+
+// MuteMainForPreview silences the main player and remembers its mute for
+// RestoreMainMute. With no main session it is a no-op (ticket 01 has no video).
+func (b *playbackBridge) MuteMainForPreview() tea.Cmd {
+	mgr := b.mgr
+	return func() tea.Msg {
+		if mgr == nil {
+			return nil
+		}
+		cur := mgr.Muted()
+		b.mainMuteMu.Lock()
+		b.mainMuteBeforePreview = cur
+		b.hasMainMuteBefore = true
+		b.mainMuteMu.Unlock()
+		_ = mgr.SetMute(true)
+		return nil
+	}
+}
+
+// RestoreMainMute restores the mute saved by MuteMainForPreview.
+func (b *playbackBridge) RestoreMainMute() tea.Cmd {
+	mgr := b.mgr
+	return func() tea.Msg {
+		b.mainMuteMu.Lock()
+		has, want := b.hasMainMuteBefore, b.mainMuteBeforePreview
+		b.hasMainMuteBefore = false
+		b.mainMuteMu.Unlock()
+		if !has || mgr == nil {
+			return nil
+		}
+		_ = mgr.SetMute(want)
+		return nil
+	}
+}
+
 func (b *playbackBridge) Listen() tea.Cmd {
 	// Events are pumped with Program.Send; nothing to poll here.
 	return nil
+}
+
+func mapPreviewEvent(ev player.Event) ui.PreviewStatusMsg {
+	var state ui.PreviewState
+	switch ev.State {
+	case player.StateStarting:
+		state = ui.PreviewStateStarting
+	case player.StatePlaying, player.StatePaused:
+		// Preview has no pause UI; treat pause as playing.
+		state = ui.PreviewStatePlaying
+	case player.StateBreak:
+		state = ui.PreviewStateBreak
+	case player.StateError:
+		if ev.Failure == player.FailureOffline {
+			state = ui.PreviewStateOffline
+		} else {
+			state = ui.PreviewStateFailed
+		}
+	case player.StateEnded:
+		state = ui.PreviewStateEnded
+	default:
+		state = ui.PreviewStateFailed
+	}
+	if ev.State == player.StateEnded && ev.Reason != player.EndReasonStopped {
+		if ev.Failure == player.FailureOffline {
+			state = ui.PreviewStateOffline
+		} else {
+			state = ui.PreviewStateFailed
+			if ev.Failure == player.FailureNone {
+				ev.Failure = player.FailureUnknown
+			}
+		}
+	}
+	return ui.PreviewStatusMsg{
+		Generation: ev.Generation, State: state, Login: ev.Login,
+		LastLine: ev.LastLine, BreakElapsed: ev.BreakElapsed,
+		Failure: ui.PlayerFailure(ev.Failure),
+	}
 }
 
 func mapPlayerEvent(ev player.Event) ui.PlayerStatusMsg {
@@ -381,6 +549,34 @@ func forwardPlayerEvents(ctx context.Context, p *tea.Program, mgr *player.Manage
 			}
 			msg := mapPlayerEvent(ev)
 			// Avoid blocking forever if the program has already exited.
+			ch := make(chan struct{})
+			go func() {
+				p.Send(msg)
+				close(ch)
+			}()
+			select {
+			case <-ch:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+// forwardPreviewEvents sends preview Manager events into the running tea program.
+func forwardPreviewEvents(ctx context.Context, p *tea.Program, mgr *player.Manager) {
+	if mgr == nil {
+		return
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-mgr.Events():
+			if !ok {
+				return
+			}
+			msg := mapPreviewEvent(ev)
 			ch := make(chan struct{})
 			go func() {
 				p.Send(msg)

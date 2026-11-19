@@ -495,5 +495,22 @@
   "action.window_list": "Mostra ou esconde a lista",
   "keymap.cancel": "Esc cancelar",
   "keymap.migration": "Novas teclas: {action.toggle_list/action.toggle_chat/action.cycle_layout} para os painéis; {action.channel_filter} para idiomas; {action.categories:1/action.favorites/action.recents} para navegar. Volte às teclas antigas com keymap = \"classic\" em %s.",
-  "keymap.save_error": "Salvar migração de teclas: %w"
+  "keymap.save_error": "Salvar migração de teclas: %w",
+  "preview.starting": "Carregando prévia...",
+  "preview.starting_channel": "Carregando prévia de %s...",
+  "preview.playing": "Prévia %s",
+  "preview.break": "Prévia em intervalo (%ds)",
+  "preview.offline": "Prévia: canal offline",
+  "preview.fail.network": "Prévia falhou: rede",
+  "preview.fail.timeout": "Prévia falhou: tempo esgotado",
+  "preview.fail.streamlink_missing": "Prévia falhou: streamlink ausente",
+  "preview.fail.mpv_missing": "Prévia falhou: mpv ausente",
+  "preview.fail.no_plugin": "Prévia falhou: URL sem plugin",
+  "preview.fail.blocked": "Prévia falhou: site recusou (HTTP 403)",
+  "preview.fail.browser_missing": "Prévia falhou: sem navegador para a Kick",
+  "preview.fail.vod": "Prévia falhou: vídeo sob demanda",
+  "preview.fail.bot_check": "Prévia falhou: verificação de robô",
+  "preview.fail.login_required": "Prévia falhou: precisa de login",
+  "preview.fail.unknown": "Prévia falhou",
+  "preview.channels_only": "A prévia é só para canais"
 }
