@@ -236,6 +236,35 @@ func onTrialBridge(t *testing.T) (*playbackBridge, string) {
 	return b, dataDir
 }
 
+// Rollback must update the preview manager's streamlink path too: PruneStreamlink
+// deletes the bad version directory, and a preview left on that path would fail
+// on the next start.
+func TestRollbackUpdatesPreviewStreamlink(t *testing.T) {
+	b, dataDir := onTrialBridge(t)
+	preview := player.NewPreview(player.Options{})
+	t.Cleanup(preview.Close)
+	b.setPreview(preview)
+	// Sync preview onto the trial version the main manager already adopted.
+	preview.SetStreamlink(b.mgr.StreamlinkPath())
+	badPath := b.mgr.StreamlinkPath()
+	if badPath == "" {
+		t.Fatal("trial streamlink path empty")
+	}
+
+	b.observePlayer(player.Event{State: player.StateError, Failure: player.FailureStreamlinkBroken})
+	b.bg.Wait()
+
+	if got := b.mgr.StreamlinkPath(); got == badPath {
+		t.Fatalf("main still on bad path %q", got)
+	}
+	if got := preview.StreamlinkPath(); got == badPath || got != b.mgr.StreamlinkPath() {
+		t.Fatalf("preview path %q, main %q; want both on the previous version (not %q)", got, b.mgr.StreamlinkPath(), badPath)
+	}
+	if managedDirExists(dataDir, "8.7.0") {
+		t.Fatal("bad version directory still present after prune")
+	}
+}
+
 func TestObservePlayerRollsBackOnlyForStreamlinkFailure(t *testing.T) {
 	failures := []player.Failure{
 		player.FailureNone,

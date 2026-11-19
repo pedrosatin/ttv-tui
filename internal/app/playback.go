@@ -395,7 +395,9 @@ func (b *playbackBridge) StopPreview() tea.Cmd {
 }
 
 // MuteMainForPreview silences the main player and remembers its mute for
-// RestoreMainMute. With no main session it is a no-op (ticket 01 has no video).
+// RestoreMainMute. The original mute is saved only the first time a preview
+// opens; switching channels must not overwrite it with the already-muted
+// value. With no main session it is a no-op (ticket 01 has no video).
 func (b *playbackBridge) MuteMainForPreview() tea.Cmd {
 	mgr := b.mgr
 	return func() tea.Msg {
@@ -404,8 +406,10 @@ func (b *playbackBridge) MuteMainForPreview() tea.Cmd {
 		}
 		cur := mgr.Muted()
 		b.mainMuteMu.Lock()
-		b.mainMuteBeforePreview = cur
-		b.hasMainMuteBefore = true
+		if !b.hasMainMuteBefore {
+			b.mainMuteBeforePreview = cur
+			b.hasMainMuteBefore = true
+		}
 		b.mainMuteMu.Unlock()
 		_ = mgr.SetMute(true)
 		return nil

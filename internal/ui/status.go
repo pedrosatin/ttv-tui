@@ -150,13 +150,16 @@ type statusContent struct {
 }
 
 // softStatusPrimary reports states whose lead message may yield to a connected
-// chat channel. Player actions, errors, search/filter and one-shot notices keep
-// the lead (ticket 07 / orientation).
+// chat channel. Player actions, errors, search/filter, an open preview and
+// one-shot notices keep the lead (ticket 07 / orientation).
 func (m Model) softStatusPrimary() bool {
 	if m.list.hardErr() || m.list.search.active || m.list.filtering || m.list.prefs.menuOpen || m.list.loading || m.list.confirmClear {
 		return false
 	}
 	if m.notices.auth != "" || m.notices.corrupt != "" || m.chat.copyNotice != "" || m.notices.status != "" || m.notices.ctrlC != "" {
+		return false
+	}
+	if m.previewOpen() {
 		return false
 	}
 	if m.player.windowNoticeShown() || m.player.state == PlayerStateError || m.player.state == PlayerStateEnded {

@@ -151,6 +151,9 @@ func (m Model) activityStatusLead() (statusLead, bool) {
 	case m.previewOpen():
 		lead.primary = m.previewStatusText()
 		lead.tone = previewTone(m.preview.state)
+		if m.preview.state == PreviewStateFailed || m.preview.state == PreviewStateOffline {
+			lead.detail = m.previewErrorDetail()
+		}
 	case m.player.windowNoticeShown():
 		lead.primary = m.t("player.window_notice")
 		lead.tone = playerTone(m.player.state)

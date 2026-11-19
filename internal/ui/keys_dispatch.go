@@ -295,9 +295,15 @@ func (m Model) keyCopyMessage() (tea.Model, tea.Cmd) {
 
 func (m Model) keyFilter() (tea.Model, tea.Cmd) {
 	m.setFocus(FocusList)
+	var cmds []tea.Cmd
+	if m.previewOpen() || m.preview.stopAfterStart {
+		if stop := m.closePreview(); stop != nil {
+			cmds = append(cmds, stop)
+		}
+	}
 	m.clearStaleStatusErrors()
 	m.list.filtering = true
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) keySearch() (tea.Model, tea.Cmd) {
