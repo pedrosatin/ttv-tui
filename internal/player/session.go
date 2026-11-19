@@ -381,10 +381,12 @@ func (s *Session) waitProcess() {
 	var exitErr *exec.ExitError
 	if !already && !classified && s.failHint == FailureNone && s.state == StateStarting && errors.As(err, &exitErr) {
 		// Exiting with an error status before any stream reached the player,
-		// and no output that explains it as the channel or the network (that
-		// is checked on the last line when the failure is classified): this
-		// streamlink build failed to run.
-		s.failHint = FailureStreamlinkBroken
+		// and no output that explains it as the channel, the network or a
+		// known build defect (checked on the last line when the failure is
+		// classified). A pasted link's server can provoke this on purpose; the
+		// managed-update trial only blames the build after two distinct
+		// channels (ADR 0014).
+		s.failHint = FailureUnrecognizedExit
 	}
 	s.mu.Unlock()
 	if already {

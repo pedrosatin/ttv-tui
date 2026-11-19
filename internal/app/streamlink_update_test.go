@@ -243,6 +243,7 @@ func TestObservePlayerRollsBackOnlyForStreamlinkFailure(t *testing.T) {
 		player.FailureBlocked,
 		player.FailureBrowserMissing,
 		player.FailureUnknown,
+		player.FailureUnrecognizedExit,
 		player.FailureStreamlinkBroken,
 	}
 	for _, f := range failures {
@@ -280,6 +281,81 @@ func TestObservePlayerRollsBackOnlyForStreamlinkFailure(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestUnrecognizedExitNeedsTwoChannels is D1(c): a pasted link (or one channel)
+// that exits non-zero without a recognized line does not undo the update; the
+// same failure on a second distinct channel does; repeating the same channel
+// does not count twice; restarting the app keeps the counter in state.json.
+func TestUnrecognizedExitNeedsTwoChannels(t *testing.T) {
+	b, dataDir := onTrialBridge(t)
+
+	paste := player.Event{
+		State:   player.StateError,
+		Failure: player.FailureUnrecognizedExit,
+		Login:   "https://www.twitch.tv/pastedlink",
+		Target:  player.Target{URL: "https://www.twitch.tv/pastedlink"},
+	}
+	b.observePlayer(paste)
+	b.bg.Wait()
+	st := components.LoadUpdateState(dataDir)
+	if st.IsBad("8.7.0") || len(b.Rollbacks()) != 0 || st.Trial != "8.7.0" {
+		t.Fatalf("one pasted link rolled back: state %+v, rollbacks %v", st, b.Rollbacks())
+	}
+	if got := st.TrialUnrecognizedChannels; len(got) != 1 || got[0] != paste.Login {
+		t.Fatalf("counter after one link = %v, want [%q]", got, paste.Login)
+	}
+
+	// Same channel again must not count twice.
+	b.observePlayer(paste)
+	b.bg.Wait()
+	st = components.LoadUpdateState(dataDir)
+	if st.IsBad("8.7.0") || len(b.Rollbacks()) != 0 || len(st.TrialUnrecognizedChannels) != 1 {
+		t.Fatalf("same channel counted twice: state %+v, rollbacks %v", st, b.Rollbacks())
+	}
+
+	// App restart: release the first process's use marker, then a new bridge
+	// reading the same state.json keeps the counter.
+	b.close()
+	b2 := newManagedBridge(t, "", dataDir, components.NewDownloader(dataDir))
+	if err := b2.ensureStreamlink(context.Background()); err != nil {
+		t.Fatalf("ensureStreamlink after restart: %v", err)
+	}
+	st = components.LoadUpdateState(dataDir)
+	if got := st.TrialUnrecognizedChannels; len(got) != 1 || got[0] != paste.Login {
+		t.Fatalf("counter after restart = %v, want [%q]", got, paste.Login)
+	}
+
+	second := player.Event{
+		State:   player.StateError,
+		Failure: player.FailureUnrecognizedExit,
+		Login:   "otherchannel",
+		Target:  player.Target{Label: "otherchannel", URL: "https://www.twitch.tv/otherchannel"},
+	}
+	b2.observePlayer(second)
+	b2.bg.Wait()
+	assertTrial(t, b2, dataDir, true)
+	if got := components.LoadUpdateState(dataDir).TrialUnrecognizedChannels; len(got) != 0 {
+		t.Fatalf("counter after rollback = %v, want cleared", got)
+	}
+}
+
+func TestUnrecognizedExitCounterClearsWhenVersionPlays(t *testing.T) {
+	b, dataDir := onTrialBridge(t)
+	b.observePlayer(player.Event{
+		State: player.StateError, Failure: player.FailureUnrecognizedExit, Login: "chan-a",
+	})
+	b.bg.Wait()
+	if got := components.LoadUpdateState(dataDir).TrialUnrecognizedChannels; len(got) != 1 {
+		t.Fatalf("counter = %v, want one channel", got)
+	}
+
+	b.observePlayer(player.Event{State: player.StatePlaying})
+	b.bg.Wait()
+	st := components.LoadUpdateState(dataDir)
+	if st.Trial != "" || len(st.TrialUnrecognizedChannels) != 0 {
+		t.Fatalf("after play: state %+v; want trial and counter cleared", st)
 	}
 }
 
