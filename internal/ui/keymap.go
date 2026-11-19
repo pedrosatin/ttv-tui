@@ -133,7 +133,8 @@ func (m Model) keyCategories() (tea.Model, tea.Cmd) {
 // keySaved é g f e g r: volta à tela inicial e destaca o primeiro favorito ou o
 // primeiro recente. Sem nenhum na lista ativa, nada se move e a barra diz como
 // ter um. Com todos escondidos pelos filtros de canal, a tela inicial abre e a
-// barra diz que são os filtros.
+// barra diz que são os filtros. Com a prévia aberta, o destaque novo agenda a
+// troca (debounce) ou a fecha se a linha de destino não for canal.
 func (m Model) keySaved(id actionID) (tea.Model, tea.Cmd) {
 	kind, empty, filtered := ItemTypeFavorite, "feedback.no_favorites", "feedback.favorites_filtered"
 	if id == actRecents {
@@ -151,7 +152,8 @@ func (m Model) keySaved(id actionID) (tea.Model, tea.Cmd) {
 	for i, item := range items {
 		if item.Type == kind {
 			m.moveHighlight(i - m.list.indexOfHighlighted(items))
-			return m, cmd
+			m, switchCmd := m.schedulePreviewSwitch()
+			return m, tea.Batch(cmd, switchCmd)
 		}
 	}
 	m.warnStatus(m.t(filtered))

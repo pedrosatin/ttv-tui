@@ -53,6 +53,10 @@ type previewState struct {
 	breakElapsed time.Duration
 	// switchGen invalidates a pending debounce when the highlight moves again.
 	switchGen uint64
+	// stopAfterStart is a close pressed while StartPreview is still in flight.
+	// The Start reply must stop that generation again (same pattern as the
+	// main player's stopAfterStart).
+	stopAfterStart bool
 }
 
 // previewSwitchMsg fires after previewSwitchDelay with no further movement.
@@ -160,6 +164,19 @@ func (m Model) previewFailureText() string {
 	}
 }
 
+// previewErrorDetail is the technical lastLine shown after an unknown preview
+// failure, or "" when there is none.
+func (m Model) previewErrorDetail() string {
+	if m.preview.failure != PlayerFailureNone && m.preview.failure != PlayerFailureUnknown {
+		return ""
+	}
+	line := strings.TrimSpace(sanitizeChatText(m.preview.lastLine))
+	if line == "" || strings.Contains(strings.ToLower(line), "[info]") {
+		return ""
+	}
+	return fmt.Sprintf(m.t("player.fail.detail"), line)
+}
+
 // stopPreviewCmd asks the bridge to stop the preview, if any.
 func (m Model) stopPreviewCmd() tea.Cmd {
 	if m.playback == nil || !m.previewActive() {
@@ -169,9 +186,12 @@ func (m Model) stopPreviewCmd() tea.Cmd {
 }
 
 // closePreview clears preview UI state, stops the process, and restores the
-// main mute saved when the preview opened.
+// main mute saved when the preview opened. A close while Start is still in
+// flight keeps awaiting+stopAfterStart so the Start reply stops that generation.
 func (m *Model) closePreview() tea.Cmd {
 	var cmds []tea.Cmd
+	stopAfter := m.preview.awaiting != 0
+	awaiting, selection := m.preview.awaiting, m.preview.selection
 	if stop := m.stopPreviewCmd(); stop != nil {
 		cmds = append(cmds, stop)
 	}
@@ -181,6 +201,11 @@ func (m *Model) closePreview() tea.Cmd {
 		}
 	}
 	m.preview = previewState{}
+	if stopAfter {
+		m.preview.stopAfterStart = true
+		m.preview.awaiting = awaiting
+		m.preview.selection = selection
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -231,10 +256,15 @@ func (m Model) startPreviewFor(target PlayTarget) (tea.Model, tea.Cmd) {
 }
 
 // togglePreview is Space on the list with no main video: open or close.
+// Outside the single window only: the hosted shim gains a preview session in
+// ticket 03, so Space must not start an orphan mpv window while hosted.
 func (m Model) togglePreview() (tea.Model, tea.Cmd) {
-	if m.previewOpen() {
+	if m.previewOpen() || m.preview.stopAfterStart {
 		cmd := m.closePreview()
 		return m, cmd
+	}
+	if m.hosted.host != nil {
+		return m, nil
 	}
 	target, ok := m.highlightedPlayTarget()
 	if !ok {
@@ -295,14 +325,33 @@ func samePreviewTarget(a, b PlayTarget) bool {
 
 // applyPreviewStatus folds one preview event into the model.
 func (m Model) applyPreviewStatus(msg PreviewStatusMsg) (tea.Model, tea.Cmd) {
+	var stop tea.Cmd
+	if msg.Selection != 0 && msg.Selection == m.preview.awaiting && m.preview.stopAfterStart {
+		// Stop ran before StartInOrder; this Start reply may have attached
+		// after it. Stop again with the real generation.
+		m.preview.stopAfterStart = false
+		msg.State, msg.Failure, msg.LastLine = PreviewStateEnded, PlayerFailureNone, ""
+		if m.playback != nil {
+			stop = m.playback.StopPreview()
+		}
+	}
 	if !m.acceptPreviewStatus(msg) {
-		return m, nil
+		return m, stop
 	}
 	m.setPreviewState(msg)
-	return m, nil
+	return m, stop
 }
 
 func (m *Model) acceptPreviewStatus(msg PreviewStatusMsg) bool {
+	if m.preview.stopAfterStart {
+		// Only the cancelled Start reply may pass (handled in applyPreviewStatus).
+		return false
+	}
+	// Closed and not awaiting a Start: ignore Events pump leftovers from a
+	// generation that Stop already tore down (or never owned).
+	if m.preview.awaiting == 0 && m.preview.state == PreviewStateClosed && msg.Selection == 0 {
+		return false
+	}
 	if m.preview.awaiting != 0 || msg.Selection != 0 {
 		if msg.Selection != m.preview.awaiting {
 			return false

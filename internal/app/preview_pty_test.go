@@ -62,6 +62,39 @@ func TestPreviewWithoutMainVideo_PTY(t *testing.T) {
 	t.Logf("PTY CAPTURE Enter opened channel from preview; main pid=%d", p.playerPid)
 }
 
+// Ctrl+Q with a preview open must tear the preview process down (same
+// containment as the main player). Ctrl+C only shows the quit hint.
+func TestPreviewEndsOnCtrlQ(t *testing.T) {
+	p := startTUIOnPTY(t, "TTV_APP_RICH=1", "TTV_APP_PREVIEW=1", "LANG=en_US.UTF-8", "LC_ALL=", "LC_MESSAGES=")
+	p.waitScreen(0, "PtyCategory")
+	off := p.mark()
+	p.send([]byte("\r"))
+	p.waitScreen(off, "PtyChan")
+
+	off = p.mark()
+	p.send([]byte(" "))
+	p.waitScreen(off, "Preview")
+	p.waitPreviewPlayer()
+	previewPid := p.playerPid
+
+	off = p.mark()
+	p.send([]byte{0x03}) // Ctrl+C
+	screen := p.waitScreen(off, "Ctrl+Q")
+	if !alive(previewPid) {
+		t.Fatal("Ctrl+C killed the preview process")
+	}
+	if !strings.Contains(screen, "Ctrl+Q") {
+		t.Fatalf("Ctrl+C hint missing:\n%s", screen)
+	}
+
+	p.send([]byte{0x11}) // Ctrl+Q
+	code := p.waitExit(10 * time.Second)
+	if code != 0 {
+		t.Errorf("Ctrl+Q exit code = %d, want 0", code)
+	}
+	waitProcessGone(t, previewPid, 5*time.Second)
+}
+
 // waitPreviewPlayer records the fake player the preview helper just spawned.
 // It ignores a stale pid file left by a previous preview that already exited.
 func (p *ptyTUI) waitPreviewPlayer() {

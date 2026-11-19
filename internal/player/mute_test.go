@@ -47,6 +47,39 @@ func muteCommands(t *testing.T, path string) []string {
 	return out
 }
 
+// SetMute sets the mute property explicitly (used by MuteMainForPreview /
+// RestoreMainMute on the playback bridge).
+func TestSetMuteReachesMpv(t *testing.T) {
+	t.Parallel()
+	cmdLog := filepath.Join(t.TempDir(), "setmute-cmds.jsonl")
+	mgr := newTestManager(t, "play-control", Options{}, "TTV_PLAYER_HELPER_CMDS="+cmdLog)
+	gen, err := mgr.Start(testTarget("setmute"))
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	_ = waitForState(t, mgr.Events(), gen, StatePlaying, 5*time.Second)
+	if err := mgr.SetMute(true); err != nil {
+		t.Fatalf("SetMute(true): %v", err)
+	}
+	waitMuted(t, mgr, gen, true, 3*time.Second)
+	if err := mgr.SetMute(false); err != nil {
+		t.Fatalf("SetMute(false): %v", err)
+	}
+	waitMuted(t, mgr, gen, false, 3*time.Second)
+	waitCommands(t, cmdLog, 3*time.Second, `["set_property","mute",true]`, `["set_property","mute",false]`)
+}
+
+func TestSetMuteWithoutSession(t *testing.T) {
+	mgr := New(Options{RuntimeDir: privateRuntimeDir(t)})
+	t.Cleanup(mgr.Close)
+	if err := mgr.SetMute(true); err == nil {
+		t.Fatal("SetMute without session must fail")
+	}
+	if mgr.Muted() {
+		t.Fatal("Muted without session must be false")
+	}
+}
+
 // m mutes mpv over IPC and m again brings the sound back; the events carry it.
 func TestToggleMuteReachesMpvAndEvents(t *testing.T) {
 	t.Parallel()

@@ -178,6 +178,9 @@ func (b *playbackBridge) rollback(ctx context.Context, version string) {
 	if b.resolved.Version == version {
 		b.resolved = prev
 		b.mgr.SetStreamlink(prev.Path, prev.Env...)
+		if b.preview != nil {
+			b.preview.SetStreamlink(prev.Path, prev.Env...)
+		}
 	}
 	b.rollbacks = append(b.rollbacks, streamlinkRollback{From: version, To: prev.Version})
 	b.mu.Unlock()

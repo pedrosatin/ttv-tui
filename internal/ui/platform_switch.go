@@ -173,20 +173,21 @@ func (m Model) helpPlatformLine() string {
 
 // keySwitchPlatform is p on the list: the next platform's categories. With a
 // single platform, or with the chat focused, the bar says why nothing changed.
+// An open preview always closes first so p never leaves a stray mpv window.
 func (m Model) keySwitchPlatform() (tea.Model, tea.Cmd) {
-	if len(m.catalogs) < 2 {
-		m.warnStatus(m.t("feedback.single_platform"))
-		return m, nil
-	}
-	if m.Focus() == FocusChat {
-		m.warnStatus(m.t("feedback.platform_list"))
-		return m, nil
-	}
 	var cmds []tea.Cmd
-	if m.previewOpen() {
+	if m.previewOpen() || m.preview.stopAfterStart {
 		if stop := m.closePreview(); stop != nil {
 			cmds = append(cmds, stop)
 		}
+	}
+	if len(m.catalogs) < 2 {
+		m.warnStatus(m.t("feedback.single_platform"))
+		return m, tea.Batch(cmds...)
+	}
+	if m.Focus() == FocusChat {
+		m.warnStatus(m.t("feedback.platform_list"))
+		return m, tea.Batch(cmds...)
 	}
 	next, cmd := m.switchPlatform()
 	m = next.(Model)
