@@ -354,10 +354,16 @@ jobs:
           end
           File.write(formula, text)
           RUBY
-          brew install --formula "$formula"
-          brew test ttv-tui
-          ttv-tui --help | grep -F ttv-tui
+          # O Homebrew só instala fórmula de dentro de um tap: monta um tap
+          # local descartável com a fórmula gerada.
+          brew tap-new --no-git local/ttv-tui-snapshot
+          tap_dir="$(brew --repository)/Library/Taps/local/homebrew-ttv-tui-snapshot"
+          cp "$formula" "$tap_dir/Formula/ttv-tui.rb"
+          brew install --formula local/ttv-tui-snapshot/ttv-tui
+          brew test local/ttv-tui-snapshot/ttv-tui
+          ttv-tui --help 2>&1 | grep -F ttv-tui
           brew uninstall ttv-tui
+          brew untap local/ttv-tui-snapshot
 
   # Confere o manifesto Scoop no ensaio: hashes e scoop install local,
   # sem escrever no bucket.
@@ -423,7 +429,9 @@ jobs:
           # streamlink pelo bucket extras.
           scoop bucket add extras
           scoop install (Resolve-Path $manifest).Path
-          $help = & ttv-tui --help
+          # A saída tem várias linhas: junta antes de comparar, senão o
+          # -notmatch devolve as linhas que não casam e o if sempre dispara.
+          $help = (& ttv-tui --help) -join "`n"
           if ($LASTEXITCODE -ne 0) { throw "ttv-tui --help failed: $LASTEXITCODE" }
           if ($help -notmatch 'ttv-tui') { throw "ttv-tui --help sem o nome do app: $help" }
           Write-Host $help
