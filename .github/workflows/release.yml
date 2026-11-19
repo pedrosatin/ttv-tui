@@ -148,17 +148,23 @@ jobs:
 
       - name: Build and package
         shell: msys2 {0}
-        timeout-minutes: 6
+        # Zip build plus LGPL source downloads (mpv, FFmpeg, libiconv).
+        timeout-minutes: 10
         env:
           CGO_ENABLED: "1"
+          LGPL_SOURCE_DIR: dist-window/lgpl-sources
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == push && "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="snapshot"
           fi
-          mkdir -p dist-window
+          mkdir -p dist-window/lgpl-sources
           packaging/window-windows.sh "dist-window/ttv-tui-window_${VERSION}_windows_amd64.zip"
+          echo "LGPL source attachments:"
+          ls -lh dist-window/lgpl-sources
+          cat dist-window/lgpl-sources/MANIFEST.txt
+          cat dist-window/lgpl-sources/SHA256SUMS
 
       # Saved after packaging so the cache holds the -trimpath objects that the
       # zip build produces. Same prefix as the CI Window (windows-latest) job.
@@ -176,6 +182,15 @@ jobs:
         with:
           name: window-windows
           path: dist-window/
+
+      # Separate artifact so the workflow_dispatch essay can show the LGPL
+      # sources without opening the whole window-windows zip tree.
+      - name: Upload LGPL sources
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lgpl-sources
+          path: dist-window/lgpl-sources/
+          if-no-files-found: error
 
   goreleaser:
     name: Release
@@ -247,7 +262,9 @@ jobs:
 
       # No ensaio (workflow_dispatch), confere que o conjunto de artefatos
       # normalizado bate com a última release publicada. Checksums e binários
-      # diferem por versão e ldflags; o que importa é o inventário.
+      # diferem por versão e ldflags; o que importa é o inventário do produto.
+      # Anexos de fonte LGPL (mpv/FFmpeg/libiconv) ficam fora desta comparação:
+      # entram na release por extra_files e no artefato lgpl-sources do ensaio.
       - name: Compare snapshot artifacts with latest release
         if: ${{ !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
         env:
@@ -261,23 +278,33 @@ jobs:
               -e 's/ttv-tui_[^_]+_/ttv-tui_*_/' \
               -e 's/ttv-tui-window_[^_]+_/ttv-tui-window_*_/'
           }
+          product_only() {
+            # Só o inventário do app e da janela. Fontes LGPL e outros anexos
+            # da release não entram nesta prova.
+            grep -E '^(ttv-tui_|ttv-tui-window_|checksums\.txt$)' || true
+          }
           mkdir -p /tmp/release-compare
-          gh release view --json assets --jq '.assets[].name' | sort > /tmp/release-compare/latest.txt
+          gh release view --json assets --jq '.assets[].name' | sort \
+            | product_only > /tmp/release-compare/latest.txt
           {
             find dist -maxdepth 1 -type f \( -name 'ttv-tui_*' -o -name 'checksums.txt' \) -printf '%f\n'
             find dist-window -maxdepth 1 -type f -name 'ttv-tui-window_*' -printf '%f\n'
           } | sort > /tmp/release-compare/snapshot-raw.txt
           normalize < /tmp/release-compare/latest.txt | sort -u > /tmp/release-compare/latest-n.txt
           normalize < /tmp/release-compare/snapshot-raw.txt | sort -u > /tmp/release-compare/snapshot-n.txt
-          echo "Última release (normalizada):"
+          echo "Última release (produto, normalizada):"
           cat /tmp/release-compare/latest-n.txt
-          echo "Snapshot (normalizado):"
+          echo "Snapshot (produto, normalizado):"
           cat /tmp/release-compare/snapshot-n.txt
           if ! diff -u /tmp/release-compare/latest-n.txt /tmp/release-compare/snapshot-n.txt; then
             echo "Inventário de artefatos difere da última release." >&2
             exit 1
           fi
           echo "Inventário de artefatos igual ao da última release (versão normalizada)."
+          if [[ -d dist-window/lgpl-sources ]]; then
+            echo "Fontes LGPL no snapshot (fora do inventário de produto):"
+            ls -lh dist-window/lgpl-sources
+          fi
 
       # Ensaio: fórmula e manifesto gerados, mais os arquivos citados neles,
       # para conferir hashes e tentar brew/scoop install sem publicar.

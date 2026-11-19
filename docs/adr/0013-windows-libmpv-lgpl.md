@@ -52,11 +52,16 @@ oficial compilada em modo LGPL pelo projeto mpv.
 - O pacote inclui os textos de licença `LICENSE.LGPL` (mpv, LGPL-2.1), `COPYING.LGPLv3` e
   `COPYING.GPLv3` (FFmpeg embutido, LGPL-3), bem como o texto de licença LGPL do `libiconv` do MSYS2.
 - O arquivo `THIRD-PARTY.txt` traz o aviso de uso da libmpv sob LGPL-2.1+, do FFmpeg sob LGPL-3.0+,
-  links para o código-fonte do mpv na tag correspondente e do commit exato do FFmpeg, a nota sobre
-  a limitação das bibliotecas estáticas da imagem BtbN, a autorização expressa para substituição da
-  `libmpv-2.dll` por versão compatível (LGPL-2.1 §6) e a relação dos pacotes MSYS2 que fornecem as
-  demais DLLs. Publicar o código-fonte junto da release, em vez de só apontar para ele, fica para
-  uma decisão própria.
+  os nomes e SHA-256 dos anexos de fonte na mesma release GitHub (mpv na tag, FFmpeg no commit da
+  marca da DLL, libiconv na versão do `pacman -Q` com tarball GNU e PKGBUILD/patches do MSYS2), a
+  nota sobre a limitação das bibliotecas estáticas da imagem BtbN, avisos de copyright das
+  bibliotecas BSD/ISC/FTL identificáveis embutidas na DLL, a autorização expressa para substituição
+  da `libmpv-2.dll` por versão compatível (LGPL-2.1 §6) e a relação dos pacotes MSYS2 que fornecem
+  as demais DLLs. Não há oferta escrita: o fonte vai como anexo da própria release.
+- O job `window-windows` da release, com `LGPL_SOURCE_DIR` definido, baixa esses tarballs com hash
+  conferido, gera `SHA256SUMS` e `MANIFEST.txt`, publica-os via `extra_files` do GoReleaser e expoe
+  o artefato `lgpl-sources` no ensaio `workflow_dispatch`. O rodapé da release avisa o uso do FFmpeg
+  sob LGPLv3, como pede a checklist em ffmpeg.org/legal.html.
 - O CI do Windows testa o `--probe` com o zip descompactado e sem o MSYS2 no `PATH`, garantindo
   que o carregador resolve as DLLs empacotadas e os símbolos que elas importam. Símbolos obtidos em
   tempo de execução (as funções de OpenGL) e a inicialização do mpv ficam fora dessa prova.

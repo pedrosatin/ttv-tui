@@ -49,6 +49,8 @@ checksum:
   extra_files:
     - glob: ./dist-window/*.tar.gz
     - glob: ./dist-window/*.zip
+    # Fontes LGPL do zip da janela Windows (mpv, FFmpeg, libiconv + PKGBUILD).
+    - glob: ./dist-window/lgpl-sources/*
 
 changelog:
   sort: asc
@@ -68,6 +70,13 @@ release:
   extra_files:
     - glob: ./dist-window/*.tar.gz
     - glob: ./dist-window/*.zip
+    - glob: ./dist-window/lgpl-sources/*
+  # Checklist do FFmpeg (ffmpeg.org/legal.html): aviso LGPL na página de download.
+  # O build embutido na libmpv LGPL usa --enable-version3, então o aviso cita LGPLv3.
+  footer: |
+    ---
+
+    This software uses code of [FFmpeg](https://ffmpeg.org) licensed under the [LGPLv3](https://www.gnu.org/licenses/lgpl-3.0.html). The matching FFmpeg source, together with the mpv and libiconv sources for the Windows window zip, is attached to this release (`FFmpeg-*.tar.gz`, `mpv-v*.tar.gz`, `libiconv-*.tar.gz`, `SHA256SUMS`). See `THIRD-PARTY.txt` inside `ttv-tui-window_*_windows_amd64.zip`.
 
 # Fórmula Homebrew: binários das releases (Darwin e Linux). A v0.10.2 já
 # publica ttv-tui_*_darwin_{arm64,amd64}.tar.gz; compilar do fonte fica de fora.

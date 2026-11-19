@@ -3,6 +3,10 @@
 # ttv-tui-window folder with the official LGPL libmpv-2.dll, SDL3 from MSYS2,
 # runtime dependencies, license files, and THIRD-PARTY.txt.
 #
+# When LGPL_SOURCE_DIR is set, also downloads the corresponding LGPL sources
+# (mpv tag, FFmpeg commit, libiconv from GNU + MSYS2 PKGBUILD/patches) into
+# that directory, with SHA-256 verified against pinned or PKGBUILD hashes.
+#
 # Usage: packaging/window-windows.sh <output.zip>
 # Needs: mingw-w64-ucrt-x86_64-{gcc,pkgconf,sdl3,ntldd}, curl, unzip, zip, and go on PATH.
 set -euo pipefail
@@ -38,14 +42,151 @@ MPV_SEMVER="${MPV_VERSION#v}"
 MPV_ASSET="libmpv-${MPV_VERSION}-x86_64-w64-mingw32-lgpl.zip"
 MPV_SHA256="8e5f77430efc53ef175804ba6618527e3af0448a0dcabf04d3cc72659d1a6fce"
 MPV_URL="https://github.com/mpv-player/mpv/releases/download/${MPV_VERSION}/${MPV_ASSET}"
+# GitHub source archive of the same tag used for the binary.
+MPV_SOURCE_ASSET="mpv-${MPV_VERSION}.tar.gz"
+MPV_SOURCE_URL="https://github.com/mpv-player/mpv/archive/refs/tags/${MPV_VERSION}.tar.gz"
+MPV_SOURCE_SHA256="bcfebbfa2b65a6d88dc97ea18117831072373e38b5785a2afb874ed4df5070dd"
 
 FFMPEG_COMMIT="baa68e68b34e2de912eb7e94342cebd2545f05ed"
 FFMPEG_TAG="git-2026-11-04-baa68e6"
-FFMPEG_SOURCE_URL="https://github.com/FFmpeg/FFmpeg/commit/${FFMPEG_COMMIT}"
+FFMPEG_SOURCE_ASSET="FFmpeg-${FFMPEG_COMMIT}.tar.gz"
+FFMPEG_SOURCE_TARBALL_URL="https://github.com/FFmpeg/FFmpeg/archive/${FFMPEG_COMMIT}.tar.gz"
+FFMPEG_SOURCE_SHA256="a533cd8e097f2c65e8ebf523ab567817a79ecc9399c5bc5405be0aaf5b79a1f1"
+
+MSYS2_LIBICONV_PKGBUILD_URL="https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-libiconv"
+MSYS2_LIBICONV_FILES=(
+  PKGBUILD
+  0002-fix-cr-for-awk-in-configure.all.patch
+  0003-add-cp65001-as-utf8-alias.patch
+  iconv.pc
+)
 
 cache_dir="${MPV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/ttv-tui}"
 mkdir -p "$cache_dir"
 cached_zip="$cache_dir/$MPV_ASSET"
+
+# download_verify <url> <dest> <sha256>
+# Writes dest only after the digest matches. Retries briefly on stall.
+download_verify() {
+  local url="$1" dest="$2" want="$3"
+  local tmp="${dest}.tmp"
+  if [[ -f "$dest" ]] && echo "${want} *${dest}" | sha256sum -c - >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "Downloading $url..."
+  curl -sSL -f --connect-timeout 15 --max-time 120 --retry 2 --retry-delay 2 --retry-all-errors \
+    -o "$tmp" "$url"
+  echo "${want} *${tmp}" | sha256sum -c -
+  mv "$tmp" "$dest"
+}
+
+# libiconv_upstream_version prints the upstream version of the installed
+# mingw-w64-ucrt-x86_64-libiconv package (e.g. 1.19.1 from 1.19.1-1).
+libiconv_upstream_version() {
+  local full
+  full="$(pacman -Q mingw-w64-ucrt-x86_64-libiconv | awk '{ print $2 }')"
+  [[ -n "$full" ]] || {
+    echo "error: pacman -Q mingw-w64-ucrt-x86_64-libiconv returned empty" >&2
+    exit 1
+  }
+  # Strip the pkgrel suffix after the last hyphen when it is all digits.
+  if [[ "$full" =~ ^(.+)-([0-9]+)$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  else
+    printf '%s\n' "$full"
+  fi
+}
+
+# fetch_lgpl_sources <outdir> writes the LGPL source attachments and SHA256SUMS.
+# Versions come from the same pins/DLL mark/pacman query used for the zip.
+fetch_lgpl_sources() {
+  local outdir="$1"
+  local src_cache="$cache_dir/lgpl-sources"
+  mkdir -p "$outdir" "$src_cache"
+
+  local mpv_src="$src_cache/$MPV_SOURCE_ASSET"
+  download_verify "$MPV_SOURCE_URL" "$mpv_src" "$MPV_SOURCE_SHA256"
+  cp -f "$mpv_src" "$outdir/$MPV_SOURCE_ASSET"
+
+  local ffmpeg_src="$src_cache/$FFMPEG_SOURCE_ASSET"
+  download_verify "$FFMPEG_SOURCE_TARBALL_URL" "$ffmpeg_src" "$FFMPEG_SOURCE_SHA256"
+  cp -f "$ffmpeg_src" "$outdir/$FFMPEG_SOURCE_ASSET"
+
+  local iconv_ver packaging_dir packaging_tar gnu_url gnu_tar expected_hash pkgbuild_ver
+  iconv_ver="$(libiconv_upstream_version)"
+  echo "libiconv from MSYS2: mingw-w64-ucrt-x86_64-libiconv -> upstream $iconv_ver"
+  packaging_dir="$work/libiconv-msys2-packaging"
+  rm -rf "$packaging_dir"
+  mkdir -p "$packaging_dir"
+  local f
+  for f in "${MSYS2_LIBICONV_FILES[@]}"; do
+    curl -sSL -f --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 --retry-all-errors \
+      -o "$packaging_dir/$f" "${MSYS2_LIBICONV_PKGBUILD_URL}/$f"
+  done
+  pkgbuild_ver="$(awk -F= '/^pkgver=/{ gsub(/["'\'']/,"",$2); print $2; exit }' "$packaging_dir/PKGBUILD")"
+  if [[ "$pkgbuild_ver" != "$iconv_ver" ]]; then
+    echo "error: MSYS2 PKGBUILD on master has pkgver=$pkgbuild_ver but installed libiconv is $iconv_ver." >&2
+    echo "Update the packaging files URL to a MINGW-packages commit that matches the installed package." >&2
+    exit 1
+  fi
+  # First sha256sums entry is the GNU tarball (second is .sig with SKIP).
+  expected_hash="$(awk -F"'" '/^sha256sums=/{ print $2; exit }' "$packaging_dir/PKGBUILD")"
+  [[ -n "$expected_hash" && "$expected_hash" != SKIP ]] || {
+    echo "error: failed to parse libiconv tarball sha256 from PKGBUILD" >&2
+    exit 1
+  }
+  gnu_url="https://ftp.gnu.org/pub/gnu/libiconv/libiconv-${iconv_ver}.tar.gz"
+  gnu_tar="$src_cache/libiconv-${iconv_ver}.tar.gz"
+  download_verify "$gnu_url" "$gnu_tar" "$expected_hash"
+  cp -f "$gnu_tar" "$outdir/libiconv-${iconv_ver}.tar.gz"
+
+  # Verify non-SKIP patch hashes from PKGBUILD against the downloaded files.
+  # Order matches source=(): tarball, .sig, then the local files.
+  local -a sums=()
+  local line
+  while IFS= read -r line; do
+    [[ "$line" == *\'* ]] || continue
+    sums+=("$(printf '%s\n' "$line" | sed -n "s/.*'\\([0-9a-fA-F]\\{64\\}\\|SKIP\\)'.*/\\1/p")")
+  done < <(awk '/^sha256sums=/,/\)/' "$packaging_dir/PKGBUILD")
+  local -a local_files=(
+    0003-add-cp65001-as-utf8-alias.patch
+    0002-fix-cr-for-awk-in-configure.all.patch
+    iconv.pc
+  )
+  # sums[0]=tarball, sums[1]=sig SKIP, sums[2..]=local_files
+  local i sum
+  for i in "${!local_files[@]}"; do
+    sum="${sums[$((i + 2))]:-}"
+    [[ -n "$sum" && "$sum" != SKIP ]] || {
+      echo "error: missing sha256 for ${local_files[$i]} in PKGBUILD" >&2
+      exit 1
+    }
+    (cd "$packaging_dir" && echo "${sum} *${local_files[$i]}" | sha256sum -c -)
+  done
+
+  packaging_tar="libiconv-${iconv_ver}-msys2-packaging.tar.gz"
+  tar -C "$packaging_dir" -czf "$outdir/$packaging_tar" "${MSYS2_LIBICONV_FILES[@]}"
+
+  {
+    echo "# SHA-256 of LGPL sources attached next to the Windows window zip."
+    echo "# Generated by packaging/window-windows.sh from the versions actually packaged."
+    (cd "$outdir" && sha256sum \
+      "$MPV_SOURCE_ASSET" \
+      "$FFMPEG_SOURCE_ASSET" \
+      "libiconv-${iconv_ver}.tar.gz" \
+      "$packaging_tar")
+  } > "$outdir/SHA256SUMS"
+
+  {
+    echo "mpv ${MPV_VERSION}"
+    echo "FFmpeg ${FFMPEG_COMMIT} (${FFMPEG_TAG})"
+    echo "libiconv ${iconv_ver} (from $(pacman -Q mingw-w64-ucrt-x86_64-libiconv))"
+    echo "SDL3 is zlib-licensed and is not included here."
+  } > "$outdir/MANIFEST.txt"
+
+  echo "LGPL sources written to $outdir:"
+  ls -lh "$outdir"
+}
 
 phase download
 if [[ ! -f "$cached_zip" ]] || ! (cd "$cache_dir" && echo "$MPV_SHA256 *$MPV_ASSET" | sha256sum -c - >/dev/null 2>&1); then
@@ -125,6 +266,8 @@ if [[ -z "$iconv_lic" || ! -f "$iconv_lic" ]]; then
 fi
 cp "$iconv_lic" "$stage/"
 iconv_lic_name="$(basename "$iconv_lic")"
+iconv_ver="$(libiconv_upstream_version)"
+iconv_pacman_q="$(pacman -Q mingw-w64-ucrt-x86_64-libiconv)"
 
 phase dlls
 # ntldd -R walks the import tables; system DLLs live outside /ucrt64/bin.
@@ -141,6 +284,8 @@ done < "$work/dlls.txt"
 
 phase verificação-e-third-party
 # Whitelist of allowed DLLs in the package.
+# LGPL among these: libmpv-2.dll (and FFmpeg statically linked inside it) and
+# libiconv-2.dll. SDL3.dll is zlib.
 allowed_dlls=("libmpv-2.dll" "SDL3.dll" "libiconv-2.dll")
 for dll_path in "$stage"/*.dll; do
   [[ -f "$dll_path" ]] || continue
@@ -168,17 +313,31 @@ done
   echo "== libmpv and embedded FFmpeg =="
   echo "libmpv-2.dll is an official binary release from the mpv project (${MPV_VERSION})."
   echo "The mpv library code is licensed under the GNU Lesser General Public License version 2.1 or later (LGPL-2.1+)."
-  echo "Source code for mpv (${MPV_VERSION}): https://github.com/mpv-player/mpv/tree/${MPV_VERSION}"
-  echo
   echo "The FFmpeg build statically embedded within libmpv-2.dll was built with --enable-version3 (without --enable-gpl),"
   echo "and is licensed under the GNU Lesser General Public License version 3.0 or later (LGPL-3.0+)."
-  echo "Source code for FFmpeg (${FFMPEG_TAG}):"
-  echo "  ${FFMPEG_SOURCE_URL}"
+  echo
+  echo "Corresponding source for these LGPL libraries is published as attachments of the same"
+  echo "GitHub release that publishes this zip (filenames and SHA-256):"
+  echo "  ${MPV_SOURCE_ASSET}  (mpv ${MPV_VERSION}; SHA-256 ${MPV_SOURCE_SHA256})"
+  echo "  ${FFMPEG_SOURCE_ASSET}  (FFmpeg ${FFMPEG_TAG} / ${FFMPEG_COMMIT}; SHA-256 ${FFMPEG_SOURCE_SHA256})"
+  echo "  libiconv-${iconv_ver}.tar.gz  (GNU libiconv matching ${iconv_pacman_q}; SHA-256 from the MSYS2 PKGBUILD)"
+  echo "  libiconv-${iconv_ver}-msys2-packaging.tar.gz  (PKGBUILD and patches used by MSYS2 for that version)"
+  echo "  SHA256SUMS  (digests of the files above, produced by the packaging job)"
   echo
   echo "Limitation note: The official mpv Windows build uses the container image"
   echo "ghcr.io/btbn/ffmpeg-builds/win64-lgpl:latest without a pinned image tag or digest;"
   echo "consequently, other static libraries embedded within the DLL (such as libass, libplacebo,"
   echo "and dependencies) do not have individually identified exact commit versions."
+  echo
+  echo "== Other libraries statically linked into libmpv-2.dll =="
+  echo "The mpv ${MPV_VERSION} mingw LGPL build (ci/build-mingw64-full.sh on top of the BtbN"
+  echo "win64-lgpl image) embeds additional libraries. Exact commits for the BtbN image contents"
+  echo "are not published with the binary. Libraries identifiable from that build and from"
+  echo "strings in libmpv-2.dll include, among others:"
+  echo "  libass (ISC), libplacebo (LGPL-2.1+), FreeType (FTL or GPL), HarfBuzz (MIT),"
+  echo "  FriBidi (LGPL-2.1), dav1d (BSD-2-Clause), libarchive (BSD-2-Clause), mujs (ISC),"
+  echo "  uchardet (MPL-1.1/GPL/LGPL), zlib (zlib), libpng (libpng/zlib), lcms2 (MIT),"
+  echo "  LuaJIT (MIT), libsixel (MIT). See each project's license for the full text."
   echo
   echo "== Library Replacement (LGPL-2.1 §6) =="
   echo "ttv-tui-window.exe loads libmpv-2.dll as a shared library: you may replace it with a"
@@ -187,7 +346,8 @@ done
   echo "== MSYS2 UCRT64 Packages =="
   echo "The other DLLs in this folder (SDL3.dll and libiconv-2.dll) come unchanged from"
   echo "MSYS2 UCRT64 packages, under their respective open-source licenses."
-  echo "Source packages and PKGBUILD definitions: https://packages.msys2.org"
+  echo "SDL3 is zlib-licensed. libiconv (${iconv_ver}, package ${iconv_pacman_q}) is LGPL;"
+  echo "its GNU source tarball and the MSYS2 PKGBUILD/patches are release attachments named above."
   echo
   if [[ -s "$work/dlls.txt" ]]; then
     while IFS= read -r dll; do
@@ -205,6 +365,18 @@ done
   echo
   cat "$mpv_work/LICENSE.LGPL"
 } > "$stage/THIRD-PARTY.txt"
+
+phase fontes-lgpl
+if [[ -n "${LGPL_SOURCE_DIR:-}" ]]; then
+  mkdir -p "$LGPL_SOURCE_DIR"
+  # Resolve to an absolute path so the trap-cleaned $work tree is not required.
+  lgpl_out="$(cd "$LGPL_SOURCE_DIR" && pwd)"
+  fetch_lgpl_sources "$lgpl_out"
+  # Record the libiconv digest actually written (from SHA256SUMS) into a sidecar
+  # the release job can echo; THIRD-PARTY already points at the PKGBUILD hash rule.
+else
+  echo "LGPL_SOURCE_DIR unset: skipping source attachment download (CI packaging only)."
+fi
 
 phase compressão
 rm -f "$out"
