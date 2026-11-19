@@ -65,7 +65,9 @@ release:
   github:
     owner: pedrosatin
     name: ttv-tui
-  draft: false
+  # Rascunho: o workflow promove com gh release edit depois dos
+  # uploads (LGPL inclusos) e da attestation de proveniência.
+  draft: true
   prerelease: auto
   extra_files:
     - glob: ./dist-window/*.tar.gz

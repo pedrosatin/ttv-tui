@@ -196,8 +196,12 @@ jobs:
     name: Release
     needs: [window, window-windows]
     runs-on: ubuntu-latest
+    # contents: write publica o rascunho e promove; id-token e
+    # attestations só entram em uso no passo de attestation (tag v*).
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     timeout-minutes: 15
     steps:
       - name: Checkout repository
@@ -259,6 +263,28 @@ jobs:
 
       - name: Require host version check
         run: test -f dist/version-checked
+
+      # Só na publicação por tag. O ensaio (workflow_dispatch) não gera
+      # attestation pública nem promove release: o GoReleaser já rodou com
+      # --snapshot --skip=publish.
+      - name: Attest release artifacts
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          # checksums.txt lista binários, janela e fontes LGPL com o mesmo
+          # digesto que a release anexa; a attestation cobre o inventário.
+          subject-checksums: dist/checksums.txt
+
+      # Promove o rascunho só depois dos uploads (extra_files LGPL inclusos)
+      # e da attestation. Falha no meio deixa o rascunho sem publicar.
+      - name: Publish draft release
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false
+          echo "Release ${GITHUB_REF_NAME} publicada."
 
       # No ensaio (workflow_dispatch), confere que o conjunto de artefatos
       # normalizado bate com a última release publicada. Checksums e binários

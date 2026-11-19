@@ -22,7 +22,8 @@ if ($DryRun) {
     Write-Host "Plan: version $Version; destination $binDir\ttv-tui.exe"
     if ($versionNumber -eq 'latest') { Write-Host 'Resolve the latest version on GitHub before downloading.' }
     else { Write-Host "Download $base/$archive and $base/checksums.txt" }
-    Write-Host 'Verify SHA-256, extract the binary, and add the directory to the user PATH if needed.'
+    Write-Host 'Verify SHA-256, then build provenance with gh attestation verify when gh is available (warn and continue on checksums.txt alone when it is not).'
+    Write-Host 'Extract the binary, and add the directory to the user PATH if needed.'
     Write-Host "When the release has it, install the single window from ttv-tui-window_${versionNumber}_windows_amd64.zip into $binDir\ttv-tui-window"
     return
 }
@@ -42,8 +43,26 @@ function Invoke-DownloadWithRetry {
         }
     }
 }
+function Test-Attestation {
+    param([string]$FilePath)
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -eq $gh) {
+        if (-not $script:AttestationWarned) {
+            Write-Host 'Warning: gh not found; skipping attestation verification. Continuing with checksums.txt only.'
+            $script:AttestationWarned = $true
+        }
+        return
+    }
+    Write-Host "Verifying build provenance attestation for $(Split-Path -Leaf $FilePath)..."
+    & gh attestation verify $FilePath --repo $repo
+    if ($LASTEXITCODE -ne 0) {
+        throw "Invalid attestation for $(Split-Path -Leaf $FilePath)."
+    }
+}
+
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $tempDir = Join-Path ([IO.Path]::GetTempPath()) ("ttv-tui-" + [guid]::NewGuid().ToString())
+$script:AttestationWarned = $false
 try {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
     $zipPath = Join-Path $tempDir $archive
@@ -56,7 +75,9 @@ try {
     $expected = ([regex]::Match($matchesFound[0], $pattern)).Groups[1].Value
     $actual = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
     if ($actual -ne $expected) { throw "Invalid SHA-256 for $archive." }
-    Write-Host 'SHA-256 checksum verified. Extracting...'
+    Write-Host 'SHA-256 checksum verified.'
+    Test-Attestation -FilePath $zipPath
+    Write-Host 'Extracting...'
     $extractDir = Join-Path $tempDir 'extracted'
     Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir
     $binary = Join-Path $extractDir 'ttv-tui.exe'
@@ -87,6 +108,7 @@ try {
         Invoke-DownloadWithRetry -Uri "$base/$windowArchive" -OutFile $windowZip
         $windowExpected = ([regex]::Match($windowLine[0], $windowPattern)).Groups[1].Value
         if ((Get-FileHash -LiteralPath $windowZip -Algorithm SHA256).Hash -ne $windowExpected) { throw "Invalid SHA-256 for $windowArchive." }
+        Test-Attestation -FilePath $windowZip
         $windowExtract = Join-Path $tempDir 'window'
         Expand-Archive -LiteralPath $windowZip -DestinationPath $windowExtract
         $windowDir = Join-Path $binDir 'ttv-tui-window'

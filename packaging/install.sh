@@ -173,6 +173,23 @@ warn_path() {
   esac
 }
 
+# Attestation de proveniência do GitHub (raiz além do checksums.txt).
+# Com gh presente, falha se a attestation for inválida. Sem gh, avisa uma
+# vez e segue com a conferência por checksums.txt.
+attestation_warned=false
+verify_attestation() {
+  local file="$1"
+  if command -v gh >/dev/null 2>&1; then
+    info "Verificando attestation de proveniência de $(basename "$file")..."
+    if ! gh attestation verify "$file" --repo "$REPO"; then
+      die "attestation inválida para $(basename "$file")"
+    fi
+  elif [[ "$attestation_warned" != true ]]; then
+    printf 'Aviso: gh não encontrado; pulando verificação de attestation. A conferência segue só pelo checksums.txt.\n' >&2
+    attestation_warned=true
+  fi
+}
+
 if [[ "$dry_run" == true ]]; then
   info "Plano de instalação (dry-run):"
   printf '  Repositório:   %s\n' "$REPO"
@@ -184,15 +201,20 @@ if [[ "$dry_run" == true ]]; then
   printf '  1. Baixar tarball:   curl -fsSLO "%s"\n' "$tarball_url"
   printf '  2. Baixar checksums: curl -fsSLO "%s"\n' "$checksums_url"
   printf '  3. Verificar SHA-256 de %s com %s -c\n' "$tarball" "${checksum_cmd[*]:-sha256sum ou shasum -a 256 (não encontrado)}"
-  printf '  4. Extrair binário e instalar em: %s (modo 0755)\n' "$bin_target"
+  if command -v gh >/dev/null 2>&1; then
+    printf '  4. Verificar attestation: gh attestation verify %s --repo %s\n' "$tarball" "$REPO"
+  else
+    printf '  4. gh não encontrado: pular attestation e seguir só com checksums.txt\n'
+  fi
+  printf '  5. Extrair binário e instalar em: %s (modo 0755)\n' "$bin_target"
   if [[ "$os" == "linux" ]]; then
-  printf '  5. Atalho .desktop: somente do tarball verificado, em %s (modo 0644)\n' "$desktop_target"
-  printf '  6. Ícone SVG: somente do tarball verificado, em %s (modo 0644)\n' "$icon_target"
+  printf '  6. Atalho .desktop: somente do tarball verificado, em %s (modo 0644)\n' "$desktop_target"
+  printf '  7. Ícone SVG: somente do tarball verificado, em %s (modo 0644)\n' "$icon_target"
   printf '     Se faltar atalho ou ícone no tarball, como nas releases até a 0.1.7, pular ambos com aviso.\n'
   if command -v update-desktop-database >/dev/null 2>&1; then
-    printf '  7. Atualizar banco de atalhos: update-desktop-database "%s"\n' "$app_dir"
+    printf '  8. Atualizar banco de atalhos: update-desktop-database "%s"\n' "$app_dir"
   else
-    printf '  7. update-desktop-database não encontrado no PATH (etapa será ignorada)\n'
+    printf '  8. update-desktop-database não encontrado no PATH (etapa será ignorada)\n'
   fi
   fi
   warn_path
@@ -223,6 +245,7 @@ fi
   cd "$tmp_dir"
   printf '%s\n' "$expected_line" | "${checksum_cmd[@]}" -c -
 )
+verify_attestation "${tmp_dir}/${tarball}"
 
 info "Extraindo arquivo ${tarball}..."
 tar -xzf "${tmp_dir}/${tarball}" -C "$tmp_dir"
@@ -243,6 +266,7 @@ if [[ "$os" == "linux" && "$arch" == "amd64" ]]; then
       cd "$tmp_dir"
       printf '%s\n' "$window_line" | "${checksum_cmd[@]}" -c -
     )
+    verify_attestation "${tmp_dir}/${window_tarball}"
     tar -xzf "${tmp_dir}/${window_tarball}" -C "$tmp_dir" ttv-tui-window
     info "Instalando a janela em ${bin_dir}/ttv-tui-window..."
     install -m 0755 "${tmp_dir}/ttv-tui-window" "${bin_dir}/ttv-tui-window"
