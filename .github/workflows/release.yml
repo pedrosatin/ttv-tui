@@ -276,12 +276,19 @@ jobs:
           manifest="dist/scoop/ttv-tui.json"
           test -f "$formula"
           test -f "$manifest"
+          # Removes the deploy keys even when a clone or push fails midway.
+          trap 'rm -f "$RUNNER_TEMP/homebrew_tap_key" "$RUNNER_TEMP/scoop_bucket_key"' EXIT
+          # github.com host key pinned from https://api.github.com/meta
+          # (ssh_keys), so the push fails closed instead of trusting the
+          # first key it sees when the runner image lacks it.
+          known_hosts="$RUNNER_TEMP/github_known_hosts"
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$known_hosts"
 
           publish_repo() {
             local key_content="$1" key_file="$2" repo_ssh="$3" dest_dir="$4" src_file="$5" dest_rel="$6"
             printf '%s\n' "$key_content" > "$key_file"
             chmod 600 "$key_file"
-            export GIT_SSH_COMMAND="ssh -i ${key_file} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+            export GIT_SSH_COMMAND="ssh -i ${key_file} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${known_hosts}"
             rm -rf "$dest_dir"
             git clone --depth 1 "$repo_ssh" "$dest_dir"
             mkdir -p "$(dirname "$dest_dir/$dest_rel")"
