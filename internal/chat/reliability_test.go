@@ -103,6 +103,11 @@ func TestReliabilitySendWithoutEcho(t *testing.T) {
 	opts := reliabilityOptions(srv)
 	opts.Token = "test"
 	opts.Username = "tester"
+	// The silent server never answers PING, so with the shared 150ms pong
+	// timeout a slow runner could drop the connection first and discard the
+	// sends as RejectConnectionLost. Keeping the heartbeat out of the way makes
+	// SendTimeout the only thing that can discard them.
+	opts.PongTimeout = 10 * time.Second
 	mgr := New(opts)
 	defer mgr.Close()
 	gen, err := mgr.JoinLogin("test")
@@ -125,6 +130,9 @@ func TestReliabilitySendWithoutEcho(t *testing.T) {
 		case ev := <-mgr.Events():
 			for _, u := range ev.SendUpdates {
 				if u.Status == DeliveryDiscarded {
+					if u.Reason != RejectTimeout {
+						t.Fatalf("send %q discarded with reason %v, want RejectTimeout", u.Nonce, u.Reason)
+					}
 					rejected[u.Nonce] = true
 				}
 			}
