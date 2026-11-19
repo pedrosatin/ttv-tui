@@ -161,12 +161,18 @@ func TestRealMPVHandshake(t *testing.T) {
 	}
 
 	// Exercise the generated bindings, then capture exactly what show-text expands.
-	for i, tc := range []struct{ key, text, want string }{
+	// property-change can arrive before expand-text reads the new value under
+	// load (CI Windows saw "‖" while pause had already flipped); poll the
+	// expanded OSD until it matches, which is the observable the binding
+	// promises.
+	nextID := int64(20)
+	for _, tc := range []struct{ key, text, want string }{
 		{"SPACE", pauseText, "▶"},
 		{"SPACE", pauseText, "‖"},
 		{"+", "${volume}%", "47%"},
 	} {
-		id := int64(20 + i*2)
+		id := nextID
+		nextID++
 		lines.request(t, id, "keypress", tc.key)
 		lines.waitFor(t, "binding property change", func(m ipcMessage) bool {
 			if m.Event != "property-change" {
@@ -179,10 +185,20 @@ func TestRealMPVHandshake(t *testing.T) {
 			vol, ok := parseVolumeData(m.Data)
 			return m.Name == "volume" && ok && vol == 47
 		})
-		reply := lines.request(t, id+1, "expand-text", tc.text)
 		var got string
-		if err := json.Unmarshal(reply.Data, &got); err != nil || got != tc.want {
-			t.Fatalf("OSD after %s = %s, want %q (decode: %v)", tc.key, reply.Data, tc.want, err)
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			reply := lines.request(t, nextID, "expand-text", tc.text)
+			nextID++
+			if err := json.Unmarshal(reply.Data, &got); err != nil {
+				t.Fatalf("OSD after %s: decode %v (data %s)", tc.key, err, reply.Data)
+			}
+			if got == tc.want {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("OSD after %s = %q, want %q", tc.key, got, tc.want)
+			}
 		}
 		t.Logf("keypress %s -> show-text %q -> %s", tc.key, tc.text, got)
 	}

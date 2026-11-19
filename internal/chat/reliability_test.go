@@ -115,7 +115,10 @@ func TestReliabilitySendWithoutEcho(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	deadline := time.After(140 * time.Millisecond)
+	// Wait on the discard events themselves. SendTimeout is the production
+	// bound; the extra second only covers coalesce and scheduler noise so a
+	// slow runner cannot miss the updates (the old 140ms wall deadline did).
+	deadline := time.After(opts.SendTimeout + time.Second)
 	rejected := map[string]bool{}
 	for len(rejected) < 2 {
 		select {

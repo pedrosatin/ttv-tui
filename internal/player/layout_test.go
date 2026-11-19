@@ -74,7 +74,11 @@ func useTempDir(t *testing.T, dir string) {
 }
 
 func TestFallbackGoesToOSTempDir(t *testing.T) {
-	base := t.TempDir()
+	// shortLaunchDir keeps the fallback base under the socket path limit even
+	// when the process TMPDIR is long (t.TempDir would inherit that length and
+	// fallbackBase would correctly drop to /tmp, outside what this test checks).
+	// The long-TMPDIR path has its own coverage in endpoint_unix_test.go.
+	base := shortLaunchDir(t)
 	useTempDir(t, base)
 	for name, runtimeDir := range map[string]string{
 		"unusable": unusableRuntimeDir(t),
