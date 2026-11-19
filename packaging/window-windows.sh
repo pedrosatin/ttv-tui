@@ -11,6 +11,11 @@
 # Needs: mingw-w64-ucrt-x86_64-{gcc,pkgconf,sdl3,ntldd}, curl, unzip, zip, and go on PATH.
 set -euo pipefail
 
+# Byte ceilings for every download: a corrupted or redirected response fails
+# fast instead of filling the runner disk until --max-time.
+MAX_SOURCE_BYTES=134217728   # 128 MiB: source tarballs and the libmpv zip
+MAX_METADATA_BYTES=1048576   # 1 MiB: GitHub API, PKGBUILD and patches
+
 [[ $# -eq 1 ]] || { echo "usage: $0 <output.zip>" >&2; exit 2; }
 out="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -69,7 +74,8 @@ download_verify() {
     return 0
   fi
   echo "Downloading $url..."
-  curl -sSL -f --connect-timeout 15 --max-time 120 --retry 2 --retry-delay 2 --retry-all-errors \
+  curl -sSL -f --connect-timeout 15 --max-time 120 --max-filesize "$MAX_SOURCE_BYTES" \
+    --retry 2 --retry-delay 2 --retry-all-errors \
     -o "$tmp" "$url"
   echo "${want} *${tmp}" | sha256sum -c -
   mv "$tmp" "$dest"
@@ -104,7 +110,7 @@ resolve_libiconv_packaging_ref() {
   local base="https://raw.githubusercontent.com/${MSYS2_LIBICONV_REPO}"
   local tmp ver sha
   tmp="$(mktemp)"
-  if curl -sSL -f --connect-timeout 15 --max-time 60 \
+  if curl -sSL -f --connect-timeout 15 --max-time 60 --max-filesize "$MAX_METADATA_BYTES" \
     -o "$tmp" "${base}/master/${MSYS2_LIBICONV_PATH}/PKGBUILD"; then
     ver="$(pkgbuild_pkgver "$tmp")"
     if [[ "$ver" == "$want" ]]; then
@@ -119,7 +125,7 @@ resolve_libiconv_packaging_ref() {
   while IFS= read -r sha; do
     [[ -n "$sha" ]] || continue
     tmp="$(mktemp)"
-    if curl -sSL -f --connect-timeout 15 --max-time 60 \
+    if curl -sSL -f --connect-timeout 15 --max-time 60 --max-filesize "$MAX_METADATA_BYTES" \
       -o "$tmp" "${base}/${sha}/${MSYS2_LIBICONV_PATH}/PKGBUILD" 2>/dev/null; then
       ver="$(pkgbuild_pkgver "$tmp")"
       if [[ "$ver" == "$want" ]]; then
@@ -129,7 +135,7 @@ resolve_libiconv_packaging_ref() {
       fi
     fi
     rm -f "$tmp"
-  done < <(curl -sSL -f --connect-timeout 15 --max-time 60 \
+  done < <(curl -sSL -f --connect-timeout 15 --max-time 60 --max-filesize "$MAX_METADATA_BYTES" \
     "https://api.github.com/repos/${MSYS2_LIBICONV_REPO}/commits?path=${MSYS2_LIBICONV_PATH}/PKGBUILD&per_page=30" \
     | grep -o '"sha": "[a-f0-9]\{40\}"' | sed 's/"sha": "//;s/"//' | awk '!seen[$0]++')
   echo "error: no ${MSYS2_LIBICONV_PATH}/PKGBUILD with pkgver=$want in the last 30 commits" >&2
@@ -192,7 +198,7 @@ fetch_lgpl_sources() {
   packaging_dir="$work/libiconv-msys2-packaging"
   rm -rf "$packaging_dir"
   mkdir -p "$packaging_dir"
-  curl -sSL -f --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 --retry-all-errors \
+  curl -sSL -f --connect-timeout 15 --max-time 60 --max-filesize "$MAX_METADATA_BYTES" --retry 2 --retry-delay 2 --retry-all-errors \
     -o "$packaging_dir/PKGBUILD" "${packaging_base}/PKGBUILD"
   [[ "$(pkgbuild_pkgver "$packaging_dir/PKGBUILD")" == "$iconv_ver" ]] || {
     echo "error: resolved PKGBUILD pkgver mismatch after download" >&2
@@ -205,7 +211,7 @@ fetch_lgpl_sources() {
     exit 1
   }
   for f in "${local_files[@]}"; do
-    curl -sSL -f --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 --retry-all-errors \
+    curl -sSL -f --connect-timeout 15 --max-time 60 --max-filesize "$MAX_METADATA_BYTES" --retry 2 --retry-delay 2 --retry-all-errors \
       -o "$packaging_dir/$f" "${packaging_base}/$f"
   done
 
@@ -265,7 +271,8 @@ if [[ ! -f "$cached_zip" ]] || ! (cd "$cache_dir" && echo "$MPV_SHA256 *$MPV_ASS
   echo "Downloading $MPV_URL..."
   # Bounded so a stalled connection fails (or retries) instead of hanging the job:
   # 3 attempts of at most 90 s each.
-  curl -sSL -f --connect-timeout 15 --max-time 90 --retry 2 --retry-delay 2 --retry-all-errors \
+  curl -sSL -f --connect-timeout 15 --max-time 90 --max-filesize "$MAX_SOURCE_BYTES" \
+    --retry 2 --retry-delay 2 --retry-all-errors \
     -o "$cached_zip.tmp" "$MPV_URL"
   (cd "$cache_dir" && echo "$MPV_SHA256 *$MPV_ASSET.tmp" | sha256sum -c -)
   mv "$cached_zip.tmp" "$cached_zip"
@@ -444,8 +451,6 @@ if [[ -n "${LGPL_SOURCE_DIR:-}" ]]; then
   # Resolve to an absolute path so the trap-cleaned $work tree is not required.
   lgpl_out="$(cd "$LGPL_SOURCE_DIR" && pwd)"
   fetch_lgpl_sources "$lgpl_out"
-  # Record the libiconv digest actually written (from SHA256SUMS) into a sidecar
-  # the release job can echo; THIRD-PARTY already points at the PKGBUILD hash rule.
 else
   echo "LGPL_SOURCE_DIR unset: skipping source attachment download (CI packaging only)."
 fi
