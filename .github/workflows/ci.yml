@@ -18,11 +18,14 @@ jobs:
   govulncheck:
     name: Govulncheck (root and window)
     runs-on: ubuntu-latest
-    container: archlinux:latest
+    # .github/images/arch-ci/README.md explains how to renew this digest.
+    container: ghcr.io/pedrosatin/ttv-tui-arch-ci@sha256:8da8d3f4904a0060d443feb4580f687b77f86fda9b9d5c370723021c884bb411
     timeout-minutes: 15
     steps:
-      - name: Install window build dependencies
-        run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd
+      - name: List the native package versions
+        run: |
+          pacman -Q sdl3 mpv gcc pkgconf
+          echo "sdl3 $(pkg-config --modversion sdl3), mpv $(pkg-config --modversion mpv)"
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Set up Go
@@ -118,11 +121,14 @@ jobs:
   window:
     name: Window (Arch)
     runs-on: ubuntu-latest
-    container: archlinux:latest
+    # .github/images/arch-ci/README.md explains how to renew this digest.
+    container: ghcr.io/pedrosatin/ttv-tui-arch-ci@sha256:8da8d3f4904a0060d443feb4580f687b77f86fda9b9d5c370723021c884bb411
     timeout-minutes: 15
     steps:
-      - name: Install build dependencies
-        run: pacman -Syu --noconfirm git gcc pkgconf sdl3 mpv libglvnd mesa ttf-dejavu noto-fonts-emoji
+      - name: List the native package versions
+        run: |
+          pacman -Q sdl3 mpv gcc pkgconf
+          echo "sdl3 $(pkg-config --modversion sdl3), mpv $(pkg-config --modversion mpv)"
 
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
