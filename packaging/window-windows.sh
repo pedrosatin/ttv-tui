@@ -53,13 +53,8 @@ FFMPEG_SOURCE_ASSET="FFmpeg-${FFMPEG_COMMIT}.tar.gz"
 FFMPEG_SOURCE_TARBALL_URL="https://github.com/FFmpeg/FFmpeg/archive/${FFMPEG_COMMIT}.tar.gz"
 FFMPEG_SOURCE_SHA256="a533cd8e097f2c65e8ebf523ab567817a79ecc9399c5bc5405be0aaf5b79a1f1"
 
-MSYS2_LIBICONV_PKGBUILD_URL="https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-libiconv"
-MSYS2_LIBICONV_FILES=(
-  PKGBUILD
-  0002-fix-cr-for-awk-in-configure.all.patch
-  0003-add-cp65001-as-utf8-alias.patch
-  iconv.pc
-)
+MSYS2_LIBICONV_REPO="msys2/MINGW-packages"
+MSYS2_LIBICONV_PATH="mingw-w64-libiconv"
 
 cache_dir="${MPV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/ttv-tui}"
 mkdir -p "$cache_dir"
@@ -97,6 +92,77 @@ libiconv_upstream_version() {
   fi
 }
 
+# pkgbuild_pkgver <file> prints the pkgver= value without quotes.
+pkgbuild_pkgver() {
+  awk -F= '/^pkgver=/{ gsub(/["'\'']/,"",$2); print $2; exit }' "$1"
+}
+
+# resolve_libiconv_packaging_ref <upstream_ver> prints a git ref (master or
+# commit SHA) of MINGW-packages whose mingw-w64-libiconv/PKGBUILD has that pkgver.
+resolve_libiconv_packaging_ref() {
+  local want="$1"
+  local base="https://raw.githubusercontent.com/${MSYS2_LIBICONV_REPO}"
+  local tmp ver sha
+  tmp="$(mktemp)"
+  if curl -sSL -f --connect-timeout 15 --max-time 60 \
+    -o "$tmp" "${base}/master/${MSYS2_LIBICONV_PATH}/PKGBUILD"; then
+    ver="$(pkgbuild_pkgver "$tmp")"
+    if [[ "$ver" == "$want" ]]; then
+      rm -f "$tmp"
+      printf '%s\n' master
+      return 0
+    fi
+  fi
+  rm -f "$tmp"
+  echo "MSYS2 master PKGBUILD pkgver differs from installed libiconv $want; searching history..." >&2
+  # Newest commits that touched the PKGBUILD; stop at the first matching pkgver.
+  while IFS= read -r sha; do
+    [[ -n "$sha" ]] || continue
+    tmp="$(mktemp)"
+    if curl -sSL -f --connect-timeout 15 --max-time 60 \
+      -o "$tmp" "${base}/${sha}/${MSYS2_LIBICONV_PATH}/PKGBUILD" 2>/dev/null; then
+      ver="$(pkgbuild_pkgver "$tmp")"
+      if [[ "$ver" == "$want" ]]; then
+        rm -f "$tmp"
+        printf '%s\n' "$sha"
+        return 0
+      fi
+    fi
+    rm -f "$tmp"
+  done < <(curl -sSL -f --connect-timeout 15 --max-time 60 \
+    "https://api.github.com/repos/${MSYS2_LIBICONV_REPO}/commits?path=${MSYS2_LIBICONV_PATH}/PKGBUILD&per_page=30" \
+    | grep -o '"sha": "[a-f0-9]\{40\}"' | sed 's/"sha": "//;s/"//' | awk '!seen[$0]++')
+  echo "error: no ${MSYS2_LIBICONV_PATH}/PKGBUILD with pkgver=$want in the last 30 commits" >&2
+  exit 1
+}
+
+# pkgbuild_source_locals <PKGBUILD> lists local (non-URL) entries of source=().
+# MSYS2 lists patches and iconv.pc unquoted; the GNU URL is quoted.
+pkgbuild_source_locals() {
+  local pb="$1"
+  awk '
+    /^source=\(/, /\)/ {
+      line=$0
+      # Drop quoted URL segments (and anything inside quotes).
+      while (match(line, /"[^"]*"/)) {
+        line = substr(line, 1, RSTART-1) " " substr(line, RSTART+RLENGTH)
+      }
+      # Drop brace expansion remnants such as {,.sig}.
+      gsub(/\{[^}]*\}/, " ", line)
+      gsub(/source=\(/, " ", line)
+      gsub(/\)/, " ", line)
+      n = split(line, a, /[[:space:]]+/)
+      for (i = 1; i <= n; i++) {
+        s = a[i]
+        if (s == "" || s == "\\") continue
+        if (s ~ /^https?:\/\//) continue
+        if (s ~ /\.sig$/) continue
+        print s
+      }
+    }
+  ' "$pb"
+}
+
 # fetch_lgpl_sources <outdir> writes the LGPL source attachments and SHA256SUMS.
 # Versions come from the same pins/DLL mark/pacman query used for the zip.
 fetch_lgpl_sources() {
@@ -112,23 +178,37 @@ fetch_lgpl_sources() {
   download_verify "$FFMPEG_SOURCE_TARBALL_URL" "$ffmpeg_src" "$FFMPEG_SOURCE_SHA256"
   cp -f "$ffmpeg_src" "$outdir/$FFMPEG_SOURCE_ASSET"
 
-  local iconv_ver packaging_dir packaging_tar gnu_url gnu_tar expected_hash pkgbuild_ver
+  local iconv_ver packaging_dir packaging_tar gnu_url gnu_tar expected_hash
+  local packaging_ref packaging_base f
+  local -a local_files=() sums=()
+  local line i sum
+
   iconv_ver="$(libiconv_upstream_version)"
   echo "libiconv from MSYS2: mingw-w64-ucrt-x86_64-libiconv -> upstream $iconv_ver"
+  packaging_ref="$(resolve_libiconv_packaging_ref "$iconv_ver")"
+  packaging_base="https://raw.githubusercontent.com/${MSYS2_LIBICONV_REPO}/${packaging_ref}/${MSYS2_LIBICONV_PATH}"
+  echo "MSYS2 libiconv packaging ref: $packaging_ref"
+
   packaging_dir="$work/libiconv-msys2-packaging"
   rm -rf "$packaging_dir"
   mkdir -p "$packaging_dir"
-  local f
-  for f in "${MSYS2_LIBICONV_FILES[@]}"; do
-    curl -sSL -f --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 --retry-all-errors \
-      -o "$packaging_dir/$f" "${MSYS2_LIBICONV_PKGBUILD_URL}/$f"
-  done
-  pkgbuild_ver="$(awk -F= '/^pkgver=/{ gsub(/["'\'']/,"",$2); print $2; exit }' "$packaging_dir/PKGBUILD")"
-  if [[ "$pkgbuild_ver" != "$iconv_ver" ]]; then
-    echo "error: MSYS2 PKGBUILD on master has pkgver=$pkgbuild_ver but installed libiconv is $iconv_ver." >&2
-    echo "Update the packaging files URL to a MINGW-packages commit that matches the installed package." >&2
+  curl -sSL -f --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 --retry-all-errors \
+    -o "$packaging_dir/PKGBUILD" "${packaging_base}/PKGBUILD"
+  [[ "$(pkgbuild_pkgver "$packaging_dir/PKGBUILD")" == "$iconv_ver" ]] || {
+    echo "error: resolved PKGBUILD pkgver mismatch after download" >&2
     exit 1
-  fi
+  }
+
+  mapfile -t local_files < <(pkgbuild_source_locals "$packaging_dir/PKGBUILD")
+  [[ ${#local_files[@]} -gt 0 ]] || {
+    echo "error: no local source files parsed from PKGBUILD" >&2
+    exit 1
+  }
+  for f in "${local_files[@]}"; do
+    curl -sSL -f --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 --retry-all-errors \
+      -o "$packaging_dir/$f" "${packaging_base}/$f"
+  done
+
   # First sha256sums entry is the GNU tarball (second is .sig with SKIP).
   expected_hash="$(awk -F"'" '/^sha256sums=/{ print $2; exit }' "$packaging_dir/PKGBUILD")"
   [[ -n "$expected_hash" && "$expected_hash" != SKIP ]] || {
@@ -140,21 +220,11 @@ fetch_lgpl_sources() {
   download_verify "$gnu_url" "$gnu_tar" "$expected_hash"
   cp -f "$gnu_tar" "$outdir/libiconv-${iconv_ver}.tar.gz"
 
-  # Verify non-SKIP patch hashes from PKGBUILD against the downloaded files.
-  # Order matches source=(): tarball, .sig, then the local files.
-  local -a sums=()
-  local line
   while IFS= read -r line; do
     [[ "$line" == *\'* ]] || continue
     sums+=("$(printf '%s\n' "$line" | sed -n "s/.*'\\([0-9a-fA-F]\\{64\\}\\|SKIP\\)'.*/\\1/p")")
   done < <(awk '/^sha256sums=/,/\)/' "$packaging_dir/PKGBUILD")
-  local -a local_files=(
-    0003-add-cp65001-as-utf8-alias.patch
-    0002-fix-cr-for-awk-in-configure.all.patch
-    iconv.pc
-  )
-  # sums[0]=tarball, sums[1]=sig SKIP, sums[2..]=local_files
-  local i sum
+  # sums[0]=tarball, sums[1]=sig SKIP, sums[2..]=local_files in source=() order
   for i in "${!local_files[@]}"; do
     sum="${sums[$((i + 2))]:-}"
     [[ -n "$sum" && "$sum" != SKIP ]] || {
@@ -165,7 +235,8 @@ fetch_lgpl_sources() {
   done
 
   packaging_tar="libiconv-${iconv_ver}-msys2-packaging.tar.gz"
-  tar -C "$packaging_dir" -czf "$outdir/$packaging_tar" "${MSYS2_LIBICONV_FILES[@]}"
+  tar -C "$packaging_dir" -czf "$outdir/$packaging_tar" PKGBUILD "${local_files[@]}"
+  printf '%s\n' "$packaging_ref" > "$outdir/libiconv-msys2-packaging.ref"
 
   {
     echo "# SHA-256 of LGPL sources attached next to the Windows window zip."
@@ -181,6 +252,7 @@ fetch_lgpl_sources() {
     echo "mpv ${MPV_VERSION}"
     echo "FFmpeg ${FFMPEG_COMMIT} (${FFMPEG_TAG})"
     echo "libiconv ${iconv_ver} (from $(pacman -Q mingw-w64-ucrt-x86_64-libiconv))"
+    echo "libiconv MSYS2 packaging ref: ${packaging_ref}"
     echo "SDL3 is zlib-licensed and is not included here."
   } > "$outdir/MANIFEST.txt"
 
