@@ -175,7 +175,18 @@ exit 1
 	if i < 0 || filepath.Base(argv[i+1]) != pluginDirName {
 		t.Fatalf("--plugin-dir missing or wrong in %q", argv)
 	}
-	if filepath.Dir(argv[i+1]) != cwd {
+	// pwd reports the resolved path (/private/tmp on macOS) while argv keeps
+	// the one the manager built (/tmp). The session is gone by now, so resolve
+	// the runtime root, which still exists, and compare with that prefix.
+	resolvedRuntime, err := filepath.EvalSymlinks(runtimeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginParent := filepath.Dir(argv[i+1])
+	if rest, ok := strings.CutPrefix(pluginParent, runtimeDir); ok {
+		pluginParent = resolvedRuntime + rest
+	}
+	if pluginParent != cwd {
 		t.Fatalf("--plugin-dir %q not inside session %q", argv[i+1], cwd)
 	}
 }
