@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+  # Ensaio sem tag: mesmos jobs, GoReleaser em snapshot sem publicar.
+  # Uma tag v* continua sendo o único caminho que publica a release.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,6 +16,7 @@ jobs:
   window:
     name: Window binary
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # .github/images/arch-ci/README.md explains how to renew this digest.
     container: ghcr.io/pedrosatin/ttv-tui-arch-ci@sha256:8da8d3f4904a0060d443feb4580f687b77f86fda9b9d5c370723021c884bb411
     steps:
@@ -30,13 +34,51 @@ jobs:
           go-version-file: window/go.mod
           cache: false
 
+      # Go's build cache does not hash the C headers and libraries cgo compiles
+      # against, so the key carries the installed SDL3, mpv, GCC and pkgconf.
+      # The prefix names the release trimpath build of the window module.
+      - name: Key the window Go cache
+        id: go-cache-key
+        run: |
+          manifest=$(pacman -Q sdl3 mpv gcc pkgconf)
+          echo "$manifest"
+          native=$(printf '%s\n' "$manifest" | sha256sum | cut -c1-16)
+          {
+            echo "prefix=go-window-release-${RUNNER_OS}-${RUNNER_ARCH}-$(go env GOVERSION)-native-${native}-"
+            echo "gocache=$(go env GOCACHE)"
+            echo "gomodcache=$(go env GOMODCACHE)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore the window Go cache
+        id: go-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-key.outputs.gocache }}
+            ${{ steps.go-cache-key.outputs.gomodcache }}
+          key: ${{ steps.go-cache-key.outputs.prefix }}${{ hashFiles('window/go.sum') }}
+          restore-keys: ${{ steps.go-cache-key.outputs.prefix }}
+
       - name: Build
         working-directory: window
         run: go build -buildvcs=false -trimpath -ldflags "-s -w" -o ttv-tui-window .
 
+      - name: Save the window Go cache
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-key.outputs.gocache }}
+            ${{ steps.go-cache-key.outputs.gomodcache }}
+          key: ${{ steps.go-cache-key.outputs.prefix }}${{ hashFiles('window/go.sum') }}
+
       - name: Package
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="snapshot"
+          fi
           mkdir -p dist-window
           tar -czf "dist-window/ttv-tui-window_${VERSION}_linux_amd64.tar.gz" -C window ttv-tui-window
 
@@ -49,9 +91,11 @@ jobs:
   # Windows has no system SDL3 or libmpv. The zip carries the official LGPL libmpv-2.dll and MSYS2 runtime DLLs.
   # The MSYS2 mpv package stays installed so this job matches the CI job that tests the script; the script
   # makes pkg-config resolve the official mpv.pc and fails otherwise.
+  # Go cache and packaging timeouts match the Window (windows-latest) job in ci.yml.
   window-windows:
     name: Window binary (Windows)
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -76,14 +120,56 @@ jobs:
           go-version-file: window/go.mod
           cache: false
 
+      - name: Key the window Go cache
+        id: go-cache-key
+        shell: msys2 {0}
+        run: |
+          manifest=$(pacman -Q mingw-w64-ucrt-x86_64-sdl3 mingw-w64-ucrt-x86_64-mpv \
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-pkgconf)
+          echo "$manifest"
+          echo "gcc $(gcc -dumpfullversion), pkg-config $(pkg-config --version)," \
+            "sdl3 $(pkg-config --modversion sdl3), mpv $(pkg-config --modversion mpv)"
+          native=$(printf '%s\n' "$manifest" | sha256sum | cut -c1-16)
+          {
+            echo "prefix=go-window-zip-${RUNNER_OS}-${RUNNER_ARCH}-$(go env GOVERSION)-native-${native}-"
+            echo "gocache=$(go env GOCACHE)"
+            echo "gomodcache=$(go env GOMODCACHE)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore the window Go cache
+        id: go-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-key.outputs.gocache }}
+            ${{ steps.go-cache-key.outputs.gomodcache }}
+          key: ${{ steps.go-cache-key.outputs.prefix }}${{ hashFiles('window/go.sum') }}
+          restore-keys: ${{ steps.go-cache-key.outputs.prefix }}
+
       - name: Build and package
         shell: msys2 {0}
+        timeout-minutes: 6
         env:
           CGO_ENABLED: "1"
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="snapshot"
+          fi
           mkdir -p dist-window
           packaging/window-windows.sh "dist-window/ttv-tui-window_${VERSION}_windows_amd64.zip"
+
+      # Saved after packaging so the cache holds the -trimpath objects that the
+      # zip build produces. Same prefix as the CI Window (windows-latest) job.
+      - name: Save the window Go cache
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-key.outputs.gocache }}
+            ${{ steps.go-cache-key.outputs.gomodcache }}
+          key: ${{ steps.go-cache-key.outputs.prefix }}${{ hashFiles('window/go.sum') }}
 
       - name: Upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -95,6 +181,7 @@ jobs:
     name: Release
     needs: [window, window-windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -105,7 +192,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.27.4'
-          cache: false
+          cache: true
 
       - name: Download window binaries
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -119,10 +206,44 @@ jobs:
         with:
           distribution: goreleaser
           version: v2.20.2
-          args: release --clean
+          args: ${{ startsWith(github.ref, 'refs/tags/v') && 'release --clean' || 'release --snapshot --clean --skip=publish' }}
         env:
-          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+          GORELEASER_CURRENT_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Require host version check
         run: test -f dist/version-checked
+
+      # No ensaio (workflow_dispatch), confere que o conjunto de artefatos
+      # normalizado bate com a última release publicada. Checksums e binários
+      # diferem por versão e ldflags; o que importa é o inventário.
+      - name: Compare snapshot artifacts with latest release
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          normalize() {
+            # ttv-tui_0.10.2_linux_amd64.tar.gz -> ttv-tui_*_linux_amd64.tar.gz
+            # ttv-tui-window_snapshot_windows_amd64.zip -> ttv-tui-window_*_windows_amd64.zip
+            sed -E \
+              -e 's/ttv-tui_[^_]+_/ttv-tui_*_/' \
+              -e 's/ttv-tui-window_[^_]+_/ttv-tui-window_*_/'
+          }
+          mkdir -p /tmp/release-compare
+          gh release view --json assets --jq '.assets[].name' | sort > /tmp/release-compare/latest.txt
+          {
+            find dist -maxdepth 1 -type f \( -name 'ttv-tui_*' -o -name 'checksums.txt' \) -printf '%f\n'
+            find dist-window -maxdepth 1 -type f -name 'ttv-tui-window_*' -printf '%f\n'
+          } | sort > /tmp/release-compare/snapshot-raw.txt
+          normalize < /tmp/release-compare/latest.txt | sort -u > /tmp/release-compare/latest-n.txt
+          normalize < /tmp/release-compare/snapshot-raw.txt | sort -u > /tmp/release-compare/snapshot-n.txt
+          echo "Última release (normalizada):"
+          cat /tmp/release-compare/latest-n.txt
+          echo "Snapshot (normalizado):"
+          cat /tmp/release-compare/snapshot-n.txt
+          if ! diff -u /tmp/release-compare/latest-n.txt /tmp/release-compare/snapshot-n.txt; then
+            echo "Inventário de artefatos difere da última release." >&2
+            exit 1
+          fi
+          echo "Inventário de artefatos igual ao da última release (versão normalizada)."
