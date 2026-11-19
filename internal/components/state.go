@@ -31,10 +31,12 @@ type UpdateState struct {
 	// yet. Only a version on trial can be undone: an older, long-working version
 	// failing later is not the update's fault.
 	Trial string `json:"trial,omitempty"`
-	// TrialUnrecognizedChannels lists distinct channel identities that produced
-	// an unrecognized non-zero exit while Trial is set. A second distinct
-	// channel during the same trial blames the build (ADR 0014, D1(c)). Cleared
-	// when the trial ends or the version is marked bad.
+	// TrialUnrecognizedChannels lists opaque keys (SHA-256 hex of a canonical
+	// channel identity) for channels that produced an unrecognized non-zero
+	// exit while Trial is set. A second distinct channel during the same trial
+	// blames the build (ADR 0014, D1(c)). Never holds a URL, userinfo or query.
+	// Cleared when the trial ends or the version is marked bad. Capped at the
+	// blame threshold so a failed MarkStreamlinkBad cannot grow the list.
 	TrialUnrecognizedChannels []string `json:"trial_unrecognized_channels,omitempty"`
 	// Bad lists versions that failed on trial and are never downloaded or used
 	// again.

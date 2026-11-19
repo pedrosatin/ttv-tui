@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,6 +22,10 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 )
+
+func gotJoined(keys []string) string {
+	return strings.Join(keys, ",")
+}
 
 // skipOnDarwin skips a test that needs the bridge's own resolver to see managed
 // installs, which macOS does not use.
@@ -303,8 +308,14 @@ func TestUnrecognizedExitNeedsTwoChannels(t *testing.T) {
 	if st.IsBad("8.7.0") || len(b.Rollbacks()) != 0 || st.Trial != "8.7.0" {
 		t.Fatalf("one pasted link rolled back: state %+v, rollbacks %v", st, b.Rollbacks())
 	}
-	if got := st.TrialUnrecognizedChannels; len(got) != 1 || got[0] != paste.Login {
-		t.Fatalf("counter after one link = %v, want [%q]", got, paste.Login)
+	wantPaste := components.UnrecognizedChannelKey(paste.Login)
+	if got := st.TrialUnrecognizedChannels; len(got) != 1 || got[0] != wantPaste {
+		t.Fatalf("counter after one link = %v, want [%s]", got, wantPaste)
+	}
+	for _, leak := range []string{"https://", "pastedlink", "?"} {
+		if strings.Contains(gotJoined(st.TrialUnrecognizedChannels), leak) {
+			t.Fatalf("counter leaked %q: %v", leak, st.TrialUnrecognizedChannels)
+		}
 	}
 
 	// Same channel again must not count twice.
@@ -315,6 +326,19 @@ func TestUnrecognizedExitNeedsTwoChannels(t *testing.T) {
 		t.Fatalf("same channel counted twice: state %+v, rollbacks %v", st, b.Rollbacks())
 	}
 
+	// Equivalent identity (bare login) must not count as a second channel.
+	b.observePlayer(player.Event{
+		State:   player.StateError,
+		Failure: player.FailureUnrecognizedExit,
+		Login:   "pastedlink",
+		Target:  player.Target{Label: "pastedlink", URL: "https://www.twitch.tv/pastedlink"},
+	})
+	b.bg.Wait()
+	st = components.LoadUpdateState(dataDir)
+	if st.IsBad("8.7.0") || len(st.TrialUnrecognizedChannels) != 1 {
+		t.Fatalf("url vs login counted twice: state %+v", st)
+	}
+
 	// App restart: release the first process's use marker, then a new bridge
 	// reading the same state.json keeps the counter.
 	b.close()
@@ -323,8 +347,8 @@ func TestUnrecognizedExitNeedsTwoChannels(t *testing.T) {
 		t.Fatalf("ensureStreamlink after restart: %v", err)
 	}
 	st = components.LoadUpdateState(dataDir)
-	if got := st.TrialUnrecognizedChannels; len(got) != 1 || got[0] != paste.Login {
-		t.Fatalf("counter after restart = %v, want [%q]", got, paste.Login)
+	if got := st.TrialUnrecognizedChannels; len(got) != 1 || got[0] != wantPaste {
+		t.Fatalf("counter after restart = %v, want [%s]", got, wantPaste)
 	}
 
 	second := player.Event{
