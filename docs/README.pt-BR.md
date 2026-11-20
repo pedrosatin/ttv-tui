@@ -171,7 +171,7 @@ Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o c
 
 | Tecla | Ação |
 | --- | --- |
-| `Space` | Pausa ou retoma |
+| `Space` | Prévia do canal destacado com o foco na lista; pausa ou retoma com o foco no chat |
 | `+` `-` | Sobe ou desce o volume em 5% |
 | `m` | Liga ou desliga o mudo; a barra de status mostra `mudo` no lugar do volume |
 | `Ctrl+X` | Para o vídeo sem sair do app |

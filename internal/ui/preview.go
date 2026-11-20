@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
@@ -255,9 +256,10 @@ func (m Model) startPreviewFor(target PlayTarget) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// togglePreview is Space on the list with no main video: open or close.
-// Outside the single window only: the hosted shim gains a preview session in
-// ticket 03, so Space must not start an orphan mpv window while hosted.
+// togglePreview is Space on the list: open or close the preview, even when a
+// main video is active. Outside the single window only: the hosted shim gains
+// a preview session in ticket 03, so Space must not start an orphan mpv window
+// while hosted. A non-channel row warns and does not pause.
 func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	if m.previewOpen() || m.preview.stopAfterStart {
 		cmd := m.closePreview()
@@ -268,7 +270,7 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	}
 	target, ok := m.highlightedPlayTarget()
 	if !ok {
-		// Ticket 02 owns the "preview is only for channels" notice.
+		m.warnStatus(m.t("preview.channels_only"))
 		return m, nil
 	}
 	return m.startPreviewFor(target)
@@ -385,8 +387,19 @@ func (m *Model) setPreviewState(msg PreviewStatusMsg) {
 	}
 }
 
-// mainVideoActive reports a main player that is starting or playing (ticket
-// 01 keeps Space as pause in that case; ticket 02 always uses Space for preview).
+// mainVideoActive reports a main player that is starting or playing.
 func (m Model) mainVideoActive() bool {
 	return m.player.controllable()
+}
+
+// isMainChannel reports whether ch is the channel the main player is showing
+// (starting, playing, paused or in a break).
+func (m Model) isMainChannel(ch catalog.Channel) bool {
+	if m.player.login == "" || !m.mainVideoActive() {
+		return false
+	}
+	if platform.IsNonTwitch(ch.Platform) {
+		return samePlayerLabel(ch.Platform, m.player.login, ch.PlayerLabel())
+	}
+	return strings.EqualFold(m.player.login, ch.Login)
 }

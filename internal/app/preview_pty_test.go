@@ -156,3 +156,73 @@ func waitTargetLog(t *testing.T, path, want string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// TestPreviewWithMainVideo_PTY: with the main channel playing, Space opens a
+// preview (muting the main session via the bridge), Esc closes it, and Enter on
+// the same channel only closes the preview without restarting main.
+func TestPreviewWithMainVideo_PTY(t *testing.T) {
+	p := startTUIOnPTY(t, "TTV_APP_RICH=1", "TTV_APP_PREVIEW=1", "LANG=en_US.UTF-8", "LC_ALL=", "LC_MESSAGES=")
+	p.waitScreen(0, "PtyCategory")
+
+	off := p.mark()
+	p.send([]byte("\r"))
+	p.waitScreen(off, "PtyChan")
+
+	// Open the channel as main playback.
+	off = p.mark()
+	p.send([]byte("\r"))
+	p.waitScreen(off, "Chat — #ptychan")
+	p.followPlayer(0)
+	mainPid := p.playerPid
+	if mainPid == 0 {
+		t.Fatal("main player did not start")
+	}
+	t.Logf("PTY CAPTURE main playing pid=%d", mainPid)
+
+	// Space opens preview of the same channel while main keeps running.
+	off = p.mark()
+	p.send([]byte(" "))
+	screen := p.waitScreen(off, "Preview")
+	if !strings.Contains(screen, "ptychan") && !strings.Contains(screen, "PtyChan") {
+		t.Fatalf("preview status missing channel:\n%s", screen)
+	}
+	p.waitPreviewPlayer()
+	previewPid := p.playerPid
+	if previewPid == 0 || previewPid == mainPid {
+		t.Fatalf("preview pid=%d main=%d", previewPid, mainPid)
+	}
+	if !alive(mainPid) {
+		t.Fatal("opening preview killed the main player")
+	}
+	t.Logf("PTY CAPTURE Space opened preview pid=%d with main still alive", previewPid)
+
+	// Esc closes preview; main must survive.
+	off = p.mark()
+	p.send([]byte{0x1b})
+	waitProcessGone(t, previewPid, 5*time.Second)
+	if !alive(mainPid) {
+		t.Fatal("Esc on preview killed the main player")
+	}
+	if strings.Contains(p.screenSince(off), "Preview") {
+		t.Fatalf("preview status still on the bar after Esc:\n%s", p.screenSince(off))
+	}
+
+	// Space again, then Enter on the same (main) channel: preview closes, main stays.
+	off = p.mark()
+	p.send([]byte(" "))
+	p.waitScreen(off, "Preview")
+	p.waitPreviewPlayer()
+	previewPid = p.playerPid
+
+	off = p.mark()
+	p.send([]byte("\r"))
+	waitProcessGone(t, previewPid, 5*time.Second)
+	if !alive(mainPid) {
+		t.Fatal("Enter on preview of main channel killed main")
+	}
+	// A restart would replace the main group; the original pid must still live.
+	if strings.Contains(p.screenSince(off), "Preview") {
+		t.Fatalf("preview still on bar after Enter:\n%s", p.screenSince(off))
+	}
+	t.Logf("PTY CAPTURE Enter closed preview of main; main pid=%d still alive", mainPid)
+}

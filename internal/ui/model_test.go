@@ -961,67 +961,41 @@ func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {
 }
 
 func TestPlayerControlKeys(t *testing.T) {
-	catEN, err := i18n.New(i18n.LangEN)
-	if err != nil {
-		t.Fatalf("i18n.New: %v", err)
+	m, w := openChannelList(t, 80, 24)
+	pb := w.playback
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 50})
+	m = chatLines(t, m, [2]string{"Fulano", "oi"})
+	m = play(t, m, "tab")
+	if m.Focus() != FocusChat {
+		t.Fatalf("focus=%v want chat", m.Focus())
 	}
-	pb := &fakePlayback{}
-	m := newClassicModel(catEN, WithPlayback(pb))
 
-	updated, cmd := m.Update(ChannelSelectedMsg{Channel: catalog.Channel{Login: "gaules"}})
-	m = updated.(Model)
-	updated, _ = m.Update(cmd())
-	m = updated.(Model)
-	updated, _ = m.Update(PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 50})
-	m = updated.(Model)
-
-	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeySpace})
-	m = updated.(Model)
-	if cmd == nil {
-		t.Fatal("expected TogglePause cmd")
-	}
-	_ = cmd // fake returns nil msg
+	// Space pauses only with chat focused; on the list it opens a preview.
+	m = play(t, m, "space")
 	if pb.pauses != 1 {
 		t.Fatalf("pauses=%d want 1", pb.pauses)
 	}
 
-	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
-	m = updated.(Model)
-	if cmd == nil {
-		t.Fatal("expected AdjustVolume cmd")
-	}
-	_ = cmd
+	m = play(t, m, "+")
 	if len(pb.volDeltas) != 1 || pb.volDeltas[0] != 5 {
 		t.Fatalf("volDeltas=%v want [5]", pb.volDeltas)
 	}
 
-	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}})
-	m = updated.(Model)
-	if cmd == nil {
-		t.Fatal("expected AdjustVolume -5 cmd")
-	}
-	_ = cmd
+	m = play(t, m, "-")
 	if len(pb.volDeltas) != 2 || pb.volDeltas[1] != -5 {
 		t.Fatalf("volDeltas=%v want [5 -5]", pb.volDeltas)
 	}
 
-	updated, _ = m.Update(PlayerStatusMsg{Generation: 1, State: PlayerStatePaused, Login: "gaules", Volume: 45})
-	m = updated.(Model)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePaused, Login: "gaules", Volume: 45})
 	if m.PlayerState() != PlayerStatePaused {
 		t.Fatalf("PlayerState=%q", m.PlayerState())
 	}
-	if !strings.Contains(m.View(), "Paused gaules") || !strings.Contains(m.View(), "vol 45") {
-		t.Fatalf("view=%q", m.View())
+	bar := m.StatusBar()
+	if !strings.Contains(bar, "gaules") || !strings.Contains(bar, "vol 45") {
+		t.Fatalf("status=%q", bar)
 	}
 
-	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
-	m = updated.(Model)
-	if cmd == nil {
-		t.Fatal("expected Stop cmd")
-	}
-	msg := cmd()
-	updated, _ = m.Update(msg)
-	m = updated.(Model)
+	m = play(t, m, "ctrl+x")
 	if pb.stopped != 1 {
 		t.Fatalf("stopped=%d want 1", pb.stopped)
 	}
