@@ -861,14 +861,35 @@ func (s *Session) toggleMute() error {
 	return s.setMuteLocked(!base)
 }
 
-// setMute sets mpv's mute to muted.
+// errSessionNotControllable is setMute's error for a session that stopped,
+// ended or failed: no player to change, but the wish was recorded.
+var errSessionNotControllable = errors.New("player: session not controllable")
+
+// setMute sets mpv's mute to muted. On a session that can no longer be
+// controlled the wish is still recorded, because keptMute (and through it the
+// next session) must follow the last mute asked for, not the last one mpv
+// confirmed before it went away.
 func (s *Session) setMute(muted bool) error {
 	s.mu.Lock()
 	if s.stopped || s.state == StateEnded || s.state == StateError {
+		s.wantMuted, s.hasWantMuted = muted, true
+		s.wantMutedSeq++
 		s.mu.Unlock()
-		return fmt.Errorf("player: session not controllable")
+		return errSessionNotControllable
 	}
 	return s.setMuteLocked(muted)
+}
+
+// keptMute is the mute a following session inherits: a wish mpv has not
+// confirmed yet (reply lost to Stop, or session already gone) wins over the
+// last observed mute.
+func (s *Session) keptMute() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.hasWantMuted {
+		return s.wantMuted
+	}
+	return s.muted
 }
 
 // setMuteLocked records the wish and sends the IPC command. Caller holds s.mu
