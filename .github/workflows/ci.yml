@@ -14,6 +14,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || (github.ref == 'refs/heads/main' && github.run_id) || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Sem bloco permissions o token herda o padrão do repositório. Só leitura
+# basta: o CI não publica release nem escreve no tap/bucket.
+permissions:
+  contents: read
+
 jobs:
   govulncheck:
     name: Govulncheck (root and window)
