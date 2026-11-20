@@ -41,7 +41,14 @@ func TestStartPreviewFailureSupersedesInFlightStart(t *testing.T) {
 		<-release
 	})
 
-	main := player.New(player.Options{RuntimeDir: t.TempDir()})
+	// A custom Command keeps the main manager off streamlink, so StartPreview
+	// never resolves or downloads it from the real data dir (macOS/Windows CI).
+	main := player.New(player.Options{
+		RuntimeDir: t.TempDir(),
+		Command: func(player.Target, string) *exec.Cmd {
+			return exec.Command(os.Args[0], "-test.run=^$")
+		},
+	})
 	t.Cleanup(main.Close)
 	b := newPlaybackBridge(main)
 	b.setPreview(preview)
