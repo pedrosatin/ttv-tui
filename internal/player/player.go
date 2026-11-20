@@ -302,9 +302,22 @@ type Manager struct {
 	// follows the viewer to any channel, as on the Twitch site.
 	keptMuted bool
 
+	// testMute, when set, backs Muted/SetMute without a live session so app
+	// tests can exercise MuteMainForPreview with deterministic mute state.
+	testMute *bool
+
 	// afterPrevStop, when set by a test, runs in Start once the previous
 	// session is down and before the new one is spawned.
 	afterPrevStop func()
+}
+
+// SetAfterPrevStop installs a hook that runs in Start once the previous
+// session is down and before tools and spawn. Tests use it to serialize a
+// Start against AdvanceOrder; production leaves it nil.
+func (m *Manager) SetAfterPrevStop(fn func()) {
+	m.mu.Lock()
+	m.afterPrevStop = fn
+	m.mu.Unlock()
 }
 
 // New creates a Manager. The Events channel stays open for the Manager lifetime;
@@ -409,6 +422,30 @@ func (m *Manager) Start(target Target) (uint64, error) {
 // higher order is superseded at once and spawns nothing.
 func (m *Manager) StartInOrder(target Target, order uint64) (uint64, error) {
 	return m.start(target, order)
+}
+
+// AdvanceOrder records a selection that will not call StartInOrder (it failed
+// earlier, e.g. streamlink missing). In-flight Starts with a lower order must
+// not attach; an already-attached session from a lower order is stopped.
+func (m *Manager) AdvanceOrder(order uint64) {
+	m.mu.Lock()
+	if order == 0 || order <= m.order {
+		m.mu.Unlock()
+		return
+	}
+	m.order = order
+	// Bump gen so an in-flight start's overtaken(gen) sees m.gen != gen.
+	m.gen++
+	sess := m.session
+	m.session = nil
+	if sess != nil {
+		m.stopping++
+	}
+	m.mu.Unlock()
+	if sess != nil {
+		_ = m.stopTracked(sess)
+		m.keepVolume(sess)
+	}
 }
 
 // start is Start, ordered when order is not 0.
@@ -758,6 +795,11 @@ func (m *Manager) ToggleMute() error {
 // error so callers can restore a saved mute without a live player.
 func (m *Manager) SetMute(muted bool) error {
 	m.mu.Lock()
+	if m.testMute != nil {
+		*m.testMute = muted
+		m.mu.Unlock()
+		return nil
+	}
 	sess := m.session
 	m.mu.Unlock()
 	if sess == nil {
@@ -769,12 +811,24 @@ func (m *Manager) SetMute(muted bool) error {
 // Muted returns the mute of the active session, or false without one.
 func (m *Manager) Muted() bool {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.testMute != nil {
+		return *m.testMute
+	}
 	sess := m.session
-	m.mu.Unlock()
 	if sess == nil {
 		return false
 	}
 	return sess.Muted()
+}
+
+// EnableTestMute arms an in-memory mute flag so Muted/SetMute work without
+// spawning mpv. Production code must not call it.
+func (m *Manager) EnableTestMute(initial bool) {
+	m.mu.Lock()
+	v := initial
+	m.testMute = &v
+	m.mu.Unlock()
 }
 
 // SetVolume sets absolute volume clamped to 0..100.
