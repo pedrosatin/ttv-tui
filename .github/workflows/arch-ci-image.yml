@@ -1,9 +1,10 @@
 name: Arch CI image
 
-# Builds .github/images/arch-ci and publishes it to GHCR. It never runs on a
-# pull request: the jobs pin the image by digest, so a new image only reaches
-# them through a commit that changes that digest. The monthly run keeps a fresh
-# image ready; .github/images/arch-ci/README.md explains how to adopt it.
+# Builds .github/images/arch-ci and publishes it to GHCR with zstd layers. It
+# never runs on a pull request: the jobs pin the image by digest, so a new
+# image only reaches them through a commit that changes that digest. The
+# monthly run keeps a fresh image ready; .github/images/arch-ci/README.md
+# explains how to adopt it.
 on:
   workflow_dispatch:
   schedule:
@@ -36,40 +37,84 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build the image
-        id: build
-        run: |
-          tag="$(date -u +%Y%m%d)-${GITHUB_RUN_NUMBER}"
-          docker build --pull --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-            -t "${IMAGE}:${tag}" .github/images/arch-ci
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+      # docker-container driver is required for compression=zstd on push; the
+      # default docker driver ignores those exporter options.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: docker-container
 
-      # The versions the cgo build of the window depends on, recorded before the
-      # image is published.
-      - name: List the native package versions
-        env:
-          TAG: ${{ steps.build.outputs.tag }}
-        run: |
-          docker run --rm "${IMAGE}:${TAG}" sh -c \
-            'pacman -Q sdl3 mpv gcc pkgconf && pkg-config --modversion sdl3 mpv' | tee versions.txt
-
-      - name: Publish the image
+      - name: Build and publish the image
         id: publish
         env:
-          TAG: ${{ steps.build.outputs.tag }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          tag="$(date -u +%Y%m%d)-${GITHUB_RUN_NUMBER}"
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push "${IMAGE}:${TAG}" | tee push.log
-          docker logout ghcr.io
-          digest=$(grep -oE 'digest: sha256:[0-9a-f]{64}' push.log | tail -n1 | cut -d' ' -f2)
+          trap 'docker logout ghcr.io' EXIT
+          docker buildx build --pull \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --output "type=image,name=${IMAGE}:${tag},push=true,compression=zstd,force-compression=true,oci-mediatypes=true" \
+            --metadata-file /tmp/arch-ci-meta.json \
+            .github/images/arch-ci
+          digest=$(python3 -c 'import json; print(json.load(open("/tmp/arch-ci-meta.json"))["containerimage.digest"])')
           test -n "$digest"
+          test "$digest" != "null"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
-          echo "Published ${IMAGE}:${TAG} as ${IMAGE}@${digest}"
+          echo "Published ${IMAGE}:${tag} as ${IMAGE}@${digest}"
+
+      # Confirm every layer is zstd before the digest is adopted by the jobs.
+      - name: Confirm zstd layers
+        env:
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect --raw "${IMAGE}@${DIGEST}" > /tmp/arch-ci-index.json
+          python3 <<'PY'
+          import json, os, subprocess, sys
+
+          image = os.environ["IMAGE"]
+          index = json.load(open("/tmp/arch-ci-index.json"))
+          # The published digest may be an OCI index (image + attestation) or a
+          # single manifest. Resolve the linux/amd64 (or only) image manifest.
+          if index.get("mediaType", "").endswith("index.v1+json") or "manifests" in index:
+              manifests = [
+                  m for m in index.get("manifests", [])
+                  if (m.get("platform") or {}).get("architecture") not in (None, "unknown")
+              ]
+              if not manifests:
+                  sys.exit("no runnable platform in image index")
+              digest = manifests[0]["digest"]
+              raw = subprocess.check_output(
+                  ["docker", "buildx", "imagetools", "inspect", "--raw", f"{image}@{digest}"],
+                  text=True,
+              )
+              manifest = json.loads(raw)
+          else:
+              manifest = index
+          layers = manifest.get("layers") or []
+          if not layers:
+              sys.exit("image manifest has no layers")
+          bad = [l.get("mediaType") for l in layers if "zstd" not in (l.get("mediaType") or "")]
+          if bad:
+              sys.exit(f"expected +zstd layers, got: {bad}")
+          for i, layer in enumerate(layers):
+              print(i, layer["mediaType"], layer["size"])
+          PY
+
+      # The versions the cgo build of the window depends on, recorded after the
+      # image is published so the jobs pull the same digest they will pin.
+      - name: List the native package versions
+        env:
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          docker pull "${IMAGE}@${DIGEST}"
+          docker run --rm "${IMAGE}@${DIGEST}" sh -c \
+            'pacman -Q sdl3 mpv gcc pkgconf && pkg-config --modversion sdl3 mpv' | tee versions.txt
 
       - name: Summarize
         env:
-          TAG: ${{ steps.build.outputs.tag }}
+          TAG: ${{ steps.publish.outputs.tag }}
           DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           {
@@ -80,6 +125,8 @@ jobs:
             echo '```yaml'
             echo "container: ${IMAGE}@${DIGEST}"
             echo '```'
+            echo
+            echo "Layers use zstd compression (\`application/vnd.oci.image.layer.v1.tar+zstd\`)."
             echo
             echo "Native packages:"
             echo

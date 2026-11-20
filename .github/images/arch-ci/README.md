@@ -6,9 +6,9 @@ Quem usa a imagem: os jobs `Govulncheck (root and window)` e `Window (Arch)` do 
 
 ## Como a imagem é publicada
 
-O fluxo [`arch-ci-image.yml`](../../workflows/arch-ci-image.yml) constrói este `Dockerfile` e publica com a tag `AAAAMMDD-<run>`. Roda no dia 3 de cada mês e sob demanda (Actions → Arch CI image → Run workflow); nunca em pull request. É o único fluxo do repositório com `packages: write`.
+O fluxo [`arch-ci-image.yml`](../../workflows/arch-ci-image.yml) constrói este `Dockerfile` com Buildx (`driver: docker-container`) e publica as camadas em zstd (`compression=zstd`, `force-compression=true`, `oci-mediatypes=true`) com a tag `AAAAMMDD-<run>`. A compressão zstd encurta o passo `Initialize containers` nos jobs que puxam a imagem. Roda no dia 3 de cada mês e sob demanda (Actions → Arch CI image → Run workflow); nunca em pull request. É o único fluxo do repositório com `packages: write`.
 
-O resumo da execução mostra o digest e as versões de `sdl3`, `mpv`, `gcc` e `pkgconf`, também presentes no log.
+O resumo da execução mostra o digest e as versões de `sdl3`, `mpv`, `gcc` e `pkgconf`, também presentes no log. O fluxo falha se alguma camada sair sem `mediaType` `+zstd`.
 
 O pacote precisa ser **público**: os jobs baixam a imagem sem credencial, inclusive em PR vindo de fork. No GHCR o pacote nasce privado. Depois da primeira publicação, abra Packages → `ttv-tui-arch-ci` → Package settings → Change visibility → Public. A troca não tem volta, e a imagem só contém pacotes públicos do Arch.
 
