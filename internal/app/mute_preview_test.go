@@ -65,3 +65,28 @@ func TestRestoreMainMuteWithoutPriorSaveIsNoop(t *testing.T) {
 		}
 	}
 }
+
+// A main session that was already muted before the preview must stay muted
+// after RestoreMainMute (spec story 16).
+func TestMuteMainForPreviewRestoresPriorMuted(t *testing.T) {
+	mgr := player.New(player.Options{})
+	t.Cleanup(mgr.Close)
+	mgr.EnableTestMute(true)
+	b := newPlaybackBridge(mgr)
+
+	if msg := b.MuteMainForPreview(); msg != nil {
+		_ = msg()
+	}
+	if !b.hasMainMuteBefore || !b.mainMuteBeforePreview {
+		t.Fatalf("saved mute: has=%v val=%v, want true/true", b.hasMainMuteBefore, b.mainMuteBeforePreview)
+	}
+	if !mgr.Muted() {
+		t.Fatal("preview did not keep the session muted")
+	}
+	if msg := b.RestoreMainMute(); msg != nil {
+		_ = msg()
+	}
+	if !mgr.Muted() {
+		t.Fatal("RestoreMainMute unmuted a session that was muted before the preview")
+	}
+}

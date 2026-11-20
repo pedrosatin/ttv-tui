@@ -171,7 +171,7 @@ Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x t
 
 | Key | Action |
 | --- | --- |
-| `Space` | Pause or resume |
+| `Space` | Preview the highlighted channel when the list is focused; pause or resume when the chat is focused |
 | `+` `-` | Volume up or down by 5% |
 | `m` | Mute or unmute; the status bar shows `muted` in place of the volume |
 | `Ctrl+X` | Stop the video and stay in the app |

@@ -286,16 +286,194 @@ func TestCtrlXClosesPreviewWhenNoMain(t *testing.T) {
 	}
 }
 
-func TestSpaceWithMainVideoStillPauses(t *testing.T) {
-	// Ticket 01 keeps pause when main video is active; ticket 02 changes this.
+func TestSpaceWithMainVideoOpensPreviewAndMutes(t *testing.T) {
+	for _, state := range []PlayerState{PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak, PlayerStateStarting} {
+		t.Run(string(state), func(t *testing.T) {
+			m, w := openChannelList(t, 80, 24)
+			m = feed(t, m, PlayerStatusMsg{Generation: 1, State: state, Login: "gaules", Volume: 80})
+			m = play(t, m, "space")
+			if len(w.playback.previewStarted) != 1 || w.playback.previewStarted[0] != "gaules" {
+				t.Fatalf("previewStarted=%v", w.playback.previewStarted)
+			}
+			if w.playback.pauses != 0 {
+				t.Fatalf("list Space paused main: pauses=%d", w.playback.pauses)
+			}
+			if !w.playback.mainMutedForPrev {
+				t.Fatal("MuteMainForPreview was not called")
+			}
+			m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "gaules"})
+			m = play(t, m, "space")
+			if !w.playback.mainMuteRestored {
+				t.Fatal("RestoreMainMute was not called on close")
+			}
+			if m.previewOpen() {
+				t.Fatal("preview still open after Space")
+			}
+			if m.PlayerState() != state {
+				t.Fatalf("main state changed: %q → %q", state, m.PlayerState())
+			}
+		})
+	}
+}
+
+func TestSpaceOnChatStillPausesWithMainVideo(t *testing.T) {
 	m, w := openChannelList(t, 80, 24)
 	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m = chatLines(t, m, [2]string{"Fulano", "oi"})
+	m = play(t, m, "tab")
+	if m.Focus() != FocusChat {
+		t.Fatalf("focus=%v want chat", m.Focus())
+	}
 	_ = play(t, m, "space")
 	if len(w.playback.previewStarted) != 0 {
-		t.Fatalf("preview started with main video: %v", w.playback.previewStarted)
+		t.Fatalf("chat Space opened preview: %v", w.playback.previewStarted)
 	}
 	if w.playback.pauses != 1 {
 		t.Fatalf("pauses=%d want 1", w.playback.pauses)
+	}
+}
+
+func TestSpaceOnNonChannelWarnsWithoutPausing(t *testing.T) {
+	m, w := openChannelList(t, 80, 24)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m = play(t, m, "esc") // back to categories
+	if m.Mode() != ModeCategories {
+		t.Fatalf("mode=%q want categories", m.Mode())
+	}
+	m = play(t, m, "space")
+	if len(w.playback.previewStarted) != 0 {
+		t.Fatalf("preview started on category: %v", w.playback.previewStarted)
+	}
+	if w.playback.pauses != 0 {
+		t.Fatalf("category Space paused: pauses=%d", w.playback.pauses)
+	}
+	if got := m.StatusNotice(); got != m.t("preview.channels_only") {
+		t.Fatalf("notice=%q want preview.channels_only", got)
+	}
+}
+
+func TestEnterOnPreviewOfMainChannelOnlyCloses(t *testing.T) {
+	m, w := openChannelList(t, 80, 24)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m = play(t, m, "space")
+	m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "gaules"})
+	beforeStarts := len(w.playback.started)
+	m = play(t, m, "enter")
+	if w.playback.previewStopped != 1 {
+		t.Fatalf("previewStopped=%d", w.playback.previewStopped)
+	}
+	if len(w.playback.started) != beforeStarts {
+		t.Fatalf("Enter restarted main: started=%v", w.playback.started)
+	}
+	if m.previewOpen() {
+		t.Fatal("preview still open")
+	}
+	if !w.playback.mainMuteRestored {
+		t.Fatal("mute not restored")
+	}
+}
+
+func TestEnterOnPreviewOfOtherChannelSwitchesMain(t *testing.T) {
+	m, w := openChannelList(t, 80, 24)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m = play(t, m, "j") // alanzoka
+	m = play(t, m, "space")
+	m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "alanzoka"})
+	m = play(t, m, "enter")
+	if w.playback.previewStopped != 1 {
+		t.Fatalf("previewStopped=%d", w.playback.previewStopped)
+	}
+	if len(w.playback.started) != 1 || w.playback.started[0] != "alanzoka" {
+		t.Fatalf("main started=%v, want alanzoka", w.playback.started)
+	}
+	if m.previewOpen() {
+		t.Fatal("preview still open after Enter")
+	}
+}
+
+func TestCtrlXWithMainAndPreviewStopsBoth(t *testing.T) {
+	m, w := openChannelList(t, 80, 24)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m = play(t, m, "j space")
+	m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "alanzoka"})
+	m = play(t, m, "ctrl+x")
+	if w.playback.previewStopped != 1 {
+		t.Fatalf("previewStopped=%d", w.playback.previewStopped)
+	}
+	if w.playback.stopped != 1 {
+		t.Fatalf("main stopped=%d", w.playback.stopped)
+	}
+	if !w.playback.mainMuteRestored {
+		t.Fatal("mute not restored when Ctrl+X closed preview")
+	}
+	if m.previewOpen() {
+		t.Fatal("preview still open after Ctrl+X")
+	}
+}
+
+func TestPreviewPreservesAlreadyMutedMain(t *testing.T) {
+	m, w := openChannelList(t, 80, 24)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 80, Muted: true})
+	m = play(t, m, "space")
+	if !w.playback.mainMutedForPrev {
+		t.Fatal("MuteMainForPreview was not called")
+	}
+	m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "gaules"})
+	m = play(t, m, "esc")
+	if !w.playback.mainMuteRestored {
+		t.Fatal("RestoreMainMute was not called")
+	}
+	// The fake bridge only records the call; the app bridge restores the saved
+	// value (true). UI mute flag is unchanged by the restore cmd itself.
+	if m.PlayerState() != PlayerStatePlaying {
+		t.Fatalf("main state=%q", m.PlayerState())
+	}
+}
+
+func TestSpaceInSearchKeepsPrecedence(t *testing.T) {
+	m, w := openChannelList(t, 80, 24)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m = play(t, m, "ctrl+f")
+	if !m.list.search.active {
+		t.Fatal("search not active")
+	}
+	m = play(t, m, "space")
+	if len(w.playback.previewStarted) != 0 {
+		t.Fatalf("search Space opened preview: %v", w.playback.previewStarted)
+	}
+	if w.playback.pauses != 0 {
+		t.Fatalf("search Space paused: %d", w.playback.pauses)
+	}
+	if m.list.search.input != " " {
+		t.Fatalf("search input=%q want space", m.list.search.input)
+	}
+}
+
+func TestPreviewFailureLeavesMainIntact(t *testing.T) {
+	m, w := openChannelList(t, 80, 24)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 70, Muted: false})
+	w.playback.previewStartMsg = PreviewStatusMsg{
+		Generation: 1, State: PreviewStateFailed, Failure: PlayerFailureNetwork, LastLine: "no route",
+	}
+	m = play(t, m, "j space")
+	if !w.playback.mainMutedForPrev {
+		t.Fatal("main was not muted before failing preview")
+	}
+	if w.playback.stopped != 0 {
+		t.Fatalf("failing preview stopped main: %d", w.playback.stopped)
+	}
+	if m.PlayerState() != PlayerStatePlaying || m.PlayerLogin() != "gaules" {
+		t.Fatalf("main changed: state=%q login=%q", m.PlayerState(), m.PlayerLogin())
+	}
+	if m.PreviewState() != PreviewStateFailed {
+		t.Fatalf("preview state=%q", m.PreviewState())
+	}
+	m = play(t, m, "esc")
+	if !w.playback.mainMuteRestored {
+		t.Fatal("closing failed preview did not restore mute")
+	}
+	if m.previewOpen() {
+		t.Fatal("failed preview still open after Esc")
 	}
 }
 
@@ -312,6 +490,28 @@ func TestCenarioPreviaSemVideo(t *testing.T) {
 		m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "gaules"})
 		if m.PreviewState() != PreviewStatePlaying {
 			t.Fatalf("prévia não ficou tocando: %q", m.PreviewState())
+		}
+		return m
+	})
+}
+
+// Com o principal tocando, espaço noutro canal abre a prévia, silencia o
+// principal e a barra mostra a prévia (regra 9).
+func TestCenarioPreviaComVideo(t *testing.T) {
+	eachSize(t, "previa-com-video", func(t *testing.T, width, height int) Model {
+		m, w := openChannelList(t, width, height)
+		m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 80})
+		m.player.windowNotice = false
+		m = play(t, m, "j space")
+		if len(w.playback.previewStarted) != 1 || w.playback.previewStarted[0] != "alanzoka" {
+			t.Fatalf("prévia: %v", w.playback.previewStarted)
+		}
+		if !w.playback.mainMutedForPrev {
+			t.Fatal("principal não foi silenciado")
+		}
+		m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "alanzoka"})
+		if m.PreviewState() != PreviewStatePlaying {
+			t.Fatalf("prévia: %q", m.PreviewState())
 		}
 		return m
 	})

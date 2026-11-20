@@ -434,7 +434,7 @@
   "action.switch_platform": "Troca a lista para a próxima plataforma",
   "action.retry": "Tenta de novo o vídeo que falhou ou, sem ele, a lista",
   "action.back": "Volta um nível; da busca, à tela de onde ela saiu",
-  "action.pause": "Pausa ou retoma o vídeo",
+  "action.pause": "Prévia do canal destacado (lista) ou pausa o vídeo (chat)",
   "action.volume_up": "Aumenta o volume",
   "action.mute": "Liga ou desliga o mudo",
   "action.volume_down": "Diminui o volume",

@@ -370,9 +370,8 @@ func (m Model) keyPause() (tea.Model, tea.Cmd) {
 	if m.playback == nil {
 		return m, nil
 	}
-	// Ticket 01: with the list focused and no main video, Space is preview.
-	// Ticket 02 will make Space always preview on the list, even with video.
-	if m.Focus() == FocusList && !m.mainVideoActive() {
+	// Space on the list is always preview (ADR 0018); pause stays on the chat.
+	if m.Focus() == FocusList {
 		return m.togglePreview()
 	}
 	if !m.player.controllable() {
@@ -481,15 +480,23 @@ func (m Model) keyGoLive() (tea.Model, tea.Cmd) {
 
 // keySelect is Enter. On the chat panel it starts composition (same as i), so
 // Tab then Enter is a natural path into the draft. Enter while composing still
-// sends, via updateComposingKey.
+// sends, via updateComposingKey. With a preview open on the channel that is
+// already the main video, Enter only closes the preview.
 func (m Model) keySelect() (tea.Model, tea.Cmd) {
 	if m.Focus() == FocusChat {
 		return m.enterCompose()
 	}
 	var cmds []tea.Cmd
 	if m.previewOpen() {
+		sameMain := false
+		if target, ok := m.highlightedPlayTarget(); ok {
+			sameMain = m.isMainChannel(target.Channel)
+		}
 		if stop := m.closePreview(); stop != nil {
 			cmds = append(cmds, stop)
+		}
+		if sameMain {
+			return m, tea.Batch(cmds...)
 		}
 	}
 	next, cmd := m.selectHighlighted()

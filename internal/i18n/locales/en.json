@@ -434,7 +434,7 @@
   "action.switch_platform": "Switch the list to the next platform",
   "action.retry": "Retry the video that failed or, without one, the list",
   "action.back": "Go back one level; from a search, to where it began",
-  "action.pause": "Pause or resume the video",
+  "action.pause": "Preview the highlighted channel (list) or pause the video (chat)",
   "action.volume_up": "Turn the volume up",
   "action.mute": "Mute or unmute the sound",
   "action.volume_down": "Turn the volume down",
