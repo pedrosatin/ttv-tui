@@ -3,6 +3,7 @@
 package player
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -594,7 +595,7 @@ func (m *Manager) doneStarting() {
 
 // keepVolume records where sess left the volume, once it can no longer change.
 func (m *Manager) keepVolume(sess *Session) {
-	volume, muted := sess.Volume(), sess.Muted()
+	volume, muted := sess.Volume(), sess.keptMute()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.keptIdentity, m.keptVolume, m.keptMuted = sess.cfg.Target.Identity(), volume, muted
@@ -810,9 +811,10 @@ func (m *Manager) SetMute(muted bool) error {
 	}
 	m.mu.Unlock()
 	err := sess.setMute(muted)
-	if err != nil && isIPCNotConnected(err) {
-		// Wish stays on the session for applyPlaybackBaseline; also seed
-		// keptMuted so a stop/restart before connect still inherits it.
+	if err != nil && (isIPCNotConnected(err) || errors.Is(err, errSessionNotControllable)) {
+		// Wish stays on the session (applyPlaybackBaseline on connect, keptMute
+		// when the next Start calls keepVolume); also seed keptMuted for the
+		// session that already ended and had its keepVolume run.
 		m.mu.Lock()
 		m.keptMuted = muted
 		m.mu.Unlock()
