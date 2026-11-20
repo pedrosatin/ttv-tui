@@ -811,11 +811,15 @@ func (m *Manager) SetMute(muted bool) error {
 // Muted returns the mute of the active session, or false without one.
 func (m *Manager) Muted() bool {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.testMute != nil {
-		return *m.testMute
+		v := *m.testMute
+		m.mu.Unlock()
+		return v
 	}
 	sess := m.session
+	m.mu.Unlock()
+	// sess.Muted takes s.mu; the session emits status under s.mu and
+	// Manager.emit takes m.mu, so m.mu must be released first (lock order).
 	if sess == nil {
 		return false
 	}
