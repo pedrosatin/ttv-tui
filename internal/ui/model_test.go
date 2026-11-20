@@ -823,6 +823,9 @@ type fakePlayback struct {
 	mainMutedForPrev bool
 	mainMuteRestored bool
 	previewStartMsg  PreviewStatusMsg
+	// cmdOrder records Mute/Restore/Stop/Start as their Cmds run, not when
+	// the Cmd value is built (Batch construction order is not execution order).
+	cmdOrder []string
 }
 
 func (f *fakePlayback) Start(login string, selection uint64) tea.Cmd {
@@ -849,12 +852,16 @@ func (f *fakePlayback) StartTarget(target PlayTarget, selection uint64) tea.Cmd 
 			msg.Volume = 100
 		}
 	}
-	return func() tea.Msg { return msg }
+	return func() tea.Msg {
+		f.cmdOrder = append(f.cmdOrder, "start")
+		return msg
+	}
 }
 
 func (f *fakePlayback) Stop() tea.Cmd {
 	f.stopped++
 	return func() tea.Msg {
+		f.cmdOrder = append(f.cmdOrder, "stop")
 		return PlayerStatusMsg{State: PlayerStateEnded}
 	}
 }
@@ -896,18 +903,25 @@ func (f *fakePlayback) StartPreview(target PlayTarget, selection uint64) tea.Cmd
 func (f *fakePlayback) StopPreview() tea.Cmd {
 	f.previewStopped++
 	return func() tea.Msg {
+		f.cmdOrder = append(f.cmdOrder, "stop-preview")
 		return PreviewStatusMsg{State: PreviewStateEnded}
 	}
 }
 
 func (f *fakePlayback) MuteMainForPreview() tea.Cmd {
-	f.mainMutedForPrev = true
-	return func() tea.Msg { return nil }
+	return func() tea.Msg {
+		f.mainMutedForPrev = true
+		f.cmdOrder = append(f.cmdOrder, "mute")
+		return nil
+	}
 }
 
 func (f *fakePlayback) RestoreMainMute() tea.Cmd {
-	f.mainMuteRestored = true
-	return func() tea.Msg { return nil }
+	return func() tea.Msg {
+		f.mainMuteRestored = true
+		f.cmdOrder = append(f.cmdOrder, "restore")
+		return nil
+	}
 }
 
 func TestChannelSelectedStartsPlaybackAndShowsStatus(t *testing.T) {

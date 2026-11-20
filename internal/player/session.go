@@ -789,15 +789,20 @@ func (s *Session) emitStatusLocked() {
 
 // applyPlaybackBaseline sets the session's volume and pause=false on the connected
 // mpv. Chosen over get_property so softvol values above the UI clamp (0..100) are
-// written back instead of only clamped in memory.
+// written back instead of only clamped in memory. A SetMute that arrived before
+// the IPC connected keeps hasWantMuted; that wish wins over cfg.Muted.
 func (s *Session) applyPlaybackBaseline() {
 	s.mu.Lock()
 	s.desiredPaused = false
 	s.hasDesiredPause = true
 	s.desiredPauseSeq++
+	mute := s.cfg.Muted
+	if s.hasWantMuted {
+		mute = s.wantMuted
+	}
 	s.mu.Unlock()
 	_ = s.setVolumeWithOSD(s.cfg.Volume, false)
-	if s.cfg.Muted {
+	if mute {
 		_ = s.sendCommand([]any{"set_property", "mute", true}, pendingCommand{kind: pendingMute, muted: true})
 	}
 	_ = s.sendCommand([]any{"set_property", "pause", false}, pendingCommand{
@@ -867,7 +872,8 @@ func (s *Session) setMute(muted bool) error {
 }
 
 // setMuteLocked records the wish and sends the IPC command. Caller holds s.mu
-// on entry; it is released before the write.
+// on entry; it is released before the write. When the IPC is not connected yet
+// the wish stays so applyPlaybackBaseline can apply it on connect.
 func (s *Session) setMuteLocked(want bool) error {
 	prevWant, prevHas := s.wantMuted, s.hasWantMuted
 	s.wantMuted, s.hasWantMuted = want, true
@@ -877,6 +883,9 @@ func (s *Session) setMuteLocked(want bool) error {
 
 	err := s.sendCommand([]any{"set_property", "mute", want}, pendingCommand{kind: pendingMute, muted: want, osd: true})
 	if err != nil {
+		if isIPCNotConnected(err) {
+			return err
+		}
 		s.mu.Lock()
 		if s.hasWantMuted && s.wantMutedSeq == seq {
 			s.wantMuted, s.hasWantMuted = prevWant, prevHas
@@ -921,7 +930,7 @@ func (s *Session) sendCommand(cmd []any, pending pendingCommand) error {
 	s.cmdMu.Lock()
 	defer s.cmdMu.Unlock()
 	if s.ipcConn == nil {
-		return fmt.Errorf("player: ipc not connected")
+		return errIPCNotConnected
 	}
 	for id, p := range s.pending {
 		if p.kind == pending.kind {
@@ -1172,7 +1181,9 @@ func (s *Session) Volume() int {
 	return s.volume
 }
 
-// Muted reports mpv's mute as last known.
+// Muted reports mpv's mute as last known (observed or confirmed). A wish still
+// in flight is not reported here: waiters and keepVolume need the confirmed
+// value so they do not race ahead of the IPC write.
 func (s *Session) Muted() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

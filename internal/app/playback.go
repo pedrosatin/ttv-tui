@@ -200,6 +200,10 @@ func (b *playbackBridge) StartTarget(target ui.PlayTarget, selection uint64) tea
 	}
 	identity := playTarget.Identity()
 	return func() tea.Msg {
+		// Restore before StartInOrder so a Batch race with RestoreMainMute
+		// cannot leave the preview mute in keptMuted for the new session.
+		b.applyPendingMainMuteRestore(mgr)
+
 		b.mu.Lock()
 		appCtx := b.ctx
 		if appCtx == nil {
@@ -269,7 +273,11 @@ func (b *playbackBridge) Stop() tea.Cmd {
 	mgr := b.mgr
 	gen := mgr.Generation()
 	return func() tea.Msg {
+		// Restore before StopGeneration so keepVolume sees the pre-preview mute
+		// even when tea.Batch runs this ahead of RestoreMainMute.
+		b.applyPendingMainMuteRestore(mgr)
 		vol := mgr.Volume()
+		muted := mgr.Muted()
 		if err := mgr.StopGeneration(gen); err != nil {
 			return ui.PlayerStatusMsg{
 				Generation: gen,
@@ -277,12 +285,14 @@ func (b *playbackBridge) Stop() tea.Cmd {
 				LastLine:   err.Error(),
 				Failure:    ui.PlayerFailure(player.FailureOf(err)),
 				Volume:     vol,
+				Muted:      muted,
 			}
 		}
 		return ui.PlayerStatusMsg{
 			Generation: gen,
 			State:      ui.PlayerStateEnded,
 			Volume:     vol,
+			Muted:      muted,
 		}
 	}
 }
@@ -401,7 +411,9 @@ func (b *playbackBridge) StopPreview() tea.Cmd {
 // MuteMainForPreview silences the main player and remembers its mute for
 // RestoreMainMute. The original mute is saved only the first time a preview
 // opens; switching channels must not overwrite it with the already-muted
-// value. With no main session it is a no-op (ticket 01 has no video).
+// value. `m` during the preview toggles the live mute but does not change the
+// value RestoreMainMute will apply. With no main session SetMute still records
+// keptMuted so a Starting session opens muted.
 func (b *playbackBridge) MuteMainForPreview() tea.Cmd {
 	mgr := b.mgr
 	return func() tea.Msg {
@@ -424,16 +436,25 @@ func (b *playbackBridge) MuteMainForPreview() tea.Cmd {
 func (b *playbackBridge) RestoreMainMute() tea.Cmd {
 	mgr := b.mgr
 	return func() tea.Msg {
-		b.mainMuteMu.Lock()
-		has, want := b.hasMainMuteBefore, b.mainMuteBeforePreview
-		b.hasMainMuteBefore = false
-		b.mainMuteMu.Unlock()
-		if !has || mgr == nil {
-			return nil
-		}
-		_ = mgr.SetMute(want)
+		b.applyPendingMainMuteRestore(mgr)
 		return nil
 	}
+}
+
+// applyPendingMainMuteRestore applies and clears a mute saved by
+// MuteMainForPreview. Stop and StartTarget call it so a Batch race with the
+// RestoreMainMute cmd cannot leak the preview mute into keptMuted.
+func (b *playbackBridge) applyPendingMainMuteRestore(mgr *player.Manager) {
+	b.mainMuteMu.Lock()
+	has, want := b.hasMainMuteBefore, b.mainMuteBeforePreview
+	if has {
+		b.hasMainMuteBefore = false
+	}
+	b.mainMuteMu.Unlock()
+	if !has || mgr == nil {
+		return
+	}
+	_ = mgr.SetMute(want)
 }
 
 func (b *playbackBridge) Listen() tea.Cmd {

@@ -121,7 +121,10 @@ func settle(t *testing.T, m Model, cmd tea.Cmd) Model {
 		}
 		msg := runCmd(t, next)
 		if cmds, ok := batchedCmds(msg); ok {
-			queue = append(queue, cmds...)
+			// Prepend so a nested Sequence/Batch runs fully before the next
+			// sibling (same as bubbletea's execSequenceMsg). Append would let
+			// Stop race ahead of RestoreMainMute inside closePreview.
+			queue = append(cmds, queue...)
 			continue
 		}
 		switch msg.(type) {

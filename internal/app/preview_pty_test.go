@@ -116,6 +116,26 @@ func (p *ptyTUI) waitPreviewPlayer() {
 	}
 }
 
+// awaitMainPlayer waits for the first main player group. Unlike followPlayer(0),
+// it never calls alive(0): on macOS pid 0 is kernel_task and stays "alive".
+func (p *ptyTUI) awaitMainPlayer() {
+	p.t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		pid := readPidFile(filepath.Join(p.dir, "player.pid"))
+		child := readPidFile(filepath.Join(p.dir, "child.pid"))
+		if pid > 0 && alive(pid) && child > 0 && alive(child) {
+			p.playerPid = pid
+			p.childPid = child
+			return
+		}
+		if time.Now().After(deadline) {
+			p.t.Fatal("main player group not running")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func readPidFile(path string) int {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -172,7 +192,10 @@ func TestPreviewWithMainVideo_PTY(t *testing.T) {
 	off = p.mark()
 	p.send([]byte("\r"))
 	p.waitScreen(off, "Chat — #ptychan")
-	p.followPlayer(0)
+	// awaitMainPlayer: followPlayer(0) fails on macOS because alive(0) is true
+	// (kernel_task). Wait for the first live player without treating pid 0 as
+	// a previous process that must die.
+	p.awaitMainPlayer()
 	mainPid := p.playerPid
 	if mainPid == 0 {
 		t.Fatal("main player did not start")
@@ -193,6 +216,10 @@ func TestPreviewWithMainVideo_PTY(t *testing.T) {
 	}
 	if !alive(mainPid) {
 		t.Fatal("opening preview killed the main player")
+	}
+	time.Sleep(300 * time.Millisecond)
+	if !alive(mainPid) {
+		t.Fatal("main player died shortly after preview opened")
 	}
 	t.Logf("PTY CAPTURE Space opened preview pid=%d with main still alive", previewPid)
 

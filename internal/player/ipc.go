@@ -64,7 +64,13 @@ var (
 	// errIPCNoListener means the endpoint exists but kept refusing connections
 	// for ipcRefusedGrace: mpv never opened its control channel.
 	errIPCNoListener = errors.New("player: ipc endpoint exists but nothing listens on it")
+	// errIPCNotConnected means sendCommand ran before dialIPCUntil attached.
+	errIPCNotConnected = errors.New("player: ipc not connected")
 )
+
+func isIPCNotConnected(err error) bool {
+	return errors.Is(err, errIPCNotConnected)
+}
 
 // dialIPCUntil dials endpoint until it connects. Readiness is the successful
 // dial itself, never the existence of a file: that is the only test that works
