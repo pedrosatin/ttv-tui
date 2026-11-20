@@ -135,13 +135,13 @@ func (m Model) Categories() []catalog.Category {
 
 // VisibleCategories returns the categories matching the current filter.
 func (m Model) VisibleCategories() []catalog.Category {
-	q := strings.ToLower(strings.TrimSpace(m.list.filter))
+	q := filterQuery(m.list.filter)
 	if q == "" {
 		return m.Categories()
 	}
 	out := make([]catalog.Category, 0, len(m.list.categories))
 	for _, c := range m.list.categories {
-		if strings.Contains(strings.ToLower(c.Name), q) {
+		if filterContains(c.Name, q) {
 			out = append(out, c)
 		}
 	}
@@ -158,7 +158,7 @@ func (m Model) Channels() []catalog.Channel {
 // VisibleChannels returns the channels matching the text filter and the
 // language/audience preference filters.
 func (m Model) VisibleChannels() []catalog.Channel {
-	q := strings.ToLower(strings.TrimSpace(m.list.filter))
+	q := filterQuery(m.list.filter)
 	out := make([]catalog.Channel, 0, len(m.list.channels))
 	for _, c := range m.list.channels {
 		if !m.list.prefs.passes(c) {
@@ -170,11 +170,11 @@ func (m Model) VisibleChannels() []catalog.Channel {
 		}
 		title := ""
 		if c.Title != nil {
-			title = strings.ToLower(*c.Title)
+			title = *c.Title
 		}
-		if strings.Contains(strings.ToLower(c.DisplayName), q) ||
-			strings.Contains(strings.ToLower(c.Login), q) ||
-			(title != "" && strings.Contains(title, q)) {
+		if filterContains(c.DisplayName, q) ||
+			filterContains(c.Login, q) ||
+			(title != "" && filterContains(title, q)) {
 			out = append(out, c)
 		}
 	}
@@ -208,7 +208,7 @@ func channelMatches(a, b catalog.Channel) bool {
 // recentes que não são resultado ficam na tela inicial.
 func (m Model) VisibleItems() []ListItem {
 	p := itemPass{
-		query:      strings.ToLower(strings.TrimSpace(m.list.filter)),
+		query:      filterQuery(m.list.filter),
 		prefs:      m.list.prefs,
 		seenStable: make(map[seenChannelKey]struct{}),
 		seenIDs:    make(map[seenChannelKey]struct{}),
@@ -277,13 +277,14 @@ func (p itemPass) isSeen(ch catalog.Channel) bool {
 }
 
 // matchesFilter reports whether one of the fields contains the text filter.
+// Both sides go through sanitizeChatText so a title like "an‏tes" matches "antes".
 func (p itemPass) matchesFilter(name, login, title string) bool {
 	if p.query == "" {
 		return true
 	}
-	return strings.Contains(strings.ToLower(name), p.query) ||
-		strings.Contains(strings.ToLower(login), p.query) ||
-		(title != "" && strings.Contains(strings.ToLower(title), p.query))
+	return filterContains(name, p.query) ||
+		filterContains(login, p.query) ||
+		(title != "" && filterContains(title, p.query))
 }
 
 // passes reports whether ch survives the text filter and the language and

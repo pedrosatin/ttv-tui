@@ -68,3 +68,18 @@ func TestChatPreservaArabeEHebraico(t *testing.T) {
 		})
 	}
 }
+
+// U+2028 e U+2029 viram espaço, como \\n (ticket 21).
+func TestSanitizeChatTextSeparadoresDeLinha(t *testing.T) {
+	for _, r := range []rune{'\u2028', '\u2029'} {
+		t.Run(fmt.Sprintf("U+%04X", r), func(t *testing.T) {
+			got := sanitizeChatText("an" + string(r) + "tes")
+			if got != "an tes" {
+				t.Fatalf("sanitizeChatText = %q, want %q", got, "an tes")
+			}
+			if got := sanitizeScreenText("an" + string(r) + "tes"); got != "an tes" {
+				t.Fatalf("sanitizeScreenText = %q, want %q", got, "an tes")
+			}
+		})
+	}
+}

@@ -252,6 +252,45 @@ func TestWithChannelFiltersAppliedOnOpen(t *testing.T) {
 	}
 }
 
+// Título com marca bidi (U+200F) aparece como "antes" e o filtro "antes" precisa casar.
+func TestChannelFilterMatchesSanitizedTitle(t *testing.T) {
+	titulo := "an" + string('\u200f') + "tes"
+	m := newClassicModel(testCatalog(t, i18n.LangEN))
+	m.list.mode = ModeChannels
+	m.list.channels = []catalog.Channel{
+		{ID: "1", Login: "streamer", DisplayName: "Streamer", Title: catalog.StringPtr(titulo), Availability: catalog.AvailabilityLive},
+		{ID: "2", Login: "other", DisplayName: "Other", Title: catalog.StringPtr("live now"), Availability: catalog.AvailabilityLive},
+	}
+	m.list.filter = "antes"
+	m.reconcileHighlight()
+
+	vis := m.VisibleChannels()
+	if len(vis) != 1 || vis[0].Login != "streamer" {
+		t.Fatalf("VisibleChannels = %+v, want só streamer (título sanitizado casa com filtro)", loginsOf(vis))
+	}
+	items := m.VisibleItems()
+	if len(items) != 1 || items[0].Channel == nil || items[0].Channel.Login != "streamer" {
+		t.Fatalf("VisibleItems = %+v, want só streamer", items)
+	}
+}
+
+// Nome de categoria com marca bidi casa com o filtro pelo texto exibido.
+func TestCategoryFilterMatchesSanitizedName(t *testing.T) {
+	nome := "an" + string('\u200f') + "tes"
+	m := newClassicModel(testCatalog(t, i18n.LangEN))
+	m.list.mode = ModeCategories
+	m.list.categories = []catalog.Category{
+		{ID: "c1", Name: nome},
+		{ID: "c2", Name: "Just Chatting"},
+	}
+	m.list.filter = "antes"
+
+	vis := m.VisibleCategories()
+	if len(vis) != 1 || vis[0].ID != "c1" {
+		t.Fatalf("VisibleCategories = %+v, want só c1", vis)
+	}
+}
+
 func loginsOf(chs []catalog.Channel) []string {
 	out := make([]string, len(chs))
 	for i, ch := range chs {

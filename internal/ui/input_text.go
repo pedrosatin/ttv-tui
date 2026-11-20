@@ -25,7 +25,8 @@ func sanitizeChatText(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	for _, r := range s {
-		if r == '\n' || r == '\r' || r == '\t' {
+		// Line/paragraph separators join the ASCII whitespace that becomes a space.
+		if r == '\n' || r == '\r' || r == '\t' || r == '\u2028' || r == '\u2029' {
 			b.WriteByte(' ')
 			continue
 		}
@@ -39,4 +40,15 @@ func sanitizeChatText(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// filterQuery normalizes the list filter the same way field comparison does.
+func filterQuery(s string) string {
+	return strings.ToLower(strings.TrimSpace(sanitizeChatText(s)))
+}
+
+// filterContains reports whether haystack contains needle after sanitizing
+// haystack. needle must already be a filterQuery result.
+func filterContains(haystack, needle string) bool {
+	return strings.Contains(strings.ToLower(sanitizeChatText(haystack)), needle)
 }
