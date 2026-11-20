@@ -791,8 +791,10 @@ func (m *Manager) ToggleMute() error {
 	return sess.toggleMute()
 }
 
-// SetMute sets the mute of the active session to muted. No session is a no-op
-// error so callers can restore a saved mute without a live player.
+// SetMute sets the mute of the active session to muted. Without a session it
+// still records keptMuted so a later Start opens with that mute (preview
+// restore after Stop, or MuteMainForPreview while Starting before attach), and
+// returns an error so callers know no live player was updated.
 func (m *Manager) SetMute(muted bool) error {
 	m.mu.Lock()
 	if m.testMute != nil {
@@ -801,11 +803,21 @@ func (m *Manager) SetMute(muted bool) error {
 		return nil
 	}
 	sess := m.session
-	m.mu.Unlock()
 	if sess == nil {
+		m.keptMuted = muted
+		m.mu.Unlock()
 		return fmt.Errorf("player: no active session")
 	}
-	return sess.setMute(muted)
+	m.mu.Unlock()
+	err := sess.setMute(muted)
+	if err != nil && isIPCNotConnected(err) {
+		// Wish stays on the session for applyPlaybackBaseline; also seed
+		// keptMuted so a stop/restart before connect still inherits it.
+		m.mu.Lock()
+		m.keptMuted = muted
+		m.mu.Unlock()
+	}
+	return err
 }
 
 // Muted returns the mute of the active session, or false without one.

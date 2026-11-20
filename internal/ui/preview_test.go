@@ -396,6 +396,7 @@ func TestCtrlXWithMainAndPreviewStopsBoth(t *testing.T) {
 	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
 	m = play(t, m, "j space")
 	m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "alanzoka"})
+	w.playback.cmdOrder = nil
 	m = play(t, m, "ctrl+x")
 	if w.playback.previewStopped != 1 {
 		t.Fatalf("previewStopped=%d", w.playback.previewStopped)
@@ -409,6 +410,41 @@ func TestCtrlXWithMainAndPreviewStopsBoth(t *testing.T) {
 	if m.previewOpen() {
 		t.Fatal("preview still open after Ctrl+X")
 	}
+	if !orderHasBefore(w.playback.cmdOrder, "restore", "stop") {
+		t.Fatalf("restore must run before stop, got %v", w.playback.cmdOrder)
+	}
+}
+
+func TestEnterOnOtherChannelRestoresMuteBeforeStart(t *testing.T) {
+	m, w := openChannelList(t, 80, 24)
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m = play(t, m, "j space")
+	m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "alanzoka"})
+	w.playback.cmdOrder = nil
+	m = play(t, m, "enter")
+	if !w.playback.mainMuteRestored {
+		t.Fatal("mute not restored")
+	}
+	if !orderHasBefore(w.playback.cmdOrder, "restore", "start") {
+		t.Fatalf("restore must run before start, got %v", w.playback.cmdOrder)
+	}
+	if m.previewOpen() {
+		t.Fatal("preview still open")
+	}
+}
+
+// orderHasBefore reports whether a appears before b in order.
+func orderHasBefore(order []string, a, b string) bool {
+	ai, bi := -1, -1
+	for i, s := range order {
+		if s == a && ai < 0 {
+			ai = i
+		}
+		if s == b && bi < 0 {
+			bi = i
+		}
+	}
+	return ai >= 0 && bi >= 0 && ai < bi
 }
 
 func TestPreviewPreservesAlreadyMutedMain(t *testing.T) {
@@ -496,7 +532,7 @@ func TestCenarioPreviaSemVideo(t *testing.T) {
 }
 
 // Com o principal tocando, espaço noutro canal abre a prévia, silencia o
-// principal e a barra mostra a prévia (regra 9).
+// principal e a barra mostra a prévia com "mudo" (regra 9).
 func TestCenarioPreviaComVideo(t *testing.T) {
 	eachSize(t, "previa-com-video", func(t *testing.T, width, height int) Model {
 		m, w := openChannelList(t, width, height)
@@ -509,6 +545,8 @@ func TestCenarioPreviaComVideo(t *testing.T) {
 		if !w.playback.mainMutedForPrev {
 			t.Fatal("principal não foi silenciado")
 		}
+		// Evento de mudo que o pump mandaria depois do SetMute da prévia.
+		m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 80, Muted: true})
 		m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "alanzoka"})
 		if m.PreviewState() != PreviewStatePlaying {
 			t.Fatalf("prévia: %q", m.PreviewState())

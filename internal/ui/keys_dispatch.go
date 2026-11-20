@@ -99,11 +99,13 @@ func (m Model) keyStopVideo() (tea.Model, tea.Cmd) {
 		}
 	}
 	if m.player.state == PlayerStateNone || m.player.state == PlayerStateEnded {
-		return m, tea.Batch(cmds...)
+		return m, tea.Sequence(cmds...)
 	}
 	m.player.stopAfterStart = m.player.awaiting != 0
 	cmds = append(cmds, m.playback.Stop())
-	return m, tea.Batch(cmds...)
+	// Sequence: restore inside closePreview finishes before Stop tears down
+	// the main session (Batch would race and leak the preview mute).
+	return m, tea.Sequence(cmds...)
 }
 
 func (m Model) keyReconnectChat() (tea.Model, tea.Cmd) {
@@ -496,7 +498,7 @@ func (m Model) keySelect() (tea.Model, tea.Cmd) {
 			cmds = append(cmds, stop)
 		}
 		if sameMain {
-			return m, tea.Batch(cmds...)
+			return m, tea.Sequence(cmds...)
 		}
 	}
 	next, cmd := m.selectHighlighted()
@@ -504,7 +506,8 @@ func (m Model) keySelect() (tea.Model, tea.Cmd) {
 	if cmd != nil {
 		cmds = append(cmds, cmd)
 	}
-	return m, tea.Batch(cmds...)
+	// Sequence so restore from closePreview runs before StartTarget.
+	return m, tea.Sequence(cmds...)
 }
 
 func (m Model) keyPageDown() (tea.Model, tea.Cmd) {

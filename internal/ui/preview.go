@@ -193,13 +193,15 @@ func (m *Model) closePreview() tea.Cmd {
 	var cmds []tea.Cmd
 	stopAfter := m.preview.awaiting != 0
 	awaiting, selection := m.preview.awaiting, m.preview.selection
-	if stop := m.stopPreviewCmd(); stop != nil {
-		cmds = append(cmds, stop)
-	}
+	// Restore before StopPreview so a later Sequence with Stop/Start sees the
+	// pre-preview mute applied first (Batch would race).
 	if m.playback != nil {
 		if restore := m.playback.RestoreMainMute(); restore != nil {
 			cmds = append(cmds, restore)
 		}
+	}
+	if stop := m.stopPreviewCmd(); stop != nil {
+		cmds = append(cmds, stop)
 	}
 	m.preview = previewState{}
 	if stopAfter {
@@ -207,7 +209,7 @@ func (m *Model) closePreview() tea.Cmd {
 		m.preview.awaiting = awaiting
 		m.preview.selection = selection
 	}
-	return tea.Batch(cmds...)
+	return tea.Sequence(cmds...)
 }
 
 // highlightedPlayTarget is the channel under the highlight, if the row is a
