@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # .github/images/arch-ci/README.md explains how to renew this digest.
-    container: ghcr.io/pedrosatin/ttv-tui-arch-ci@sha256:8da8d3f4904a0060d443feb4580f687b77f86fda9b9d5c370723021c884bb411
+    container: ghcr.io/pedrosatin/ttv-tui-arch-ci@sha256:fdbe15c0207d9fc31f3d5808ee90a00d3cbe99f0d2f5738db6e42ecc03abb137
     steps:
       - name: List the native package versions
         run: |
