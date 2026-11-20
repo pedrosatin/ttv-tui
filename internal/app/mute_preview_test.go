@@ -9,10 +9,12 @@ import (
 // MuteMainForPreview must remember the original mute only once. A second call
 // while the preview is already open (channel switch) must not overwrite the
 // saved value; RestoreMainMute then clears the flag so a later preview can save
-// again.
+// again. The manager carries an active mute state: without a session SetMute is
+// a no-op and this assertion would pass even if the save-once guard were gone.
 func TestMuteMainForPreviewSavesOriginalOnlyOnce(t *testing.T) {
 	mgr := player.New(player.Options{})
 	t.Cleanup(mgr.Close)
+	mgr.EnableTestMute(false)
 	b := newPlaybackBridge(mgr)
 
 	if msg := b.MuteMainForPreview(); msg != nil {
@@ -22,7 +24,10 @@ func TestMuteMainForPreviewSavesOriginalOnlyOnce(t *testing.T) {
 		t.Fatal("first MuteMainForPreview did not save mute")
 	}
 	if b.mainMuteBeforePreview {
-		t.Fatal("no session starts muted; saved value should be false")
+		t.Fatal("session started unmuted; saved value should be false")
+	}
+	if !mgr.Muted() {
+		t.Fatal("first MuteMainForPreview did not mute the active session")
 	}
 
 	if msg := b.MuteMainForPreview(); msg != nil {
@@ -37,6 +42,9 @@ func TestMuteMainForPreviewSavesOriginalOnlyOnce(t *testing.T) {
 	}
 	if b.hasMainMuteBefore {
 		t.Fatal("RestoreMainMute left hasMainMuteBefore set")
+	}
+	if mgr.Muted() {
+		t.Fatal("RestoreMainMute did not restore unmuted")
 	}
 
 	if msg := b.MuteMainForPreview(); msg != nil {

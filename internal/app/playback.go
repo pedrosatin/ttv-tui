@@ -332,6 +332,9 @@ func (b *playbackBridge) StartPreview(target ui.PlayTarget, selection uint64) te
 			label = ch.Login
 		}
 		return func() tea.Msg {
+			// Selection grew past any in-flight StartInOrder; advance order so
+			// that older start cannot attach after this failure.
+			mgr.AdvanceOrder(selection)
 			return ui.PreviewStatusMsg{
 				State: ui.PreviewStateFailed, Login: label, LastLine: err.Error(),
 				Failure: ui.PlayerFailureUnknown, Selection: selection,
@@ -351,6 +354,7 @@ func (b *playbackBridge) StartPreview(target ui.PlayTarget, selection uint64) te
 		}
 		b.mu.Unlock()
 		if err := b.ensureStreamlink(appCtx); err != nil {
+			mgr.AdvanceOrder(selection)
 			gen := mgr.Generation()
 			lastLine := err.Error()
 			var missing *player.MissingToolError
