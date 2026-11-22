@@ -18,7 +18,7 @@ func tuiEnvironment(env []string) []string {
 	out := make([]string, 0, len(env))
 	for _, entry := range env {
 		key, _, _ := strings.Cut(entry, "=")
-		if !strings.EqualFold(key, "TTV_WINDOW_TEST") {
+		if !strings.EqualFold(key, "TTV_WINDOW_TEST") && !strings.EqualFold(key, windowRoleEnv) {
 			out = append(out, entry)
 		}
 	}

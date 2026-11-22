@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -58,8 +59,18 @@ var maxSocketPathLen = maxSocketPathLenFor(runtime.GOOS)
 // prefixes `\\.\pipe\` itself, so a name containing slashes would be taken as a
 // path. The directory's base name is unique per session but visible to anyone
 // who lists the temp directory; callers add a random suffix it cannot promise.
+func isPreviewSessionDir(dir string) bool {
+	clean := filepath.Clean(dir)
+	return filepath.Base(filepath.Dir(clean)) == previewSubdir ||
+		strings.HasPrefix(filepath.Base(clean), "ttv-tui-preview-")
+}
+
 func pipeName(dir string, pid int) string {
-	return "ttv-tui-" + strconv.Itoa(pid) + "-" + filepath.Base(dir)
+	prefix := "ttv-tui-"
+	if isPreviewSessionDir(dir) {
+		prefix = "ttv-tui-preview-"
+	}
+	return prefix + strconv.Itoa(pid) + "-" + filepath.Base(filepath.Clean(dir))
 }
 
 // shortFallbackBaseDir is the last place a session can go. It only comes into
@@ -113,6 +124,10 @@ func checkDirWritable(dir string) error {
 // endpoint, not writable, not private). The directory is the same on every OS;
 // the endpoint comes from endpointInDir, which is per OS.
 func prepareSession(runtimeDir string, gen uint64) (sessionLayout, error) {
+	return prepareSessionForRole(runtimeDir, gen, false)
+}
+
+func prepareSessionForRole(runtimeDir string, gen uint64, preview bool) (sessionLayout, error) {
 	var primaryErr error
 	if runtimeDir != "" {
 		l, err := prepareIn(runtimeDir, gen)
@@ -122,7 +137,7 @@ func prepareSession(runtimeDir string, gen uint64) (sessionLayout, error) {
 		primaryErr = err
 	}
 
-	l, err := prepareFallback(gen)
+	l, err := prepareFallbackFor(gen, preview)
 	if err != nil {
 		if primaryErr != nil {
 			return sessionLayout{}, fmt.Errorf("player: fallback %w (primary %q: %v)", err, runtimeDir, primaryErr)
@@ -135,7 +150,10 @@ func prepareSession(runtimeDir string, gen uint64) (sessionLayout, error) {
 // fallbackPrefix é o começo do nome do diretório de fallback. O os.MkdirTemp
 // completa com um sufixo aleatório: um nome fixo em /tmp deixava outro usuário
 // local criá-lo antes e impedir a reprodução.
-func fallbackPrefix(gen uint64) string {
+func fallbackPrefixFor(gen uint64, preview bool) string {
+	if preview {
+		return fmt.Sprintf("ttv-tui-preview-%d-", gen)
+	}
 	return fmt.Sprintf("ttv-tui-%d-", gen)
 }
 
@@ -150,7 +168,11 @@ const mkdirTempSuffixMax = "4294967295"
 // relativo apontaria para onde o app foi aberto, e o streamlink roda na sessão.
 // Não toca no disco.
 func fallbackBase(gen uint64) (string, error) {
-	worst := fallbackPrefix(gen) + mkdirTempSuffixMax
+	return fallbackBaseFor(gen, false)
+}
+
+func fallbackBaseFor(gen uint64, preview bool) (string, error) {
+	worst := fallbackPrefixFor(gen, preview) + mkdirTempSuffixMax
 	base, err := filepath.Abs(getFallbackBaseDir())
 	if err != nil {
 		return "", fmt.Errorf("fallback base directory: %w", err)
@@ -168,12 +190,12 @@ func fallbackBase(gen uint64) (string, error) {
 // prepareFallback cria um diretório novo, privado e de nome aleatório para a
 // sessão. Nunca reaproveita um diretório que já existe: o MkdirTemp tenta outro
 // nome quando o sorteado está ocupado.
-func prepareFallback(gen uint64) (sessionLayout, error) {
-	base, err := fallbackBase(gen)
+func prepareFallbackFor(gen uint64, preview bool) (sessionLayout, error) {
+	base, err := fallbackBaseFor(gen, preview)
 	if err != nil {
 		return sessionLayout{}, err
 	}
-	dir, err := os.MkdirTemp(base, fallbackPrefix(gen))
+	dir, err := os.MkdirTemp(base, fallbackPrefixFor(gen, preview))
 	if err != nil {
 		return sessionLayout{}, fmt.Errorf("create fallback directory: %w", err)
 	}

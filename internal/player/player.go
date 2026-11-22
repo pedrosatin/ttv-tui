@@ -184,8 +184,8 @@ func (s streamlinkInvocation) build(target Target, layout sessionLayout, inputCo
 	)
 	cmd := exec.Command(s.bin, args...)
 	cmd.Dir = layout.Dir
-	if len(s.env) > 0 {
-		cmd.Env = append(os.Environ(), s.env...)
+	if len(s.env) > 0 || hasEnvKey(os.Environ(), windowRoleEnv) {
+		cmd.Env = envWithRole(os.Environ(), s.env, "")
 	}
 	return cmd
 }
@@ -536,6 +536,7 @@ func (m *Manager) start(target Target, order uint64) (uint64, error) {
 		CommandNoInputConf: noInputConf,
 		Volume:             m.startVolume(target),
 		Muted:              m.startMuted(),
+		Preview:            m.opts.Preview,
 		WriteInputConf:     m.opts.WriteInputConf,
 		SocketWait:         m.opts.SocketWait,
 		StopWait:           m.opts.StopWait,

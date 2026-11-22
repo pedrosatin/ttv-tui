@@ -29,6 +29,7 @@ type hostPanel struct {
 
 type ctlMsg struct {
 	kind string // "start" | "ended" | "layout" | "resize"
+	role string
 	ipc  string
 	fd   int    // Unix: streamlink's stdin, closed if libmpv never takes it
 	url  string // what libmpv loads: fdclose://N or the shim's named pipe
@@ -41,6 +42,7 @@ type ctlMsg struct {
 }
 
 type session struct {
+	role     string
 	m        *C.mpv_handle
 	rc       *C.mpv_render_context
 	conn     *net.UnixConn
@@ -67,22 +69,23 @@ type ptyDevice interface {
 }
 
 type app struct {
-	win  *C.SDL_Window
-	W, H int
-	px   int // x do painel
-	cols int
-	rows int
-	pw   int
-	ph   int
-	fs   *fontSet
-	pt   float64
-	term *vt.SafeEmulator
-	ptmx ptyDevice
-	cmd  *exec.Cmd
-	buf  []byte
-	prev []cellKey
-	sess *session
-	ctlq chan ctlMsg
+	win     *C.SDL_Window
+	W, H    int
+	px      int // x do painel
+	cols    int
+	rows    int
+	pw      int
+	ph      int
+	fs      *fontSet
+	pt      float64
+	term    *vt.SafeEmulator
+	ptmx    ptyDevice
+	cmd     *exec.Cmd
+	buf     []byte
+	prev    []cellKey
+	sess    *session
+	preview *session
+	ctlq    chan ctlMsg
 
 	// O painel fica em uma textura, ou em várias quando o OpenGL não aceita uma do
 	// tamanho dele (paneltex.go). texs[i] guarda tiles[i]; só a thread de render mexe.
@@ -113,6 +116,7 @@ type app struct {
 	sessions    int64
 	lastTtff    int64
 	lastIpc     string
+	lastRole    string
 	inputAt     time.Time
 	latMs       []float64
 	maxMs       int64

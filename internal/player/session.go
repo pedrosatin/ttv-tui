@@ -40,6 +40,8 @@ type sessionConfig struct {
 	Volume int
 	// Muted mutes the player once its IPC connects. False leaves mpv's own setting.
 	Muted bool
+	// Preview marks a preview session for role-tagged fallback/pipe names.
+	Preview bool
 }
 
 type pendingKind int
@@ -140,11 +142,13 @@ type Session struct {
 const readerDrainWait = 500 * time.Millisecond
 
 func startSession(cfg sessionConfig) (*Session, error) {
-	prepare := cfg.Prepare
-	if prepare == nil {
-		prepare = prepareSession
+	var layout sessionLayout
+	var err error
+	if cfg.Prepare != nil {
+		layout, err = cfg.Prepare(cfg.RuntimeDir, cfg.Generation)
+	} else {
+		layout, err = prepareSessionForRole(cfg.RuntimeDir, cfg.Generation, cfg.Preview)
 	}
-	layout, err := prepare(cfg.RuntimeDir, cfg.Generation)
 	if err != nil {
 		return nil, err
 	}

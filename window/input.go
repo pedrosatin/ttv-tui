@@ -149,8 +149,11 @@ func (a *app) handle(ev *C.SDL_Event) {
 	case t == C.SDL_EVENT_TEXT_INPUT:
 		a.writeInput([]byte(C.GoString(C.e_text(ev))))
 	case t == C.ev_mpv():
-		if a.sess != nil && C.rc_has_frame(a.sess.rc) != 0 {
-			a.videoDirty = true
+		active := a.activeVideo()
+		for _, s := range []*session{a.sess, a.preview} {
+			if s != nil && C.rc_has_frame(s.rc) != 0 && s == active {
+				a.videoDirty = true
+			}
 		}
 	case t == C.ev_input(): // socket de teste: text, raw e letras do key
 		p := C.input_data(ev)
@@ -167,9 +170,7 @@ func (a *app) handle(ev *C.SDL_Event) {
 			case "start":
 				a.startSession(msg)
 			case "ended":
-				if a.sess == msg.s {
-					a.stopSession()
-				}
+				a.endSession(msg.s)
 			case "resize":
 				a.resizeForTest(msg)
 			}

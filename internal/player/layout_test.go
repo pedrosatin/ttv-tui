@@ -304,3 +304,29 @@ func TestSessionPathsAreAbsoluteWithRelativeBase(t *testing.T) {
 		})
 	}
 }
+
+func TestPreviewPipeNameAndFallbackCarryRoleMarker(t *testing.T) {
+	for _, dir := range []string{
+		"/run/user/1000/ttv-tui/preview/3-123456",
+		"/tmp/ttv-tui-preview-3-123456",
+	} {
+		got := pipeName(dir, 42)
+		if !strings.HasPrefix(got, "ttv-tui-preview-42-") {
+			t.Errorf("pipeName(%q) = %q, want ttv-tui-preview-42- prefix", dir, got)
+		}
+		if quoted := quotePlayerArg(got); quoted != got {
+			t.Errorf("pipeName(%q) = %q needs quoting: %q", dir, got, quoted)
+		}
+	}
+
+	base := shortLaunchDir(t)
+	useTempDir(t, base)
+	l, err := prepareSessionForRole(unusableRuntimeDir(t), 7, true)
+	if err != nil {
+		t.Fatalf("prepareSessionForRole: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(l.Dir) })
+	if filepath.Dir(l.Dir) != base || !strings.HasPrefix(filepath.Base(l.Dir), "ttv-tui-preview-7-") {
+		t.Fatalf("preview fallback Dir = %q, want %s/ttv-tui-preview-7-<aleatório>", l.Dir, base)
+	}
+}

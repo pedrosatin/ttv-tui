@@ -57,3 +57,60 @@ func TestCalledAsMpv(t *testing.T) {
 		}
 	}
 }
+
+func TestParseShimConfigRole(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		roleEnv  string
+		wantIPC  string
+		wantRole string
+	}{
+		{
+			name:     "principal padrão sem sinal",
+			args:     []string{"--no-config", "--input-ipc-server=/run/ttv/i"},
+			wantIPC:  "/run/ttv/i",
+			wantRole: roleMain,
+		},
+		{
+			name:     "principal com autofit e focus-on continua principal",
+			args:     []string{"--input-ipc-server=/run/ttv/i", "--autofit=480x270", "--focus-on=never"},
+			wantIPC:  "/run/ttv/i",
+			wantRole: roleMain,
+		},
+		{
+			name:     "principal com sinal desconhecido",
+			args:     []string{"--input-ipc-server=/run/ttv/i"},
+			roleEnv:  "other",
+			wantIPC:  "/run/ttv/i",
+			wantRole: roleMain,
+		},
+		{
+			name:     "prévia pelo sinal explícito",
+			args:     []string{"--input-ipc-server=/run/ttv/preview/i", "--mute=yes"},
+			roleEnv:  rolePreview,
+			wantIPC:  "/run/ttv/preview/i",
+			wantRole: rolePreview,
+		},
+		{
+			name:     "sem ipc como versão",
+			args:     []string{"--version"},
+			roleEnv:  rolePreview,
+			wantIPC:  "",
+			wantRole: rolePreview,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotIPC, gotRole := parseShimConfig(tc.args, func(k string) string {
+				if k == windowRoleEnv {
+					return tc.roleEnv
+				}
+				return ""
+			})
+			if gotIPC != tc.wantIPC || gotRole != tc.wantRole {
+				t.Fatalf("parseShimConfig(%v, %q) = (%q, %q), quero (%q, %q)", tc.args, tc.roleEnv, gotIPC, gotRole, tc.wantIPC, tc.wantRole)
+			}
+		})
+	}
+}

@@ -71,7 +71,7 @@ func execRealMpv(real string, args []string) {
 // sendShimStream opens a named pipe, tells the window its name and pumps
 // streamlink's stdin into it once the announced window PID connects.
 // Windows has no SCM_RIGHTS.
-func sendShimStream(c *net.UnixConn, ipc string) error {
+func sendShimStream(c *net.UnixConn, ipc, role string) error {
 	var peer struct {
 		PID uint32 `json:"pid"`
 	}
@@ -81,13 +81,17 @@ func sendShimStream(c *net.UnixConn, ipc string) error {
 	if peer.PID == 0 {
 		return fmt.Errorf("PID da janela ausente")
 	}
-	name := fmt.Sprintf(`\\.\pipe\ttv-win-stream-%d-%d`, os.Getpid(), time.Now().UnixNano())
+	prefix := `\\.\pipe\ttv-win-stream-`
+	if normalizeRole(role) == rolePreview {
+		prefix = `\\.\pipe\ttv-win-stream-preview-`
+	}
+	name := fmt.Sprintf("%s%d-%d", prefix, os.Getpid(), time.Now().UnixNano())
 	l, err := listenStreamPipe(name)
 	if err != nil {
 		return err
 	}
 	defer l.Close()
-	msg, _ := json.Marshal(map[string]string{"ipc": ipc, "pipe": name})
+	msg, _ := json.Marshal(map[string]string{"ipc": ipc, "pipe": name, "role": role})
 	if _, err := c.Write(append(msg, '\n')); err != nil {
 		return err
 	}

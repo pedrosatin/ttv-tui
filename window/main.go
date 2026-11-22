@@ -172,7 +172,7 @@ func main() {
 	var ev C.SDL_Event
 	for !a.quit {
 		wait := C.Sint32(-1)
-		if a.panelChanged && a.sess != nil {
+		if a.panelChanged && a.activeVideo() != nil {
 			wait = 8 // sem quadro de vídeo a caminho (pausa), ainda precisamos apresentar o painel
 		}
 		if C.SDL_WaitEventTimeout(&ev, wait) {

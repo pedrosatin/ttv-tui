@@ -177,12 +177,36 @@ func TestStopPreviewDuringStartEndsStopped(t *testing.T) {
 	}
 }
 
-func TestSpaceDoesNotOpenPreviewInHostedWindow(t *testing.T) {
+func TestSpaceOpensPreviewInHostedWindowWithoutMain(t *testing.T) {
+	m, w := openChannelList(t, 120, 30)
+	m.hosted.host = &recordingHost{}
+	m = play(t, m, "space")
+	if len(w.playback.previewStarted) != 1 || w.playback.previewStarted[0] != "gaules" {
+		t.Fatalf("hosted window previewStarted = %v, want [gaules]", w.playback.previewStarted)
+	}
+	if !strings.Contains(m.hostedIdleText(), "gaules") {
+		t.Fatalf("hostedIdleText during starting = %q, want channel loading text", m.hostedIdleText())
+	}
+	m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "gaules"})
+	if got := m.hostedIdleText(); got != "" {
+		t.Fatalf("hostedIdleText while preview playing = %q, want empty", got)
+	}
+	m = play(t, m, "esc")
+	if m.previewOpen() {
+		t.Fatalf("preview still open after Esc: %q", m.PreviewState())
+	}
+	if !strings.Contains(m.hostedIdleText(), "Gaules") {
+		t.Fatalf("hostedIdleText after closing preview = %q, want idle channel prompt", m.hostedIdleText())
+	}
+}
+
+func TestSpaceDoesNotOpenPreviewInHostedWindowWithMain(t *testing.T) {
 	m, w := openChannelList(t, 80, 24)
 	m.hosted.host = &recordingHost{}
+	m = feed(t, m, PlayerStatusMsg{State: PlayerStatePlaying, Login: "gaules"})
 	_ = play(t, m, "space")
 	if len(w.playback.previewStarted) != 0 {
-		t.Fatalf("hosted window started preview: %v", w.playback.previewStarted)
+		t.Fatalf("hosted window with active main started preview: %v", w.playback.previewStarted)
 	}
 }
 

@@ -387,6 +387,15 @@ func (m Model) hostedIdleText() string {
 	case PlayerStatePlaying, PlayerStatePaused, PlayerStateBreak:
 		return ""
 	}
+	switch m.preview.state {
+	case PreviewStateStarting:
+		if label := m.previewLabel(); label != "" {
+			return fmt.Sprintf(m.t("preview.starting_channel"), sanitizeScreenText(label))
+		}
+		return m.t("preview.starting")
+	case PreviewStatePlaying, PreviewStateBreak:
+		return ""
+	}
 	it, ok := m.HighlightedItem()
 	switch {
 	case !ok:

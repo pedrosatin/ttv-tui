@@ -8,6 +8,27 @@ import (
 	"strings"
 )
 
+const (
+	roleMain      = "main"
+	rolePreview   = "preview"
+	windowRoleEnv = "TTV_WINDOW_ROLE"
+)
+
+// parseShimConfig extrai o caminho do IPC dos argumentos do shim e o papel
+// explícito da sessão via TTV_WINDOW_ROLE (ausência = principal).
+func parseShimConfig(args []string, getenv func(string) string) (ipc, role string) {
+	for _, a := range args {
+		if v, ok := strings.CutPrefix(a, "--input-ipc-server="); ok {
+			ipc = v
+		}
+	}
+	role = roleMain
+	if getenv != nil && getenv(windowRoleEnv) == rolePreview {
+		role = rolePreview
+	}
+	return ipc, role
+}
+
 // findMpv looks for the real mpv on path, skipping the directory of this shim
 // and every relative entry: "", "." and the like name the working directory,
 // where nothing of the player chain is looked up.
@@ -32,12 +53,7 @@ func findMpv(path, skip string) string {
 // enquanto a sessão existir: o streamlink e o ttv-tui acompanham este processo
 // como se fosse o player.
 func shimMain() {
-	ipc := ""
-	for _, a := range os.Args[1:] {
-		if v, ok := strings.CutPrefix(a, "--input-ipc-server="); ok {
-			ipc = v
-		}
-	}
+	ipc, role := parseShimConfig(os.Args[1:], os.Getenv)
 	sock := os.Getenv("TTV_WINDOW_SOCK")
 	if ipc == "" || sock == "" {
 		skip := ""
@@ -54,7 +70,7 @@ func shimMain() {
 		_, _ = os.Stderr.WriteString("shim: " + err.Error() + "\n")
 		os.Exit(1)
 	}
-	if err := sendShimStream(c, ipc); err != nil {
+	if err := sendShimStream(c, ipc, role); err != nil {
 		_, _ = os.Stderr.WriteString("shim: " + err.Error() + "\n")
 		os.Exit(1)
 	}
