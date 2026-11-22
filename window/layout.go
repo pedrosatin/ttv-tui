@@ -115,12 +115,13 @@ func (a *app) applySessionMargins(s *session, col, row, cols, rows int) {
 	s.setProperty("osd-margin-x", marginStr)
 }
 
-// previewPIP reports whether the preview should draw in the smaller HostPanel rect.
+// previewPIP diz se a prévia desenha no retângulo menor do HostPanel.
 func (a *app) previewPIP() bool {
 	return a.sess != nil && a.preview != nil && a.host.PreviewCols > 0 && a.host.PreviewRows > 0
 }
 
-// previewPixelRect is the PiP box in window pixels (origin top-left), or zeros.
+// previewPixelRect é o quadro do PiP em pixels da janela (origem em cima à
+// esquerda), ou zeros.
 func (a *app) previewPixelRect() (x, y, w, h int) {
 	if !a.previewPIP() || a.fs == nil {
 		return 0, 0, 0, 0

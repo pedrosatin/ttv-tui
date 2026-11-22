@@ -7,17 +7,36 @@ import "C"
 
 import "time"
 
-func (a *app) present(video bool) {
+func (a *app) present(mainVideo, previewVideo bool) {
 	W, H := C.int(a.W), C.int(a.H)
 	v := a.activeVideo()
+	previewRendered := false
 	if v != nil {
 		C.rc_render(v.rc, W, H)
-		a.noteFirstFrame(v, video)
-		// Prévia sobre a principal: desenha só no retângulo do PiP, sem apagar o resto.
-		if a.previewPIP() && a.preview.rc != nil {
+		// Sessão do painel inteiro: principal, ou prévia sozinha sem PiP.
+		fullFrame := mainVideo
+		if v == a.preview {
+			fullFrame = previewVideo
+		}
+		a.noteFirstFrame(v, fullFrame)
+		// Prévia em FBO W×H próprio e composição só do retângulo: mpv_render apaga o FBO 0.
+		if a.previewPIP() && a.preview != nil && a.preview.rc != nil && a.preview != v {
 			px, py, pw, ph := a.previewPixelRect()
-			C.rc_render_scissored(a.preview.rc, W, H, C.int(px), C.int(py), C.int(pw), C.int(ph))
-			a.noteFirstFrame(a.preview, video)
+			if pw > 0 && ph > 0 {
+				switch st := C.pip_fbo_ensure(W, H); {
+				case st < 0:
+					// Sem FBO: a prévia fica de fora neste quadro.
+				default:
+					if previewVideo || st > 0 {
+						C.rc_render_to_pip(a.preview.rc)
+						previewRendered = true
+						a.noteFirstFrame(a.preview, previewVideo)
+					}
+					if a.preview.gotFirst.Load() {
+						C.pip_compose(C.int(px), C.int(py), C.int(pw), C.int(ph), W, H)
+					}
+				}
+			}
 		}
 	} else {
 		C.clear_to(W, H, C.float(float32(bgR)/255), C.float(float32(bgG)/255), C.float(float32(bgB)/255))
@@ -38,14 +57,14 @@ func (a *app) present(video bool) {
 	if v != nil {
 		C.mpv_render_context_report_swap(v.rc)
 	}
-	if a.previewPIP() && a.preview != nil && a.preview.rc != nil {
+	if previewRendered && a.preview != nil && a.preview.rc != nil {
 		C.mpv_render_context_report_swap(a.preview.rc)
 	}
 	now := time.Now()
 	a.lastPresent = now
 	a.mu.Lock()
 	a.presents++
-	if video {
+	if mainVideo || previewVideo {
 		a.videoFrames++
 		if !a.lastVideo.IsZero() {
 			gap := now.Sub(a.lastVideo).Milliseconds()
@@ -147,12 +166,18 @@ func (a *app) frame() {
 	a.uploadPanel()
 	v := a.activeVideo()
 	switch {
-	case a.videoDirty:
-		a.present(true)
-		a.videoDirty, a.layoutDirty, a.panelChanged = false, false, false
+	case a.mainDirty || a.previewDirty:
+		a.present(a.mainDirty, a.previewDirty)
+		a.mainDirty = false
+		// Só limpa o aviso da prévia depois de poder compor (Preview* no HostPanel)
+		// ou quando a sessão sumiu; senão rc_has_frame já consumiu o quadro.
+		if a.previewPIP() || a.preview == nil {
+			a.previewDirty = false
+		}
+		a.layoutDirty, a.panelChanged = false, false
 	case a.layoutDirty, a.panelChanged && (v == nil || !v.gotFirst.Load() || time.Since(a.lastPresent) > 33*time.Millisecond):
 		// Painel sem quadro de vídeo: pausado, antes do primeiro quadro, ou sem sessão.
-		a.present(false)
+		a.present(false, false)
 		a.layoutDirty, a.panelChanged = false, false
 	}
 }

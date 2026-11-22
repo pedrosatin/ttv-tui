@@ -4,6 +4,7 @@ package windowscenarios
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -196,6 +197,7 @@ func TestJanelaPreviaSobrePrincipal(t *testing.T) {
 	w.waitVideoFrames(3)
 
 	var previewHole []int
+	var sessionsWithPreview int64
 	expect(t, func() error {
 		cur, err := w.state()
 		if err != nil {
@@ -226,6 +228,19 @@ func TestJanelaPreviaSobrePrincipal(t *testing.T) {
 		if !fixture.ClipLooksRight(r, g, b) {
 			return fmt.Errorf("pixel (%d,%d) do quadro da prévia é %d,%d,%d", x, y, r, g, b)
 		}
+		// Principal fora do PiP e fora do chat sobreposto: tem de ser o clipe,
+		// não o fundo #1c1c1e que o scissor do mpv deixava ao apagar o FBO 0.
+		mx, my, err := mainPixelOutsidePreview(cur, previewHole)
+		if err != nil {
+			return err
+		}
+		mr, mg, mb, err := w.fbpixel(mx, my)
+		if err != nil {
+			return err
+		}
+		if !fixture.ClipLooksRight(mr, mg, mb) {
+			return fmt.Errorf("pixel (%d,%d) da principal com prévia aberta é %d,%d,%d (fundo ou apagado)", mx, my, mr, mg, mb)
+		}
 		var stats struct {
 			Sessions                          int64
 			Active, MainActive, PreviewActive bool
@@ -239,7 +254,54 @@ func TestJanelaPreviaSobrePrincipal(t *testing.T) {
 		if stats.Sessions != sessionsBefore+1 {
 			return fmt.Errorf("abrir a prévia reiniciou a principal: sessions %d→%d", sessionsBefore, stats.Sessions)
 		}
+		sessionsWithPreview = stats.Sessions
 		return nil
+	})
+
+	// Ajuda (F1) cobre o quadro da prévia como cobre o vídeo (overlay na
+	// coluna inteira; o PiP não some nem muda de canto).
+	w.press("F1")
+	w.waitState("ajuda aberta sobre a prévia", 5*time.Second, func(s ui.StateReport) bool {
+		return s.Help
+	})
+	w.waitScreen("===", 5*time.Second)
+	expect(t, func() error {
+		cur, err := w.state()
+		if err != nil {
+			return err
+		}
+		if len(cur.Window.PreviewHole) != 4 || cur.Window.PreviewHole[2] == 0 {
+			return fmt.Errorf("ajuda removeu o quadro da prévia: %+v", cur.Window)
+		}
+		if !sameInts(cur.Window.PreviewHole, previewHole) {
+			return fmt.Errorf("ajuda moveu o quadro da prévia: antes %v depois %v", previewHole, cur.Window.PreviewHole)
+		}
+		if cur.Window.Overlay != cur.Window.Hole[2] {
+			return fmt.Errorf("ajuda não cobre o vídeo/prévia: overlay=%d hole=%v", cur.Window.Overlay, cur.Window.Hole)
+		}
+		// Título da ajuda com fundo opaco: se a linha cai sobre o PiP, o clipe
+		// não atravessa (mesmo critério do cenário da ajuda).
+		helpRow := rowWith(w.screen(), "===")
+		if helpRow < 0 {
+			return errors.New("o título da ajuda sumiu da grade")
+		}
+		pCol, pRow, pCols, pRows := previewHole[0], previewHole[1], previewHole[2], previewHole[3]
+		if helpRow >= pRow-1 && helpRow < pRow-1+pRows {
+			x := (pCol-1+pCols/2)*cur.Window.CellW + cur.Window.CellW/2
+			y := helpRow*cur.Window.CellH + cur.Window.CellH/2
+			r, g, b, err := w.fbpixel(x, y)
+			if err != nil {
+				return err
+			}
+			if r > 40 || g > 40 || b > 40 {
+				return fmt.Errorf("a prévia atravessa a ajuda: pixel (%d,%d) é %d,%d,%d", x, y, r, g, b)
+			}
+		}
+		return nil
+	})
+	w.press("F1")
+	w.waitState("ajuda fechada, prévia ainda aberta", 5*time.Second, func(s ui.StateReport) bool {
+		return !s.Help && s.Preview == string(ui.PreviewStatePlaying)
 	})
 
 	// Redimensionar reposiciona o quadro.
@@ -275,6 +337,7 @@ func TestJanelaPreviaSobrePrincipal(t *testing.T) {
 			return fmt.Errorf("quadro da prévia ficou publicado: %v", cur.Window.PreviewHole)
 		}
 		var stats struct {
+			Sessions                  int64
 			MainActive, PreviewActive bool
 		}
 		if err := json.Unmarshal([]byte(w.must("stats")), &stats); err != nil {
@@ -283,8 +346,49 @@ func TestJanelaPreviaSobrePrincipal(t *testing.T) {
 		if !stats.MainActive || stats.PreviewActive {
 			return fmt.Errorf("após fechar a prévia: %+v", stats)
 		}
+		if stats.Sessions != sessionsWithPreview {
+			return fmt.Errorf("fechar a prévia reiniciou a principal: sessions %d→%d", sessionsWithPreview, stats.Sessions)
+		}
 		return nil
 	})
+}
+
+// mainPixelOutsidePreview escolhe um pixel do buraco da principal fora do
+// quadro da prévia e fora da faixa do chat sobreposto.
+func mainPixelOutsidePreview(cur windowState, previewHole []int) (x, y int, err error) {
+	hole := cur.Window.Hole
+	if len(hole) != 4 || len(previewHole) != 4 {
+		return 0, 0, fmt.Errorf("buracos incompletos: hole=%v preview=%v", hole, previewHole)
+	}
+	cw, ch := cur.Window.CellW, cur.Window.CellH
+	pCol, pRow, pCols, pRows := previewHole[0], previewHole[1], previewHole[2], previewHole[3]
+	overlay := cur.Window.Overlay
+	// Chat sobreposto à direita (padrão do cenário): amostra à esquerda do PiP
+	// ou abaixo dele, ainda dentro do vídeo livre.
+	freeRight := hole[0] + hole[2]
+	if overlay > 0 {
+		freeRight = hole[0] + hole[2] - overlay
+	}
+	// Ponto abaixo do PiP, centrado na faixa livre horizontal.
+	cellCol := hole[0] + (freeRight-hole[0])/2
+	cellRow := pRow + pRows + 1
+	if cellRow >= hole[1]+hole[3] {
+		// PiP encostado embaixo: amostra à direita do PiP, ainda na faixa livre.
+		cellRow = pRow + pRows/2
+		cellCol = pCol + pCols + 1
+		if cellCol >= freeRight {
+			cellCol = pCol - 2
+		}
+	}
+	if cellCol < hole[0] || cellCol >= freeRight || cellRow < hole[1] || cellRow >= hole[1]+hole[3] {
+		return 0, 0, fmt.Errorf("sem célula livre fora do PiP: hole=%v preview=%v overlay=%d tentativa=%d,%d", hole, previewHole, overlay, cellCol, cellRow)
+	}
+	if cellCol >= pCol && cellCol < pCol+pCols && cellRow >= pRow && cellRow < pRow+pRows {
+		return 0, 0, fmt.Errorf("célula de amostra caiu dentro do PiP: %d,%d preview=%v", cellCol, cellRow, previewHole)
+	}
+	x = (cellCol-1)*cw + cw/2
+	y = (cellRow-1)*ch + ch/2
+	return x, y, nil
 }
 
 func curCols(t *testing.T, w *window) int {

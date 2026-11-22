@@ -98,8 +98,11 @@ func (a *app) startSession(msg ctlMsg) {
 	} else {
 		a.sess = s
 	}
-	if a.activeVideo() == s {
-		a.videoDirty = false
+	if role == rolePreview {
+		a.previewDirty = false
+		C.pip_fbo_free()
+	} else {
+		a.mainDirty = false
 	}
 	a.mu.Lock()
 	a.sessions++
@@ -165,10 +168,13 @@ func (a *app) stopSlot(slot **session) {
 	if s == nil {
 		return
 	}
-	wasActive := a.activeVideo() == s
+	isPreview := slot == &a.preview
 	*slot = nil
-	if wasActive {
-		a.videoDirty = false
+	if isPreview {
+		a.previewDirty = false
+		C.pip_fbo_free()
+	} else {
+		a.mainDirty = false
 	}
 	s.stop.Store(true)
 	if s.stopping != nil {

@@ -59,16 +59,6 @@ void rc_render(mpv_render_context *rc, int w, int h) {
     mpv_render_param p[] = {{MPV_RENDER_PARAM_OPENGL_FBO, &fbo}, {MPV_RENDER_PARAM_FLIP_Y, &flip}, {0, NULL}};
     mpv_render_context_render(rc, p);
 }
-void rc_render_scissored(mpv_render_context *rc, int w, int h, int x, int y, int rw, int rh) {
-    if (rw <= 0 || rh <= 0) {
-        return;
-    }
-    glEnable(GL_SCISSOR_TEST);
-    /* glScissor usa origem embaixo à esquerda; y da janela é em cima à esquerda. */
-    glScissor(x, h - y - rh, rw, rh);
-    rc_render(rc, w, h);
-    glDisable(GL_SCISSOR_TEST);
-}
 void rc_free(mpv_render_context *rc) { mpv_render_context_set_update_callback(rc, NULL, NULL); mpv_render_context_free(rc); }
 void load_fd(mpv_handle *m, const char *url) { const char *a[] = {"loadfile", url, NULL}; mpv_command_async(m, 0, a); }
 void set_property(mpv_handle *m, const char *name, const char *value) {
@@ -78,6 +68,11 @@ void set_property(mpv_handle *m, const char *name, const char *value) {
 
 #ifdef _WIN32
 static PFNGLBINDFRAMEBUFFERPROC p_glBindFramebuffer = NULL;
+static PFNGLGENFRAMEBUFFERSPROC p_glGenFramebuffers = NULL;
+static PFNGLDELETEFRAMEBUFFERSPROC p_glDeleteFramebuffers = NULL;
+static PFNGLFRAMEBUFFERTEXTURE2DPROC p_glFramebufferTexture2D = NULL;
+static PFNGLCHECKFRAMEBUFFERSTATUSPROC p_glCheckFramebufferStatus = NULL;
+static PFNGLBLITFRAMEBUFFERPROC p_glBlitFramebuffer = NULL;
 static PFNGLBINDVERTEXARRAYPROC p_glBindVertexArray = NULL;
 static PFNGLBINDBUFFERPROC p_glBindBuffer = NULL;
 static PFNGLACTIVETEXTUREPROC p_glActiveTexture = NULL;
@@ -85,14 +80,38 @@ static PFNGLUSEPROGRAMPROC p_glUseProgram = NULL;
 
 void init_gl_extensions(void) {
     p_glBindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)SDL_GL_GetProcAddress("glBindFramebuffer");
+    p_glGenFramebuffers = (PFNGLGENFRAMEBUFFERSPROC)SDL_GL_GetProcAddress("glGenFramebuffers");
+    p_glDeleteFramebuffers = (PFNGLDELETEFRAMEBUFFERSPROC)SDL_GL_GetProcAddress("glDeleteFramebuffers");
+    p_glFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)SDL_GL_GetProcAddress("glFramebufferTexture2D");
+    p_glCheckFramebufferStatus = (PFNGLCHECKFRAMEBUFFERSTATUSPROC)SDL_GL_GetProcAddress("glCheckFramebufferStatus");
+    p_glBlitFramebuffer = (PFNGLBLITFRAMEBUFFERPROC)SDL_GL_GetProcAddress("glBlitFramebuffer");
     p_glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)SDL_GL_GetProcAddress("glBindVertexArray");
     p_glBindBuffer = (PFNGLBINDBUFFERPROC)SDL_GL_GetProcAddress("glBindBuffer");
     p_glActiveTexture = (PFNGLACTIVETEXTUREPROC)SDL_GL_GetProcAddress("glActiveTexture");
     p_glUseProgram = (PFNGLUSEPROGRAMPROC)SDL_GL_GetProcAddress("glUseProgram");
 }
 
+static void gl_bind_fb(GLenum target, GLuint fb) {
+    if (p_glBindFramebuffer) p_glBindFramebuffer(target, fb);
+}
+static void gl_gen_fbs(GLsizei n, GLuint *ids) {
+    if (p_glGenFramebuffers) p_glGenFramebuffers(n, ids);
+}
+static void gl_del_fbs(GLsizei n, const GLuint *ids) {
+    if (p_glDeleteFramebuffers) p_glDeleteFramebuffers(n, ids);
+}
+static void gl_fb_tex2d(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
+    if (p_glFramebufferTexture2D) p_glFramebufferTexture2D(target, attachment, textarget, texture, level);
+}
+static GLenum gl_fb_status(GLenum target) {
+    return p_glCheckFramebufferStatus ? p_glCheckFramebufferStatus(target) : 0;
+}
+static void gl_blit_fb(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter) {
+    if (p_glBlitFramebuffer) p_glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+}
+
 static void gl_reset(int W, int H) {
-    if (p_glBindFramebuffer) p_glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl_bind_fb(GL_FRAMEBUFFER, 0);
     if (p_glBindVertexArray) p_glBindVertexArray(0);
     if (p_glBindBuffer) {
         p_glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -107,8 +126,19 @@ static void gl_reset(int W, int H) {
 #else
 void init_gl_extensions(void) {}
 
+static void gl_bind_fb(GLenum target, GLuint fb) { glBindFramebuffer(target, fb); }
+static void gl_gen_fbs(GLsizei n, GLuint *ids) { glGenFramebuffers(n, ids); }
+static void gl_del_fbs(GLsizei n, const GLuint *ids) { glDeleteFramebuffers(n, ids); }
+static void gl_fb_tex2d(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
+    glFramebufferTexture2D(target, attachment, textarget, texture, level);
+}
+static GLenum gl_fb_status(GLenum target) { return glCheckFramebufferStatus(target); }
+static void gl_blit_fb(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter) {
+    glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+}
+
 static void gl_reset(int W, int H) {
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl_bind_fb(GL_FRAMEBUFFER, 0);
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
@@ -119,6 +149,11 @@ static void gl_reset(int W, int H) {
     glViewport(0, 0, W, H);
 }
 #endif
+
+/* Alvo offscreen da prévia: um FBO + textura RGBA do tamanho do quadro PiP. */
+static GLuint pip_fbo = 0, pip_tex = 0;
+static int pip_w = 0, pip_h = 0;
+
 // Tudo daqui para baixo é o caminho do painel e só usa OpenGL 1.1, que é o que o
 // opengl32.dll genérico do Windows oferece. O que passa disso (lados fora de potência de 2,
 // GL_BGRA, textura maior que o limite) é decidido em paneltex.go.
@@ -137,6 +172,76 @@ GLuint make_tex(void) {
     return t;
 }
 void free_tex(GLuint t) { glDeleteTextures(1, &t); }
+
+void pip_fbo_free(void) {
+    if (pip_fbo != 0) {
+        gl_del_fbs(1, &pip_fbo);
+        pip_fbo = 0;
+    }
+    if (pip_tex != 0) {
+        free_tex(pip_tex);
+        pip_tex = 0;
+    }
+    pip_w = pip_h = 0;
+}
+
+int pip_fbo_ensure(int w, int h) {
+    if (w <= 0 || h <= 0) {
+        return -1;
+    }
+    if (pip_fbo != 0 && pip_w == w && pip_h == h) {
+        return 0;
+    }
+    pip_fbo_free();
+    pip_tex = make_tex();
+    glBindTexture(GL_TEXTURE_2D, pip_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    gl_gen_fbs(1, &pip_fbo);
+    if (pip_fbo == 0 || pip_tex == 0) {
+        pip_fbo_free();
+        return -1;
+    }
+    gl_bind_fb(GL_FRAMEBUFFER, pip_fbo);
+    gl_fb_tex2d(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pip_tex, 0);
+    if (gl_fb_status(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        gl_bind_fb(GL_FRAMEBUFFER, 0);
+        pip_fbo_free();
+        return -1;
+    }
+    gl_bind_fb(GL_FRAMEBUFFER, 0);
+    pip_w = w;
+    pip_h = h;
+    return 1;
+}
+
+void rc_render_to_pip(mpv_render_context *rc) {
+    if (rc == NULL || pip_fbo == 0 || pip_w <= 0 || pip_h <= 0) {
+        return;
+    }
+    gl_bind_fb(GL_FRAMEBUFFER, pip_fbo);
+    glViewport(0, 0, pip_w, pip_h);
+    mpv_opengl_fbo fbo = {.fbo = (int)pip_fbo, .w = pip_w, .h = pip_h};
+    int flip = 1;
+    mpv_render_param p[] = {{MPV_RENDER_PARAM_OPENGL_FBO, &fbo}, {MPV_RENDER_PARAM_FLIP_Y, &flip}, {0, NULL}};
+    mpv_render_context_render(rc, p);
+    gl_bind_fb(GL_FRAMEBUFFER, 0);
+}
+
+void pip_compose(int x, int y, int rw, int rh, int win_w, int win_h) {
+    if (pip_fbo == 0 || pip_w <= 0 || pip_h <= 0 || rw <= 0 || rh <= 0 || win_w <= 0 || win_h <= 0) {
+        return;
+    }
+    /* y da janela é em cima à esquerda; blit usa origem embaixo à esquerda.
+       O FBO tem o mesmo layout W×H da janela (prévia já nas margens do PiP). */
+    int y0 = win_h - y - rh;
+    int y1 = win_h - y;
+    gl_bind_fb(GL_READ_FRAMEBUFFER, pip_fbo);
+    gl_bind_fb(GL_DRAW_FRAMEBUFFER, 0);
+    gl_blit_fb(x, y0, x + rw, y1, x, y0, x + rw, y1, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    gl_bind_fb(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, win_w, win_h);
+}
+
 // O formato dos pixels é validado mesmo sem dados, então a alocação também segue bgra.
 void tex_alloc(GLuint t, int w, int h, int bgra) {
     glBindTexture(GL_TEXTURE_2D, t);

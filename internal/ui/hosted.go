@@ -375,19 +375,20 @@ func (m Model) hostedPanel() HostPanel {
 		panel.OverlayRows = m.overlayHeight(panel.Rows)
 		panel.OverlayTextBackdrop = m.hosted.overlayPreferences.TextBackdrop
 	}
+	// Com principal tocando, a prévia vai num quadro menor no canto oposto ao
+	// chat sobreposto. O retângulo usa o overlay do chat (não o da ajuda),
+	// senão o PiP pula de canto ao abrir a ajuda. Sem principal, campos zero.
+	if m.previewActive() && m.mainVideoActive() {
+		if r, c, rows, cols, ok := previewOverlayRect(panel); ok {
+			panel.PreviewRow, panel.PreviewCol, panel.PreviewRows, panel.PreviewCols = r, c, rows, cols
+		}
+	}
 	// A ajuda ocupa a coluna do vídeo inteira, com fundo opaco só atrás do
 	// texto. Com a opacidade do chat, o vídeo atravessaria as letras; com o
 	// painel inteiro, que é opaco aqui, o vídeo sumiria atrás da ajuda.
 	if m.helpOpen() {
 		panel.OverlayCols, panel.OverlayLeft, panel.OverlayOpacity = videoW, false, hostedHelpOpacity
 		panel.OverlayRows, panel.OverlayTextBackdrop = panel.Rows, true
-	}
-	// Com principal tocando, a prévia vai num quadro menor no canto oposto ao
-	// chat sobreposto. Sem principal, a prévia usa o painel inteiro (campos zero).
-	if m.previewActive() && m.mainVideoActive() {
-		if r, c, rows, cols, ok := previewOverlayRect(panel); ok {
-			panel.PreviewRow, panel.PreviewCol, panel.PreviewRows, panel.PreviewCols = r, c, rows, cols
-		}
 	}
 	return panel
 }
@@ -401,14 +402,20 @@ func previewOverlayRect(panel HostPanel) (row, col, rows, cols int, ok bool) {
 		return 0, 0, 0, 0, false
 	}
 	pad := hostedPreviewPad
-	innerCols := panel.Cols - 2*pad
+	// A área útil horizontal desconta o chat sobreposto: o PiP não pode
+	// invadir essas colunas nem caber só no padding.
+	freeCols := panel.Cols
+	if panel.OverlayCols > 0 {
+		freeCols -= panel.OverlayCols
+	}
+	innerCols := freeCols - 2*pad
 	innerRows := panel.Rows - 2*pad
 	if innerCols < hostedPreviewMinCols || innerRows < hostedPreviewMinRows {
 		return 0, 0, 0, 0, false
 	}
 	cols = min(max(innerCols/3, hostedPreviewMinCols), innerCols)
 	rows = min(max(innerRows/3, hostedPreviewMinRows), innerRows)
-	// Prefer a roughly 16:9 box in cell space (cells are ~2:1), then clamp.
+	// Prefere um quadro perto de 16:9 em células (~2:1) e limita ao espaço livre.
 	if want := max(cols*9/32, hostedPreviewMinRows); want < rows {
 		rows = want
 	}

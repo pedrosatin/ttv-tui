@@ -63,9 +63,30 @@ func TestPreviewOverlayRectRejectsNarrowPanel(t *testing.T) {
 	for _, panel := range []HostPanel{
 		{Row: 1, Col: 1, Rows: 20, Cols: 12, Visible: true}, // cols curtas
 		{Row: 1, Col: 1, Rows: 5, Cols: 80, Visible: true},  // rows curtas
+		// Chat sobreposto come a área útil: freeCols = 40-24 = 16, pad deixa 14.
+		{Row: 1, Col: 1, Rows: 20, Cols: 40, Visible: true, OverlayCols: 24},
 	} {
 		if _, _, _, _, ok := previewOverlayRect(panel); ok {
 			t.Fatalf("painel estreito aceitou o quadro da prévia: %+v", panel)
+		}
+	}
+}
+
+// Terminal estreito (34–41) sem lista e com chat sobreposto: o espaço livre
+// horizontal fica abaixo do mínimo do PiP + padding.
+func TestHostedPanelPreviewRectRejectedOnNarrowOverlayWithoutList(t *testing.T) {
+	for width := 34; width <= 41; width++ {
+		m := hostedModel(t, width, 30, true)
+		m.layout.showList = false
+		m.hosted.chatOverlay = true
+		m.player.state = PlayerStatePlaying
+		m.preview.state = PreviewStatePlaying
+		panel := m.hostedPanel()
+		if panel.PreviewCols != 0 || panel.PreviewRows != 0 {
+			t.Fatalf("largura %d sem lista: Preview* deveria ser rejeitado: %+v", width, panel)
+		}
+		if _, _, _, _, ok := previewOverlayRect(panel); ok {
+			t.Fatalf("largura %d: previewOverlayRect aceitou com overlay=%d cols=%d", width, panel.OverlayCols, panel.Cols)
 		}
 	}
 }
@@ -120,5 +141,35 @@ func TestHostedPanelPreviewRectWithSwappedOverlay(t *testing.T) {
 	wantCol := panel.Col + panel.Cols - hostedPreviewPad - panel.PreviewCols
 	if panel.PreviewCol != wantCol {
 		t.Fatalf("prévia deveria ficar à direita com overlay à esquerda: %+v", panel)
+	}
+
+	m.layout.helpVisible = true
+	withHelp := m.hostedPanel()
+	if withHelp.PreviewCol != panel.PreviewCol || withHelp.PreviewRow != panel.PreviewRow {
+		t.Fatalf("ajuda com lados trocados moveu o PiP: antes %+v depois %+v", panel, withHelp)
+	}
+}
+
+func TestHostedPanelPreviewRectWithoutChatOverlayKeepsCornerUnderHelp(t *testing.T) {
+	m := hostedModel(t, 212, 49, true)
+	m.hosted.chatOverlay = false
+	m.player.state = PlayerStatePlaying
+	m.preview.state = PreviewStatePlaying
+	panel := m.hostedPanel()
+	if panel.PreviewCols == 0 {
+		t.Fatalf("sem overlay de chat: HostPanel sem Preview*: %+v", panel)
+	}
+	wantCol := panel.Col + panel.Cols - hostedPreviewPad - panel.PreviewCols
+	if panel.PreviewCol != wantCol {
+		t.Fatalf("sem overlay: prévia deveria ficar no canto superior direito: %+v", panel)
+	}
+
+	m.layout.helpVisible = true
+	withHelp := m.hostedPanel()
+	if withHelp.PreviewCol != panel.PreviewCol || withHelp.PreviewRow != panel.PreviewRow {
+		t.Fatalf("ajuda sem chat overlay moveu o PiP: antes %+v depois %+v", panel, withHelp)
+	}
+	if withHelp.OverlayCols != withHelp.Cols {
+		t.Fatalf("ajuda deveria cobrir o vídeo: %+v", withHelp)
 	}
 }

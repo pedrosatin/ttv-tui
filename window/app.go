@@ -106,7 +106,8 @@ type app struct {
 
 	tuiDirty     atomic.Bool
 	tuiPending   atomic.Bool
-	videoDirty   bool
+	mainDirty    bool // quadro novo da sessão principal
+	previewDirty bool // quadro novo da prévia (PiP)
 	panelChanged bool
 	layoutDirty  bool
 	lastPresent  time.Time
