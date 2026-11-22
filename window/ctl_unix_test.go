@@ -253,18 +253,43 @@ func TestValidIPCForRole(t *testing.T) {
 		t.Fatal("symlinked preview session accepted")
 	}
 
-	// Fallback em temp privado vale para os dois papéis.
-	fbDir, err := os.MkdirTemp(os.TempDir(), "ttv-tui-2-")
+	// Fallback em temp privado exige cruzamento caminho↔papel.
+	fbMainDir, err := os.MkdirTemp(os.TempDir(), "ttv-tui-2-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = os.RemoveAll(fbDir) }()
-	if err := os.Chmod(fbDir, 0o700); err != nil {
+	defer func() { _ = os.RemoveAll(fbMainDir) }()
+	if err := os.Chmod(fbMainDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	fbIPC := filepath.Join(fbDir, "i")
-	if !validIPCForRole(fbIPC, rolePreview) || !validIPCForRole(fbIPC, roleMain) {
-		t.Fatalf("fallback IPC rejected: %s", fbIPC)
+	fbMainIPC := filepath.Join(fbMainDir, "i")
+	if !validIPCForRole(fbMainIPC, roleMain) {
+		t.Fatalf("main fallback IPC rejected: %s", fbMainIPC)
+	}
+	if validIPCForRole(fbMainIPC, rolePreview) {
+		t.Fatalf("main fallback IPC accepted for preview role: %s", fbMainIPC)
+	}
+
+	fbPreviewDir, err := os.MkdirTemp(os.TempDir(), "ttv-tui-preview-2-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(fbPreviewDir) }()
+	if err := os.Chmod(fbPreviewDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fbPreviewIPC := filepath.Join(fbPreviewDir, "i")
+	if !validIPCForRole(fbPreviewIPC, rolePreview) {
+		t.Fatalf("preview fallback IPC rejected: %s", fbPreviewIPC)
+	}
+	if validIPCForRole(fbPreviewIPC, roleMain) {
+		t.Fatalf("preview fallback IPC accepted for main role: %s", fbPreviewIPC)
+	}
+
+	// Nome de fallback dentro do runtimeDir não é aceito fora do temp privado.
+	squatPreview := mustPrivateDir(t, filepath.Join(runtimeDir, "ttv-tui-preview-2-999"))
+	if validIPCForRole(filepath.Join(squatPreview, "i"), roleMain) || validIPCForRole(filepath.Join(squatPreview, "i"), rolePreview) {
+		t.Fatalf("fallback name inside runtimeDir accepted: %s", squatPreview)
 	}
 }
 

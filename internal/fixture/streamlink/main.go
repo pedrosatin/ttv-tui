@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/pedrosatin/ttv-tui/internal/fixture"
 )
@@ -52,6 +55,47 @@ func run(args []string) error {
 		return err
 	}
 	fmt.Printf("[cli][info] Found matching plugin twitch for URL %s\n", url)
+
+	// Trata SIGTERM/SIGINT como o streamlink real: depois de abrir o player,
+	// repassa o sinal ao filho e só sai depois de recolhê-lo com Wait, evitando
+	// órfão zumbi no grupo de processos em contêineres cujo PID 1 não recolhe.
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	cmd := exec.Command(player, append(argv, "-")...)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("pipe do player: %w", err)
+	}
+
+	var childMu sync.Mutex
+	var child *os.Process
+	var waited bool
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case sig := <-sigCh:
+				childMu.Lock()
+				p, w := child, waited
+				childMu.Unlock()
+				if w {
+					return
+				}
+				if p == nil {
+					os.Exit(0)
+				}
+				_ = in.Close()
+				_ = p.Signal(sig)
+			}
+		}
+	}()
+
 	// OpenGateEnv imita o streamlink que demora a achar a live: o player só
 	// abre quando o cenário libera o gate.
 	if gate := os.Getenv(fixture.OpenGateEnv); gate != "" {
@@ -63,15 +107,14 @@ func run(args []string) error {
 	fmt.Println("[cli][info] Opening stream: best (fixture)")
 	fmt.Printf("[cli][info] Starting player: %s\n", player)
 
-	cmd := exec.Command(player, append(argv, "-")...)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	in, err := cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("pipe do player: %w", err)
-	}
+	childMu.Lock()
 	if err := cmd.Start(); err != nil {
+		childMu.Unlock()
 		return fmt.Errorf("abrir o player: %w", err)
 	}
+	child = cmd.Process
+	childMu.Unlock()
+
 	// O player fechar o pipe encerra a escrita; o erro dela não importa.
 	go func() {
 		_ = fixture.WriteClip(in, 0)
@@ -79,6 +122,9 @@ func run(args []string) error {
 	}()
 	// Player encerrado por sinal ou com erro é o fim normal de uma sessão.
 	_ = cmd.Wait()
+	childMu.Lock()
+	waited = true
+	childMu.Unlock()
 	fmt.Println("[cli][info] Closing currently open stream...")
 	return nil
 }

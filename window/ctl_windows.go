@@ -50,16 +50,42 @@ func readStart(c *net.UnixConn) (ctlMsg, error) {
 	if err != nil {
 		return ctlMsg{}, err
 	}
-	if !validStreamPipe(req.Pipe) || !validIPCName(req.IPC) {
+	if !validStreamPipeForRole(req.Pipe, role) || !validIPCNameForRole(req.IPC, role) {
 		return ctlMsg{}, fmt.Errorf("pipe fora do runtime esperado")
 	}
 	return ctlMsg{kind: "start", role: role, ipc: req.IPC, fd: -1, url: req.Pipe, conn: c}, nil
 }
 
 func validStreamPipe(name string) bool {
-	return strings.HasPrefix(name, `\\.\pipe\ttv-win-stream-`) && !strings.ContainsAny(strings.TrimPrefix(name, `\\.\pipe\ttv-win-stream-`), `/\`)
+	return validStreamPipeForRole(name, roleMain)
+}
+
+func validStreamPipeForRole(name, role string) bool {
+	const prefix = `\\.\pipe\ttv-win-stream-`
+	rest, ok := strings.CutPrefix(name, prefix)
+	if !ok || rest == "" || strings.ContainsAny(rest, `/\`) {
+		return false
+	}
+	if role == rolePreview {
+		tail, ok := strings.CutPrefix(rest, "preview-")
+		return ok && tail != ""
+	}
+	return !strings.HasPrefix(rest, "preview-")
 }
 
 func validIPCName(name string) bool {
-	return strings.HasPrefix(name, "ttv-tui-") && !strings.ContainsAny(name, `/\`)
+	return validIPCNameForRole(name, roleMain)
+}
+
+func validIPCNameForRole(name, role string) bool {
+	const prefix = "ttv-tui-"
+	rest, ok := strings.CutPrefix(name, prefix)
+	if !ok || rest == "" || strings.ContainsAny(name, `/\`) {
+		return false
+	}
+	if role == rolePreview {
+		tail, ok := strings.CutPrefix(rest, "preview-")
+		return ok && tail != ""
+	}
+	return !strings.HasPrefix(rest, "preview-")
 }

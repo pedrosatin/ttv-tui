@@ -9,21 +9,22 @@ import (
 )
 
 const (
-	roleMain    = "main"
-	rolePreview = "preview"
+	roleMain      = "main"
+	rolePreview   = "preview"
+	windowRoleEnv = "TTV_WINDOW_ROLE"
 )
 
-// parseShimArgs extrai o caminho do IPC e o papel da sessão (principal ou
-// prévia) a partir dos argumentos que o streamlink repassou ao shim.
-func parseShimArgs(args []string) (ipc, role string) {
-	role = roleMain
+// parseShimConfig extrai o caminho do IPC dos argumentos do shim e o papel
+// explícito da sessão via TTV_WINDOW_ROLE (ausência = principal).
+func parseShimConfig(args []string, getenv func(string) string) (ipc, role string) {
 	for _, a := range args {
 		if v, ok := strings.CutPrefix(a, "--input-ipc-server="); ok {
 			ipc = v
 		}
-		if a == "--focus-on=never" || strings.HasPrefix(a, "--autofit=") {
-			role = rolePreview
-		}
+	}
+	role = roleMain
+	if getenv != nil && getenv(windowRoleEnv) == rolePreview {
+		role = rolePreview
 	}
 	return ipc, role
 }
@@ -52,7 +53,7 @@ func findMpv(path, skip string) string {
 // enquanto a sessão existir: o streamlink e o ttv-tui acompanham este processo
 // como se fosse o player.
 func shimMain() {
-	ipc, role := parseShimArgs(os.Args[1:])
+	ipc, role := parseShimConfig(os.Args[1:], os.Getenv)
 	sock := os.Getenv("TTV_WINDOW_SOCK")
 	if ipc == "" || sock == "" {
 		skip := ""

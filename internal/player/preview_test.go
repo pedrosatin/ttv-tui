@@ -50,6 +50,16 @@ func TestPreviewCommandArgv(t *testing.T) {
 	if strings.Contains(playerArgs, "--input-conf=") {
 		t.Fatalf("preview must omit input.conf, got %q", playerArgs)
 	}
+	if !slices.Contains(cmd.Env, windowRoleEnv+"="+windowRolePreview) {
+		t.Fatalf("preview cmd.Env missing %s=%s", windowRoleEnv, windowRolePreview)
+	}
+
+	// Principal não herda TTV_WINDOW_ROLE=preview mesmo que esteja no ambiente ou s.env.
+	t.Setenv(windowRoleEnv, windowRolePreview)
+	mainCmd := (streamlinkInvocation{bin: "streamlink", mpv: "mpv", env: []string{windowRoleEnv + "=preview"}}).command(testTarget("gaules"), layout)
+	if hasEnvKey(mainCmd.Env, windowRoleEnv) {
+		t.Fatalf("main cmd.Env inherited %s: %v", windowRoleEnv, mainCmd.Env)
+	}
 }
 
 func TestNewPreviewNestsRuntimeAndRegistry(t *testing.T) {

@@ -96,11 +96,14 @@ func validIPCForRole(ipc, role string) bool {
 	}
 	dir := filepath.Dir(ipc)
 	// The player falls back to a private temp directory when the runtime
-	// cannot hold a Unix socket. Its name carries the generation and a random decimal suffix.
-	parts := strings.Split(filepath.Base(dir), "-")
-	if len(parts) == 4 && parts[0] == "ttv" && parts[1] == "tui" {
-		gen, genErr := strconv.ParseUint(parts[2], 10, 64)
-		_, suffixErr := strconv.ParseUint(parts[3], 10, 64)
+	// cannot hold a Unix socket. Its name carries the role marker (for preview),
+	// generation, and a random decimal suffix.
+	if genPart, suffixPart, fbRole, isFallback := parseFallbackDir(filepath.Base(dir)); isFallback {
+		if fbRole != role {
+			return false
+		}
+		gen, genErr := strconv.ParseUint(genPart, 10, 64)
+		_, suffixErr := strconv.ParseUint(suffixPart, 10, 64)
 		if genErr != nil || suffixErr != nil || gen == 0 {
 			return false
 		}
@@ -146,4 +149,16 @@ func privateIPCDir(path string) bool {
 	}
 	stat, ok := st.Sys().(*syscall.Stat_t)
 	return ok && stat.Uid == uint32(os.Geteuid())
+}
+
+func parseFallbackDir(base string) (gen, suffix, role string, ok bool) {
+	parts := strings.Split(base, "-")
+	switch {
+	case len(parts) == 4 && parts[0] == "ttv" && parts[1] == "tui":
+		return parts[2], parts[3], roleMain, true
+	case len(parts) == 5 && parts[0] == "ttv" && parts[1] == "tui" && parts[2] == "preview":
+		return parts[3], parts[4], rolePreview, true
+	default:
+		return "", "", "", false
+	}
 }

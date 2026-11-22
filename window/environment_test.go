@@ -19,7 +19,7 @@ func TestFontPoints(t *testing.T) {
 }
 
 func TestTUIEnvironment(t *testing.T) {
-	got := tuiEnvironment([]string{"HOME=/isolated", "TTV_WINDOW_TEST=/test", "PATH=/bin"})
+	got := tuiEnvironment([]string{"HOME=/isolated", "TTV_WINDOW_TEST=/test", "TTV_WINDOW_ROLE=preview", "PATH=/bin"})
 	if !reflect.DeepEqual(got, []string{"HOME=/isolated", "PATH=/bin"}) {
 		t.Fatal(got)
 	}

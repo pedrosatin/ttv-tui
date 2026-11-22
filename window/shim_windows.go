@@ -81,7 +81,11 @@ func sendShimStream(c *net.UnixConn, ipc, role string) error {
 	if peer.PID == 0 {
 		return fmt.Errorf("PID da janela ausente")
 	}
-	name := fmt.Sprintf(`\\.\pipe\ttv-win-stream-%d-%d`, os.Getpid(), time.Now().UnixNano())
+	prefix := `\\.\pipe\ttv-win-stream-`
+	if normalizeRole(role) == rolePreview {
+		prefix = `\\.\pipe\ttv-win-stream-preview-`
+	}
+	name := fmt.Sprintf("%s%d-%d", prefix, os.Getpid(), time.Now().UnixNano())
 	l, err := listenStreamPipe(name)
 	if err != nil {
 		return err

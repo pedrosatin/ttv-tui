@@ -280,7 +280,7 @@ func TestShimStreamWindowPID(t *testing.T) {
 			os.Stdin = empty
 			defer func() { os.Stdin = stdin; _ = empty.Close() }()
 			done := make(chan error, 1)
-			go func() { done <- sendShimStream(client, "ttv-tui-test") }()
+			go func() { done <- sendShimStream(client, "ttv-tui-test", roleMain) }()
 			defer func() { _ = window.Close(); _ = client.Close(); <-done }()
 			if err := json.NewEncoder(window).Encode(map[string]uint32{"pid": pid}); err != nil {
 				t.Fatal(err)
@@ -296,12 +296,13 @@ func TestShimStreamWindowPID(t *testing.T) {
 			var request struct {
 				IPC  string
 				Pipe string
+				Role string
 			}
 			if err := json.NewDecoder(window).Decode(&request); err != nil {
 				t.Fatal(err)
 			}
-			if request.IPC != "ttv-tui-test" {
-				t.Fatalf("IPC: %q", request.IPC)
+			if request.IPC != "ttv-tui-test" || request.Role != roleMain {
+				t.Fatalf("IPC/Role: %+v", request)
 			}
 			c := openStreamOnce(t, request.Pipe)
 			defer c.Close()

@@ -58,43 +58,58 @@ func TestCalledAsMpv(t *testing.T) {
 	}
 }
 
-func TestParseShimArgsRole(t *testing.T) {
+func TestParseShimConfigRole(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     []string
+		roleEnv  string
 		wantIPC  string
 		wantRole string
 	}{
 		{
-			name:     "principal padrão",
+			name:     "principal padrão sem sinal",
 			args:     []string{"--no-config", "--input-ipc-server=/run/ttv/i"},
 			wantIPC:  "/run/ttv/i",
 			wantRole: roleMain,
 		},
 		{
-			name:     "prévia com focus-on e autofit",
-			args:     []string{"--input-ipc-server=/run/ttv/preview/i", "--mute=yes", "--autofit=480x270", "--focus-on=never"},
-			wantIPC:  "/run/ttv/preview/i",
-			wantRole: rolePreview,
+			name:     "principal com autofit e focus-on continua principal",
+			args:     []string{"--input-ipc-server=/run/ttv/i", "--autofit=480x270", "--focus-on=never"},
+			wantIPC:  "/run/ttv/i",
+			wantRole: roleMain,
 		},
 		{
-			name:     "prévia só com autofit",
-			args:     []string{"--autofit=480x270", "--input-ipc-server=ttv-tui-1-abc"},
-			wantIPC:  "ttv-tui-1-abc",
+			name:     "principal com sinal desconhecido",
+			args:     []string{"--input-ipc-server=/run/ttv/i"},
+			roleEnv:  "other",
+			wantIPC:  "/run/ttv/i",
+			wantRole: roleMain,
+		},
+		{
+			name:     "prévia pelo sinal explícito",
+			args:     []string{"--input-ipc-server=/run/ttv/preview/i", "--mute=yes"},
+			roleEnv:  rolePreview,
+			wantIPC:  "/run/ttv/preview/i",
 			wantRole: rolePreview,
 		},
 		{
 			name:     "sem ipc como versão",
 			args:     []string{"--version"},
+			roleEnv:  rolePreview,
 			wantIPC:  "",
-			wantRole: roleMain,
+			wantRole: rolePreview,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotIPC, gotRole := parseShimArgs(tc.args)
+			gotIPC, gotRole := parseShimConfig(tc.args, func(k string) string {
+				if k == windowRoleEnv {
+					return tc.roleEnv
+				}
+				return ""
+			})
 			if gotIPC != tc.wantIPC || gotRole != tc.wantRole {
-				t.Fatalf("parseShimArgs(%v) = (%q, %q), quero (%q, %q)", tc.args, gotIPC, gotRole, tc.wantIPC, tc.wantRole)
+				t.Fatalf("parseShimConfig(%v, %q) = (%q, %q), quero (%q, %q)", tc.args, tc.roleEnv, gotIPC, gotRole, tc.wantIPC, tc.wantRole)
 			}
 		})
 	}

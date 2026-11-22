@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // PreviewQuality is the streamlink quality for a preview session: the lowest
@@ -77,8 +78,41 @@ func (s streamlinkInvocation) previewCommand(target Target, layout sessionLayout
 	)
 	cmd := exec.Command(s.bin, args...)
 	cmd.Dir = layout.Dir
-	if len(s.env) > 0 {
-		cmd.Env = append(os.Environ(), s.env...)
-	}
+	cmd.Env = envWithRole(os.Environ(), s.env, windowRolePreview)
 	return cmd
+}
+
+const (
+	windowRoleEnv     = "TTV_WINDOW_ROLE"
+	windowRolePreview = "preview"
+)
+
+func hasEnvKey(env []string, key string) bool {
+	for _, entry := range env {
+		k, _, _ := strings.Cut(entry, "=")
+		if strings.EqualFold(k, key) {
+			return true
+		}
+	}
+	return false
+}
+
+func envWithoutKey(env []string, key string) []string {
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		k, _, _ := strings.Cut(entry, "=")
+		if !strings.EqualFold(k, key) {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
+
+func envWithRole(base, extra []string, role string) []string {
+	out := envWithoutKey(base, windowRoleEnv)
+	out = append(out, envWithoutKey(extra, windowRoleEnv)...)
+	if role != "" {
+		out = append(out, windowRoleEnv+"="+role)
+	}
+	return out
 }
