@@ -7,8 +7,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // assertPrivateMode checks the 0600 mode. Windows has no such bits: Go reports
@@ -462,5 +465,142 @@ func TestKickBrowserRoundTrip(t *testing.T) {
 	}
 	if _, err := parseTOML("kick_browser = sem aspas\n"); err == nil {
 		t.Error("unquoted kick_browser: want a parse error")
+	}
+}
+
+func TestUpdateConcurrentPreservesBothChanges(t *testing.T) {
+	for round := 0; round < 15; round++ {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := SaveTo(path, Config{Language: "en"}); err != nil {
+			t.Fatal(err)
+		}
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			err := Update(path, func(c *Config) error {
+				time.Sleep(5 * time.Millisecond)
+				c.AccessToken = "tokennovo123456"
+				c.Username = "pedro"
+				return nil
+			})
+			if err != nil {
+				t.Errorf("round %d: update token: %v", round, err)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			err := Update(path, func(c *Config) error {
+				time.Sleep(5 * time.Millisecond)
+				c.FilterLanguages = []string{"pt", "en"}
+				c.MinViewers = 250
+				c.ListColumns = 42
+				return nil
+			})
+			if err != nil {
+				t.Errorf("round %d: update filtros: %v", round, err)
+			}
+		}()
+		close(start)
+		wg.Wait()
+
+		got, err := LoadFrom(path)
+		if err != nil {
+			t.Fatalf("round %d: LoadFrom: %v", round, err)
+		}
+		if got.AccessToken != "tokennovo123456" || got.Username != "pedro" {
+			t.Fatalf("round %d: perdeu credenciais: %+v", round, got)
+		}
+		if !slices.Equal(got.FilterLanguages, []string{"pt", "en"}) || got.MinViewers != 250 || got.ListColumns != 42 {
+			t.Fatalf("round %d: perdeu ajustes: %+v", round, got)
+		}
+	}
+}
+
+func TestUpdateTwoProcessesPreservesBothChanges(t *testing.T) {
+	if role := os.Getenv("TTV_CFG_HELPER"); role != "" {
+		var b [1]byte
+		if _, err := os.Stdin.Read(b[:]); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.Stdin.Close()
+		path := os.Getenv("TTV_CFG_PATH")
+		err := Update(path, func(c *Config) error {
+			time.Sleep(25 * time.Millisecond)
+			switch role {
+			case "login":
+				c.AccessToken = "tokenprocesso123"
+				c.Username = "pedro"
+			case "settings":
+				c.FilterLanguages = []string{"pt"}
+				c.MinViewers = 500
+				c.ChatColumns = 55
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Update(%s): %v", role, err)
+		}
+		return
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := SaveTo(path, Config{Language: "pt-BR"}); err != nil {
+		t.Fatal(err)
+	}
+
+	type child struct {
+		cmd   *exec.Cmd
+		start *os.File
+	}
+	children := make([]child, 0, 2)
+	for _, role := range []string{"login", "settings"} {
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(os.Args[0], "-test.run=^TestUpdateTwoProcessesPreservesBothChanges$")
+		cmd.Env = append(os.Environ(),
+			"XDG_CONFIG_HOME="+t.TempDir(),
+			"XDG_STATE_HOME="+t.TempDir(),
+			"TTV_CFG_HELPER="+role,
+			"TTV_CFG_PATH="+path,
+		)
+		cmd.Stdin = r
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		_ = r.Close()
+		children = append(children, child{cmd, w})
+	}
+	for _, c := range children {
+		_, err := c.start.Write([]byte{1})
+		_ = c.start.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range children {
+		if err := c.cmd.Wait(); err != nil {
+			t.Fatalf("processo filho falhou: %v", err)
+		}
+	}
+
+	got, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if got.Language != "pt-BR" || got.AccessToken != "tokenprocesso123" || got.Username != "pedro" {
+		t.Fatalf("perdeu login concorrente: %+v", got)
+	}
+	if !slices.Equal(got.FilterLanguages, []string{"pt"}) || got.MinViewers != 500 || got.ChatColumns != 55 {
+		t.Fatalf("perdeu ajustes concorrentes: %+v", got)
 	}
 }

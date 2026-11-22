@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -765,6 +766,77 @@ func TestRunVideoHostChildDoesNotSecure(t *testing.T) {
 		info, err := os.Stat(path)
 		if err != nil || info.Mode().Perm() != 0o644 {
 			t.Fatal("filho restringiu o config novamente")
+		}
+	}
+}
+
+func TestConcurrentLoginAndSettingsPreserveBothChanges(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	for round := 0; round < 10; round++ {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := config.SaveTo(path, config.Config{Language: "en"}); err != nil {
+			t.Fatal(err)
+		}
+		w := &configWriter{path: path, existed: true}
+		secret := fmt.Sprintf("concurrenttokensecret%02dabcdef", round)
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			<-start
+			var out bytes.Buffer
+			err := RunLogin(context.Background(), LoginOptions{
+				FromBrowser: true,
+				ConfigPath:  path,
+				Input:       bytes.NewBuffer(nil),
+				Output:      &out,
+				ListProfiles: func() ([]auth.Profile, error) {
+					return []auth.Profile{{Browser: auth.BrowserBrave, Name: "Default", Family: "chromium", CookiesPath: "/fake/Cookies"}}, nil
+				},
+				ExtractToken: func(auth.Profile) (string, error) {
+					return secret, nil
+				},
+				Validate: func(context.Context, string) (auth.Validation, error) {
+					return auth.Validation{Login: "pedrosatin", Scopes: []string{"chat:read", "chat:edit"}, ExpiresIn: 3600}, nil
+				},
+			})
+			if err != nil {
+				t.Errorf("round %d: RunLogin: %v", round, err)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			if err := w.saveColumns(36, 52, true, true, 65, ui.OverlayPreferences{Rows: 12, TextBackdrop: true, HeightKeysSeen: true}); err != nil {
+				t.Errorf("round %d: saveColumns: %v", round, err)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			if err := w.saveFilters([]string{"pt"}, 300); err != nil {
+				t.Errorf("round %d: saveFilters: %v", round, err)
+			}
+		}()
+		close(start)
+		wg.Wait()
+
+		got, err := config.LoadFrom(path)
+		if err != nil {
+			t.Fatalf("round %d: LoadFrom: %v", round, err)
+		}
+		if got.AccessToken != secret || got.Username != "pedrosatin" {
+			t.Fatalf("round %d: perdeu login: username=%q token_match=%v", round, got.Username, got.AccessToken == secret)
+		}
+		if got.ListColumns != 36 || got.ChatColumns != 52 || !got.ChatOverlay || !got.PanelsSwapped || got.ChatOverlayOpacity != 65 || got.ChatOverlayRows != 12 || got.ChatOverlayBackdrop != "text" || !got.ChatOverlayHeightKeysSeen {
+			t.Fatalf("round %d: perdeu layout: %+v", round, got)
+		}
+		if !slices.Equal(got.FilterLanguages, []string{"pt"}) || got.MinViewers != 300 {
+			t.Fatalf("round %d: perdeu filtros: %+v", round, got)
 		}
 	}
 }

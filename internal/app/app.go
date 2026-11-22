@@ -327,15 +327,14 @@ func persistLang(lang string, cfg *config.Config, cfgPath string) error {
 	return rewriteConfig(cfgPath, func(c *config.Config) { c.Language = norm })
 }
 
-// rewriteConfig relê o config antes de gravar para preservar um login concorrente.
-// Configs ilegíveis ou inválidos são mantidos como estão.
+// rewriteConfig relê e grava o config sob o mesmo lock exclusivo usado pelo estado,
+// preservando gravações concorrentes (login, ajustes). Configs ilegíveis ou
+// inválidos são mantidos como estão.
 func rewriteConfig(path string, change func(*config.Config)) error {
-	cfg, err := config.LoadFrom(path)
-	if err != nil {
-		return err
-	}
-	change(&cfg)
-	return config.SaveTo(path, cfg)
+	return config.Update(path, func(cfg *config.Config) error {
+		change(cfg)
+		return nil
+	})
 }
 
 func resolveStatePath(path string) (string, error) {
@@ -543,9 +542,14 @@ type configWriter struct {
 func (w *configWriter) update(change func(*config.Config)) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	_, statErr := os.Stat(w.path)
-	removed := w.existed && errors.Is(statErr, os.ErrNotExist)
-	if err := rewriteConfig(w.path, change); err != nil {
+	removed := false
+	err := config.Update(w.path, func(c *config.Config) error {
+		_, statErr := os.Stat(w.path)
+		removed = w.existed && errors.Is(statErr, os.ErrNotExist)
+		change(c)
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 	w.existed = true

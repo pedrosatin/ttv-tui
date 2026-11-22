@@ -146,36 +146,42 @@ func RunLogin(ctx context.Context, opts LoginOptions) error {
 		_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.warn_expiry"), validation.ExpiresIn))
 	}
 
-	existingCfg, err = config.LoadFrom(cfgPath)
-	if err != nil {
-		return fmt.Errorf(cat.T("login.err_read_config"), withRecoveryHint(cat, err))
-	}
-	if existingCfg.HasToken() {
-		_, _ = fmt.Fprintln(out, cat.T("login.warn_overwrite"))
-	}
-
-	if opts.Lang != "" {
-		normFlag := i18n.NormalizeLocale(opts.Lang)
-		if normFlag != "" {
-			existingCfg.Language = normFlag
+	var (
+		hadToken bool
+		username string
+	)
+	notice, err := config.UpdateWithNotice(cfgPath, func(cfg *config.Config) error {
+		hadToken = cfg.HasToken()
+		if opts.Lang != "" {
+			normFlag := i18n.NormalizeLocale(opts.Lang)
+			if normFlag != "" {
+				cfg.Language = normFlag
+			}
 		}
-	}
 
-	if validation.Login != "" {
-		existingCfg.Username = validation.Login
-	} else if importedUsername != "" && existingCfg.Username == "" {
-		existingCfg.Username = importedUsername
-	}
-	existingCfg.AccessToken = token
-
-	notice, err := config.SaveToWithNotice(cfgPath, existingCfg)
+		if validation.Login != "" {
+			cfg.Username = validation.Login
+		} else if importedUsername != "" && cfg.Username == "" {
+			cfg.Username = importedUsername
+		}
+		cfg.AccessToken = token
+		username = cfg.Username
+		return nil
+	})
 	if err != nil {
+		var readErr *config.ReadError
+		if errors.As(err, &readErr) {
+			return fmt.Errorf(cat.T("login.err_read_config"), withRecoveryHint(cat, readErr.Err))
+		}
 		return fmt.Errorf(cat.T("login.err_save_config"), termtext.Line(cfgPath), err)
+	}
+	if hadToken {
+		_, _ = fmt.Fprintln(out, cat.T("login.warn_overwrite"))
 	}
 
 	logConfigPermissions(out, cfgPath, notice, cat)
 
-	_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.success"), termtext.Line(existingCfg.Username), termtext.Line(cfgPath)))
+	_, _ = fmt.Fprintln(out, fmt.Sprintf(cat.T("login.success"), termtext.Line(username), termtext.Line(cfgPath)))
 	return nil
 }
 

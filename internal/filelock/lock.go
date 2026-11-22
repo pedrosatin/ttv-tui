@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -20,6 +21,29 @@ const DefaultStaleAge = time.Minute
 const DeletePendingWait = 3 * time.Second
 
 const deletePendingPoll = 25 * time.Millisecond
+
+var (
+	lockMuMapMu sync.Mutex
+	lockMuMap   = map[string]*sync.Mutex{}
+	tempSeq     atomic.Uint64
+)
+
+func pathMutex(lockPath string) *sync.Mutex {
+	key := filepath.Clean(lockPath)
+	lockMuMapMu.Lock()
+	defer lockMuMapMu.Unlock()
+	mu, ok := lockMuMap[key]
+	if !ok {
+		mu = &sync.Mutex{}
+		lockMuMap[key] = mu
+	}
+	return mu
+}
+
+func uniqueTempPath(lockPath, kind string) string {
+	seq := tempSeq.Add(1)
+	return fmt.Sprintf("%s.%s.%d.%d.%016x", lockPath, kind, os.Getpid(), seq, rand.Uint64())
+}
 
 // errDeletePending marks a lock name that is still held by a file being deleted;
 // it wraps the real error so a wait that runs out reports it.
@@ -154,55 +178,195 @@ func startHeartbeat(lockPath string, initialInfo os.FileInfo, release func() err
 }
 
 func tryAcquire(lockPath string, staleAge time.Duration) (func() error, os.FileInfo, error) {
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err == nil {
-		info, statErr := f.Stat()
-		closeErr := f.Close()
-		if err := errors.Join(statErr, closeErr); err != nil {
-			return nil, nil, errors.Join(fmt.Errorf("close lock: %w", err), os.Remove(lockPath))
-		}
-		return func() error {
-			current, err := os.Stat(lockPath)
-			if errors.Is(err, os.ErrNotExist) {
-				return nil
-			}
-			if err != nil {
-				return fmt.Errorf("stat lock: %w", err)
-			}
-			// Do not remove a successor's lock after this owner's lease expired.
-			if !os.SameFile(info, current) {
-				return nil
-			}
-			if err := os.Remove(lockPath); err != nil {
-				return fmt.Errorf("release lock: %w", err)
-			}
-			return nil
-		}, info, nil
-	}
-
-	if isDeletePending(err) {
-		return nil, nil, errDeletePending{fmt.Errorf("create lock: %w", err)}
-	}
+	release, info, err := createLockFile(lockPath)
 	if !errors.Is(err, os.ErrExist) {
-		return nil, nil, fmt.Errorf("create lock: %w", err)
+		return release, info, err
 	}
 
-	info, err := os.Stat(lockPath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	info, err = os.Stat(lockPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil, os.ErrExist
+	}
+	if err != nil {
 		if isDeletePending(err) {
 			return nil, nil, errDeletePending{fmt.Errorf("stat lock: %w", err)}
 		}
 		return nil, nil, fmt.Errorf("stat lock: %w", err)
 	}
-	if err == nil && time.Since(info.ModTime()) > staleAge {
-		// Recheck identity so competing stale-lock recovery does not knowingly
-		// remove a different owner's newly acquired lock.
-		current, statErr := os.Stat(lockPath)
-		if statErr == nil && os.SameFile(info, current) {
-			if err := os.Remove(lockPath); err != nil && !errors.Is(err, os.ErrNotExist) && !isDeletePending(err) {
-				return nil, nil, fmt.Errorf("remove stale lock: %w", err)
-			}
-		}
+	if time.Since(info.ModTime()) > staleAge {
+		return recoverStaleLock(lockPath, info, staleAge)
 	}
 	return nil, nil, os.ErrExist
+}
+
+func createLockFile(lockPath string) (func() error, os.FileInfo, error) {
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		if isDeletePending(err) {
+			return nil, nil, errDeletePending{fmt.Errorf("create lock: %w", err)}
+		}
+		if isSharingViolation(err) || errors.Is(err, os.ErrExist) {
+			return nil, nil, os.ErrExist
+		}
+		return nil, nil, fmt.Errorf("create lock: %w", err)
+	}
+
+	info, statErr := f.Stat()
+	closeErr := f.Close()
+	if err := errors.Join(statErr, closeErr); err != nil {
+		return nil, nil, errors.Join(fmt.Errorf("close lock: %w", err), os.Remove(lockPath))
+	}
+	return makeRelease(lockPath, info), info, nil
+}
+
+func makeRelease(lockPath string, info os.FileInfo) func() error {
+	var once sync.Once
+	var releaseErr error
+	return func() error {
+		once.Do(func() {
+			mu := pathMutex(lockPath)
+			mu.Lock()
+			defer mu.Unlock()
+
+			var f *os.File
+			deadline := time.Now().Add(DeletePendingWait)
+			for {
+				var err error
+				f, err = openLockExisting(lockPath)
+				if err == nil {
+					break
+				}
+				if errors.Is(err, os.ErrNotExist) {
+					return
+				}
+				if (isSharingViolation(err) || isDeletePending(err)) && time.Now().Before(deadline) {
+					time.Sleep(deletePendingPoll)
+					continue
+				}
+				releaseErr = fmt.Errorf("open lock: %w", err)
+				return
+			}
+
+			if err := lockFile(f); err != nil {
+				_ = f.Close()
+				releaseErr = fmt.Errorf("lock for release: %w", err)
+				return
+			}
+
+			fInfo, err := f.Stat()
+			if err != nil {
+				_ = unlockAndClose(f)
+				releaseErr = fmt.Errorf("stat lock: %w", err)
+				return
+			}
+			current, err := os.Stat(lockPath)
+			if errors.Is(err, os.ErrNotExist) {
+				_ = unlockAndClose(f)
+				return
+			}
+			if err != nil {
+				_ = unlockAndClose(f)
+				releaseErr = fmt.Errorf("stat lock: %w", err)
+				return
+			}
+			// Do not remove a successor's lock after this owner's lease expired.
+			if !os.SameFile(info, fInfo) || !os.SameFile(info, current) {
+				_ = unlockAndClose(f)
+				return
+			}
+
+			tmpPath := uniqueTempPath(lockPath, "rel")
+			if err := os.Rename(lockPath, tmpPath); err != nil {
+				_ = unlockAndClose(f)
+				if errors.Is(err, os.ErrNotExist) {
+					return
+				}
+				releaseErr = fmt.Errorf("release lock: %w", err)
+				return
+			}
+			_ = unlockAndClose(f)
+			if err := os.Remove(tmpPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				releaseErr = fmt.Errorf("release lock: %w", err)
+			}
+		})
+		return releaseErr
+	}
+}
+
+// recoverStaleLock serializa a recuperação do lock velho com um lock do SO no
+// próprio descritor aberto e move o arquivo para um nome único antes de remover.
+// Enquanto o arquivo renomeado existe, o sucessor novo recebe um inode próprio
+// e nenhum processo atrasado remove o lock recém-criado.
+func recoverStaleLock(lockPath string, info os.FileInfo, staleAge time.Duration) (func() error, os.FileInfo, error) {
+	mu := pathMutex(lockPath)
+	if !mu.TryLock() {
+		return nil, nil, os.ErrExist
+	}
+	defer mu.Unlock()
+
+	f, err := openLockExisting(lockPath)
+	if errors.Is(err, os.ErrNotExist) || isSharingViolation(err) {
+		return nil, nil, os.ErrExist
+	}
+	if isDeletePending(err) {
+		return nil, nil, errDeletePending{fmt.Errorf("open stale lock: %w", err)}
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("open stale lock: %w", err)
+	}
+
+	locked, err := tryLockFile(f)
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, fmt.Errorf("lock stale lock: %w", err)
+	}
+	if !locked {
+		_ = f.Close()
+		return nil, nil, os.ErrExist
+	}
+
+	fInfo, err := f.Stat()
+	if err != nil {
+		_ = unlockAndClose(f)
+		return nil, nil, fmt.Errorf("stat stale lock: %w", err)
+	}
+	if time.Since(fInfo.ModTime()) <= staleAge {
+		_ = unlockAndClose(f)
+		return nil, nil, os.ErrExist
+	}
+
+	current, err := os.Stat(lockPath)
+	if errors.Is(err, os.ErrNotExist) {
+		_ = unlockAndClose(f)
+		return nil, nil, os.ErrExist
+	}
+	if isDeletePending(err) {
+		_ = unlockAndClose(f)
+		return nil, nil, errDeletePending{fmt.Errorf("stat lock: %w", err)}
+	}
+	if err != nil {
+		_ = unlockAndClose(f)
+		return nil, nil, fmt.Errorf("stat lock: %w", err)
+	}
+	if !os.SameFile(fInfo, current) || !os.SameFile(info, current) || time.Since(current.ModTime()) <= staleAge {
+		_ = unlockAndClose(f)
+		return nil, nil, os.ErrExist
+	}
+
+	stalePath := uniqueTempPath(lockPath, "stale")
+	if err := os.Rename(lockPath, stalePath); err != nil {
+		_ = unlockAndClose(f)
+		if errors.Is(err, os.ErrNotExist) || isSharingViolation(err) {
+			return nil, nil, os.ErrExist
+		}
+		if isDeletePending(err) {
+			return nil, nil, errDeletePending{fmt.Errorf("rename stale lock: %w", err)}
+		}
+		return nil, nil, fmt.Errorf("rename stale lock: %w", err)
+	}
+
+	release, newInfo, createErr := createLockFile(lockPath)
+	_ = unlockAndClose(f)
+	_ = os.Remove(stalePath)
+	return release, newInfo, createErr
 }
