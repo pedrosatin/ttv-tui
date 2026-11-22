@@ -216,8 +216,50 @@ func SaveTo(path string, cfg Config) error {
 	return err
 }
 
-// SaveToWithNotice grava como SaveTo e devolve o aviso de permissões.
-func SaveToWithNotice(path string, cfg Config) (PermissionNotice, error) {
+// ReadError indica falha ao ler ou interpretar o config dentro de Update.
+type ReadError struct {
+	Err error
+}
+
+func (e *ReadError) Error() string { return e.Err.Error() }
+func (e *ReadError) Unwrap() error { return e.Err }
+
+// SaveToWithNotice grava como SaveTo e devolve o aviso de permissões, sob o lock
+// exclusivo de arquivo.
+func SaveToWithNotice(path string, cfg Config) (notice PermissionNotice, err error) {
+	if err := ValidateCredentials(cfg.AccessToken, cfg.Username); err != nil {
+		return notice, fmt.Errorf("save config: %w", err)
+	}
+	release, err := lockConfig(path)
+	if err != nil {
+		return notice, err
+	}
+	defer func() { err = errors.Join(err, release()) }()
+	return saveTo(path, cfg, fchmod)
+}
+
+// Update lê, altera e grava o config de path sob o mesmo lock exclusivo usado
+// pelo estado, preservando gravações concorrentes.
+func Update(path string, change func(*Config) error) error {
+	_, err := UpdateWithNotice(path, change)
+	return err
+}
+
+// UpdateWithNotice funciona como Update e devolve o aviso de permissões da gravação.
+func UpdateWithNotice(path string, change func(*Config) error) (notice PermissionNotice, err error) {
+	release, err := lockConfig(path)
+	if err != nil {
+		return notice, err
+	}
+	defer func() { err = errors.Join(err, release()) }()
+
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		return notice, &ReadError{Err: err}
+	}
+	if err := change(&cfg); err != nil {
+		return notice, err
+	}
 	return saveTo(path, cfg, fchmod)
 }
 
