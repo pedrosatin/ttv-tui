@@ -11,10 +11,11 @@ func (a *app) present(mainVideo, previewVideo bool) {
 	W, H := C.int(a.W), C.int(a.H)
 	v := a.activeVideo()
 	previewRendered := false
+	fullFrame := false
 	if v != nil {
 		C.rc_render(v.rc, W, H)
 		// Sessão do painel inteiro: principal, ou prévia sozinha sem PiP.
-		fullFrame := mainVideo
+		fullFrame = mainVideo
 		if v == a.preview {
 			fullFrame = previewVideo
 		}
@@ -62,9 +63,10 @@ func (a *app) present(mainVideo, previewVideo bool) {
 	}
 	now := time.Now()
 	a.lastPresent = now
+	drawn := frameDrawn(v != nil, fullFrame, previewRendered)
 	a.mu.Lock()
 	a.presents++
-	if mainVideo || previewVideo {
+	if drawn {
 		a.videoFrames++
 		if !a.lastVideo.IsZero() {
 			gap := now.Sub(a.lastVideo).Milliseconds()
@@ -83,6 +85,28 @@ func (a *app) present(mainVideo, previewVideo bool) {
 		a.inputAt = time.Time{}
 	}
 	a.mu.Unlock()
+}
+
+// frameDrawn diz se este present desenhou quadro de vídeo de fato (painel
+// inteiro com aviso, ou PiP composto). Aviso sozinho sem desenho não conta.
+func frameDrawn(hasVideo, fullFrame, previewRendered bool) bool {
+	return (hasVideo && fullFrame) || previewRendered
+}
+
+// clearPreviewDirtyAfterPresent decide se previewDirty pode zerar depois do
+// present. Mantém o flag enquanto a prévia com principal espera o primeiro
+// HostPanel com PiP (PreviewCols>0); limpa na prévia sozinha, no PiP ativo,
+// sem sessão de prévia, ou quando um painel posterior à abertura ainda veio
+// sem PiP (evita o flag preso a contar videoFrames/stalls sem quadro novo).
+func (a *app) clearPreviewDirtyAfterPresent() bool {
+	if a.preview == nil || a.previewPIP() {
+		return true
+	}
+	if a.sess == nil {
+		return true // prévia sozinha: desenha o painel inteiro
+	}
+	// Principal ativa sem PiP: só limpa se o host já republicou após a abertura.
+	return a.host.PreviewCols == 0 && a.hostSeq > a.previewAtHostSeq
 }
 
 func (a *app) noteFirstFrame(s *session, video bool) {
@@ -169,9 +193,7 @@ func (a *app) frame() {
 	case a.mainDirty || a.previewDirty:
 		a.present(a.mainDirty, a.previewDirty)
 		a.mainDirty = false
-		// Só limpa o aviso da prévia depois de poder compor (Preview* no HostPanel)
-		// ou quando a sessão sumiu; senão rc_has_frame já consumiu o quadro.
-		if a.previewPIP() || a.preview == nil {
+		if a.clearPreviewDirtyAfterPresent() {
 			a.previewDirty = false
 		}
 		a.layoutDirty, a.panelChanged = false, false

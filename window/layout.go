@@ -149,6 +149,7 @@ func (a *app) refreshHole() {
 func (a *app) setHost(p hostPanel) {
 	a.paintMu.Lock()
 	a.haveHost, a.host = true, p
+	a.hostSeq++
 	a.paintMu.Unlock()
 	a.refreshHole()
 	a.relayout()

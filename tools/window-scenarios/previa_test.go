@@ -279,23 +279,24 @@ func TestJanelaPreviaSobrePrincipal(t *testing.T) {
 		if cur.Window.Overlay != cur.Window.Hole[2] {
 			return fmt.Errorf("ajuda não cobre o vídeo/prévia: overlay=%d hole=%v", cur.Window.Overlay, cur.Window.Hole)
 		}
-		// Título da ajuda com fundo opaco: se a linha cai sobre o PiP, o clipe
-		// não atravessa (mesmo critério do cenário da ajuda).
-		helpRow := rowWith(w.screen(), "===")
-		if helpRow < 0 {
+		// Procura uma linha da ajuda que cruze o retângulo do PiP (o título
+		// "===" fica no topo e quase nunca cai sobre o quadro).
+		if rowWith(w.screen(), "===") < 0 {
 			return errors.New("o título da ajuda sumiu da grade")
 		}
 		pCol, pRow, pCols, pRows := previewHole[0], previewHole[1], previewHole[2], previewHole[3]
-		if helpRow >= pRow-1 && helpRow < pRow-1+pRows {
-			x := (pCol-1+pCols/2)*cur.Window.CellW + cur.Window.CellW/2
-			y := helpRow*cur.Window.CellH + cur.Window.CellH/2
-			r, g, b, err := w.fbpixel(x, y)
-			if err != nil {
-				return err
-			}
-			if r > 40 || g > 40 || b > 40 {
-				return fmt.Errorf("a prévia atravessa a ajuda: pixel (%d,%d) é %d,%d,%d", x, y, r, g, b)
-			}
+		helpRow := helpRowCrossingPreview(w.screen(), pCol, pRow, pCols, pRows)
+		if helpRow < 0 {
+			return fmt.Errorf("nenhuma linha da ajuda cruza o quadro da prévia: preview=%v", previewHole)
+		}
+		x := (pCol-1+pCols/2)*cur.Window.CellW + cur.Window.CellW/2
+		y := helpRow*cur.Window.CellH + cur.Window.CellH/2
+		r, g, b, err := w.fbpixel(x, y)
+		if err != nil {
+			return err
+		}
+		if r > 40 || g > 40 || b > 40 {
+			return fmt.Errorf("a prévia atravessa a ajuda: pixel (%d,%d) é %d,%d,%d", x, y, r, g, b)
 		}
 		return nil
 	})

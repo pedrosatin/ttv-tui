@@ -150,7 +150,7 @@ static void gl_reset(int W, int H) {
 }
 #endif
 
-/* Alvo offscreen da prévia: um FBO + textura RGBA do tamanho do quadro PiP. */
+/* Alvo offscreen da prévia: um FBO + textura RGBA W×H da janela (mesmas margens). */
 static GLuint pip_fbo = 0, pip_tex = 0;
 static int pip_w = 0, pip_h = 0;
 
@@ -189,6 +189,12 @@ int pip_fbo_ensure(int w, int h) {
     if (w <= 0 || h <= 0) {
         return -1;
     }
+#ifdef _WIN32
+    /* Sem blit não dá para compor o PiP: falha explícita (prévia cai fora / tela cheia). */
+    if (p_glBlitFramebuffer == NULL) {
+        return -1;
+    }
+#endif
     if (pip_fbo != 0 && pip_w == w && pip_h == h) {
         return 0;
     }
@@ -235,6 +241,7 @@ void pip_compose(int x, int y, int rw, int rh, int win_w, int win_h) {
        O FBO tem o mesmo layout W×H da janela (prévia já nas margens do PiP). */
     int y0 = win_h - y - rh;
     int y1 = win_h - y;
+    glDisable(GL_SCISSOR_TEST);
     gl_bind_fb(GL_READ_FRAMEBUFFER, pip_fbo);
     gl_bind_fb(GL_DRAW_FRAMEBUFFER, 0);
     gl_blit_fb(x, y0, x + rw, y1, x, y0, x + rw, y1, GL_COLOR_BUFFER_BIT, GL_NEAREST);

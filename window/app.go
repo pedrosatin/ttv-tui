@@ -113,6 +113,13 @@ type app struct {
 	lastPresent  time.Time
 	quit         bool
 
+	// hostSeq sobe a cada setHost. previewAtHostSeq é o hostSeq no instante em
+	// que a prévia abriu: com principal ativa e PreviewCols==0, só limpamos
+	// previewDirty depois de um painel publicado após essa abertura (senão
+	// perdíamos o primeiro quadro antes do PiP).
+	hostSeq          int
+	previewAtHostSeq int
+
 	mu          sync.Mutex
 	presents    int64
 	videoFrames int64

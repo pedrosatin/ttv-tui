@@ -319,3 +319,27 @@ func TestJanelaEscVoltaABusca(t *testing.T) {
 func rowWith(screen []string, text string) int {
 	return slices.IndexFunc(screen, func(l string) bool { return strings.Contains(l, text) })
 }
+
+// helpRowCrossingPreview devolve uma linha (base 0) da grade com texto da
+// ajuda dentro do retângulo do PiP (pCol/pRow base 1), ou -1 se nenhuma cruzar.
+func helpRowCrossingPreview(screen []string, pCol, pRow, pCols, pRows int) int {
+	row0 := pRow - 1
+	col0 := pCol - 1
+	for r := row0; r < row0+pRows; r++ {
+		if r < 0 || r >= len(screen) {
+			continue
+		}
+		runes := []rune(screen[r])
+		if col0 >= len(runes) {
+			continue
+		}
+		end := col0 + pCols
+		if end > len(runes) {
+			end = len(runes)
+		}
+		if strings.TrimSpace(string(runes[col0:end])) != "" {
+			return r
+		}
+	}
+	return -1
+}
