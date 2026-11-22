@@ -25,3 +25,21 @@ func TestIPCName(t *testing.T) {
 		t.Fatal("valid IPC rejected")
 	}
 }
+
+func TestParseRole(t *testing.T) {
+	for _, tc := range []struct {
+		raw     string
+		want    string
+		wantErr bool
+	}{
+		{"", roleMain, false},
+		{roleMain, roleMain, false},
+		{rolePreview, rolePreview, false},
+		{"other", "", true},
+	} {
+		got, err := parseRole(tc.raw)
+		if (err != nil) != tc.wantErr || got != tc.want {
+			t.Fatalf("parseRole(%q) = (%q, %v), quero (%q, err=%v)", tc.raw, got, err, tc.want, tc.wantErr)
+		}
+	}
+}

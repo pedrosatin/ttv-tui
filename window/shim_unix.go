@@ -34,8 +34,8 @@ func execRealMpv(real string, args []string) {
 }
 
 // sendShimStream hands streamlink's stdin to the window by SCM_RIGHTS.
-func sendShimStream(c *net.UnixConn, ipc string) error {
-	msg, _ := json.Marshal(map[string]string{"ipc": ipc})
+func sendShimStream(c *net.UnixConn, ipc, role string) error {
+	msg, _ := json.Marshal(map[string]string{"ipc": ipc, "role": role})
 	_, _, err := c.WriteMsgUnix(msg, syscall.UnixRights(0), nil)
 	return err
 }

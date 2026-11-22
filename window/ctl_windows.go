@@ -14,9 +14,20 @@ import (
 // closeFD has nothing to close: the stream comes through the shim's named pipe.
 func closeFD(int) {}
 
+func parseRole(raw string) (string, error) {
+	switch raw {
+	case "", roleMain:
+		return roleMain, nil
+	case rolePreview:
+		return rolePreview, nil
+	default:
+		return "", fmt.Errorf("papel de sessão inválido: %q", raw)
+	}
+}
+
 // readStart first identifies this window process to the shim, then reads its
-// request with the IPC path and the named pipe libmpv opens. The shim checks
-// the pipe client's PID before pumping streamlink's stdin into it.
+// request with the IPC path, role, and the named pipe libmpv opens. The shim
+// checks the pipe client's PID before pumping streamlink's stdin into it.
 func readStart(c *net.UnixConn) (ctlMsg, error) {
 	if err := json.NewEncoder(c).Encode(struct {
 		PID int `json:"pid"`
@@ -30,14 +41,19 @@ func readStart(c *net.UnixConn) (ctlMsg, error) {
 	var req struct {
 		IPC  string `json:"ipc"`
 		Pipe string `json:"pipe"`
+		Role string `json:"role"`
 	}
 	if err := json.Unmarshal(line, &req); err != nil {
+		return ctlMsg{}, err
+	}
+	role, err := parseRole(req.Role)
+	if err != nil {
 		return ctlMsg{}, err
 	}
 	if !validStreamPipe(req.Pipe) || !validIPCName(req.IPC) {
 		return ctlMsg{}, fmt.Errorf("pipe fora do runtime esperado")
 	}
-	return ctlMsg{kind: "start", ipc: req.IPC, fd: -1, url: req.Pipe, conn: c}, nil
+	return ctlMsg{kind: "start", role: role, ipc: req.IPC, fd: -1, url: req.Pipe, conn: c}, nil
 }
 
 func validStreamPipe(name string) bool {

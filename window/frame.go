@@ -9,13 +9,14 @@ import "time"
 
 func (a *app) present(video bool) {
 	W, H := C.int(a.W), C.int(a.H)
-	if a.sess != nil {
-		C.rc_render(a.sess.rc, W, H)
+	v := a.activeVideo()
+	if v != nil {
+		C.rc_render(v.rc, W, H)
 		if video {
-			if !a.sess.gotFirst.Swap(true) {
-				a.sess.ttffMs.Store(time.Since(a.sess.started).Milliseconds())
+			if !v.gotFirst.Swap(true) {
+				v.ttffMs.Store(time.Since(v.started).Milliseconds())
 				a.mu.Lock()
-				a.lastTtff = a.sess.ttffMs.Load()
+				a.lastTtff = v.ttffMs.Load()
 				a.mu.Unlock()
 				a.refreshHole() // o primeiro quadro abre o buraco do vídeo
 			}
@@ -36,8 +37,8 @@ func (a *app) present(video bool) {
 	}
 	a.answerFB()
 	C.SDL_GL_SwapWindow(a.win)
-	if a.sess != nil {
-		C.mpv_render_context_report_swap(a.sess.rc)
+	if v != nil {
+		C.mpv_render_context_report_swap(v.rc)
 	}
 	now := time.Now()
 	a.lastPresent = now
@@ -130,12 +131,13 @@ func (a *app) uploadPanel() {
 
 func (a *app) frame() {
 	a.uploadPanel()
+	v := a.activeVideo()
 	switch {
 	case a.videoDirty:
 		a.present(true)
 		a.videoDirty, a.layoutDirty, a.panelChanged = false, false, false
-	case a.layoutDirty, a.panelChanged && (a.sess == nil || time.Since(a.lastPresent) > 33*time.Millisecond):
-		// Painel sem quadro de vídeo: pausado, ou sem sessão.
+	case a.layoutDirty, a.panelChanged && (v == nil || !v.gotFirst.Load() || time.Since(a.lastPresent) > 33*time.Millisecond):
+		// Painel sem quadro de vídeo: pausado, antes do primeiro quadro, ou sem sessão.
 		a.present(false)
 		a.layoutDirty, a.panelChanged = false, false
 	}

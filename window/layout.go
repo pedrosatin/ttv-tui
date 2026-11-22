@@ -64,23 +64,20 @@ func (a *app) relayoutFonts(fs *fontSet) {
 
 // applyMargins põe o vídeo no retângulo publicado pelo TUI.
 func (a *app) applyMargins() {
-	if a.sess == nil {
+	if !a.host.Visible || a.fs == nil || a.W <= 0 || a.H <= 0 {
+		return // sobreposição na frente ou janela sem grade: mantém a geometria para quando voltar
+	}
+	if a.sess == nil && a.preview == nil {
 		return
 	}
 	W, H := float64(a.W), float64(a.H)
-	ratio := func(name string, px int) {
-		a.sess.setProperty("video-margin-ratio-"+name, fmt.Sprintf("%.5f", max(float64(px), 0)/map[bool]float64{true: W, false: H}[name == "left" || name == "right"]))
-	}
-	if !a.host.Visible {
-		return // sobreposição na frente: mantém a geometria para quando ela sair
-	}
 	cw, ch := a.fs.cellW, a.fs.cellH
 	x, y := (a.host.Col-1)*cw, (a.host.Row-1)*ch
 	w, h := a.host.Cols*cw, a.host.Rows*ch
-	ratio("left", x)
-	ratio("right", a.W-x-w)
-	ratio("top", y)
-	ratio("bottom", a.H-y-h)
+	left := fmt.Sprintf("%.5f", max(float64(x), 0)/W)
+	right := fmt.Sprintf("%.5f", max(float64(a.W-x-w), 0)/W)
+	top := fmt.Sprintf("%.5f", max(float64(y), 0)/H)
+	bottom := fmt.Sprintf("%.5f", max(float64(a.H-y-h), 0)/H)
 	// O OSD do mpv é relativo à janela: a margem o traz para dentro do vídeo, e ele fica
 	// no canto oposto ao chat sobreposto. A margem é limitada a 300 unidades pelo mpv.
 	osdSide, edge := "left", x
@@ -91,16 +88,27 @@ func (a *app) applyMargins() {
 	if margin > 300 {
 		osdSide, margin = "center", 0
 	}
-	a.sess.setProperty("osd-align-x", osdSide)
-	a.sess.setProperty("osd-margin-x", strconv.Itoa(margin))
+	marginStr := strconv.Itoa(margin)
+	for _, s := range []*session{a.sess, a.preview} {
+		if s == nil || s.setProperty == nil {
+			continue
+		}
+		s.setProperty("video-margin-ratio-left", left)
+		s.setProperty("video-margin-ratio-right", right)
+		s.setProperty("video-margin-ratio-top", top)
+		s.setProperty("video-margin-ratio-bottom", bottom)
+		s.setProperty("osd-align-x", osdSide)
+		s.setProperty("osd-margin-x", marginStr)
+	}
 }
 
 // refreshHole recalcula se as células do vídeo ficam transparentes agora. Só
 // depois do primeiro quadro: até lá a TUI escreve ali o canal que está abrindo,
 // e o buraco mostraria só o fundo do mpv.
 func (a *app) refreshHole() {
+	v := a.activeVideo()
 	a.paintMu.Lock()
-	a.holeOn = a.haveHost && a.host.Visible && a.sess != nil && a.sess.gotFirst.Load()
+	a.holeOn = a.haveHost && a.host.Visible && v != nil && v.gotFirst.Load()
 	a.paintMu.Unlock()
 	a.tuiDirty.Store(true)
 	a.kickPaint()

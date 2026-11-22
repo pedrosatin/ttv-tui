@@ -209,3 +209,136 @@ func TestIPCFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestValidIPCForRole(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", base)
+	runtimeDir := filepath.Join(base, "ttv-tui")
+	mainDir := mustPrivateDir(t, filepath.Join(runtimeDir, "1-main"))
+	previewBase := mustPrivateDir(t, filepath.Join(runtimeDir, "preview"))
+	previewDir := mustPrivateDir(t, filepath.Join(previewBase, "1-preview"))
+
+	mainIPC := filepath.Join(mainDir, "i")
+	previewIPC := filepath.Join(previewDir, "i")
+
+	if !validIPCForRole(mainIPC, roleMain) {
+		t.Fatal("main valid IPC rejected")
+	}
+	if !validIPCForRole(previewIPC, rolePreview) {
+		t.Fatal("preview valid IPC rejected")
+	}
+	if validIPCForRole(previewIPC, roleMain) {
+		t.Fatal("preview IPC accepted for main role")
+	}
+	if validIPCForRole(mainIPC, rolePreview) {
+		t.Fatal("main IPC accepted for preview role")
+	}
+
+	// Público ou symlink em preview/ deve ser rejeitado.
+	if err := os.Chmod(previewBase, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if validIPCForRole(previewIPC, rolePreview) {
+		t.Fatal("public preview base accepted")
+	}
+	if err := os.Chmod(previewBase, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	outside := mustPrivateDir(t, filepath.Join(t.TempDir(), "1-escape"))
+	escaped := filepath.Join(previewBase, "2-escape")
+	if err := os.Symlink(outside, escaped); err != nil {
+		t.Fatal(err)
+	}
+	if validIPCForRole(filepath.Join(escaped, "i"), rolePreview) {
+		t.Fatal("symlinked preview session accepted")
+	}
+
+	// Fallback em temp privado vale para os dois papéis.
+	fbDir, err := os.MkdirTemp(os.TempDir(), "ttv-tui-2-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(fbDir) }()
+	if err := os.Chmod(fbDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fbIPC := filepath.Join(fbDir, "i")
+	if !validIPCForRole(fbIPC, rolePreview) || !validIPCForRole(fbIPC, roleMain) {
+		t.Fatalf("fallback IPC rejected: %s", fbIPC)
+	}
+}
+
+func TestReadStartRoleAndRejection(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", base)
+	mainDir := mustPrivateDir(t, filepath.Join(base, "ttv-tui", "1-main"))
+	previewDir := mustPrivateDir(t, filepath.Join(base, "ttv-tui", "preview", "1-preview"))
+
+	sockDir, err := os.MkdirTemp("/tmp", "ctlrole-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(sockDir) }()
+
+	runReq := func(payload string) (ctlMsg, int, error) {
+		ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: filepath.Join(sockDir, "ctl"), Net: "unix"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = ln.Close() }()
+		c, err := net.DialUnix("unix", nil, ln.Addr().(*net.UnixAddr))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = c.Close() }()
+		server, err := ln.AcceptUnix()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = server.Close() }()
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = r.Close() }()
+		if _, _, err := c.WriteMsgUnix([]byte(payload), syscall.UnixRights(int(w.Fd())), nil); err != nil {
+			t.Fatal(err)
+		}
+		_ = w.Close()
+		msg, readErr := readStart(server)
+		if readErr == nil {
+			closeFD(msg.fd)
+		}
+		if err := syscall.SetNonblock(int(r.Fd()), true); err != nil {
+			t.Fatal(err)
+		}
+		var b [1]byte
+		n, err := syscall.Read(int(r.Fd()), b[:])
+		if err != nil {
+			t.Fatalf("read pipe check: %v", err)
+		}
+		return msg, n, readErr
+	}
+
+	// Papel vazio assume principal.
+	msg, n, err := runReq(`{"ipc":"` + filepath.Join(mainDir, "i") + `"}`)
+	if err != nil || msg.role != roleMain || n != 0 {
+		t.Fatalf("empty role: msg=%+v n=%d err=%v", msg, n, err)
+	}
+
+	// Papel preview usa diretório preview/.
+	msg, n, err = runReq(`{"ipc":"` + filepath.Join(previewDir, "i") + `","role":"preview"}`)
+	if err != nil || msg.role != rolePreview || n != 0 {
+		t.Fatalf("preview role: msg=%+v n=%d err=%v", msg, n, err)
+	}
+
+	// Papel inválido falha e fecha o fd recebido.
+	if _, n, err := runReq(`{"ipc":"` + filepath.Join(mainDir, "i") + `","role":"other"}`); err == nil || n != 0 {
+		t.Fatalf("invalid role: err=%v n=%d", err, n)
+	}
+
+	// Prévia apontando para diretório principal falha e fecha o fd recebido.
+	if _, n, err := runReq(`{"ipc":"` + filepath.Join(mainDir, "i") + `","role":"preview"}`); err == nil || n != 0 {
+		t.Fatalf("cross-role IPC: err=%v n=%d", err, n)
+	}
+}
