@@ -154,3 +154,156 @@ func TestJanelaPreviaSemPrincipal(t *testing.T) {
 		return nil
 	})
 }
+
+// Com a principal tocando, Espaço abre a prévia num quadro menor sobre o
+// vídeo; a principal continua ativa (sem reiniciar o buraco) e Esc fecha só a
+// prévia. Redimensionar a janela reposiciona o quadro.
+func TestJanelaPreviaSobrePrincipal(t *testing.T) {
+	t.Parallel()
+	w := openWindow(t, setup{
+		config: "chat_overlay = true\n",
+		irc:    fixture.IRCConfig{Messages: 2},
+		env:    []string{"TTV_WINDOW_MUTE=0"},
+	})
+	w.openFirstChannel()
+	w.waitVideoFrames(3)
+
+	var sessionsBefore int64
+	expect(t, func() error {
+		var stats struct {
+			Sessions                          int64
+			Active, MainActive, PreviewActive bool
+		}
+		if err := json.Unmarshal([]byte(w.must("stats")), &stats); err != nil {
+			return err
+		}
+		if !stats.MainActive || stats.PreviewActive {
+			return fmt.Errorf("antes da prévia: %+v", stats)
+		}
+		sessionsBefore = stats.Sessions
+		return nil
+	})
+
+	// Destaque em outro canal e abre a prévia sobre a principal.
+	w.press("j")
+	w.waitState("destaque em FixtureDois", 5*time.Second, func(s ui.StateReport) bool {
+		return s.Highlighted == "FixtureDois"
+	})
+	w.press("Space")
+	w.waitState("prévia tocando com principal ativa", 15*time.Second, func(s ui.StateReport) bool {
+		return s.Preview == string(ui.PreviewStatePlaying) && s.Player == string(ui.PlayerStatePlaying)
+	})
+	w.waitVideoFrames(3)
+
+	var previewHole []int
+	expect(t, func() error {
+		cur, err := w.state()
+		if err != nil {
+			return err
+		}
+		if !cur.Window.HoleOn {
+			return fmt.Errorf("buraco da principal fechou ao abrir a prévia: %+v", cur.Window)
+		}
+		if len(cur.Window.PreviewHole) != 4 || cur.Window.PreviewHole[2] == 0 || cur.Window.PreviewHole[3] == 0 {
+			return fmt.Errorf("janela sem quadro da prévia: %+v", cur.Window)
+		}
+		previewHole = append([]int(nil), cur.Window.PreviewHole...)
+		col, row, cols, rows := previewHole[0], previewHole[1], previewHole[2], previewHole[3]
+		// Quadro dentro do painel de vídeo e menor que ele.
+		hole := cur.Window.Hole
+		if col < hole[0] || row < hole[1] || col+cols > hole[0]+hole[2] || row+rows > hole[1]+hole[3] {
+			return fmt.Errorf("quadro da prévia fora do painel: preview=%v hole=%v", previewHole, hole)
+		}
+		if cols >= hole[2] && rows >= hole[3] {
+			return fmt.Errorf("quadro da prévia não é menor que o painel: preview=%v hole=%v", previewHole, hole)
+		}
+		x := (col-1+cols/2)*cur.Window.CellW + cur.Window.CellW/2
+		y := (row-1+rows/2)*cur.Window.CellH + cur.Window.CellH/2
+		r, g, b, err := w.fbpixel(x, y)
+		if err != nil {
+			return err
+		}
+		if !fixture.ClipLooksRight(r, g, b) {
+			return fmt.Errorf("pixel (%d,%d) do quadro da prévia é %d,%d,%d", x, y, r, g, b)
+		}
+		var stats struct {
+			Sessions                          int64
+			Active, MainActive, PreviewActive bool
+		}
+		if err := json.Unmarshal([]byte(w.must("stats")), &stats); err != nil {
+			return err
+		}
+		if !stats.Active || !stats.MainActive || !stats.PreviewActive {
+			return fmt.Errorf("stats com as duas sessões: %+v", stats)
+		}
+		if stats.Sessions != sessionsBefore+1 {
+			return fmt.Errorf("abrir a prévia reiniciou a principal: sessions %d→%d", sessionsBefore, stats.Sessions)
+		}
+		return nil
+	})
+
+	// Redimensionar reposiciona o quadro.
+	w.resizeCols(curCols(t, w) - 10)
+	w.waitVideoFrames(2)
+	expect(t, func() error {
+		cur, err := w.state()
+		if err != nil {
+			return err
+		}
+		if len(cur.Window.PreviewHole) != 4 || cur.Window.PreviewHole[2] == 0 {
+			return fmt.Errorf("após resize sem quadro da prévia: %+v", cur.Window)
+		}
+		if sameInts(cur.Window.PreviewHole, previewHole) {
+			return fmt.Errorf("resize não reposicionou o quadro: %v", cur.Window.PreviewHole)
+		}
+		return nil
+	})
+
+	w.press("Escape")
+	w.waitState("prévia fechada, principal tocando", 10*time.Second, func(s ui.StateReport) bool {
+		return s.Preview == string(ui.PreviewStateClosed) && s.Player == string(ui.PlayerStatePlaying)
+	})
+	expect(t, func() error {
+		cur, err := w.state()
+		if err != nil {
+			return err
+		}
+		if !cur.Window.HoleOn {
+			return fmt.Errorf("fechar a prévia apagou o buraco da principal")
+		}
+		if len(cur.Window.PreviewHole) == 4 && (cur.Window.PreviewHole[2] != 0 || cur.Window.PreviewHole[3] != 0) {
+			return fmt.Errorf("quadro da prévia ficou publicado: %v", cur.Window.PreviewHole)
+		}
+		var stats struct {
+			MainActive, PreviewActive bool
+		}
+		if err := json.Unmarshal([]byte(w.must("stats")), &stats); err != nil {
+			return err
+		}
+		if !stats.MainActive || stats.PreviewActive {
+			return fmt.Errorf("após fechar a prévia: %+v", stats)
+		}
+		return nil
+	})
+}
+
+func curCols(t *testing.T, w *window) int {
+	t.Helper()
+	st, err := w.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st.Window.Cols
+}
+
+func sameInts(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

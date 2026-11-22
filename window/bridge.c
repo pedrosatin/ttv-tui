@@ -59,6 +59,16 @@ void rc_render(mpv_render_context *rc, int w, int h) {
     mpv_render_param p[] = {{MPV_RENDER_PARAM_OPENGL_FBO, &fbo}, {MPV_RENDER_PARAM_FLIP_Y, &flip}, {0, NULL}};
     mpv_render_context_render(rc, p);
 }
+void rc_render_scissored(mpv_render_context *rc, int w, int h, int x, int y, int rw, int rh) {
+    if (rw <= 0 || rh <= 0) {
+        return;
+    }
+    glEnable(GL_SCISSOR_TEST);
+    /* glScissor usa origem embaixo à esquerda; y da janela é em cima à esquerda. */
+    glScissor(x, h - y - rh, rw, rh);
+    rc_render(rc, w, h);
+    glDisable(GL_SCISSOR_TEST);
+}
 void rc_free(mpv_render_context *rc) { mpv_render_context_set_update_callback(rc, NULL, NULL); mpv_render_context_free(rc); }
 void load_fd(mpv_handle *m, const char *url) { const char *a[] = {"loadfile", url, NULL}; mpv_command_async(m, 0, a); }
 void set_property(mpv_handle *m, const char *name, const char *value) {

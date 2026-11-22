@@ -12,14 +12,12 @@ func (a *app) present(video bool) {
 	v := a.activeVideo()
 	if v != nil {
 		C.rc_render(v.rc, W, H)
-		if video {
-			if !v.gotFirst.Swap(true) {
-				v.ttffMs.Store(time.Since(v.started).Milliseconds())
-				a.mu.Lock()
-				a.lastTtff = v.ttffMs.Load()
-				a.mu.Unlock()
-				a.refreshHole() // o primeiro quadro abre o buraco do vídeo
-			}
+		a.noteFirstFrame(v, video)
+		// Prévia sobre a principal: desenha só no retângulo do PiP, sem apagar o resto.
+		if a.previewPIP() && a.preview.rc != nil {
+			px, py, pw, ph := a.previewPixelRect()
+			C.rc_render_scissored(a.preview.rc, W, H, C.int(px), C.int(py), C.int(pw), C.int(ph))
+			a.noteFirstFrame(a.preview, video)
 		}
 	} else {
 		C.clear_to(W, H, C.float(float32(bgR)/255), C.float(float32(bgG)/255), C.float(float32(bgB)/255))
@@ -39,6 +37,9 @@ func (a *app) present(video bool) {
 	C.SDL_GL_SwapWindow(a.win)
 	if v != nil {
 		C.mpv_render_context_report_swap(v.rc)
+	}
+	if a.previewPIP() && a.preview != nil && a.preview.rc != nil {
+		C.mpv_render_context_report_swap(a.preview.rc)
 	}
 	now := time.Now()
 	a.lastPresent = now
@@ -63,6 +64,19 @@ func (a *app) present(video bool) {
 		a.inputAt = time.Time{}
 	}
 	a.mu.Unlock()
+}
+
+func (a *app) noteFirstFrame(s *session, video bool) {
+	if s == nil || !video {
+		return
+	}
+	if !s.gotFirst.Swap(true) {
+		s.ttffMs.Store(time.Since(s.started).Milliseconds())
+		a.mu.Lock()
+		a.lastTtff = s.ttffMs.Load()
+		a.mu.Unlock()
+		a.refreshHole() // o primeiro quadro abre o buraco do vídeo
+	}
 }
 
 // answerFB responde às leituras pendentes com o quadro que acabou de ser desenhado.

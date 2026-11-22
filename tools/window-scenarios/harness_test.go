@@ -379,6 +379,7 @@ type windowState struct {
 		Hole                                 []int
 		HoleOn                               bool
 		Overlay, OverlayOpacity, OverlayRows int
+		PreviewHole                          []int
 	} `json:"window"`
 	TUI *ui.StateReport `json:"tui"`
 }

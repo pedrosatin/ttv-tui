@@ -17,6 +17,7 @@ import (
 )
 
 // hostPanel é a região do vídeo que o TUI publica, em células com base 1.
+// Preview* é o quadro menor da prévia sobre a principal; zero = sem PiP.
 type hostPanel struct {
 	Row, Col, Rows, Cols int
 	Visible              bool
@@ -25,6 +26,10 @@ type hostPanel struct {
 	OverlayOpacity       int
 	OverlayRows          int
 	OverlayTextBackdrop  bool
+	PreviewRow           int
+	PreviewCol           int
+	PreviewRows          int
+	PreviewCols          int
 }
 
 type ctlMsg struct {

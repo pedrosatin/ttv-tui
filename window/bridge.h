@@ -33,6 +33,9 @@ SDL_Window *make_window(const char *title);
 mpv_render_context *make_rc(mpv_handle *m, SDL_Window *win);
 int rc_has_frame(mpv_render_context *rc);
 void rc_render(mpv_render_context *rc, int w, int h);
+// rc_render_scissored desenha só dentro do retângulo em pixels (origem em cima,
+// à esquerda), para a prévia sobre a principal sem apagar o resto do FBO.
+void rc_render_scissored(mpv_render_context *rc, int w, int h, int x, int y, int rw, int rh);
 void rc_free(mpv_render_context *rc);
 void load_fd(mpv_handle *m, const char *url);
 void set_property(mpv_handle *m, const char *name, const char *value);

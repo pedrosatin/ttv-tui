@@ -259,15 +259,12 @@ func (m Model) startPreviewFor(target PlayTarget) (tea.Model, tea.Cmd) {
 }
 
 // togglePreview is Space on the list: open or close the preview, even when a
-// main video is active. In the single window, opening a preview over an active
-// main video waits for ticket 04. A non-channel row warns and does not pause.
+// main video is active (in the single window the preview sits in a smaller
+// rectangle over the main picture). A non-channel row warns and does not pause.
 func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	if m.previewOpen() || m.preview.stopAfterStart {
 		cmd := m.closePreview()
 		return m, cmd
-	}
-	if m.hosted.host != nil && m.mainVideoActive() {
-		return m, nil
 	}
 	target, ok := m.highlightedPlayTarget()
 	if !ok {

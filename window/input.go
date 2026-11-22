@@ -151,7 +151,11 @@ func (a *app) handle(ev *C.SDL_Event) {
 	case t == C.ev_mpv():
 		active := a.activeVideo()
 		for _, s := range []*session{a.sess, a.preview} {
-			if s != nil && C.rc_has_frame(s.rc) != 0 && s == active {
+			if s == nil || s.rc == nil || C.rc_has_frame(s.rc) == 0 {
+				continue
+			}
+			// A sessão do painel inteiro e a prévia em PiP pedem redesenho.
+			if s == active || (s == a.preview && a.previewPIP()) {
 				a.videoDirty = true
 			}
 		}
