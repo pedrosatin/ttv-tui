@@ -259,7 +259,7 @@ type statusChrome struct {
 // the cut order: title, language, layout token, focus hint, help hint. The state
 // message, the volume, the active filter and the quit hint outlast all of them.
 func (m Model) statusLadder(lang string) []statusChrome {
-	help, quit := m.statusHint("status.help_hint", actHelp, actHelpAnywhere), m.statusHint("status.quit_hint", actQuit)
+	help, quit := m.helpStatusHint(), m.statusHint("status.quit_hint", actQuit)
 	hints := statusRightHints(help, quit)
 	focusHints := hints
 	// Focus lives in the chrome, not in the state message, so Tab has a stable
@@ -295,6 +295,18 @@ func (m Model) statusHint(catalogKey string, ids ...actionID) string {
 		if len(m.keys.keys[id]) > 0 {
 			return m.t(catalogKey)
 		}
+	}
+	return ""
+}
+
+// helpStatusHint escolhe a dica cuja ação ainda tem tecla. Com help desligado e
+// help_anywhere em F1, usa footer.help_field para não sobrar " help" sem tecla.
+func (m Model) helpStatusHint() string {
+	if len(m.keys.keys[actHelp]) > 0 {
+		return m.t("status.help_hint")
+	}
+	if len(m.keys.keys[actHelpAnywhere]) > 0 {
+		return m.t("footer.help_field")
 	}
 	return ""
 }

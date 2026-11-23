@@ -73,7 +73,7 @@ func TestKeysAusenteFicaNil(t *testing.T) {
 }
 
 func TestKeysMalformedNaoDerrubaCarga(t *testing.T) {
-	raw := "access_token = \"accesstoken12345\"\nlanguage = \"pt-BR\"\n\n[keys]\ntoggle_list = [\"ctrl+b\"]\nbad = \"ctrl+x\"\nsearch = [\"ctrl+f\"]\n= [\"z\"]\n"
+	raw := "access_token = \"accesstoken12345\"\nlanguage = \"pt-BR\"\n\n[keys]\ntoggle_list = [\"ctrl+b\"]\nbad = \"ctrl+x\"\nsearch = [\"ctrl+f\"]\n= [\"z\"]\nbroken = [a]\n"
 	cfg, err := parseTOML(raw)
 	if err != nil {
 		t.Fatalf("carga falhou: %v", err)
@@ -96,9 +96,12 @@ func TestKeysMalformedNaoDerrubaCarga(t *testing.T) {
 	if len(cfg.KeyWarnings) == 0 {
 		t.Fatal("sem KeyWarnings")
 	}
-	joined := strings.Join(cfg.KeyWarnings, "\n")
-	if !strings.Contains(joined, "discarded") {
-		t.Fatalf("avisos inesperados: %v", cfg.KeyWarnings)
+	kinds := map[KeyWarningKind]bool{}
+	for _, w := range cfg.KeyWarnings {
+		kinds[w.Kind] = true
+	}
+	if !kinds[KeyWarningNotArray] || !kinds[KeyWarningEmptyKey] || !kinds[KeyWarningMalformedArray] {
+		t.Fatalf("kinds = %v", cfg.KeyWarnings)
 	}
 	if strings.Contains(formatTOML(cfg), "KeyWarnings") || strings.Contains(formatTOML(cfg), "bad =") {
 		t.Fatalf("formatTOML gravou aviso ou entrada ruim:\n%s", formatTOML(cfg))
@@ -113,7 +116,20 @@ func TestKeysDuplicateShortAndFullPrefersShort(t *testing.T) {
 	if !slices.Equal(cfg.Keys["toggle_list"], []string{"ctrl+b"}) {
 		t.Fatalf("curta deveria vencer: %v", cfg.Keys["toggle_list"])
 	}
-	if len(cfg.KeyWarnings) == 0 {
-		t.Fatal("esperava aviso de duplicata")
+	if len(cfg.KeyWarnings) != 1 || cfg.KeyWarnings[0].Kind != KeyWarningDuplicateForm {
+		t.Fatalf("esperava DuplicateForm: %v", cfg.KeyWarnings)
+	}
+}
+
+func TestKeysDuplicateShortShortLastWins(t *testing.T) {
+	cfg, err := parseTOML("[keys]\ntoggle_list = [\"ctrl+h\"]\ntoggle_list = [\"ctrl+b\"]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(cfg.Keys["toggle_list"], []string{"ctrl+b"}) {
+		t.Fatalf("última linha deveria vencer: %v", cfg.Keys["toggle_list"])
+	}
+	if len(cfg.KeyWarnings) != 1 || cfg.KeyWarnings[0].Kind != KeyWarningDuplicateShort {
+		t.Fatalf("esperava DuplicateShort: %v", cfg.KeyWarnings)
 	}
 }

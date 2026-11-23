@@ -117,7 +117,7 @@ func Run(opts Options) error {
 		return err
 	}
 	keyOverrides, keyNotices := ui.ResolveKeyOverrides(cfg.Keymap == "classic", cfg.Keys, appCat)
-	keymapNotice = ui.JoinKeyNotices(keymapNotice, strings.Join(cfg.KeyWarnings, "\n"), strings.Join(keyNotices, "\n"))
+	keymapNotice = ui.JoinKeyNotices(keymapNotice, strings.Join(ui.FormatKeyWarnings(cfg.KeyWarnings, appCat), "\n"), strings.Join(keyNotices, "\n"))
 
 	// Only after the terminal check: a run that cannot start must not write.
 	if err := persistLang(opts.Lang, &cfg, cfgPath); err != nil {

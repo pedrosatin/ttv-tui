@@ -415,19 +415,21 @@ func defaultActions() []action {
 // keyRegistry responde que ação uma tecla dispara num modo e que teclas uma ação
 // tem. As teclas efetivas são as padrão, salvo as que overrides troca.
 type keyRegistry struct {
-	actions []action
-	keys    map[actionID][]string
-	byMode  map[keyMode]map[string]actionID
+	actions      []action
+	keys         map[actionID][]string
+	byMode       map[keyMode]map[string]actionID
+	livePrefixes map[string]bool
 }
 
 // newKeyRegistry monta o registro. overrides troca as teclas de uma ação inteira;
 // nil deixa o mapa padrão. Se duas ações dividem uma tecla num modo, vale a que
-// vem primeiro na lista: quem aceita teclas de fora confere conflitos antes.
+// vem primeiro na lista. Quem aceita teclas de fora confere conflitos antes.
 func newKeyRegistry(actions []action, overrides map[actionID][]string) keyRegistry {
 	r := keyRegistry{
-		actions: actions,
-		keys:    make(map[actionID][]string, len(actions)),
-		byMode:  make(map[keyMode]map[string]actionID),
+		actions:      actions,
+		keys:         make(map[actionID][]string, len(actions)),
+		byMode:       make(map[keyMode]map[string]actionID),
+		livePrefixes: map[string]bool{},
 	}
 	for _, a := range actions {
 		keys := a.Default
@@ -435,6 +437,7 @@ func newKeyRegistry(actions []action, overrides map[actionID][]string) keyRegist
 			keys = o
 		}
 		r.keys[a.ID] = slices.Clone(keys)
+		markLivePrefixes(keys, r.livePrefixes)
 		for _, mode := range a.Modes {
 			if r.byMode[mode] == nil {
 				r.byMode[mode] = make(map[string]actionID)
@@ -448,6 +451,33 @@ func newKeyRegistry(actions []action, overrides map[actionID][]string) keyRegist
 		}
 	}
 	return r
+}
+
+// bindsKey diz se algum modo do registro indexa a tecla ou sequência name.
+func (r keyRegistry) bindsKey(name string) bool {
+	name = indexName(name)
+	for _, slot := range r.byMode {
+		if _, ok := slot[name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// prefixLiveIn diz se há sequência ativa começando por prefix nos modos dados.
+func (r keyRegistry) prefixLiveIn(prefix string, modes ...keyMode) bool {
+	if !r.livePrefixes[prefix] {
+		return false
+	}
+	needle := prefix + " "
+	for _, mode := range modes {
+		for name := range r.byMode[mode] {
+			if strings.HasPrefix(name, needle) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // indexName é o nome com que o terminal entrega a tecla: "space" chega como " ".

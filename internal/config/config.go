@@ -57,8 +57,29 @@ type Config struct {
 	// An empty list disables the action. Nil means no [keys] section.
 	Keys map[string][]string
 	// KeyWarnings are non-fatal [keys] parse problems (bad syntax on one line).
-	// They are never written back to the file.
-	KeyWarnings []string
+	// They are never written back to the file. The UI and doctor format them
+	// with the active catalog.
+	KeyWarnings []KeyWarning
+}
+
+// KeyWarningKind classifies a non-fatal [keys] parse problem.
+type KeyWarningKind int
+
+const (
+	KeyWarningMissingEquals KeyWarningKind = iota
+	KeyWarningInvalidKey
+	KeyWarningEmptyKey
+	KeyWarningNotArray
+	KeyWarningMalformedArray
+	KeyWarningDuplicateShort
+	KeyWarningDuplicateForm
+)
+
+// KeyWarning is one discarded or ambiguous [keys] line.
+type KeyWarning struct {
+	Line int
+	Kind KeyWarningKind
+	Key  string
 }
 
 // Limits of a saved panel width. The UI applies the tighter limits of the moment.
@@ -532,6 +553,7 @@ func shortActionKey(id string) string {
 func parseTOML(input string) (Config, error) {
 	cfg := Default()
 	cfg.KeymapNoticeSeen = false
+	keyFromShort := map[string]bool{}
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	lineNum := 0
 	section := ""
@@ -548,7 +570,7 @@ func parseTOML(input string) (Config, error) {
 		eq := strings.IndexByte(line, '=')
 		if eq < 0 {
 			if section == "keys" {
-				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] entry discarded: missing '='", lineNum))
+				cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningMissingEquals})
 				continue
 			}
 			return Config{}, fmt.Errorf("line %d: missing '='", lineNum)
@@ -558,16 +580,24 @@ func parseTOML(input string) (Config, error) {
 		if section == "keys" {
 			id, err := unquoteTOMLKey(key)
 			if err != nil {
-				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] entry discarded: key %q: %v", lineNum, key, err))
+				kind := KeyWarningInvalidKey
+				if strings.TrimSpace(key) == "" {
+					kind = KeyWarningEmptyKey
+				}
+				cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: kind, Key: key})
 				continue
 			}
 			if shortActionKey(id) == "" {
-				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] entry discarded: empty or invalid key", lineNum))
+				cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningEmptyKey})
 				continue
 			}
 			vals, err := parseTOMLStringArray(rawVal)
 			if err != nil {
-				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] entry discarded: key %q: %v", lineNum, key, err))
+				kind := KeyWarningMalformedArray
+				if !strings.HasPrefix(strings.TrimSpace(rawVal), "[") {
+					kind = KeyWarningNotArray
+				}
+				cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: kind, Key: shortActionKey(id)})
 				continue
 			}
 			if cfg.Keys == nil {
@@ -581,15 +611,26 @@ func parseTOML(input string) (Config, error) {
 			short := shortActionKey(id)
 			fullForm := strings.HasPrefix(id, "action.") && id != short
 			if prev, exists := cfg.Keys[short]; exists {
-				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] duplicate action %q; using the short form", lineNum, short))
-				if !fullForm {
+				fromShort := keyFromShort[short]
+				switch {
+				case !fullForm && fromShort:
+					cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningDuplicateShort, Key: short})
 					cfg.Keys[short] = vals
-				} else {
+				case fullForm && fromShort, !fullForm && !fromShort:
+					cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningDuplicateForm, Key: short})
+					if !fullForm {
+						cfg.Keys[short] = vals
+						keyFromShort[short] = true
+					}
+				default:
+					// long + long: keep the first, warn as a repeated action.
+					cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningDuplicateShort, Key: short})
 					_ = prev
 				}
 				continue
 			}
 			cfg.Keys[short] = vals
+			keyFromShort[short] = !fullForm
 			continue
 		}
 		fullKey := key

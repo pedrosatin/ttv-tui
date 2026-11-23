@@ -46,9 +46,16 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if name == "esc" {
 			return m, nil, true
 		}
-		// Despacha qualquer ação cuja sequência case nos modos ativos, pelo
-		// mesmo caminho das teclas simples, com mensagem sintética do nome da
-		// sequência.
+		// F1 atravessa o prefixo e abre a ajuda. Ctrl+C e Ctrl+Q chegam antes,
+		// em handleKeyMsg. Sem ação para a sequência nos modos ativos, a tecla
+		// original segue o despacho normal só quando é a ajuda; as demais
+		// encerram a sequência sem efeito.
+		if m.keys.actionFor(modeGlobal, msg) == actHelpAnywhere {
+			return m, nil, false
+		}
+		if !m.keys.bindsKey(seq) {
+			return m, nil, true
+		}
 		synth := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(seq)}
 		if next, cmd, ok := m.handleAppKey(synth); ok {
 			return next, cmd, true
@@ -71,21 +78,37 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if next, cmd, ok := m.handleMoveKey(synth); ok {
 			return next, cmd, true
 		}
-		// Só a ajuda atravessa o prefixo: F1 o desfaz e abre a ajuda. Ctrl+C e
-		// Ctrl+Q chegam antes, em handleKeyMsg. As demais teclas acabam a
-		// sequência sem efeito.
-		if m.keys.actionFor(modeGlobal, msg) == actHelpAnywhere {
-			return m, nil, false
-		}
 		return m, nil, true
 	}
 	if !slices.Contains(prefixKeys, name) || name == "g" && (m.typingField() || m.list.prefs.menuOpen) {
+		return m, nil, false
+	}
+	if !m.keys.prefixLiveIn(name, m.prefixActiveModes()...) {
 		return m, nil, false
 	}
 	m.prefix = name
 	m.prefixGeneration++
 	gen := m.prefixGeneration
 	return m, m.after(250*time.Millisecond, func(time.Time) tea.Msg { return prefixPopupMsg{gen} }), true
+}
+
+// prefixActiveModes são os modos em que uma sequência do prefixo ainda pode
+// disparar depois que a ajuda e a confirmação já passaram.
+func (m Model) prefixActiveModes() []keyMode {
+	modes := []keyMode{modeApp, modeGlobal, modeWindow, modeNormal}
+	if m.list.prefs.menuOpen {
+		modes = append(modes, modeMenu)
+	}
+	if m.list.search.active {
+		modes = append(modes, modeSearch)
+	}
+	if m.list.filtering {
+		modes = append(modes, modeFilter)
+	}
+	if m.chat.composing {
+		modes = append(modes, modeCompose)
+	}
+	return modes
 }
 
 // prefixSecondKey é a tecla que fecha a sequência. Como no vim, Ctrl+letra vale

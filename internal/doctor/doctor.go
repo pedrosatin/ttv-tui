@@ -125,7 +125,7 @@ func reportKeymap(out io.Writer, cfg config.Config, cat *i18n.Catalog) {
 		}
 		_, _ = fmt.Fprintf(out, "  %s: %s\n", b.Action, termtext.Line(keys))
 	}
-	notices = append(append([]string{}, cfg.KeyWarnings...), notices...)
+	notices = append(ui.FormatKeyWarnings(cfg.KeyWarnings, cat), notices...)
 	if len(notices) == 0 {
 		return
 	}

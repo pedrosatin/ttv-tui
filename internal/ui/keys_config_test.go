@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/pedrosatin/ttv-tui/internal/config"
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
@@ -19,7 +20,7 @@ func TestResolveKeyOverridesDesconhecidoInvalidoConflitoEImprimivel(t *testing.T
 		"nao_existe":  {"ctrl+b"},
 		"toggle_list": {"ctrl+b", "nao-e-tecla"},
 		"toggle_chat": {"x"}, // imprimível em modo global
-		"mute":        {"f"}, // f já é favorito no modo normal; mute só modeNormal no classic? mute is modeNormal
+		"mute":        {"f"}, // f já é favorito no modo normal; mute é modeNormal
 	}
 	// No classic, mute conflita com favorite (f) no mesmo contexto.
 	overrides, notices := ResolveKeyOverrides(true, raw, cat)
@@ -298,6 +299,40 @@ func TestDicasSomemComAcaoDesligada(t *testing.T) {
 	}
 }
 
+func TestDicasParciaisHelpEHelpAnywhere(t *testing.T) {
+	cat, _ := i18n.New(i18n.LangEN)
+	onlyAnywhere, _ := ResolveKeyOverrides(false, map[string][]string{
+		"help": {},
+	}, cat)
+	m, _ := newScenario(t, 120, 40, WithKeymapOverrides(false, onlyAnywhere, ""))
+	bar := ansi.Strip(m.StatusBar())
+	if strings.Contains(bar, " help") && !strings.Contains(bar, "F1") {
+		t.Fatalf("dica parcial sem F1: %q", bar)
+	}
+	if !strings.Contains(bar, "F1") {
+		t.Fatalf("status sem F1 com help_anywhere ativo: %q", bar)
+	}
+	m.list.search.active = true
+	footer := ansi.Strip(m.Footer())
+	if !strings.Contains(footer, "F1") {
+		t.Fatalf("rodapé de campo sem F1: %q", footer)
+	}
+
+	onlyHelp, _ := ResolveKeyOverrides(false, map[string][]string{
+		"help_anywhere": {},
+	}, cat)
+	m, _ = newScenario(t, 120, 40, WithKeymapOverrides(false, onlyHelp, ""))
+	bar = ansi.Strip(m.StatusBar())
+	if !strings.Contains(bar, "?") {
+		t.Fatalf("status sem ? com help ativo: %q", bar)
+	}
+	m.list.search.active = true
+	footer = ansi.Strip(m.Footer())
+	if strings.Contains(footer, "F1") || strings.Contains(footer, " help") {
+		t.Fatalf("rodapé de campo com help_anywhere desligado: %q", footer)
+	}
+}
+
 func TestPrefixoDespachaAcaoForaDaListaFixa(t *testing.T) {
 	cat, _ := i18n.New(i18n.LangEN)
 	overrides, notices := ResolveKeyOverrides(false, map[string][]string{
@@ -408,5 +443,180 @@ func TestCenarioTeclaCustomToggleListClassic(t *testing.T) {
 	m = play(t, m, "ctrl+b")
 	if m.layout.showList {
 		t.Fatal("Ctrl+B não escondeu a lista no classic")
+	}
+}
+
+func TestResolveKeyOverridesReversaoAtePontoFixo(t *testing.T) {
+	cat, _ := i18n.New(i18n.LangEN)
+	overrides, notices := ResolveKeyOverrides(false, map[string][]string{
+		"toggle_list": {"ctrl+q"},
+		"mute":        {"ctrl+w h"},
+	}, cat)
+	if _, ok := overrides[actToggleList]; ok {
+		t.Fatalf("toggle_list não deveria sobreviver após colidir no padrão: %v", overrides[actToggleList])
+	}
+	if _, ok := overrides[actMute]; ok {
+		t.Fatalf("mute deveria reverter ao colidir com o padrão de toggle_list: %v", overrides[actMute])
+	}
+	joined := strings.Join(notices, "\n")
+	if !strings.Contains(joined, "quit") || !strings.Contains(joined, "toggle_list") {
+		t.Fatalf("sem aviso do conflito inicial:\n%s", joined)
+	}
+
+	overrides, notices = ResolveKeyOverrides(false, map[string][]string{
+		"categories": {"ctrl+q"},
+		"favorites":  {"f2"},
+		"recents":    {"f3"},
+		"home":       {"home"},
+		"mute":       {"g"},
+	}, cat)
+	if _, ok := overrides[actMute]; ok {
+		t.Fatalf("mute=g deveria reverter quando categories volta com g c: %v", overrides[actMute])
+	}
+	if _, ok := overrides[actCategories]; ok {
+		t.Fatalf("categories=ctrl+q deveria conflitar com quit: %v", overrides[actCategories])
+	}
+	if !slices.Equal(overrides[actFavorites], []string{"f2"}) {
+		t.Fatalf("favorites = %v", overrides[actFavorites])
+	}
+	joined = strings.Join(notices, "\n")
+	if !strings.Contains(joined, "prefix") && !strings.Contains(joined, "live prefix") {
+		t.Fatalf("sem aviso de prefixo após reversão:\n%s", joined)
+	}
+}
+
+func TestResolveKeyOverridesMuteGSemPrefixoVivo(t *testing.T) {
+	cat, _ := i18n.New(i18n.LangEN)
+	raw := map[string][]string{
+		"categories": {"f4"},
+		"favorites":  {"f2"},
+		"recents":    {"f3"},
+		"home":       {"home"},
+		"mute":       {"g"},
+	}
+	overrides, notices := ResolveKeyOverrides(false, raw, cat)
+	if len(notices) != 0 {
+		t.Fatalf("avisos: %v", notices)
+	}
+	if !slices.Equal(overrides[actMute], []string{"g"}) {
+		t.Fatalf("mute = %v", overrides[actMute])
+	}
+	reg, _ := EffectiveKeymap(false, raw, cat)
+	if reg.livePrefixes["g"] {
+		t.Fatal("g ainda é prefixo vivo")
+	}
+	m, _ := newScenario(t, 80, 24, WithKeymapOverrides(false, overrides, ""))
+	if m.keys.actionFor(modeNormal, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) != actMute {
+		t.Fatal("g não mapeia mute no modo normal")
+	}
+	m = play(t, m, "g")
+	if m.prefix != "" {
+		t.Fatalf("entrou em modo prefixo com g: %q", m.prefix)
+	}
+}
+
+func TestF1AposCtrlWComMenuFiltroAberto(t *testing.T) {
+	m, _ := newScenario(t, 80, 24)
+	m = m.openChannelFilterMenu()
+	if !m.list.prefs.menuOpen {
+		t.Fatal("menu de filtros fechado")
+	}
+	m = play(t, m, "ctrl+w")
+	if m.prefix != "ctrl+w" {
+		t.Fatalf("prefixo = %q", m.prefix)
+	}
+	m = play(t, m, "f1")
+	if !m.helpOpen() {
+		t.Fatal("F1 depois de ctrl+w com menu aberto não abriu a ajuda")
+	}
+	if m.prefix != "" {
+		t.Fatalf("prefixo sobrou: %q", m.prefix)
+	}
+}
+
+func TestSequenciaEmAcaoSoDeHelpOuConfirm(t *testing.T) {
+	cat, _ := i18n.New(i18n.LangEN)
+	overrides, notices := ResolveKeyOverrides(false, map[string][]string{
+		"help_next_section": {"g n"},
+		"confirm":           {"g y"},
+	}, cat)
+	if _, ok := overrides[actHelpNext]; ok {
+		t.Fatal("help_next_section não deveria aceitar sequência")
+	}
+	if _, ok := overrides[actConfirm]; ok {
+		t.Fatal("confirm não deveria aceitar sequência")
+	}
+	joined := strings.Join(notices, "\n")
+	if !strings.Contains(joined, "help_next_section") || !strings.Contains(joined, "confirm") {
+		t.Fatalf("sem aviso de sequência modal:\n%s", joined)
+	}
+}
+
+func TestFormatKeyWarningsLocalizados(t *testing.T) {
+	warnings := []config.KeyWarning{
+		{Line: 3, Kind: config.KeyWarningMissingEquals},
+		{Line: 4, Kind: config.KeyWarningNotArray, Key: "bad"},
+		{Line: 5, Kind: config.KeyWarningDuplicateShort, Key: "toggle_list"},
+		{Line: 6, Kind: config.KeyWarningDuplicateForm, Key: "search"},
+	}
+	en, _ := i18n.New(i18n.LangEN)
+	pt, _ := i18n.New(i18n.LangPTBR)
+	enLines := FormatKeyWarnings(warnings, en)
+	ptLines := FormatKeyWarnings(warnings, pt)
+	if len(enLines) != 4 || len(ptLines) != 4 {
+		t.Fatalf("en=%d pt=%d", len(enLines), len(ptLines))
+	}
+	if !strings.Contains(enLines[0], "missing '='") || !strings.Contains(ptLines[0], "falta de '='") {
+		t.Fatalf("missing equals: en=%q pt=%q", enLines[0], ptLines[0])
+	}
+	if !strings.Contains(enLines[1], "not a string array") || !strings.Contains(ptLines[1], "não é um array") {
+		t.Fatalf("not array: en=%q pt=%q", enLines[1], ptLines[1])
+	}
+	if !strings.Contains(enLines[2], "last line wins") || !strings.Contains(ptLines[2], "vale a última linha") {
+		t.Fatalf("duplicate short: en=%q pt=%q", enLines[2], ptLines[2])
+	}
+	if !strings.Contains(enLines[3], "short form") || !strings.Contains(ptLines[3], "forma curta") {
+		t.Fatalf("duplicate form: en=%q pt=%q", enLines[3], ptLines[3])
+	}
+}
+
+func TestEffectiveKeymapInvariantAcrossSampleConfigs(t *testing.T) {
+	cat, _ := i18n.New(i18n.LangEN)
+	samples := []map[string][]string{
+		nil,
+		{"toggle_list": {"ctrl+b"}, "window_list": {"ctrl+g"}},
+		{"help": {}, "help_anywhere": {"f1"}},
+		{"mute": {"g"}, "categories": {"f4"}, "favorites": {"f2"}, "recents": {"f3"}, "home": {"home"}},
+		{"toggle_list": {"ctrl+q"}, "mute": {"ctrl+w h"}},
+		{"ctrl_c": {"x"}},
+		{"help_next_section": {"g n"}},
+		{"up": {"k"}, "down": {"j"}},
+	}
+	assertInvariant := func(t *testing.T, reg keyRegistry) {
+		t.Helper()
+		for _, modes := range keyContexts {
+			owner := map[string]actionID{}
+			for _, a := range reg.actions {
+				if !slices.ContainsFunc(a.Modes, func(m keyMode) bool { return slices.Contains(modes, m) }) {
+					continue
+				}
+				for _, name := range reg.keys[a.ID] {
+					name = indexName(name)
+					if other, taken := owner[name]; taken && other != a.ID {
+						t.Errorf("modos %v: %q dispara %s e %s", modes, name, other, a.ID)
+					}
+					owner[name] = a.ID
+				}
+			}
+		}
+	}
+	for i, raw := range samples {
+		reg, _ := EffectiveKeymap(false, raw, cat)
+		assertInvariant(t, reg)
+		reg, _ = EffectiveKeymap(true, raw, cat)
+		assertInvariant(t, reg)
+		if i == 0 {
+			continue
+		}
 	}
 }

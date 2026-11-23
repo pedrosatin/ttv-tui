@@ -94,14 +94,16 @@ func (m Model) Footer() string {
 		}
 	}
 	slices.SortStableFunc(hints, func(a, b hint) int { return cmp.Compare(a.priority, b.priority) })
-	// A pergunta da barra só aceita a resposta: a ajuda não abre com ela.
+	// A pergunta da barra só aceita a resposta e a ajuda não abre com ela.
 	var help []string
 	switch m.footerMode() {
 	case footConfirm:
 	case footSearch, footFilter, footCompose, footMenu:
-		help = []string{m.t("footer.help_field")}
+		if hint := m.statusHint("footer.help_field", actHelpAnywhere); hint != "" {
+			help = []string{hint}
+		}
 	default:
-		if hint := m.statusHint("status.help_hint", actHelp, actHelpAnywhere); hint != "" {
+		if hint := m.helpStatusHint(); hint != "" {
 			help = []string{hint}
 		}
 	}

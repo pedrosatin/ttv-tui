@@ -525,7 +525,7 @@ func TestReportKeymapEfetivoEConflitos(t *testing.T) {
 	if !strings.Contains(text, "Keymap notices:") || !strings.Contains(text, "nao_existe") {
 		t.Fatalf("sem aviso de ação desconhecida:\n%s", text)
 	}
-	if !strings.Contains(text, "discarded") {
+	if !strings.Contains(text, "not a string array") && !strings.Contains(text, "discarded") {
 		t.Fatalf("sem aviso de [keys] malformado:\n%s", text)
 	}
 }
