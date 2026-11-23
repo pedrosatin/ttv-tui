@@ -10,12 +10,19 @@ import (
 
 // WithKeymap selects the legacy bindings and an optional startup notice.
 func WithKeymap(classic bool, notice string) Option {
+	return WithKeymapOverrides(classic, nil, notice)
+}
+
+// WithKeymapOverrides aplica a base (default ou classic), os overrides de
+// [keys] já validados e o aviso de início (migração e/ou validação).
+func WithKeymapOverrides(classic bool, overrides map[actionID][]string, notice string) Option {
 	return func(m *Model) {
 		m.classic = classic
-		m.keys = defaultKeys()
+		actions := defaultActions()
 		if classic {
-			m.keys = newKeyRegistry(classicActions(), nil)
+			actions = classicActions()
 		}
+		m.keys = newKeyRegistry(actions, overrides)
 		if notice != "" {
 			m.keymapNotice = notice
 		}
@@ -34,32 +41,49 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 	name := keyName(msg)
 	if m.prefix != "" {
-		seq := m.prefix + " " + prefixSecondKey(name)
+		seq := m.prefix + " " + sequenceSecondName(name)
 		m.cancelPrefix()
 		if name == "esc" {
 			return m, nil, true
 		}
-		if id := m.keys.byMode[modeGlobal][seq]; id == actCategories {
-			return handled(m.keyCategories())
-		}
-		if m.keys.byMode[modeNormal][seq] == actHome {
-			return handled(m.keyHome())
-		}
-		if id := m.keys.byMode[modeNormal][seq]; id == actFavorites || id == actRecents {
-			return handled(m.keySaved(id))
-		}
-		if next, cmd, ok := m.handleLayoutAction(m.keys.byMode[modeGlobal][seq], m.keys.byMode[modeWindow][seq]); ok {
-			return next, cmd, true
-		}
-		// Só a ajuda atravessa o prefixo: F1 o desfaz e abre a ajuda. Ctrl+C e
-		// Ctrl+Q chegam antes, em handleKeyMsg. As demais teclas acabam a
-		// sequência sem efeito.
+		// F1 atravessa o prefixo e abre a ajuda. Ctrl+C e Ctrl+Q chegam antes,
+		// em handleKeyMsg. Sem ação para a sequência nos modos ativos, a tecla
+		// original segue o despacho normal só quando é a ajuda; as demais
+		// encerram a sequência sem efeito.
 		if m.keys.actionFor(modeGlobal, msg) == actHelpAnywhere {
 			return m, nil, false
+		}
+		if !m.keys.bindsKey(seq) {
+			return m, nil, true
+		}
+		synth := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(seq)}
+		if next, cmd, ok := m.handleAppKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handleGlobalKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handleLayoutKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handleModeKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handleCommandKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handlePlayerKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handleMoveKey(synth); ok {
+			return next, cmd, true
 		}
 		return m, nil, true
 	}
 	if !slices.Contains(prefixKeys, name) || name == "g" && (m.typingField() || m.list.prefs.menuOpen) {
+		return m, nil, false
+	}
+	if !m.keys.prefixLiveIn(name, m.prefixActiveModes()...) {
 		return m, nil, false
 	}
 	m.prefix = name
@@ -68,12 +92,42 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, m.after(250*time.Millisecond, func(time.Time) tea.Msg { return prefixPopupMsg{gen} }), true
 }
 
+// prefixActiveModes são os modos em que uma sequência do prefixo ainda pode
+// disparar depois que a ajuda e a confirmação já passaram.
+func (m Model) prefixActiveModes() []keyMode {
+	modes := []keyMode{modeApp, modeGlobal, modeWindow, modeNormal}
+	if m.list.prefs.menuOpen {
+		modes = append(modes, modeMenu)
+	}
+	if m.list.search.active {
+		modes = append(modes, modeSearch)
+	}
+	if m.list.filtering {
+		modes = append(modes, modeFilter)
+	}
+	if m.chat.composing {
+		modes = append(modes, modeCompose)
+	}
+	return modes
+}
+
 // prefixSecondKey é a tecla que fecha a sequência. Como no vim, Ctrl+letra vale
 // a letra: Ctrl+W Ctrl+H é Ctrl+W h, e Ctrl+W Ctrl+X, Ctrl+W x, sem encerrar o
-// vídeo no caminho.
+// vídeo no caminho. A validação de [keys] recusa ctrl+letra como segunda tecla
+// no arquivo; o despacho continua dobrando para casar o que o usuário digita.
 func prefixSecondKey(name string) string {
 	if letter, ok := strings.CutPrefix(name, "ctrl+"); ok && len(letter) == 1 && letter[0] >= 'a' && letter[0] <= 'z' {
 		return letter
+	}
+	return name
+}
+
+// sequenceSecondName é o nome indexado da segunda tecla de uma sequência: aplica
+// o dobramento vim de Ctrl+letra e grava space em vez do caractere espaço.
+func sequenceSecondName(name string) string {
+	name = prefixSecondKey(name)
+	if name == " " {
+		return "space"
 	}
 	return name
 }

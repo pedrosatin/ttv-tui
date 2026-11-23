@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/pedrosatin/ttv-tui/internal/components"
@@ -18,6 +19,7 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 	"github.com/pedrosatin/ttv-tui/internal/player"
 	"github.com/pedrosatin/ttv-tui/internal/termtext"
+	"github.com/pedrosatin/ttv-tui/internal/ui"
 )
 
 // Options selects the version, language and configuration to inspect.
@@ -100,8 +102,37 @@ func Run(out io.Writer, opts Options) int {
 		code = 1
 	}
 	line("doctor.registry", cat.T(status))
+	if cfgErr == nil && path != "" {
+		reportKeymap(out, cfg, cat)
+	}
 	_, _ = fmt.Fprintln(out, cat.T("doctor.scope"))
 	return code
+}
+
+// reportKeymap lista o mapa efetivo (base + [keys]) e os avisos de validação.
+func reportKeymap(out io.Writer, cfg config.Config, cat *i18n.Catalog) {
+	classic := cfg.Keymap == "classic"
+	base := cat.T("doctor.keymap_default")
+	if classic {
+		base = cat.T("doctor.keymap_classic")
+	}
+	_, _ = fmt.Fprintf(out, "%s (%s: %s):\n", cat.T("doctor.keymap"), cat.T("doctor.keymap_base"), base)
+	bindings, notices := ui.KeymapReport(classic, cfg.Keys, cat)
+	for _, b := range bindings {
+		keys := cat.T("doctor.keymap_disabled")
+		if len(b.Keys) > 0 {
+			keys = strings.Join(b.Keys, ", ")
+		}
+		_, _ = fmt.Fprintf(out, "  %s: %s\n", b.Action, termtext.Line(keys))
+	}
+	notices = append(ui.FormatKeyWarnings(cfg.KeyWarnings, cat), notices...)
+	if len(notices) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(out, "%s:\n", cat.T("doctor.keymap_conflicts"))
+	for _, n := range notices {
+		_, _ = fmt.Fprintf(out, "  %s\n", termtext.Line(n))
+	}
 }
 
 // Records disappear after cleanup, so the registry cannot prove past IPC health.

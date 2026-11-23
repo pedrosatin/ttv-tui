@@ -38,6 +38,8 @@ var allowedExceptions = map[string]bool{
 	"ctrl+w ":  true,
 	"g ":       true,
 	"classic":  true,
+	// Prefixo interno dos IDs de ação no registro e na seção [keys].
+	"action.": true,
 
 	// Separador entre plataforma e StableID na identidade de uma linha.
 	":": true,

@@ -494,3 +494,38 @@ func TestReport_WindowLibmpvNonWindows(t *testing.T) {
 		t.Fatalf("expected 'mpv: MISSING' on linux without mpv on PATH, got: %s", out.String())
 	}
 }
+
+func TestReportKeymapEfetivoEConflitos(t *testing.T) {
+	base := isolate(t)
+	fakeTool(t, base, "streamlink")
+	fakeTool(t, base, "mpv")
+	t.Setenv("PATH", base)
+	path := filepath.Join(base, "XDG_CONFIG_HOME", "ttv-tui", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	raw := "keymap = \"classic\"\n\n[keys]\ntoggle_list = [\"ctrl+b\"]\nnao_existe = [\"z\"]\nbad = \"not-an-array\"\n"
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if code := Run(&out, Options{Version: "test", Lang: "en", ConfigPath: path}); code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	text := out.String()
+	if !strings.Contains(text, "Keymap (base: classic):") {
+		t.Fatalf("sem cabeçalho do mapa:\n%s", text)
+	}
+	if !strings.Contains(text, "toggle_list") || !strings.Contains(text, "ctrl+b") {
+		t.Fatalf("mapa efetivo sem toggle_list=ctrl+b:\n%s", text)
+	}
+	if strings.Contains(text, "action.toggle_list") {
+		t.Fatalf("doctor ainda mostra forma longa:\n%s", text)
+	}
+	if !strings.Contains(text, "Keymap notices:") || !strings.Contains(text, "nao_existe") {
+		t.Fatalf("sem aviso de ação desconhecida:\n%s", text)
+	}
+	if !strings.Contains(text, "not a string array") && !strings.Contains(text, "discarded") {
+		t.Fatalf("sem aviso de [keys] malformado:\n%s", text)
+	}
+}

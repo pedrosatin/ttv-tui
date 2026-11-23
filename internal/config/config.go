@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -51,6 +52,34 @@ type Config struct {
 	// path is resolved against the working directory, like StreamlinkPath.
 	// Empty means streamlink's own search. TOML key: kick_browser.
 	KickBrowser string
+	// Keys are per-action key overrides from the [keys] section. The map key is
+	// the short action name (toggle_list); the value is the bubbletea key names.
+	// An empty list disables the action. Nil means no [keys] section.
+	Keys map[string][]string
+	// KeyWarnings are non-fatal [keys] parse problems (bad syntax on one line).
+	// They are never written back to the file. The UI and doctor format them
+	// with the active catalog.
+	KeyWarnings []KeyWarning
+}
+
+// KeyWarningKind classifies a non-fatal [keys] parse problem.
+type KeyWarningKind int
+
+const (
+	KeyWarningMissingEquals KeyWarningKind = iota
+	KeyWarningInvalidKey
+	KeyWarningEmptyKey
+	KeyWarningNotArray
+	KeyWarningMalformedArray
+	KeyWarningDuplicateShort
+	KeyWarningDuplicateForm
+)
+
+// KeyWarning is one discarded or ambiguous [keys] line.
+type KeyWarning struct {
+	Line int
+	Kind KeyWarningKind
+	Key  string
 }
 
 // Limits of a saved panel width. The UI applies the tighter limits of the moment.
@@ -408,7 +437,42 @@ func formatTOML(cfg Config) string {
 	if cfg.KickBrowser != "" {
 		fmt.Fprintf(&b, "kick_browser = %s\n", quoteTOML(cfg.KickBrowser))
 	}
+	if len(cfg.Keys) > 0 {
+		b.WriteString("\n[keys]\n")
+		ids := make([]string, 0, len(cfg.Keys))
+		for id := range cfg.Keys {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			fmt.Fprintf(&b, "%s = %s\n", formatTOMLKey(id), formatTOMLStringArray(cfg.Keys[id]))
+		}
+	}
 	return b.String()
+}
+
+// formatTOMLKey writes a bare key when it is a simple identifier (toggle_list);
+// otherwise it quotes, as dotted action.* names used to require.
+func formatTOMLKey(s string) string {
+	if isBareTOMLKey(s) {
+		return s
+	}
+	return quoteTOML(s)
+}
+
+func isBareTOMLKey(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func formatTOMLStringArray(vals []string) string {
@@ -467,9 +531,29 @@ func quoteTOML(s string) string {
 	return b.String()
 }
 
+// unquoteTOMLKey is the left-hand side of an assignment: a quoted string or a
+// bare key. Short action names under [keys] are bare (toggle_list); the legacy
+// dotted form may still arrive quoted.
+func unquoteTOMLKey(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", errors.New("empty key")
+	}
+	if raw[0] == '"' || raw[0] == '\'' {
+		return unquoteTOML(raw)
+	}
+	return raw, nil
+}
+
+// shortActionKey normalizes a [keys] map key to the short config name.
+func shortActionKey(id string) string {
+	return strings.TrimPrefix(strings.TrimSpace(id), "action.")
+}
+
 func parseTOML(input string) (Config, error) {
 	cfg := Default()
 	cfg.KeymapNoticeSeen = false
+	keyFromShort := map[string]bool{}
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	lineNum := 0
 	section := ""
@@ -485,10 +569,70 @@ func parseTOML(input string) (Config, error) {
 		}
 		eq := strings.IndexByte(line, '=')
 		if eq < 0 {
+			if section == "keys" {
+				cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningMissingEquals})
+				continue
+			}
 			return Config{}, fmt.Errorf("line %d: missing '='", lineNum)
 		}
 		key := strings.TrimSpace(line[:eq])
 		rawVal := strings.TrimSpace(line[eq+1:])
+		if section == "keys" {
+			id, err := unquoteTOMLKey(key)
+			if err != nil {
+				kind := KeyWarningInvalidKey
+				if strings.TrimSpace(key) == "" {
+					kind = KeyWarningEmptyKey
+				}
+				cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: kind, Key: key})
+				continue
+			}
+			if shortActionKey(id) == "" {
+				cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningEmptyKey})
+				continue
+			}
+			vals, err := parseTOMLStringArray(rawVal)
+			if err != nil {
+				kind := KeyWarningMalformedArray
+				if !strings.HasPrefix(strings.TrimSpace(rawVal), "[") {
+					kind = KeyWarningNotArray
+				}
+				cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: kind, Key: shortActionKey(id)})
+				continue
+			}
+			if cfg.Keys == nil {
+				cfg.Keys = make(map[string][]string)
+			}
+			// Empty array disables the action; keep a non-nil empty slice so a
+			// later SaveTo still writes the entry.
+			if vals == nil {
+				vals = []string{}
+			}
+			short := shortActionKey(id)
+			fullForm := strings.HasPrefix(id, "action.") && id != short
+			if _, exists := cfg.Keys[short]; exists {
+				fromShort := keyFromShort[short]
+				switch {
+				case !fullForm && fromShort:
+					cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningDuplicateShort, Key: short})
+					cfg.Keys[short] = vals
+				case fullForm && fromShort, !fullForm && !fromShort:
+					cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningDuplicateForm, Key: short})
+					if !fullForm {
+						cfg.Keys[short] = vals
+						keyFromShort[short] = true
+					}
+				default:
+					// long + long: the last line wins, as with short + short.
+					cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningDuplicateShort, Key: short})
+					cfg.Keys[short] = vals
+				}
+				continue
+			}
+			cfg.Keys[short] = vals
+			keyFromShort[short] = !fullForm
+			continue
+		}
 		fullKey := key
 		if section != "" {
 			fullKey = section + "." + key

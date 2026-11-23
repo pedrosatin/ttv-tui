@@ -51,7 +51,11 @@ func parseKeyName(name string) (tea.KeyMsg, bool) {
 		if !ok {
 			return tea.KeyMsg{}, false
 		}
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(prefix + " " + keyName(second))}, true
+		secondName := keyName(second)
+		if secondName == " " {
+			secondName = "space"
+		}
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(prefix + " " + secondName)}, true
 	}
 	if t, ok := keyTypesByName[name]; ok {
 		return keyMsgOf(t, false), true

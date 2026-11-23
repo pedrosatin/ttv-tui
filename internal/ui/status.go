@@ -259,19 +259,19 @@ type statusChrome struct {
 // the cut order: title, language, layout token, focus hint, help hint. The state
 // message, the volume, the active filter and the quit hint outlast all of them.
 func (m Model) statusLadder(lang string) []statusChrome {
-	help, quit := m.t("status.help_hint"), m.t("status.quit_hint")
-	hints := fmt.Sprintf(" | %s · %s ", help, quit)
+	help, quit := m.helpStatusHint(), m.statusHint("status.quit_hint", actQuit)
+	hints := statusRightHints(help, quit)
 	focusHints := hints
 	// Focus lives in the chrome, not in the state message, so Tab has a stable
 	// place to announce the active panel. Skip it while an error detail needs
 	// the columns.
 	if focus := m.focusStatusText(); focus != "" && !m.list.hardErr() {
-		focusHints = fmt.Sprintf(" | %s · %s · %s ", focus, help, quit)
+		focusHints = statusRightHints(focus, help, quit)
 	}
-	last := " | " + quit + " "
+	last := statusRightHints(quit)
 	// The window is narrow exactly when this hint matters: it outlasts the help hint.
 	if m.hosted.host != nil && m.shouldShowNarrowChatNotice() {
-		last = fmt.Sprintf(" | %s · %s ", m.t("status.chat_narrow"), quit)
+		last = statusRightHints(m.t("status.chat_narrow"), quit)
 		hints, focusHints = last, last
 	}
 	// A pergunta de limpar os recentes só aceita a resposta: a ajuda não abre.
@@ -286,6 +286,44 @@ func (m Model) statusLadder(lang string) []statusChrome {
 		{" ", hints, false},
 		{" ", last, false},
 	}
+}
+
+// statusHint is the catalog text for a status key hint when at least one of the
+// cited actions still has a key; an empty string when every action is disabled.
+func (m Model) statusHint(catalogKey string, ids ...actionID) string {
+	for _, id := range ids {
+		if len(m.keys.keys[id]) > 0 {
+			return m.t(catalogKey)
+		}
+	}
+	return ""
+}
+
+// helpStatusHint escolhe a dica cuja ação ainda tem tecla. Com help desligado e
+// help_anywhere em F1, usa footer.help_field para não sobrar " help" sem tecla.
+func (m Model) helpStatusHint() string {
+	if len(m.keys.keys[actHelp]) > 0 {
+		return m.t("status.help_hint")
+	}
+	if len(m.keys.keys[actHelpAnywhere]) > 0 {
+		return m.t("footer.help_field")
+	}
+	return ""
+}
+
+// statusRightHints joins non-empty status fragments as " | a · b ".
+func statusRightHints(parts ...string) string {
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return " "
+	}
+	return " | " + strings.Join(out, " · ") + " "
 }
 
 // StatusBar renders the one-line bar: state on the left, key hints pinned to the

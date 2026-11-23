@@ -112,11 +112,11 @@ func TestScreenDiffMostraSoAsLinhasQueMudaram(t *testing.T) {
 }
 
 // Uma sequência do mapa padrão é o prefixo e uma tecla, com o nome que
-// handlePrefixKey monta ao receber as duas: "ctrl+w space" vira "ctrl+w  ".
+// handlePrefixKey monta ao receber as duas. O espaço fica como "space".
 func TestParseKeyNameSequencia(t *testing.T) {
 	for name, want := range map[string]string{
 		"ctrl+w h": "ctrl+w h", "ctrl+w +": "ctrl+w +", "ctrl+w <": "ctrl+w <",
-		"g c": "g c", "ctrl+w space": "ctrl+w  ", "ctrl+w esc": "ctrl+w esc",
+		"g c": "g c", "ctrl+w space": "ctrl+w space", "ctrl+w esc": "ctrl+w esc",
 	} {
 		k, ok := parseKeyName(name)
 		if !ok {
