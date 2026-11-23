@@ -185,6 +185,12 @@ func TestStatusBarResolvesSameKeysInBothLanguages(t *testing.T) {
 			m.list.prefs.menuOpen = true
 			return m
 		}, func() []expectKey { return []expectKey{ek("channel_filter.status_open")} }},
+		{"quick open", func(t *testing.T, lang string, classic bool) Model {
+			m := auditModel(t, lang, 200, classic)
+			m.list.quickOpen.active = true
+			m.list.quickOpen.input = "gau"
+			return m
+		}, func() []expectKey { return []expectKey{ek("quick_open.status_open")} }},
 		{"search prompt", func(t *testing.T, lang string, classic bool) Model {
 			m := auditModel(t, lang, 200, classic)
 			m.list.search.active, m.list.search.input = true, "doom"
@@ -261,7 +267,7 @@ func auditHelp(t *testing.T, classic bool) {
 	for _, s := range []string{"global", "nav", "search", "chat", "video", "window", "settings"} {
 		helpKeys = append(helpKeys, "help.section."+s)
 	}
-	for _, c := range []string{"help", "search_prompt", "filter", "menu", "chat_panel", "compose", "field"} {
+	for _, c := range []string{"help", "search_prompt", "filter", "quick_open", "menu", "chat_panel", "compose", "field"} {
 		helpKeys = append(helpKeys, "help.ctx."+c)
 	}
 	actions := defaultActions()

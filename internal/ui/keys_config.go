@@ -457,7 +457,7 @@ func releaseKeys(occupied map[keyMode]map[string]actionID, id actionID, modes []
 func actionWorksWhileTyping(a action) bool {
 	for _, m := range a.Modes {
 		switch m {
-		case modeApp, modeGlobal, modeWindow, modeCompose, modeFilter, modeSearch:
+		case modeApp, modeGlobal, modeWindow, modeCompose, modeFilter, modeSearch, modeQuickOpen:
 			return true
 		}
 	}

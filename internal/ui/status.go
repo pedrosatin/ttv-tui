@@ -153,7 +153,7 @@ type statusContent struct {
 // chat channel. Player actions, errors, search/filter, an open preview and
 // one-shot notices keep the lead (ticket 07 / orientation).
 func (m Model) softStatusPrimary() bool {
-	if m.list.hardErr() || m.list.search.active || m.list.filtering || m.list.prefs.menuOpen || m.list.loading || m.list.confirmClear {
+	if m.list.hardErr() || m.list.search.active || m.list.filtering || m.list.quickOpen.active || m.list.prefs.menuOpen || m.list.loading || m.list.confirmClear {
 		return false
 	}
 	if m.notices.auth != "" || m.notices.corrupt != "" || m.chat.copyNotice != "" || m.notices.status != "" || m.notices.ctrlC != "" {
@@ -237,7 +237,7 @@ func (m Model) includeLayoutStatus() bool {
 	if m.LayoutMode() == LayoutSplit {
 		return false
 	}
-	if m.list.hardErr() || m.list.prefs.menuOpen || m.list.search.active || m.list.filtering || m.list.confirmClear {
+	if m.list.hardErr() || m.list.prefs.menuOpen || m.list.search.active || m.list.filtering || m.list.quickOpen.active || m.list.confirmClear {
 		return false
 	}
 	if m.player.state == PlayerStateError {

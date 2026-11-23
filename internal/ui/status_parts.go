@@ -106,6 +106,8 @@ func (m Model) blockingStatusLead() (statusLead, bool) {
 		return statusLead{primary: m.notices.status, tone: toneWarning}, true
 	case m.list.prefs.menuOpen:
 		return statusLead{primary: m.t("channel_filter.status_open")}, true
+	case m.list.quickOpen.active:
+		return statusLead{primary: m.t("quick_open.status_open")}, true
 	case m.list.search.active && m.listVisible():
 		return statusLead{primary: fmt.Sprintf(m.t("search.prompt"), m.list.search.input)}, true
 	case m.list.filtering && m.listVisible():

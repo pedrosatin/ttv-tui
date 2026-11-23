@@ -21,6 +21,7 @@
 ── Search and filters ──
   /                   Filter the list
   Ctrl+F              Search categories and channels
+  Ctrl+K              Open Quick open
   L                   Open the language and audience filters
   In the search prompt:
     Enter Ctrl+F      Search for what you typed
@@ -30,11 +31,10 @@
     Enter             Open the highlighted item or, when nothing matches, search for the text
     Esc               Clear and close the filter
     Ctrl+F            Search the platform for the filter text
+  In Quick open:
+    Enter             Open the highlighted result or search with the text
+    Esc Ctrl+K        Close Quick open
   In the filter menu:
     ↑/k ↓/j PgUp PgDn Home End/G
-                      Move through the options
-    Enter Space       Turn the option on or off
-    Esc L             Close the menu
-  In a text field:
-Navigation · section 2 of 7 · Tab/→ next                                                                           49/99
+Navigation · section 2 of 7 · Tab/→ next                                                                          49/103
  ttv-tui | [en] Ready                                                                            | ? help · Ctrl+Q quit

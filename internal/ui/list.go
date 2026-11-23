@@ -657,6 +657,7 @@ func (m Model) returnToCategories() (tea.Model, tea.Cmd) {
 	m.applyPendingRecents()
 	m.list.mode = ModeCategories
 	m.list.search = searchState{}
+	m.list.quickOpen = quickOpenState{}
 	m.list.filtering = false
 	m.list.prefs.menuOpen = false
 	m.list.filter = ""
@@ -709,6 +710,7 @@ func (m Model) returnToSearch() (tea.Model, tea.Cmd) {
 	m.list.search.categoryOpened = false
 	m.list.filtering = false
 	m.list.search.active = false
+	m.list.quickOpen = quickOpenState{}
 	m.list.prefs.menuOpen = false
 	m.list.filter = ""
 	m.list.search.input = ""
@@ -740,6 +742,7 @@ func (m Model) returnToChannels() (tea.Model, tea.Cmd) {
 	m.applyPendingRecents()
 	m.list.mode = ModeChannels
 	m.list.search = searchState{}
+	m.list.quickOpen = quickOpenState{}
 	m.list.filtering = false
 	m.list.prefs.menuOpen = false
 	m.list.filter = ""

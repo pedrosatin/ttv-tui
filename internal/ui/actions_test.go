@@ -181,7 +181,7 @@ func TestNoKeyFiresTwoActionsInOneContext(t *testing.T) {
 func TestFieldModesLeaveTheEditPrimitivesToTheField(t *testing.T) {
 	for _, a := range defaultActions() {
 		for _, mode := range a.Modes {
-			if mode != modeSearch && mode != modeFilter && mode != modeCompose {
+			if mode != modeSearch && mode != modeFilter && mode != modeCompose && mode != modeQuickOpen {
 				continue
 			}
 			for _, name := range a.Default {

@@ -59,6 +59,7 @@ var uxModes = []uxMode{
 	{name: "filtro", reach: func(t *testing.T, m Model) Model { return play(t, m, "enter / g a") }, focusVisible: func(m Model, rows []string) bool {
 		return textOnScreen("ga")(m, rows) && highlightOnScreen(m, rows)
 	}},
+	{name: "seletor rápido", reach: func(t *testing.T, m Model) Model { return play(t, m, "ctrl+k g a u") }, focusVisible: textOnScreen("gau")},
 	{name: "chat", reach: func(t *testing.T, m Model) Model { return focusChat(t, openGaulesWithChat(t, m)) }, focusVisible: textOnScreen("▌ ")},
 	{name: "escrita", reach: func(t *testing.T, m Model) Model {
 		return play(t, focusChat(t, openGaulesWithChat(t, m)), "i o i")
@@ -156,5 +157,34 @@ func checkScreenInvariants(t *testing.T, classic bool, width int, mode uxMode) {
 	}
 	if hint := m.t("status.help_hint"); !strings.Contains(rows[len(rows)-1], hint) {
 		t.Errorf("o rodapé não mostra %q: %q", hint, rows[len(rows)-1])
+	}
+}
+
+// O seletor aberto respeita largura e altura em terminais baixos, inclusive 3 e 5 linhas.
+func TestInvariantesSeletorRapidoEmAlturasBaixas(t *testing.T) {
+	for _, height := range []int{3, 5, 8, 12, 24} {
+		for _, width := range []int{60, 80, 120} {
+			t.Run(fmt.Sprintf("%dx%d", width, height), func(t *testing.T) {
+				m, _ := newScenario(t, width, height)
+				m = play(t, m, "ctrl+k g a u")
+				rows := strings.Split(ansi.Strip(m.View()), "\n")
+				if len(rows) != height {
+					t.Fatalf("tela com %d linhas em terminal %d", len(rows), height)
+				}
+				for i, row := range rows {
+					if got := ansi.StringWidth(row); got > width {
+						t.Fatalf("linha %d tem %d colunas em %d: %q", i+1, got, width, row)
+					}
+				}
+				if !m.list.quickOpen.active {
+					t.Fatal("seletor não ficou aberto")
+				}
+				overlay := m.renderQuickOpenLines(width)
+				available := height - 1 - m.footerRows()
+				if available > 0 && len(overlay) > available {
+					t.Fatalf("overlay %d > available %d", len(overlay), available)
+				}
+			})
+		}
 	}
 }

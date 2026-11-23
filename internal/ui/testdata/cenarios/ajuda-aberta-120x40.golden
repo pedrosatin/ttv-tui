@@ -19,6 +19,7 @@
 ── Busca e filtros ──
   /                   Filtra a lista
   Ctrl+F/S            Busca categorias e canais
+  Ctrl+K              Abre o seletor rápido
   l                   Abre os filtros de idioma e audiência
   No prompt de busca:
     Enter Ctrl+F/S    Busca o texto digitado
@@ -28,13 +29,12 @@
     Enter             Abre o item destacado ou, se nada casa, busca o texto
     Esc               Limpa e fecha o filtro
     Ctrl+F/S          Leva o texto do filtro à busca
+  No seletor rápido:
+    Enter             Abre o resultado destacado ou busca com o texto
+    Esc Ctrl+K        Fecha o seletor rápido
   No menu de filtros:
     ↑/k ↓/j PgUp PgDn Home/g End/G
                       Anda pelas opções
     Enter Espaço      Liga ou desliga a opção
-    Esc l             Fecha o menu
-  Num campo de texto:
-    Backspace/Delete  Apaga o caractere anterior
-    Alt+Backspace/Ctrl+W
-Navegação · seção 2 de 7 · Tab/→ próxima                                                                           49/98
+Navegação · seção 2 de 7 · Tab/→ próxima                                                                          49/102
  ttv-tui | [pt-BR] Pronto                                                                       | ? ajuda · Ctrl+Q sair
