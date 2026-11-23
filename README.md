@@ -126,6 +126,17 @@ The split view needs 80 columns. Below that, the app shows chat only or the list
 
 Ctrl+W is a prefix: press h/l to toggle the left/right panel, o for overlay, x to swap sides, w to cycle layouts, +/- for chat height, and </> for chat width. A popup appears after a short pause; the sequence works immediately. Esc cancels. Ctrl+B also toggles the list in the window; terminal users keep their tmux prefix. Use g f for favorites, g r for recents and g g for the top. Existing configurations receive one migration notice. Ctrl+O still puts the chat over the video, next to Ctrl+W o. Set `keymap = "classic"` in your config to restore the previous keys, including Ctrl+H/L/P, Ctrl+W cycling, lowercase l, g (Home) and Ctrl+S search.
 
+The `[keys]` section overrides individual actions on top of that base. Action IDs match the registry (`action.toggle_list`, `action.search`, …). Values are bubbletea key names (`ctrl+b`, `f1`, `g c`). An empty list turns the action off. Help, the footer and startup notices show the effective keys. `ttv-tui doctor` prints the full map and any validation warnings.
+
+```toml
+keymap = "default"
+
+[keys]
+"action.toggle_list" = ["ctrl+b"]
+"action.search" = ["ctrl+f", "f2"]
+"action.help" = []
+```
+
 <details open>
 <summary>List and search</summary>
 

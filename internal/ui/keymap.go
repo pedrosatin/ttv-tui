@@ -10,12 +10,19 @@ import (
 
 // WithKeymap selects the legacy bindings and an optional startup notice.
 func WithKeymap(classic bool, notice string) Option {
+	return WithKeymapOverrides(classic, nil, notice)
+}
+
+// WithKeymapOverrides aplica a base (default ou classic), os overrides de
+// [keys] já validados e o aviso de início (migração e/ou validação).
+func WithKeymapOverrides(classic bool, overrides map[actionID][]string, notice string) Option {
 	return func(m *Model) {
 		m.classic = classic
-		m.keys = defaultKeys()
+		actions := defaultActions()
 		if classic {
-			m.keys = newKeyRegistry(classicActions(), nil)
+			actions = classicActions()
 		}
+		m.keys = newKeyRegistry(actions, overrides)
 		if notice != "" {
 			m.keymapNotice = notice
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -51,6 +52,10 @@ type Config struct {
 	// path is resolved against the working directory, like StreamlinkPath.
 	// Empty means streamlink's own search. TOML key: kick_browser.
 	KickBrowser string
+	// Keys are per-action key overrides from the [keys] section. The map key is
+	// the action ID (action.toggle_list); the value is the bubbletea key names.
+	// An empty list disables the action. Nil means no [keys] section.
+	Keys map[string][]string
 }
 
 // Limits of a saved panel width. The UI applies the tighter limits of the moment.
@@ -408,6 +413,17 @@ func formatTOML(cfg Config) string {
 	if cfg.KickBrowser != "" {
 		fmt.Fprintf(&b, "kick_browser = %s\n", quoteTOML(cfg.KickBrowser))
 	}
+	if len(cfg.Keys) > 0 {
+		b.WriteString("\n[keys]\n")
+		ids := make([]string, 0, len(cfg.Keys))
+		for id := range cfg.Keys {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			fmt.Fprintf(&b, "%s = %s\n", quoteTOML(id), formatTOMLStringArray(cfg.Keys[id]))
+		}
+	}
 	return b.String()
 }
 
@@ -467,6 +483,20 @@ func quoteTOML(s string) string {
 	return b.String()
 }
 
+// unquoteTOMLKey is the left-hand side of an assignment: a quoted string or a
+// bare key. Dotted action IDs under [keys] are written quoted so a real TOML
+// parser does not nest them.
+func unquoteTOMLKey(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", errors.New("empty key")
+	}
+	if raw[0] == '"' || raw[0] == '\'' {
+		return unquoteTOML(raw)
+	}
+	return raw, nil
+}
+
 func parseTOML(input string) (Config, error) {
 	cfg := Default()
 	cfg.KeymapNoticeSeen = false
@@ -489,6 +519,26 @@ func parseTOML(input string) (Config, error) {
 		}
 		key := strings.TrimSpace(line[:eq])
 		rawVal := strings.TrimSpace(line[eq+1:])
+		if section == "keys" {
+			id, err := unquoteTOMLKey(key)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+			}
+			vals, err := parseTOMLStringArray(rawVal)
+			if err != nil {
+				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+			}
+			if cfg.Keys == nil {
+				cfg.Keys = make(map[string][]string)
+			}
+			// Empty array disables the action; keep a non-nil empty slice so a
+			// later SaveTo still writes the entry.
+			if vals == nil {
+				vals = []string{}
+			}
+			cfg.Keys[id] = vals
+			continue
+		}
 		fullKey := key
 		if section != "" {
 			fullKey = section + "." + key

@@ -53,6 +53,10 @@ var identicalInBothLanguages = map[string]string{
 	"status.layout":        "layout é empréstimo consolidado; o modo vem de layout.mode.*",
 	"doctor.origin.config": "config é abreviação técnica comum a ambos os idiomas",
 	"doctor.origin.path":   "PATH é o nome da variável de ambiente comum a ambos os idiomas",
+	// Valores literais de keymap = "default" | "classic" e o rótulo "base".
+	"doctor.keymap_base":    "rótulo técnico da base do mapa",
+	"doctor.keymap_classic": "valor literal de keymap = \"classic\"",
+	"doctor.keymap_default": "valor literal de keymap = \"default\"",
 }
 
 // englishOnlyWords are words with no use in pt-BR interface copy. A pt-BR value

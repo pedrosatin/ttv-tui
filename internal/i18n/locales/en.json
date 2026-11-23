@@ -512,5 +512,15 @@
   "preview.fail.bot_check": "Preview failed: bot check",
   "preview.fail.login_required": "Preview failed: sign-in required",
   "preview.fail.unknown": "Preview failed",
-  "preview.channels_only": "Preview is only for channels"
+  "preview.channels_only": "Preview is only for channels",
+  "keymap.unknown_action": "Unknown action %s in [keys]; ignored.",
+  "keymap.invalid_key": "Invalid key %s for %s in [keys]; discarded.",
+  "keymap.conflict": "Key %s for %s in [keys] conflicts with %s in the same mode; keeping the default.",
+  "keymap.printable_while_typing": "Printable key %s for %s in [keys] is refused while typing.",
+  "doctor.keymap": "Keymap",
+  "doctor.keymap_base": "base",
+  "doctor.keymap_classic": "classic",
+  "doctor.keymap_default": "default",
+  "doctor.keymap_conflicts": "Keymap notices",
+  "doctor.keymap_disabled": "(disabled)"
 }

@@ -512,5 +512,15 @@
   "preview.fail.bot_check": "Prévia falhou: verificação de robô",
   "preview.fail.login_required": "Prévia falhou: precisa de login",
   "preview.fail.unknown": "Prévia falhou",
-  "preview.channels_only": "A prévia é só para canais"
+  "preview.channels_only": "A prévia é só para canais",
+  "keymap.unknown_action": "Ação %s desconhecida em [keys]; ignorada.",
+  "keymap.invalid_key": "Tecla %s inválida para %s em [keys]; descartada.",
+  "keymap.conflict": "Tecla %s de %s em [keys] conflita com %s no mesmo modo; fica a padrão.",
+  "keymap.printable_while_typing": "Tecla imprimível %s de %s em [keys] recusada na escrita.",
+  "doctor.keymap": "Mapa de teclas",
+  "doctor.keymap_base": "base",
+  "doctor.keymap_classic": "classic",
+  "doctor.keymap_default": "default",
+  "doctor.keymap_conflicts": "Avisos do mapa de teclas",
+  "doctor.keymap_disabled": "(desligada)"
 }

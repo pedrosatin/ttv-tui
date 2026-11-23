@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -115,6 +116,8 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
+	keyOverrides, keyNotices := ui.ResolveKeyOverrides(cfg.Keymap == "classic", cfg.Keys, appCat)
+	keymapNotice = ui.JoinKeyNotices(keymapNotice, strings.Join(keyNotices, "\n"))
 
 	// Only after the terminal check: a run that cannot start must not write.
 	if err := persistLang(opts.Lang, &cfg, cfgPath); err != nil {
@@ -194,7 +197,7 @@ func Run(opts Options) error {
 
 	chats := newChatBridge(ctx, providerRegistry)
 	uiOpts := []ui.Option{
-		ui.WithKeymap(cfg.Keymap == "classic", keymapNotice),
+		ui.WithKeymapOverrides(cfg.Keymap == "classic", keyOverrides, keymapNotice),
 		hostOption,
 		reportOption,
 		ui.WithPlayback(playback),
