@@ -149,10 +149,17 @@ func (a *app) handle(ev *C.SDL_Event) {
 	case t == C.SDL_EVENT_TEXT_INPUT:
 		a.writeInput([]byte(C.GoString(C.e_text(ev))))
 	case t == C.ev_mpv():
-		active := a.activeVideo()
 		for _, s := range []*session{a.sess, a.preview} {
-			if s != nil && C.rc_has_frame(s.rc) != 0 && s == active {
-				a.videoDirty = true
+			if s == nil || s.rc == nil || C.rc_has_frame(s.rc) == 0 {
+				continue
+			}
+			// Um sinal por sessão: a prévia marca dirty mesmo antes do HostPanel
+			// publicar Preview*, para rc_has_frame não consumir o aviso em vão.
+			switch s {
+			case a.sess:
+				a.mainDirty = true
+			case a.preview:
+				a.previewDirty = true
 			}
 		}
 	case t == C.ev_input(): // socket de teste: text, raw e letras do key

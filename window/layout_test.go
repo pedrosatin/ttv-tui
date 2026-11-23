@@ -52,6 +52,44 @@ func TestApplyMarginsQueuesLayout(t *testing.T) {
 	check(nil)
 }
 
+func TestApplyMarginsPreviewPIPUsesSmallerRect(t *testing.T) {
+	a := &app{
+		W: 1000, H: 720,
+		fs: &fontSet{cellW: 10, cellH: 20},
+		host: hostPanel{
+			Visible: true, Col: 11, Row: 3, Cols: 70, Rows: 30,
+			PreviewCol: 12, PreviewRow: 4, PreviewCols: 20, PreviewRows: 8,
+		},
+	}
+	var gotMain, gotPrev [][2]string
+	a.sess = &session{setProperty: func(k, v string) { gotMain = append(gotMain, [2]string{k, v}) }}
+	a.preview = &session{setProperty: func(k, v string) { gotPrev = append(gotPrev, [2]string{k, v}) }}
+	a.applyMargins()
+	wantMain := [][2]string{
+		{"video-margin-ratio-left", "0.10000"}, {"video-margin-ratio-right", "0.20000"},
+		{"video-margin-ratio-top", "0.05556"}, {"video-margin-ratio-bottom", "0.11111"},
+		{"osd-align-x", "left"}, {"osd-margin-x", "116"},
+	}
+	wantPrev := [][2]string{
+		{"video-margin-ratio-left", "0.11000"}, {"video-margin-ratio-right", "0.69000"},
+		{"video-margin-ratio-top", "0.08333"}, {"video-margin-ratio-bottom", "0.69444"},
+		{"osd-align-x", "left"}, {"osd-margin-x", "126"},
+	}
+	if !reflect.DeepEqual(gotMain, wantMain) {
+		t.Fatalf("principal = %v, want %v", gotMain, wantMain)
+	}
+	if !reflect.DeepEqual(gotPrev, wantPrev) {
+		t.Fatalf("prévia = %v, want %v", gotPrev, wantPrev)
+	}
+	if !a.previewPIP() {
+		t.Fatal("previewPIP falso com principal e Preview* preenchidos")
+	}
+	x, y, w, h := a.previewPixelRect()
+	if x != 110 || y != 60 || w != 200 || h != 160 {
+		t.Fatalf("previewPixelRect = %d,%d %dx%d", x, y, w, h)
+	}
+}
+
 // O buraco do vídeo só abre com o primeiro quadro da sessão: antes dele, as
 // células mostram o que a TUI escreveu ali ("Abrindo canal…").
 func TestHoleWaitsForTheFirstFrame(t *testing.T) {

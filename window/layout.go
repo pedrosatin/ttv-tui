@@ -62,7 +62,9 @@ func (a *app) relayoutFonts(fs *fontSet) {
 	a.layoutDirty = true
 }
 
-// applyMargins põe o vídeo no retângulo publicado pelo TUI.
+// applyMargins põe cada sessão no retângulo publicado pelo TUI. A principal
+// usa o painel inteiro; a prévia, com principal ativa e Preview* preenchido,
+// usa o quadro menor (PiP).
 func (a *app) applyMargins() {
 	if !a.host.Visible || a.fs == nil || a.W <= 0 || a.H <= 0 {
 		return // sobreposição na frente ou janela sem grade: mantém a geometria para quando voltar
@@ -70,10 +72,26 @@ func (a *app) applyMargins() {
 	if a.sess == nil && a.preview == nil {
 		return
 	}
+	if a.sess != nil {
+		a.applySessionMargins(a.sess, a.host.Col, a.host.Row, a.host.Cols, a.host.Rows)
+	}
+	if a.preview != nil {
+		col, row, cols, rows := a.host.Col, a.host.Row, a.host.Cols, a.host.Rows
+		if a.sess != nil && a.host.PreviewCols > 0 && a.host.PreviewRows > 0 {
+			col, row, cols, rows = a.host.PreviewCol, a.host.PreviewRow, a.host.PreviewCols, a.host.PreviewRows
+		}
+		a.applySessionMargins(a.preview, col, row, cols, rows)
+	}
+}
+
+func (a *app) applySessionMargins(s *session, col, row, cols, rows int) {
+	if s == nil || s.setProperty == nil {
+		return
+	}
 	W, H := float64(a.W), float64(a.H)
 	cw, ch := a.fs.cellW, a.fs.cellH
-	x, y := (a.host.Col-1)*cw, (a.host.Row-1)*ch
-	w, h := a.host.Cols*cw, a.host.Rows*ch
+	x, y := (col-1)*cw, (row-1)*ch
+	w, h := cols*cw, rows*ch
 	left := fmt.Sprintf("%.5f", max(float64(x), 0)/W)
 	right := fmt.Sprintf("%.5f", max(float64(a.W-x-w), 0)/W)
 	top := fmt.Sprintf("%.5f", max(float64(y), 0)/H)
@@ -89,17 +107,31 @@ func (a *app) applyMargins() {
 		osdSide, margin = "center", 0
 	}
 	marginStr := strconv.Itoa(margin)
-	for _, s := range []*session{a.sess, a.preview} {
-		if s == nil || s.setProperty == nil {
-			continue
-		}
-		s.setProperty("video-margin-ratio-left", left)
-		s.setProperty("video-margin-ratio-right", right)
-		s.setProperty("video-margin-ratio-top", top)
-		s.setProperty("video-margin-ratio-bottom", bottom)
-		s.setProperty("osd-align-x", osdSide)
-		s.setProperty("osd-margin-x", marginStr)
+	s.setProperty("video-margin-ratio-left", left)
+	s.setProperty("video-margin-ratio-right", right)
+	s.setProperty("video-margin-ratio-top", top)
+	s.setProperty("video-margin-ratio-bottom", bottom)
+	s.setProperty("osd-align-x", osdSide)
+	s.setProperty("osd-margin-x", marginStr)
+}
+
+// previewPIP diz se a prévia desenha no retângulo menor do HostPanel.
+func (a *app) previewPIP() bool {
+	return a.sess != nil && a.preview != nil && a.host.PreviewCols > 0 && a.host.PreviewRows > 0
+}
+
+// previewPixelRect é o quadro do PiP em pixels da janela (origem em cima à
+// esquerda), ou zeros.
+func (a *app) previewPixelRect() (x, y, w, h int) {
+	if !a.previewPIP() || a.fs == nil {
+		return 0, 0, 0, 0
 	}
+	cw, ch := a.fs.cellW, a.fs.cellH
+	x = (a.host.PreviewCol - 1) * cw
+	y = (a.host.PreviewRow - 1) * ch
+	w = a.host.PreviewCols * cw
+	h = a.host.PreviewRows * ch
+	return x, y, w, h
 }
 
 // refreshHole recalcula se as células do vídeo ficam transparentes agora. Só
@@ -117,6 +149,7 @@ func (a *app) refreshHole() {
 func (a *app) setHost(p hostPanel) {
 	a.paintMu.Lock()
 	a.haveHost, a.host = true, p
+	a.hostSeq++
 	a.paintMu.Unlock()
 	a.refreshHole()
 	a.relayout()

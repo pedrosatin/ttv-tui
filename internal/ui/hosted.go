@@ -32,10 +32,17 @@ const (
 	hostedSaveDelay      = 400 * time.Millisecond
 	// hostedNoticeDelay is how long a layout notice keeps the playback state off the bar.
 	hostedNoticeDelay = 2500 * time.Millisecond
+
+	// Preview PiP inside the video panel when a main session is already playing.
+	hostedPreviewMinCols = 16
+	hostedPreviewMinRows = 6
+	hostedPreviewPad     = 1
 )
 
 // HostPanel is the video's region in the hosted window, in 1-based cells. The last
 // OverlayCols columns of it carry the chat, drawn translucent over the picture.
+// When a live preview sits over an active main video, PreviewRow/Col/Rows/Cols
+// name the smaller rectangle (still 1-based cells); zeros mean no PiP.
 type HostPanel struct {
 	Row, Col, Rows, Cols int
 	Visible              bool
@@ -46,6 +53,10 @@ type HostPanel struct {
 	OverlayOpacity      int
 	OverlayRows         int
 	OverlayTextBackdrop bool
+	PreviewRow          int
+	PreviewCol          int
+	PreviewRows         int
+	PreviewCols         int
 }
 
 // VideoHost is the window that draws the video. SetPanel runs inside Update, so it
@@ -364,6 +375,14 @@ func (m Model) hostedPanel() HostPanel {
 		panel.OverlayRows = m.overlayHeight(panel.Rows)
 		panel.OverlayTextBackdrop = m.hosted.overlayPreferences.TextBackdrop
 	}
+	// Com principal tocando, a prévia vai num quadro menor no canto oposto ao
+	// chat sobreposto. O retângulo usa o overlay do chat (não o da ajuda),
+	// senão o PiP pula de canto ao abrir a ajuda. Sem principal, campos zero.
+	if m.previewActive() && m.mainVideoActive() {
+		if r, c, rows, cols, ok := previewOverlayRect(panel); ok {
+			panel.PreviewRow, panel.PreviewCol, panel.PreviewRows, panel.PreviewCols = r, c, rows, cols
+		}
+	}
 	// A ajuda ocupa a coluna do vídeo inteira, com fundo opaco só atrás do
 	// texto. Com a opacidade do chat, o vídeo atravessaria as letras; com o
 	// painel inteiro, que é opaco aqui, o vídeo sumiria atrás da ajuda.
@@ -372,6 +391,44 @@ func (m Model) hostedPanel() HostPanel {
 		panel.OverlayRows, panel.OverlayTextBackdrop = panel.Rows, true
 	}
 	return panel
+}
+
+// previewOverlayRect coloca o quadro da prévia dentro do painel de vídeo, no
+// canto oposto ao chat sobreposto (topo; esquerda se o chat está à direita e
+// vice-versa). Sem overlay, fica no canto superior direito. Devolve ok=false
+// quando o painel é estreito demais para o mínimo.
+func previewOverlayRect(panel HostPanel) (row, col, rows, cols int, ok bool) {
+	if !panel.Visible || panel.Cols <= 0 || panel.Rows <= 0 {
+		return 0, 0, 0, 0, false
+	}
+	pad := hostedPreviewPad
+	// A área útil horizontal desconta o chat sobreposto: o PiP não pode
+	// invadir essas colunas nem caber só no padding.
+	freeCols := panel.Cols
+	if panel.OverlayCols > 0 {
+		freeCols -= panel.OverlayCols
+	}
+	innerCols := freeCols - 2*pad
+	innerRows := panel.Rows - 2*pad
+	if innerCols < hostedPreviewMinCols || innerRows < hostedPreviewMinRows {
+		return 0, 0, 0, 0, false
+	}
+	cols = min(max(innerCols/3, hostedPreviewMinCols), innerCols)
+	rows = min(max(innerRows/3, hostedPreviewMinRows), innerRows)
+	// Prefere um quadro perto de 16:9 em células (~2:1) e limita ao espaço livre.
+	if want := max(cols*9/32, hostedPreviewMinRows); want < rows {
+		rows = want
+	}
+	row = panel.Row + pad
+	switch {
+	case panel.OverlayCols > 0 && panel.OverlayLeft:
+		col = panel.Col + panel.Cols - pad - cols
+	case panel.OverlayCols > 0:
+		col = panel.Col + pad
+	default:
+		col = panel.Col + panel.Cols - pad - cols
+	}
+	return row, col, rows, cols, true
 }
 
 // hostedIdleText is what the video column says while it shows no picture: the

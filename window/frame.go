@@ -7,18 +7,36 @@ import "C"
 
 import "time"
 
-func (a *app) present(video bool) {
+func (a *app) present(mainVideo, previewVideo bool) {
 	W, H := C.int(a.W), C.int(a.H)
 	v := a.activeVideo()
+	previewRendered := false
+	fullFrame := false
 	if v != nil {
 		C.rc_render(v.rc, W, H)
-		if video {
-			if !v.gotFirst.Swap(true) {
-				v.ttffMs.Store(time.Since(v.started).Milliseconds())
-				a.mu.Lock()
-				a.lastTtff = v.ttffMs.Load()
-				a.mu.Unlock()
-				a.refreshHole() // o primeiro quadro abre o buraco do vídeo
+		// Sessão do painel inteiro: principal, ou prévia sozinha sem PiP.
+		fullFrame = mainVideo
+		if v == a.preview {
+			fullFrame = previewVideo
+		}
+		a.noteFirstFrame(v, fullFrame)
+		// Prévia em FBO W×H próprio e composição só do retângulo: mpv_render apaga o FBO 0.
+		if a.previewPIP() && a.preview != nil && a.preview.rc != nil && a.preview != v {
+			px, py, pw, ph := a.previewPixelRect()
+			if pw > 0 && ph > 0 {
+				switch st := C.pip_fbo_ensure(W, H); {
+				case st < 0:
+					// Sem FBO: a prévia fica de fora neste quadro.
+				default:
+					if previewVideo || st > 0 {
+						C.rc_render_to_pip(a.preview.rc)
+						previewRendered = true
+						a.noteFirstFrame(a.preview, previewVideo)
+					}
+					if a.preview.gotFirst.Load() {
+						C.pip_compose(C.int(px), C.int(py), C.int(pw), C.int(ph), W, H)
+					}
+				}
 			}
 		}
 	} else {
@@ -40,11 +58,15 @@ func (a *app) present(video bool) {
 	if v != nil {
 		C.mpv_render_context_report_swap(v.rc)
 	}
+	if previewRendered && a.preview != nil && a.preview.rc != nil {
+		C.mpv_render_context_report_swap(a.preview.rc)
+	}
 	now := time.Now()
 	a.lastPresent = now
+	drawn := frameDrawn(v != nil, fullFrame, previewRendered)
 	a.mu.Lock()
 	a.presents++
-	if video {
+	if drawn {
 		a.videoFrames++
 		if !a.lastVideo.IsZero() {
 			gap := now.Sub(a.lastVideo).Milliseconds()
@@ -63,6 +85,41 @@ func (a *app) present(video bool) {
 		a.inputAt = time.Time{}
 	}
 	a.mu.Unlock()
+}
+
+// frameDrawn diz se este present desenhou quadro de vídeo de fato (painel
+// inteiro com aviso, ou PiP composto). Aviso sozinho sem desenho não conta.
+func frameDrawn(hasVideo, fullFrame, previewRendered bool) bool {
+	return (hasVideo && fullFrame) || previewRendered
+}
+
+// clearPreviewDirtyAfterPresent decide se previewDirty pode zerar depois do
+// present. Mantém o flag enquanto a prévia com principal espera o primeiro
+// HostPanel com PiP (PreviewCols>0); limpa na prévia sozinha, no PiP ativo,
+// sem sessão de prévia, ou quando um painel posterior à abertura ainda veio
+// sem PiP (evita o flag preso a contar videoFrames/stalls sem quadro novo).
+func (a *app) clearPreviewDirtyAfterPresent() bool {
+	if a.preview == nil || a.previewPIP() {
+		return true
+	}
+	if a.sess == nil {
+		return true // prévia sozinha: desenha o painel inteiro
+	}
+	// Principal ativa sem PiP: só limpa se o host já republicou após a abertura.
+	return a.host.PreviewCols == 0 && a.hostSeq > a.previewAtHostSeq
+}
+
+func (a *app) noteFirstFrame(s *session, video bool) {
+	if s == nil || !video {
+		return
+	}
+	if !s.gotFirst.Swap(true) {
+		s.ttffMs.Store(time.Since(s.started).Milliseconds())
+		a.mu.Lock()
+		a.lastTtff = s.ttffMs.Load()
+		a.mu.Unlock()
+		a.refreshHole() // o primeiro quadro abre o buraco do vídeo
+	}
 }
 
 // answerFB responde às leituras pendentes com o quadro que acabou de ser desenhado.
@@ -133,12 +190,16 @@ func (a *app) frame() {
 	a.uploadPanel()
 	v := a.activeVideo()
 	switch {
-	case a.videoDirty:
-		a.present(true)
-		a.videoDirty, a.layoutDirty, a.panelChanged = false, false, false
+	case a.mainDirty || a.previewDirty:
+		a.present(a.mainDirty, a.previewDirty)
+		a.mainDirty = false
+		if a.clearPreviewDirtyAfterPresent() {
+			a.previewDirty = false
+		}
+		a.layoutDirty, a.panelChanged = false, false
 	case a.layoutDirty, a.panelChanged && (v == nil || !v.gotFirst.Load() || time.Since(a.lastPresent) > 33*time.Millisecond):
 		// Painel sem quadro de vídeo: pausado, antes do primeiro quadro, ou sem sessão.
-		a.present(false)
+		a.present(false, false)
 		a.layoutDirty, a.panelChanged = false, false
 	}
 }

@@ -319,3 +319,35 @@ func TestJanelaEscVoltaABusca(t *testing.T) {
 func rowWith(screen []string, text string) int {
 	return slices.IndexFunc(screen, func(l string) bool { return strings.Contains(l, text) })
 }
+
+// helpBackdropCellInPreview devolve uma célula (coluna e linha, base 0) de
+// espaço dentro do retângulo do PiP (pCol/pRow base 1) que fica no fundo da
+// ajuda: à esquerda do fim do texto da linha, a partir de holeCol (base 1).
+// Com OverlayTextBackdrop o fundo vai só até uma célula depois do último
+// texto da linha; dali em diante a célula é transparente e o vídeo aparece.
+// Vizinhas também em branco evitam que o traço de um glifo caia no pixel.
+func helpBackdropCellInPreview(screen []string, holeCol, pCol, pRow, pCols, pRows int) (int, int, bool) {
+	col0, row0 := pCol-1, pRow-1
+	for r := row0; r < row0+pRows; r++ {
+		if r < 0 || r >= len(screen) {
+			continue
+		}
+		runes := []rune(screen[r])
+		textEnd := -1
+		for x := len(runes) - 1; x >= holeCol-1 && x >= 0; x-- {
+			if runes[x] != ' ' {
+				textEnd = x
+				break
+			}
+		}
+		if textEnd < 0 {
+			continue
+		}
+		for x := max(col0, holeCol); x < col0+pCols && x < textEnd && x+1 < len(runes); x++ {
+			if runes[x-1] == ' ' && runes[x] == ' ' && runes[x+1] == ' ' {
+				return x, r, true
+			}
+		}
+	}
+	return 0, 0, false
+}

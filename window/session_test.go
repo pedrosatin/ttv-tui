@@ -104,9 +104,25 @@ func TestRefreshHoleMainOverPreviewAndMargins(t *testing.T) {
 		t.Fatal("principal sem primeiro quadro manteve o buraco da prévia aberto")
 	}
 
+	a.host.PreviewCol, a.host.PreviewRow, a.host.PreviewCols, a.host.PreviewRows = 50, 5, 20, 8
 	a.applyMargins()
 	if len(gotMain) == 0 || len(gotPrev) == 0 {
 		t.Fatalf("applyMargins não aplicou margens às sessões ativas: main=%d prev=%d", len(gotMain), len(gotPrev))
+	}
+	// Com PiP, a prévia recebe margens do quadro menor, distintas da principal.
+	var mainLeft, prevLeft string
+	for _, p := range gotMain {
+		if p[0] == "video-margin-ratio-left" {
+			mainLeft = p[1]
+		}
+	}
+	for _, p := range gotPrev {
+		if p[0] == "video-margin-ratio-left" {
+			prevLeft = p[1]
+		}
+	}
+	if mainLeft == "" || prevLeft == "" || mainLeft == prevLeft {
+		t.Fatalf("margens PiP iguais ou vazias: main=%q prev=%q", mainLeft, prevLeft)
 	}
 
 	a.endSession(main)

@@ -200,13 +200,25 @@ func TestSpaceOpensPreviewInHostedWindowWithoutMain(t *testing.T) {
 	}
 }
 
-func TestSpaceDoesNotOpenPreviewInHostedWindowWithMain(t *testing.T) {
-	m, w := openChannelList(t, 80, 24)
-	m.hosted.host = &recordingHost{}
+func TestSpaceOpensPreviewInHostedWindowWithMain(t *testing.T) {
+	m, w := openChannelList(t, 120, 30)
+	host := &recordingHost{}
+	m.hosted.host = host
+	m.hosted.chatOverlay = true
 	m = feed(t, m, PlayerStatusMsg{State: PlayerStatePlaying, Login: "gaules"})
-	_ = play(t, m, "space")
-	if len(w.playback.previewStarted) != 0 {
-		t.Fatalf("hosted window with active main started preview: %v", w.playback.previewStarted)
+	m = m.syncHostPanel()
+	m = play(t, m, "space")
+	if len(w.playback.previewStarted) != 1 {
+		t.Fatalf("hosted window with active main previewStarted = %v, want one start", w.playback.previewStarted)
+	}
+	if !w.playback.mainMutedForPrev {
+		t.Fatal("expected MuteMainForPreview with main active in hosted window")
+	}
+	m = feed(t, m, PreviewStatusMsg{Generation: 1, State: PreviewStatePlaying, Login: "alanzoka"})
+	m = m.syncHostPanel()
+	panel := m.hostedPanel()
+	if panel.PreviewCols == 0 || panel.PreviewRows == 0 {
+		t.Fatalf("HostPanel sem quadro da prévia: %+v", panel)
 	}
 }
 

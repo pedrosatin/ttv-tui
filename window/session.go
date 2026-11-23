@@ -95,11 +95,12 @@ func (a *app) startSession(msg ctlMsg) {
 	}
 	if role == rolePreview {
 		a.preview = s
+		a.previewDirty = false
+		a.previewAtHostSeq = a.hostSeq
+		C.pip_fbo_free()
 	} else {
 		a.sess = s
-	}
-	if a.activeVideo() == s {
-		a.videoDirty = false
+		a.mainDirty = false
 	}
 	a.mu.Lock()
 	a.sessions++
@@ -165,10 +166,17 @@ func (a *app) stopSlot(slot **session) {
 	if s == nil {
 		return
 	}
-	wasActive := a.activeVideo() == s
+	isPreview := slot == &a.preview
 	*slot = nil
-	if wasActive {
-		a.videoDirty = false
+	if isPreview {
+		a.previewDirty = false
+		C.pip_fbo_free()
+	} else {
+		a.mainDirty = false
+		// Sai do modo PiP: o FBO da prévia sobre a principal não serve mais.
+		if a.preview != nil {
+			C.pip_fbo_free()
+		}
 	}
 	s.stop.Store(true)
 	if s.stopping != nil {
