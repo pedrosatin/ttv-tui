@@ -62,7 +62,7 @@ func TestChannelFilterByLanguageAndAudience(t *testing.T) {
 		// Ensure the row formatter marks unknown when language filter active.
 		for _, it := range items {
 			if it.Channel != nil && it.Channel.Login == "mystery" {
-				row := m.formatChannelRow("▸ ", *it.Channel, it.Availability, 120)
+				row := m.formatChannelRow("▸ ", *it.Channel, it.Availability, 120, false)
 				if strings.Contains(row, m.t("channels.lang_unknown_tag")) {
 					mysteryTag = true
 				}
