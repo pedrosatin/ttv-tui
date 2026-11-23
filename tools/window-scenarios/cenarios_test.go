@@ -320,26 +320,34 @@ func rowWith(screen []string, text string) int {
 	return slices.IndexFunc(screen, func(l string) bool { return strings.Contains(l, text) })
 }
 
-// helpRowCrossingPreview devolve uma linha (base 0) da grade com texto da
-// ajuda dentro do retângulo do PiP (pCol/pRow base 1), ou -1 se nenhuma cruzar.
-func helpRowCrossingPreview(screen []string, pCol, pRow, pCols, pRows int) int {
-	row0 := pRow - 1
-	col0 := pCol - 1
+// helpBackdropCellInPreview devolve uma célula (coluna e linha, base 0) de
+// espaço dentro do retângulo do PiP (pCol/pRow base 1) que fica no fundo da
+// ajuda: à esquerda do fim do texto da linha, a partir de holeCol (base 1).
+// Com OverlayTextBackdrop o fundo vai só até uma célula depois do último
+// texto da linha; dali em diante a célula é transparente e o vídeo aparece.
+// Vizinhas também em branco evitam que o traço de um glifo caia no pixel.
+func helpBackdropCellInPreview(screen []string, holeCol, pCol, pRow, pCols, pRows int) (int, int, bool) {
+	col0, row0 := pCol-1, pRow-1
 	for r := row0; r < row0+pRows; r++ {
 		if r < 0 || r >= len(screen) {
 			continue
 		}
 		runes := []rune(screen[r])
-		if col0 >= len(runes) {
+		textEnd := -1
+		for x := len(runes) - 1; x >= holeCol-1 && x >= 0; x-- {
+			if runes[x] != ' ' {
+				textEnd = x
+				break
+			}
+		}
+		if textEnd < 0 {
 			continue
 		}
-		end := col0 + pCols
-		if end > len(runes) {
-			end = len(runes)
-		}
-		if strings.TrimSpace(string(runes[col0:end])) != "" {
-			return r
+		for x := max(col0, holeCol); x < col0+pCols && x < textEnd && x+1 < len(runes); x++ {
+			if runes[x-1] == ' ' && runes[x] == ' ' && runes[x+1] == ' ' {
+				return x, r, true
+			}
 		}
 	}
-	return -1
+	return 0, 0, false
 }

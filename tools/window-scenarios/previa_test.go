@@ -279,18 +279,18 @@ func TestJanelaPreviaSobrePrincipal(t *testing.T) {
 		if cur.Window.Overlay != cur.Window.Hole[2] {
 			return fmt.Errorf("ajuda não cobre o vídeo/prévia: overlay=%d hole=%v", cur.Window.Overlay, cur.Window.Hole)
 		}
-		// Procura uma linha da ajuda que cruze o retângulo do PiP (o título
-		// "===" fica no topo e quase nunca cai sobre o quadro).
+		// Procura, dentro do retângulo do PiP, uma célula em branco no fundo da
+		// ajuda (antes do fim do texto da linha): ali o PiP não pode aparecer.
 		if rowWith(w.screen(), "===") < 0 {
 			return errors.New("o título da ajuda sumiu da grade")
 		}
 		pCol, pRow, pCols, pRows := previewHole[0], previewHole[1], previewHole[2], previewHole[3]
-		helpRow := helpRowCrossingPreview(w.screen(), pCol, pRow, pCols, pRows)
-		if helpRow < 0 {
-			return fmt.Errorf("nenhuma linha da ajuda cruza o quadro da prévia: preview=%v", previewHole)
+		cx, cy, ok := helpBackdropCellInPreview(w.screen(), cur.Window.Hole[0], pCol, pRow, pCols, pRows)
+		if !ok {
+			return fmt.Errorf("nenhuma célula do fundo da ajuda cai no quadro da prévia: preview=%v", previewHole)
 		}
-		x := (pCol-1+pCols/2)*cur.Window.CellW + cur.Window.CellW/2
-		y := helpRow*cur.Window.CellH + cur.Window.CellH/2
+		x := cx*cur.Window.CellW + cur.Window.CellW/2
+		y := cy*cur.Window.CellH + cur.Window.CellH/2
 		r, g, b, err := w.fbpixel(x, y)
 		if err != nil {
 			return err
