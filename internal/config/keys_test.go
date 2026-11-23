@@ -133,3 +133,16 @@ func TestKeysDuplicateShortShortLastWins(t *testing.T) {
 		t.Fatalf("esperava DuplicateShort: %v", cfg.KeyWarnings)
 	}
 }
+
+func TestKeysDuplicateLongLongLastWins(t *testing.T) {
+	cfg, err := parseTOML("[keys]\n\"action.toggle_list\" = [\"ctrl+h\"]\n\"action.toggle_list\" = [\"ctrl+b\"]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(cfg.Keys["toggle_list"], []string{"ctrl+b"}) {
+		t.Fatalf("última linha deveria vencer: %v", cfg.Keys["toggle_list"])
+	}
+	if len(cfg.KeyWarnings) != 1 || cfg.KeyWarnings[0].Kind != KeyWarningDuplicateShort {
+		t.Fatalf("esperava DuplicateShort: %v", cfg.KeyWarnings)
+	}
+}

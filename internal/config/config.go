@@ -610,7 +610,7 @@ func parseTOML(input string) (Config, error) {
 			}
 			short := shortActionKey(id)
 			fullForm := strings.HasPrefix(id, "action.") && id != short
-			if prev, exists := cfg.Keys[short]; exists {
+			if _, exists := cfg.Keys[short]; exists {
 				fromShort := keyFromShort[short]
 				switch {
 				case !fullForm && fromShort:
@@ -623,9 +623,9 @@ func parseTOML(input string) (Config, error) {
 						keyFromShort[short] = true
 					}
 				default:
-					// long + long: keep the first, warn as a repeated action.
+					// long + long: the last line wins, as with short + short.
 					cfg.KeyWarnings = append(cfg.KeyWarnings, KeyWarning{Line: lineNum, Kind: KeyWarningDuplicateShort, Key: short})
-					_ = prev
+					cfg.Keys[short] = vals
 				}
 				continue
 			}

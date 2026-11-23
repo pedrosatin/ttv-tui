@@ -133,26 +133,49 @@ func resolveKeyOverrides(actions []action, classic bool, raw map[string][]string
 		current[c.id] = nil
 	}
 
-	// Prefixo ainda em uso no mapa projetado (restante + overrides candidatos).
-	prefixInUse := livePrefixes(current)
-	for _, c := range candidates {
-		markLivePrefixes(c.keys, prefixInUse)
+	prefixNoted := map[[2]string]bool{}
+	notePrefix := func(key, short string) {
+		sig := [2]string{key, short}
+		if prefixNoted[sig] {
+			return
+		}
+		prefixNoted[sig] = true
+		notices = append(notices, fmt.Sprintf(cat.T("keymap.prefix_reserved"), sanitizeScreenText(key), sanitizeScreenText(short)))
 	}
 
-	var surviving []candidate
-	for _, c := range candidates {
-		keys, droppedPrefix := filterReservedPrefixKeys(c.keys, prefixInUse)
-		for _, k := range droppedPrefix {
-			notices = append(notices, fmt.Sprintf(cat.T("keymap.prefix_reserved"), sanitizeScreenText(k), sanitizeScreenText(c.short)))
+	// filterPrefixes tira de cada candidato as teclas iguais a um prefixo vivo.
+	// Quem fica sem tecla volta ao padrão, e esse padrão pode reativar um
+	// prefixo, então a filtragem se repete até nenhum candidato reverter.
+	filterPrefixes := func(cands []candidate, note func(key, short string)) []candidate {
+		for {
+			prefixInUse := livePrefixes(current)
+			for _, c := range cands {
+				markLivePrefixes(c.keys, prefixInUse)
+			}
+			reverted := false
+			var kept []candidate
+			for _, c := range cands {
+				keys, droppedPrefix := filterReservedPrefixKeys(c.keys, prefixInUse)
+				for _, k := range droppedPrefix {
+					note(k, c.short)
+				}
+				if len(keys) == 0 {
+					current[c.id] = slices.Clone(defaults[c.id])
+					claimKeys(occupied, c.id, c.a.Modes, current[c.id])
+					reverted = true
+					continue
+				}
+				c.keys = keys
+				kept = append(kept, c)
+			}
+			cands = kept
+			if !reverted {
+				return cands
+			}
 		}
-		if len(keys) == 0 {
-			current[c.id] = slices.Clone(defaults[c.id])
-			claimKeys(occupied, c.id, c.a.Modes, current[c.id])
-			continue
-		}
-		c.keys = keys
-		surviving = append(surviving, c)
 	}
+
+	surviving := filterPrefixes(candidates, notePrefix)
 
 	// Fase 4: conflitos no mapa final, com reversão até ponto fixo. Quem volta
 	// ao padrão pode colidir com um override sobrevivente ou reativar um
@@ -165,15 +188,6 @@ func resolveKeyOverrides(actions []action, classic bool, raw map[string][]string
 		}
 		conflictNoted[sig] = true
 		notices = append(notices, fmt.Sprintf(cat.T("keymap.conflict"), sanitizeScreenText(key), sanitizeScreenText(short), sanitizeScreenText(other)))
-	}
-	prefixNoted := map[[2]string]bool{}
-	notePrefix := func(key, short string) {
-		sig := [2]string{key, short}
-		if prefixNoted[sig] {
-			return
-		}
-		prefixNoted[sig] = true
-		notices = append(notices, fmt.Sprintf(cat.T("keymap.prefix_reserved"), sanitizeScreenText(key), sanitizeScreenText(short)))
 	}
 
 	for {
@@ -234,26 +248,7 @@ func resolveKeyOverrides(actions []action, classic bool, raw map[string][]string
 		}
 		surviving = next
 
-		prefixInUse = livePrefixes(current)
-		for _, c := range surviving {
-			markLivePrefixes(c.keys, prefixInUse)
-		}
-
-		next = next[:0]
-		for _, c := range surviving {
-			keys, droppedPrefix := filterReservedPrefixKeys(c.keys, prefixInUse)
-			for _, k := range droppedPrefix {
-				notePrefix(k, c.short)
-			}
-			if len(keys) == 0 {
-				current[c.id] = slices.Clone(defaults[c.id])
-				claimKeys(occupied, c.id, c.a.Modes, current[c.id])
-				continue
-			}
-			c.keys = keys
-			next = append(next, c)
-		}
-		surviving = next
+		surviving = filterPrefixes(surviving, notePrefix)
 	}
 
 	for _, c := range surviving {

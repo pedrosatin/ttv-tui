@@ -620,3 +620,29 @@ func TestEffectiveKeymapInvariantAcrossSampleConfigs(t *testing.T) {
 		}
 	}
 }
+
+// favorites = ["ctrl+w"] cai porque Ctrl+W segue prefixo vivo; o padrão g f
+// reativa o prefixo g, e mute = ["g"] tem de cair também.
+func TestResolveKeyOverridesReversaoReativaPrefixo(t *testing.T) {
+	cat, _ := i18n.New(i18n.LangEN)
+	raw := map[string][]string{
+		"categories": {"f4"},
+		"favorites":  {"ctrl+w"},
+		"recents":    {"f3"},
+		"home":       {"home"},
+		"mute":       {"g"},
+	}
+	overrides, _ := ResolveKeyOverrides(false, raw, cat)
+	if slices.Contains(overrides[actMute], "g") {
+		t.Fatalf("mute ficou com g, que voltou a ser prefixo: %v", overrides[actMute])
+	}
+	reg, _ := EffectiveKeymap(false, raw, cat)
+	if !reg.livePrefixes["g"] {
+		t.Fatal("g f voltou ao padrão, g deveria ser prefixo vivo")
+	}
+	for id, keys := range reg.keys {
+		if slices.Contains(keys, "g") {
+			t.Fatalf("%s ficou com g isolado com o prefixo vivo", id)
+		}
+	}
+}
