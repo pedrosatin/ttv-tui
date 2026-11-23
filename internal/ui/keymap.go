@@ -41,21 +41,34 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 	name := keyName(msg)
 	if m.prefix != "" {
-		seq := m.prefix + " " + prefixSecondKey(name)
+		seq := m.prefix + " " + sequenceSecondName(name)
 		m.cancelPrefix()
 		if name == "esc" {
 			return m, nil, true
 		}
-		if id := m.keys.byMode[modeGlobal][seq]; id == actCategories {
-			return handled(m.keyCategories())
+		// Despacha qualquer ação cuja sequência case nos modos ativos, pelo
+		// mesmo caminho das teclas simples, com mensagem sintética do nome da
+		// sequência.
+		synth := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(seq)}
+		if next, cmd, ok := m.handleAppKey(synth); ok {
+			return next, cmd, true
 		}
-		if m.keys.byMode[modeNormal][seq] == actHome {
-			return handled(m.keyHome())
+		if next, cmd, ok := m.handleGlobalKey(synth); ok {
+			return next, cmd, true
 		}
-		if id := m.keys.byMode[modeNormal][seq]; id == actFavorites || id == actRecents {
-			return handled(m.keySaved(id))
+		if next, cmd, ok := m.handleLayoutKey(synth); ok {
+			return next, cmd, true
 		}
-		if next, cmd, ok := m.handleLayoutAction(m.keys.byMode[modeGlobal][seq], m.keys.byMode[modeWindow][seq]); ok {
+		if next, cmd, ok := m.handleModeKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handleCommandKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handlePlayerKey(synth); ok {
+			return next, cmd, true
+		}
+		if next, cmd, ok := m.handleMoveKey(synth); ok {
 			return next, cmd, true
 		}
 		// Só a ajuda atravessa o prefixo: F1 o desfaz e abre a ajuda. Ctrl+C e
@@ -77,10 +90,21 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 // prefixSecondKey é a tecla que fecha a sequência. Como no vim, Ctrl+letra vale
 // a letra: Ctrl+W Ctrl+H é Ctrl+W h, e Ctrl+W Ctrl+X, Ctrl+W x, sem encerrar o
-// vídeo no caminho.
+// vídeo no caminho. A validação de [keys] recusa ctrl+letra como segunda tecla
+// no arquivo; o despacho continua dobrando para casar o que o usuário digita.
 func prefixSecondKey(name string) string {
 	if letter, ok := strings.CutPrefix(name, "ctrl+"); ok && len(letter) == 1 && letter[0] >= 'a' && letter[0] <= 'z' {
 		return letter
+	}
+	return name
+}
+
+// sequenceSecondName é o nome indexado da segunda tecla de uma sequência: aplica
+// o dobramento vim de Ctrl+letra e grava space em vez do caractere espaço.
+func sequenceSecondName(name string) string {
+	name = prefixSecondKey(name)
+	if name == " " {
+		return "space"
 	}
 	return name
 }

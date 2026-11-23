@@ -101,7 +101,9 @@ func (m Model) Footer() string {
 	case footSearch, footFilter, footCompose, footMenu:
 		help = []string{m.t("footer.help_field")}
 	default:
-		help = []string{m.t("status.help_hint")}
+		if hint := m.statusHint("status.help_hint", actHelp, actHelpAnywhere); hint != "" {
+			help = []string{hint}
+		}
 	}
 	parts := []string{}
 	for _, h := range hints {

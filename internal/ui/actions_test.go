@@ -137,21 +137,43 @@ func assertSequenceFires(t *testing.T, id actionID, name string) {
 // No key fires two actions in the same context: the modes a context consults
 // share one keyboard.
 func TestNoKeyFiresTwoActionsInOneContext(t *testing.T) {
-	for _, modes := range keyContexts {
-		owner := map[string]actionID{}
-		for _, a := range defaultActions() {
-			if !slices.ContainsFunc(a.Modes, func(m keyMode) bool { return slices.Contains(modes, m) }) {
-				continue
-			}
-			for _, name := range a.Default {
-				name = indexName(name)
-				if other, taken := owner[name]; taken && other != a.ID {
-					t.Errorf("modos %v: %q dispara %s e %s", modes, name, other, a.ID)
+	assertNoKeyFiresTwoActions := func(t *testing.T, reg keyRegistry) {
+		t.Helper()
+		for _, modes := range keyContexts {
+			owner := map[string]actionID{}
+			for _, a := range reg.actions {
+				if !slices.ContainsFunc(a.Modes, func(m keyMode) bool { return slices.Contains(modes, m) }) {
+					continue
 				}
-				owner[name] = a.ID
+				for _, name := range reg.keys[a.ID] {
+					name = indexName(name)
+					if other, taken := owner[name]; taken && other != a.ID {
+						t.Errorf("modos %v: %q dispara %s e %s", modes, name, other, a.ID)
+					}
+					owner[name] = a.ID
+				}
 			}
 		}
 	}
+	t.Run("default", func(t *testing.T) {
+		assertNoKeyFiresTwoActions(t, defaultKeys())
+	})
+	t.Run("com overrides", func(t *testing.T) {
+		cat, err := i18n.New(i18n.LangEN)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reg, notices := EffectiveKeymap(false, map[string][]string{
+			"toggle_list": {"ctrl+b"},
+			"window_list": {"ctrl+g"},
+			"up":          {"k"},
+			"down":        {"j"},
+		}, cat)
+		if len(notices) != 0 {
+			t.Fatalf("avisos: %v", notices)
+		}
+		assertNoKeyFiresTwoActions(t, reg)
+	})
 }
 
 // A text field takes its edit primitives before any shortcut, so an action of a

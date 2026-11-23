@@ -126,15 +126,15 @@ A tela dividida precisa de 80 colunas. Abaixo disso, o app mostra só o chat ou 
 
 Ctrl+W é um prefixo: h/l alternam o painel da esquerda/direita, o sobrepõe o chat, x troca os lados, w cicla o layout, +/- ajustam a altura e </> a largura do chat. O popup aparece após uma pausa curta; a sequência funciona na hora. Esc cancela. Ctrl+B também alterna a lista na janela; no terminal, fica para o tmux. Use g f para favoritos, g r para recentes e g g para o topo. Configs existentes recebem um aviso único. Ctrl+O continua pondo o chat sobre o vídeo, ao lado de Ctrl+W o. Defina `keymap = "classic"` no config para restaurar as teclas anteriores, incluindo Ctrl+H/L/P, Ctrl+W para ciclar, l minúsculo, g (Home) e Ctrl+S para buscar.
 
-A seção `[keys]` troca teclas individuais sobre essa base. Os IDs são os do registro (`action.toggle_list`, `action.search`, …). Os valores usam os nomes de tecla do bubbletea (`ctrl+b`, `f1`, `g c`). Lista vazia desliga a ação. A ajuda, o rodapé e os avisos de início mostram as teclas efetivas. O `ttv-tui doctor` imprime o mapa completo e os avisos de validação.
+A seção `[keys]` troca teclas individuais sobre essa base. As chaves são os nomes curtos das ações (`toggle_list`, `search`, …); a forma longa `action.*` também é aceita. Os valores usam os nomes de tecla do bubbletea (`ctrl+b`, `f1`, `g c`), e a lista vazia desliga a ação. A ajuda, o rodapé e os avisos de início mostram as teclas efetivas, e o `ttv-tui doctor` imprime o mapa completo com os avisos de validação.
 
 ```toml
 keymap = "default"
 
 [keys]
-"action.toggle_list" = ["ctrl+b"]
-"action.search" = ["ctrl+f", "f2"]
-"action.help" = []
+toggle_list = ["ctrl+b"]
+search = ["ctrl+f", "f2"]
+help = []
 ```
 
 <details open>

@@ -504,7 +504,7 @@ func TestReportKeymapEfetivoEConflitos(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	raw := "keymap = \"classic\"\n\n[keys]\n\"action.toggle_list\" = [\"ctrl+b\"]\n\"action.nao_existe\" = [\"z\"]\n"
+	raw := "keymap = \"classic\"\n\n[keys]\ntoggle_list = [\"ctrl+b\"]\nnao_existe = [\"z\"]\nbad = \"not-an-array\"\n"
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -516,10 +516,16 @@ func TestReportKeymapEfetivoEConflitos(t *testing.T) {
 	if !strings.Contains(text, "Keymap (base: classic):") {
 		t.Fatalf("sem cabeçalho do mapa:\n%s", text)
 	}
-	if !strings.Contains(text, "action.toggle_list") || !strings.Contains(text, "ctrl+b") {
+	if !strings.Contains(text, "toggle_list") || !strings.Contains(text, "ctrl+b") {
 		t.Fatalf("mapa efetivo sem toggle_list=ctrl+b:\n%s", text)
 	}
-	if !strings.Contains(text, "Keymap notices:") || !strings.Contains(text, "action.nao_existe") {
+	if strings.Contains(text, "action.toggle_list") {
+		t.Fatalf("doctor ainda mostra forma longa:\n%s", text)
+	}
+	if !strings.Contains(text, "Keymap notices:") || !strings.Contains(text, "nao_existe") {
 		t.Fatalf("sem aviso de ação desconhecida:\n%s", text)
+	}
+	if !strings.Contains(text, "discarded") {
+		t.Fatalf("sem aviso de [keys] malformado:\n%s", text)
 	}
 }

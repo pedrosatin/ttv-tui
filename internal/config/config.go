@@ -53,9 +53,12 @@ type Config struct {
 	// Empty means streamlink's own search. TOML key: kick_browser.
 	KickBrowser string
 	// Keys are per-action key overrides from the [keys] section. The map key is
-	// the action ID (action.toggle_list); the value is the bubbletea key names.
+	// the short action name (toggle_list); the value is the bubbletea key names.
 	// An empty list disables the action. Nil means no [keys] section.
 	Keys map[string][]string
+	// KeyWarnings are non-fatal [keys] parse problems (bad syntax on one line).
+	// They are never written back to the file.
+	KeyWarnings []string
 }
 
 // Limits of a saved panel width. The UI applies the tighter limits of the moment.
@@ -421,10 +424,34 @@ func formatTOML(cfg Config) string {
 		}
 		sort.Strings(ids)
 		for _, id := range ids {
-			fmt.Fprintf(&b, "%s = %s\n", quoteTOML(id), formatTOMLStringArray(cfg.Keys[id]))
+			fmt.Fprintf(&b, "%s = %s\n", formatTOMLKey(id), formatTOMLStringArray(cfg.Keys[id]))
 		}
 	}
 	return b.String()
+}
+
+// formatTOMLKey writes a bare key when it is a simple identifier (toggle_list);
+// otherwise it quotes, as dotted action.* names used to require.
+func formatTOMLKey(s string) string {
+	if isBareTOMLKey(s) {
+		return s
+	}
+	return quoteTOML(s)
+}
+
+func isBareTOMLKey(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func formatTOMLStringArray(vals []string) string {
@@ -484,8 +511,8 @@ func quoteTOML(s string) string {
 }
 
 // unquoteTOMLKey is the left-hand side of an assignment: a quoted string or a
-// bare key. Dotted action IDs under [keys] are written quoted so a real TOML
-// parser does not nest them.
+// bare key. Short action names under [keys] are bare (toggle_list); the legacy
+// dotted form may still arrive quoted.
 func unquoteTOMLKey(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -495,6 +522,11 @@ func unquoteTOMLKey(raw string) (string, error) {
 		return unquoteTOML(raw)
 	}
 	return raw, nil
+}
+
+// shortActionKey normalizes a [keys] map key to the short config name.
+func shortActionKey(id string) string {
+	return strings.TrimPrefix(strings.TrimSpace(id), "action.")
 }
 
 func parseTOML(input string) (Config, error) {
@@ -515,6 +547,10 @@ func parseTOML(input string) (Config, error) {
 		}
 		eq := strings.IndexByte(line, '=')
 		if eq < 0 {
+			if section == "keys" {
+				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] entry discarded: missing '='", lineNum))
+				continue
+			}
 			return Config{}, fmt.Errorf("line %d: missing '='", lineNum)
 		}
 		key := strings.TrimSpace(line[:eq])
@@ -522,11 +558,17 @@ func parseTOML(input string) (Config, error) {
 		if section == "keys" {
 			id, err := unquoteTOMLKey(key)
 			if err != nil {
-				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] entry discarded: key %q: %v", lineNum, key, err))
+				continue
+			}
+			if shortActionKey(id) == "" {
+				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] entry discarded: empty or invalid key", lineNum))
+				continue
 			}
 			vals, err := parseTOMLStringArray(rawVal)
 			if err != nil {
-				return Config{}, fmt.Errorf("line %d: key %q: %w", lineNum, key, err)
+				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] entry discarded: key %q: %v", lineNum, key, err))
+				continue
 			}
 			if cfg.Keys == nil {
 				cfg.Keys = make(map[string][]string)
@@ -536,7 +578,18 @@ func parseTOML(input string) (Config, error) {
 			if vals == nil {
 				vals = []string{}
 			}
-			cfg.Keys[id] = vals
+			short := shortActionKey(id)
+			fullForm := strings.HasPrefix(id, "action.") && id != short
+			if prev, exists := cfg.Keys[short]; exists {
+				cfg.KeyWarnings = append(cfg.KeyWarnings, fmt.Sprintf("line %d: [keys] duplicate action %q; using the short form", lineNum, short))
+				if !fullForm {
+					cfg.Keys[short] = vals
+				} else {
+					_ = prev
+				}
+				continue
+			}
+			cfg.Keys[short] = vals
 			continue
 		}
 		fullKey := key

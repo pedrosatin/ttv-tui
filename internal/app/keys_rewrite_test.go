@@ -14,7 +14,7 @@ import (
 // struct, a seção [keys] some na primeira mudança de largura ou filtro.
 func TestRewriteConfigPreservaKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	raw := "language = \"en\"\nlist_columns = 30\n\n[keys]\n\"action.toggle_list\" = [\"ctrl+b\"]\n"
+	raw := "language = \"en\"\nlist_columns = 30\n\n[keys]\ntoggle_list = [\"ctrl+b\"]\n"
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestRewriteConfigPreservaKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	if !strings.Contains(text, "[keys]") || !strings.Contains(text, "action.toggle_list") {
+	if !strings.Contains(text, "[keys]") || !strings.Contains(text, "toggle_list") {
 		t.Fatalf("mudar a largura apagou [keys]:\n%s", text)
 	}
 
@@ -44,7 +44,7 @@ func TestRewriteConfigPreservaKeys(t *testing.T) {
 	if cfg.ListColumns != 40 || !slices.Equal(cfg.FilterLanguages, []string{"pt"}) || cfg.MinViewers != 100 {
 		t.Fatalf("filtros/largura = %+v", cfg)
 	}
-	if got := cfg.Keys["action.toggle_list"]; !slices.Equal(got, []string{"ctrl+b"}) {
-		t.Fatalf("Keys = %#v, quer action.toggle_list=[ctrl+b]", cfg.Keys)
+	if got := cfg.Keys["toggle_list"]; !slices.Equal(got, []string{"ctrl+b"}) {
+		t.Fatalf("Keys = %#v, quer toggle_list=[ctrl+b]", cfg.Keys)
 	}
 }
