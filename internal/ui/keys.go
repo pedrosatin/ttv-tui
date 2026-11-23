@@ -106,10 +106,19 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // hiddenListKey rejects list actions while preserving shared chat shortcuts
 // and text entry in a visible chat. Global controls are handled independently.
 func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
-	if m.listVisible() || m.list.prefs.menuOpen || m.list.quickOpen.active || (m.chat.composing && m.chatColumnVisible()) {
+	if m.list.quickOpen.active {
 		return false
 	}
-	switch m.keys.actionFor(modeNormal, msg) {
+	return m.hiddenListAction(m.keys.actionFor(modeNormal, msg))
+}
+
+// hiddenListAction diz se a ação mexe na lista enquanto ela está oculta. A
+// tecla e o seletor rápido usam a mesma regra.
+func (m Model) hiddenListAction(id actionID) bool {
+	if m.listVisible() || m.list.prefs.menuOpen || (m.chat.composing && m.chatColumnVisible()) {
+		return false
+	}
+	switch id {
 	case actFilter, actSearch, actFavorite, actForgetRecent, actClearRecents, actChannelFilter, actSwitchPlatform:
 		return true
 	case actRetry:

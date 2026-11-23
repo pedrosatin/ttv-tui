@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -302,5 +303,64 @@ func TestQuickOpenCategoriaSemBrowserAjustaModo(t *testing.T) {
 	}
 	if m.list.selectedCategory == nil || m.list.selectedCategory.ID != cat.ID {
 		t.Fatalf("categoria = %+v", m.list.selectedCategory)
+	}
+}
+
+// Um aviso aberto sobre o seletor fica no fim da área, como os outros
+// overlays; só o próprio seletor vai para o topo.
+func TestOverlaySobreOSeletorFicaNoFim(t *testing.T) {
+	m, _ := newScenario(t, 80, 24)
+	m = play(t, m, "ctrl+k")
+	m.keymapNotice = "aviso-sobre-o-seletor"
+	lines := strings.Split(ansi.Strip(m.View()), "\n")
+	row := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "aviso-sobre-o-seletor") })
+	if row < 0 {
+		t.Fatalf("aviso ausente:\n%s", strings.Join(lines, "\n"))
+	}
+	if row < len(lines)/2 {
+		t.Fatalf("aviso na linha %d, quer na metade de baixo:\n%s", row, strings.Join(lines, "\n"))
+	}
+}
+
+// Pelo seletor, uma ação da lista oculta é recusada como a tecla: o filtro não
+// fica armado fora da tela.
+func TestQuickOpenAcaoDaListaOcultaRecusada(t *testing.T) {
+	m, _ := newScenario(t, 120, 40)
+	m = play(t, m, "enter enter")
+	m = feed(t, m, PlayerStatusMsg{Generation: 1, State: PlayerStatePlaying, Login: "gaules", Volume: 100})
+	m.layout.showList, m.layout.showChat = false, false
+	m.normalizeFocusAfterLayout()
+	if m.listVisible() {
+		t.Fatal("a lista continua visível no layout foco")
+	}
+	for _, id := range []actionID{actFilter, actSearch, actClearRecents, actSwitchPlatform} {
+		next, _ := m.fireQuickAction(id)
+		got := next.(Model)
+		if got.list.filtering || got.list.search.active || got.list.confirmClear {
+			t.Fatalf("%s executou com a lista oculta", id)
+		}
+		if got.ListPlatform() != m.ListPlatform() {
+			t.Fatalf("%s trocou a plataforma com a lista oculta", id)
+		}
+	}
+}
+
+// No keymap classic, buscar pelo seletor também mostra a lista oculta.
+func TestQuickOpenRevelaListaNoClassic(t *testing.T) {
+	m, w := newScenario(t, 120, 40, WithKeymap(true, ""))
+	m.layout.showList = false
+	m.layout.showChat = true
+	m.chat.panel.channel = "gaules"
+	m.setFocus(FocusChat)
+	m.normalizeFocusAfterLayout()
+	m = play(t, m, "ctrl+k z e l d a enter")
+	if !m.layout.showList {
+		t.Fatal("busca pelo seletor não revelou a lista no classic")
+	}
+	if m.Focus() != FocusList {
+		t.Fatalf("foco = %v, quer lista", m.Focus())
+	}
+	if len(w.searched) == 0 || w.searched[len(w.searched)-1] != "zelda" {
+		t.Fatalf("buscas = %q, quer zelda", w.searched)
 	}
 }

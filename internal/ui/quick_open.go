@@ -224,13 +224,11 @@ func (m Model) confirmQuickOpen() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// revealListForQuickOpen mostra a lista e leva o foco a ela fora do classic,
-// como keyCategories e keySaved.
+// revealListForQuickOpen mostra a lista e leva o foco a ela, como keySaved,
+// também no keymap classic.
 func (m Model) revealListForQuickOpen() Model {
-	if !m.classic {
-		m.layout.showList = true
-		m.setFocus(FocusList)
-	}
+	m.layout.showList = true
+	m.setFocus(FocusList)
 	return m
 }
 
@@ -341,6 +339,10 @@ func (m Model) openQuickCategory(cat catalog.Category, plat string) (tea.Model, 
 // caminho das teclas de comando, layout, player e globais. As primitivas de
 // movimento e confirmação não entram no seletor.
 func (m Model) fireQuickAction(id actionID) (tea.Model, tea.Cmd) {
+	if m.hiddenListAction(id) {
+		m.warnStatus(m.t("layout.hidden_list_key"))
+		return m, nil
+	}
 	switch id {
 	case actCycleLayout, actToggleList, actToggleChat:
 		if next, cmd, ok := m.handleLayoutAction(id, ""); ok {

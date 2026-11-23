@@ -504,8 +504,9 @@ func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int
 		}
 		return out
 	}
-	// O seletor rápido fica ancorado no topo da área; os outros overlays, no fim.
-	if m.list.quickOpen.active {
+	// O seletor rápido fica ancorado no topo da área; os outros overlays, no
+	// fim, inclusive a ajuda, o aviso e o prefixo abertos sobre o seletor.
+	if m.quickOpenOverlayShown() {
 		for i, hl := range helpLines {
 			lines[i] = fitScreenLines(padOrTruncateVisual(hl, maxWidth), maxWidth)
 		}
@@ -945,4 +946,10 @@ func (m Model) formatChannelViewers(v *int) string {
 		return m.t("channels.viewers_unknown")
 	}
 	return m.formatViewers(v)
+}
+
+// quickOpenOverlayShown diz se o overlay desenhado agora é o seletor rápido, e
+// não a ajuda, o aviso de teclas ou o prefixo, que têm prioridade em frame.
+func (m Model) quickOpenOverlayShown() bool {
+	return m.list.quickOpen.active && !m.helpOpen() && m.keymapNotice == "" && !m.prefixVisible
 }
