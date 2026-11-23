@@ -19,7 +19,7 @@ import (
 // janela vêm logo depois das gerais: dentro dela, onde não levam marca, elas
 // continuam as linhas sem título que as antecedem.
 var helpContextOrder = []helpContext{
-	ctxAny, ctxWindowOnly, ctxConfirm, ctxHelp, ctxSearchPrompt, ctxFilter, ctxMenu, ctxChatPanel, ctxCompose, ctxField,
+	ctxAny, ctxWindowOnly, ctxConfirm, ctxHelp, ctxSearchPrompt, ctxFilter, ctxQuickOpen, ctxMenu, ctxChatPanel, ctxCompose, ctxField,
 }
 
 // helpEntry é uma linha da ajuda antes de quebrar na largura.
@@ -78,7 +78,7 @@ func (m Model) helpTextWidth() int {
 // configurações, onde fica o último erro, salvo com o foco num campo de texto.
 func (m Model) focusHelpSection() helpSection {
 	switch {
-	case m.list.prefs.menuOpen, m.listVisible() && (m.list.search.active || m.list.filtering):
+	case m.list.quickOpen.active, m.list.prefs.menuOpen, m.listVisible() && (m.list.search.active || m.list.filtering):
 		return sectionSearch
 	case m.chat.composing && m.Focus() == FocusChat:
 		return sectionChat
@@ -309,6 +309,8 @@ func (m Model) helpContextLabel(c helpContext) string {
 		return m.t("help.ctx.search_prompt")
 	case ctxFilter:
 		return m.t("help.ctx.filter")
+	case ctxQuickOpen:
+		return m.t("help.ctx.quick_open")
 	case ctxMenu:
 		return m.t("help.ctx.menu")
 	case ctxChatPanel:

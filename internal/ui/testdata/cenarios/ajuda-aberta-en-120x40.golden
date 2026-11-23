@@ -19,6 +19,7 @@
 ── Search and filters ──
   /                   Filter the list
   Ctrl+F/S            Search categories and channels
+  Ctrl+K              Open the quick selector
   l                   Open the language and audience filters
   In the search prompt:
     Enter Ctrl+F/S    Search for what you typed
@@ -28,13 +29,12 @@
     Enter             Open the highlighted item or, when nothing matches, search for the text
     Esc               Clear and close the filter
     Ctrl+F/S          Search the platform for the filter text
+  In the quick selector:
+    Enter             Open the highlighted result or search with the text
+    Esc Ctrl+K        Close the quick selector
   In the filter menu:
     ↑/k ↓/j PgUp PgDn Home/g End/G
                       Move through the options
     Enter Space       Turn the option on or off
-    Esc l             Close the menu
-  In a text field:
-    Backspace/Delete  Delete the previous character
-    Alt+Backspace/Ctrl+W
-Navigation · section 2 of 7 · Tab/→ next                                                                           49/98
+Navigation · section 2 of 7 · Tab/→ next                                                                          49/102
  ttv-tui | [en] Ready                                                                            | ? help · Ctrl+Q quit

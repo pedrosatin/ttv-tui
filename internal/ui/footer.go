@@ -24,6 +24,8 @@ const (
 	footOverlayChat
 	// footConfirm é a pergunta da barra antes de limpar os recentes.
 	footConfirm
+	// footQuickOpen é o seletor rápido (Ctrl+K).
+	footQuickOpen
 )
 
 // footerUse é uma dica da ação no rodapé de um modo. Pair junta à tecla da ação
@@ -46,6 +48,8 @@ func (m Model) footerMode() footerMode {
 	switch {
 	case m.list.confirmClear:
 		return footConfirm
+	case m.list.quickOpen.active:
+		return footQuickOpen
 	case m.LayoutMode() == LayoutFocus:
 		return footFocus
 	case m.list.prefs.menuOpen:
@@ -98,7 +102,7 @@ func (m Model) Footer() string {
 	var help []string
 	switch m.footerMode() {
 	case footConfirm:
-	case footSearch, footFilter, footCompose, footMenu:
+	case footSearch, footFilter, footCompose, footMenu, footQuickOpen:
 		if hint := m.statusHint("footer.help_field", actHelpAnywhere); hint != "" {
 			help = []string{hint}
 		}

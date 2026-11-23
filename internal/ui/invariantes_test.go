@@ -59,6 +59,7 @@ var uxModes = []uxMode{
 	{name: "filtro", reach: func(t *testing.T, m Model) Model { return play(t, m, "enter / g a") }, focusVisible: func(m Model, rows []string) bool {
 		return textOnScreen("ga")(m, rows) && highlightOnScreen(m, rows)
 	}},
+	{name: "seletor rápido", reach: func(t *testing.T, m Model) Model { return play(t, m, "ctrl+k g a u") }, focusVisible: textOnScreen("gau")},
 	{name: "chat", reach: func(t *testing.T, m Model) Model { return focusChat(t, openGaulesWithChat(t, m)) }, focusVisible: textOnScreen("▌ ")},
 	{name: "escrita", reach: func(t *testing.T, m Model) Model {
 		return play(t, focusChat(t, openGaulesWithChat(t, m)), "i o i")

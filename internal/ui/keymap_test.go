@@ -445,6 +445,7 @@ var classicKeysAdded = map[actionID][]string{
 	actClearRecents:  {"X"},
 	actConfirm:       {"y"},
 	actCancelConfirm: {"esc", "n"},
+	actQuickOpen:     {"ctrl+k"},
 }
 
 func assertClassicKeys(t *testing.T, keys keyRegistry) {

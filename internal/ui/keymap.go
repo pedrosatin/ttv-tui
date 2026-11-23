@@ -80,7 +80,7 @@ func (m Model) handlePrefixKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	}
-	if !slices.Contains(prefixKeys, name) || name == "g" && (m.typingField() || m.list.prefs.menuOpen) {
+	if !slices.Contains(prefixKeys, name) || name == "g" && (m.typingField() || m.list.prefs.menuOpen || m.list.quickOpen.active) {
 		return m, nil, false
 	}
 	if !m.keys.prefixLiveIn(name, m.prefixActiveModes()...) {
@@ -104,6 +104,9 @@ func (m Model) prefixActiveModes() []keyMode {
 	}
 	if m.list.filtering {
 		modes = append(modes, modeFilter)
+	}
+	if m.list.quickOpen.active {
+		modes = append(modes, modeQuickOpen)
 	}
 	if m.chat.composing {
 		modes = append(modes, modeCompose)

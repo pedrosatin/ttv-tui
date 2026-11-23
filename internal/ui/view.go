@@ -330,6 +330,9 @@ func (m Model) frame() string {
 		overlayLines = m.prefixLines()
 	}
 	if len(overlayLines) == 0 {
+		overlayLines = m.renderQuickOpenLines(m.width)
+	}
+	if len(overlayLines) == 0 {
 		overlayLines = m.renderChannelFilterMenuLines(m.width)
 	}
 

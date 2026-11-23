@@ -2,6 +2,7 @@
 ── Busca e filtros ──
   /                   Filtra a lista
   Ctrl+F/S            Busca categorias e canais
+  Ctrl+K              Abre o seletor rápido
   l                   Abre os filtros de idioma e audiência
   No prompt de busca:
     Enter Ctrl+F/S    Busca o texto digitado
@@ -11,6 +12,9 @@
     Enter             Abre o item destacado ou, se nada casa, busca o texto
     Esc               Limpa e fecha o filtro
     Ctrl+F/S          Leva o texto do filtro à busca
+  No seletor rápido:
+    Enter             Abre o resultado destacado ou busca com o texto
+    Esc Ctrl+K        Fecha o seletor rápido
   No menu de filtros:
     ↑/k ↓/j PgUp PgDn Home/g End/G
                       Anda pelas opções
@@ -32,9 +36,5 @@
     Enter             Começa a escrever
     Esc               Devolve o foco à lista
   Escrevendo no chat:
-    Enter             Envia a mensagem
-    Tab               Vai à lista e guarda o rascunho
-    Esc               Sai da escrita e guarda o rascunho
-    Backspace/Delete  Apaga o caractere anterior
-Busca e filtros · seção 3 de 7 · Tab/→ próxima                                                                     66/98
+Busca e filtros · seção 3 de 7 · Tab/→ próxima                                                                    66/102
  ttv-tui | [pt-BR] Enter ou Ctrl+F busca na Twitch: ga                                          | ? ajuda · Ctrl+Q sair

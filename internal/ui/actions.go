@@ -67,6 +67,7 @@ const (
 	actClearRecents   actionID = "action.clear_recents"
 	actConfirm        actionID = "action.confirm"
 	actCancelConfirm  actionID = "action.cancel_confirm"
+	actQuickOpen      actionID = "action.quick_open"
 )
 
 // keyMode é um contexto de despacho. Uma tecla pode disparar ações diferentes em
@@ -93,6 +94,8 @@ const (
 	modeMenu
 	// modeCompose é a escrita da mensagem no chat.
 	modeCompose
+	// modeQuickOpen é o seletor rápido (Ctrl+K).
+	modeQuickOpen
 	// modeNormal é a lista e o chat fora de qualquer campo de texto.
 	modeNormal
 )
@@ -106,6 +109,7 @@ var keyContexts = [][]keyMode{
 	{modeApp, modeGlobal, modeWindow, modeFilter},
 	{modeApp, modeGlobal, modeWindow, modeMenu},
 	{modeApp, modeGlobal, modeWindow, modeCompose},
+	{modeApp, modeGlobal, modeWindow, modeQuickOpen},
 	{modeApp, modeGlobal, modeWindow, modeNormal},
 }
 
@@ -144,6 +148,8 @@ const (
 	ctxField
 	// ctxConfirm é a pergunta da barra antes de limpar os recentes.
 	ctxConfirm
+	// ctxQuickOpen é o seletor rápido aberto com Ctrl+K.
+	ctxQuickOpen
 	// ctxWindowOnly agrupa as ações que só a janela única tem. A ajuda o deduz
 	// dos modos da ação; nenhuma o declara.
 	ctxWindowOnly
@@ -242,22 +248,24 @@ func classicActions() []action {
 		// End/G vão ao fim da lista ou retomam o ao vivo no chat.
 		{ID: actEnd, Modes: nav, Section: sectionNav, Default: []string{"end", "G"},
 			Also: also("help.use.scroll_ends", "help.use.menu_move", "help.use.chat_live")},
-		{ID: actSelect, Modes: []keyMode{modeNormal, modeSearch, modeFilter, modeMenu, modeCompose}, Section: sectionNav, Default: []string{"enter"},
+		{ID: actSelect, Modes: []keyMode{modeNormal, modeSearch, modeFilter, modeMenu, modeCompose, modeQuickOpen}, Section: sectionNav, Default: []string{"enter"},
 			Also: []helpUse{
 				{sectionSearch, ctxSearchPrompt, "help.use.search_confirm"},
 				{sectionSearch, ctxFilter, "help.use.filter_enter"},
 				{sectionSearch, ctxMenu, "help.use.menu_toggle"},
+				{sectionSearch, ctxQuickOpen, "help.use.quick_open_select"},
 				{sectionChat, ctxChatPanel, "help.use.chat_enter"},
 				{sectionChat, ctxCompose, "help.use.compose_send"},
 			}},
 		{ID: actSwitchFocus, Modes: []keyMode{modeNormal, modeCompose}, Section: sectionNav, Default: []string{"tab"},
 			Also: []helpUse{{sectionChat, ctxCompose, "help.use.compose_tab"}}},
-		{ID: actBack, Modes: []keyMode{modeNormal, modeHelp, modeSearch, modeFilter, modeMenu, modeCompose}, Section: sectionNav, Default: []string{"esc"},
+		{ID: actBack, Modes: []keyMode{modeNormal, modeHelp, modeSearch, modeFilter, modeMenu, modeCompose, modeQuickOpen}, Section: sectionNav, Default: []string{"esc"},
 			Also: []helpUse{
 				{sectionGlobal, ctxHelp, string(actCloseHelp)},
 				{sectionSearch, ctxSearchPrompt, "help.use.search_cancel"},
 				{sectionSearch, ctxFilter, "help.use.filter_clear"},
 				{sectionSearch, ctxMenu, "help.use.menu_close"},
+				{sectionSearch, ctxQuickOpen, "help.use.quick_open_cancel"},
 				{sectionChat, ctxChatPanel, "help.use.chat_leave"},
 				{sectionChat, ctxCompose, "help.use.compose_leave"},
 				{sectionWindow, ctxAny, "help.use.back_layout"},
@@ -282,6 +290,10 @@ func classicActions() []action {
 				{sectionSearch, ctxSearchPrompt, "help.use.search_confirm"},
 				{sectionSearch, ctxFilter, "help.use.filter_search"},
 			}},
+		// Ctrl+K abre o seletor rápido em qualquer tela de lista ou no chat,
+		// fora de um campo de texto. No seletor aberto, a mesma tecla fecha.
+		{ID: actQuickOpen, Modes: []keyMode{modeNormal, modeQuickOpen}, Section: sectionSearch, Default: []string{"ctrl+k"},
+			Also: []helpUse{{sectionSearch, ctxQuickOpen, "help.use.quick_open_cancel"}}},
 		{ID: actChannelFilter, Modes: []keyMode{modeNormal, modeMenu}, Section: sectionSearch, Default: []string{"l"},
 			Also: []helpUse{{sectionSearch, ctxMenu, "help.use.menu_close"}}},
 
@@ -345,7 +357,7 @@ func classicActions() []action {
 		case actToggleChat:
 			a.Footer = []footerUse{{Mode: footFocus, Priority: 3, Text: "layout.mode.chat"}, {Mode: footOverlayChat, Priority: 2, Text: "footer.list", ListHidden: true}}
 		case actSelect:
-			a.Footer = []footerUse{{Mode: footList, Priority: 1, Text: "footer.open"}, {Mode: footSearch, Priority: 1, Text: "footer.search"}, {Mode: footFilter, Priority: 1, Text: "footer.open"}, {Mode: footCompose, Priority: 1, Text: "footer.send"}, {Mode: footMenu, Priority: 1, Text: "footer.choose"}}
+			a.Footer = []footerUse{{Mode: footList, Priority: 1, Text: "footer.open"}, {Mode: footSearch, Priority: 1, Text: "footer.search"}, {Mode: footFilter, Priority: 1, Text: "footer.open"}, {Mode: footCompose, Priority: 1, Text: "footer.send"}, {Mode: footMenu, Priority: 1, Text: "footer.choose"}, {Mode: footQuickOpen, Priority: 1, Text: "footer.open"}}
 		case actFavorite:
 			a.Footer = []footerUse{{Mode: footList, Priority: 2, Text: "footer.favorite"}}
 		case actCategories:
@@ -357,10 +369,15 @@ func classicActions() []action {
 			a.Footer = []footerUse{{Mode: footList, Priority: 3, Text: "footer.filter"}}
 		case actSearch:
 			a.Footer = []footerUse{{Mode: footList, Priority: 4, Text: "footer.search"}, {Mode: footFilter, Priority: 2, Text: "footer.search"}}
+		case actQuickOpen:
+			a.Footer = []footerUse{
+				{Mode: footList, Priority: 6, Text: "footer.quick_open"},
+				{Mode: footChat, Priority: 4, Text: "footer.quick_open"},
+			}
 		case actSwitchPlatform:
 			a.Footer = []footerUse{{Mode: footList, Priority: 5, Text: "footer.platform"}}
 		case actBack:
-			a.Footer = []footerUse{{Mode: footSearch, Priority: 2, Text: "footer.cancel"}, {Mode: footFilter, Priority: 3, Text: "footer.clear"}, {Mode: footCompose, Priority: 2, Text: "footer.cancel"}, {Mode: footMenu, Priority: 2, Text: "footer.close"}}
+			a.Footer = []footerUse{{Mode: footSearch, Priority: 2, Text: "footer.cancel"}, {Mode: footFilter, Priority: 3, Text: "footer.clear"}, {Mode: footCompose, Priority: 2, Text: "footer.cancel"}, {Mode: footMenu, Priority: 2, Text: "footer.close"}, {Mode: footQuickOpen, Priority: 2, Text: "footer.cancel"}}
 		case actCompose:
 			a.Footer = []footerUse{{Mode: footChat, Priority: 1, Text: "footer.compose"}}
 		case actCopyMessage:

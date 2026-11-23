@@ -306,6 +306,7 @@ type listState struct {
 	filter     string
 	filtering  bool
 	search     searchState
+	quickOpen  quickOpenState
 	prefs      channelPrefs
 
 	highlightedPlatform string // canonical platform of highlightedLogin

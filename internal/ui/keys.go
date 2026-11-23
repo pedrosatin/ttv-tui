@@ -121,8 +121,11 @@ func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
 }
 
 // typingField diz se o foco está num campo de texto à vista: o prompt de busca,
-// o filtro / ou a mensagem do chat.
+// o filtro /, o seletor rápido ou a mensagem do chat.
 func (m Model) typingField() bool {
+	if m.list.quickOpen.active {
+		return true
+	}
 	if m.listVisible() && (m.list.search.active || m.list.filtering) {
 		return true
 	}

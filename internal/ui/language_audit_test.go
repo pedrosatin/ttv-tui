@@ -261,7 +261,7 @@ func auditHelp(t *testing.T, classic bool) {
 	for _, s := range []string{"global", "nav", "search", "chat", "video", "window", "settings"} {
 		helpKeys = append(helpKeys, "help.section."+s)
 	}
-	for _, c := range []string{"help", "search_prompt", "filter", "menu", "chat_panel", "compose", "field"} {
+	for _, c := range []string{"help", "search_prompt", "filter", "quick_open", "menu", "chat_panel", "compose", "field"} {
 		helpKeys = append(helpKeys, "help.ctx."+c)
 	}
 	actions := defaultActions()

@@ -158,13 +158,18 @@ func (m Model) handleLayoutAction(id, windowID actionID) (tea.Model, tea.Cmd, bo
 }
 
 // handleModeKey hands the key to the input mode that owns it: search, filter,
-// the filter menu or composition. Tab sits between the menu and composition.
+// the filter menu, the quick selector or composition. Tab sits between the
+// menu and composition.
 func (m Model) handleModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// The filter menu is a visible overlay in every layout. Other list
 	// inputs stay suspended until the list is shown again.
 	if m.hiddenListKey(msg) {
 		m.warnStatus(m.t("layout.hidden_list_key"))
 		return m, nil, true
+	}
+
+	if m.list.quickOpen.active {
+		return handled(m.updateQuickOpenKey(msg))
 	}
 
 	if m.list.search.active && m.listVisible() {
@@ -240,6 +245,9 @@ func (m Model) handleCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 	case actSearch:
 		return handled(m.keySearch())
+
+	case actQuickOpen:
+		return handled(m.keyQuickOpen())
 
 	case actRetry:
 		return handled(m.keyRetry())
