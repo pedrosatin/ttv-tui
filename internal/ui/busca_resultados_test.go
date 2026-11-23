@@ -161,7 +161,7 @@ func TestNomeSemMarcaUsaALarguraToda(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			row := ansi.Strip(fitChannelRow("  ", "● 24.2k", name, tc.tag, "Live de hoje", false, tc.maxWidth, len("[offline]"), false))
+			row := ansi.Strip(fitChannelRow("  ", "● 24.2k", name, tc.tag, "Live de hoje", false, tc.maxWidth, len("[offline]"), false, 0))
 			if w := ansi.StringWidth(row); w > tc.maxWidth {
 				t.Fatalf("linha com %d colunas passa de %d: %q", w, tc.maxWidth, row)
 			}
