@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
+	"github.com/rivo/uniseg"
 )
 
 const (
@@ -36,6 +37,163 @@ func TruncateVisual(s string, maxWidth int) string {
 	}
 	return ansi.Truncate(s, maxWidth, "…")
 }
+
+// TruncateMiddleVisual corta s no meio para caber em maxWidth células. Mantém o
+// começo e o fim e põe "…" entre eles. Serve para nomes que, cortados só no fim,
+// ficariam iguais na lista.
+func TruncateMiddleVisual(s string, maxWidth int) string {
+	return truncateMiddleVisual(s, maxWidth, "…")
+}
+
+type graphemeCell struct {
+	text  string
+	width int
+}
+
+func graphemeCells(s string) []graphemeCell {
+	out := make([]graphemeCell, 0, len(s))
+	state := -1
+	rest := s
+	for len(rest) > 0 {
+		cluster, next, _, nextState := uniseg.FirstGraphemeClusterInString(rest, state)
+		out = append(out, graphemeCell{text: cluster, width: ansi.StringWidth(cluster)})
+		rest = next
+		state = nextState
+	}
+	return out
+}
+
+func truncateMiddleVisual(s string, maxWidth int, ell string) string {
+	s = normalizeScreenText(s)
+	if maxWidth <= 0 {
+		return s
+	}
+	if ansi.StringWidth(s) <= maxWidth {
+		return s
+	}
+	ellW := ansi.StringWidth(ell)
+	// Sem espaço para a reticência, devolve só o começo do nome. Nunca string vazia
+	// quando ainda há orçamento de células.
+	if maxWidth <= ellW {
+		return truncateToBudgetNonEmpty(s, maxWidth)
+	}
+	room := maxWidth - ellW
+	cells := graphemeCells(s)
+	if len(cells) == 0 {
+		return truncateToBudgetNonEmpty(s, maxWidth)
+	}
+
+	// Cerca de 2/3 do espaço no começo e 1/3 no fim, para o sufixo que distingue
+	// títulos com o mesmo prefixo continuar legível.
+	endBudget := room / 3
+	if endBudget < 1 {
+		endBudget = 1
+	}
+	headBudget := room - endBudget
+	if headBudget < 1 {
+		headBudget = 1
+		endBudget = room - headBudget
+	}
+
+	wide := false
+	for _, c := range cells {
+		if c.width >= 2 {
+			wide = true
+			break
+		}
+	}
+	// Em larguras 4 a 7 um CJK não cabe no terço final de 1 célula. A sobra vai
+	// para o fim enquanto ainda couber um grafema no começo e outro no fim.
+	if wide && endBudget < 2 && room >= 4 {
+		endBudget = 2
+		headBudget = room - endBudget
+	}
+	if wide && headBudget < 2 && room >= 4 {
+		headBudget = 2
+		endBudget = room - headBudget
+	}
+
+	endStart := len(cells)
+	endW := 0
+	for endStart > 0 && endW < endBudget {
+		cw := cells[endStart-1].width
+		if endW+cw > endBudget {
+			break
+		}
+		endStart--
+		endW += cw
+	}
+	headEnd := 0
+	headW := 0
+	for headEnd < endStart && headW < headBudget {
+		cw := cells[headEnd].width
+		if headW+cw > headBudget {
+			break
+		}
+		headW += cw
+		headEnd++
+	}
+
+	// Se o fim ficou vazio e ainda cabem um grafema no começo e outro no fim,
+	// cede espaço do começo para o último cluster.
+	if endStart == len(cells) && len(cells) >= 2 {
+		last := cells[len(cells)-1]
+		if last.width <= room && cells[0].width+last.width <= room {
+			endStart = len(cells) - 1
+			endW = last.width
+			remain := room - endW
+			headEnd = 0
+			headW = 0
+			for headEnd < endStart && headW+cells[headEnd].width <= remain {
+				headW += cells[headEnd].width
+				headEnd++
+			}
+		}
+	}
+	if headEnd == 0 && endStart > 0 && cells[0].width <= room {
+		headEnd = 1
+		headW = cells[0].width
+		remain := room - headW
+		endStart = len(cells)
+		endW = 0
+		for endStart > headEnd && endW+cells[endStart-1].width <= remain {
+			endStart--
+			endW += cells[endStart].width
+		}
+	}
+
+	var b strings.Builder
+	b.Grow(maxWidth * 4)
+	for i := 0; i < headEnd; i++ {
+		b.WriteString(cells[i].text)
+	}
+	b.WriteString(ell)
+	for i := endStart; i < len(cells); i++ {
+		b.WriteString(cells[i].text)
+	}
+	out := b.String()
+	if out == ell || out == "" || ansi.StringWidth(out) > maxWidth {
+		return truncateToBudgetNonEmpty(s, maxWidth)
+	}
+	return out
+}
+
+// truncateToBudgetNonEmpty corta no fim sem reticência e evita nome vazio quando
+// o primeiro grafema é mais largo que o orçamento.
+func truncateToBudgetNonEmpty(s string, budget int) string {
+	if budget <= 0 {
+		return ""
+	}
+	out := ansi.Truncate(s, budget, "")
+	if out != "" {
+		return out
+	}
+	return ansi.Truncate("…", budget, "")
+}
+
+// listRowPrefixCells é a largura fixa do marcador (2) + espaço + espectadores (7)
+// + dois espaços antes do nome.
+const listRowPrefixCells = 12
 
 // hasWideRune reports whether s contains a grapheme that occupies two terminal
 // cells under the default (non–East-Asian) width tables (CJK, emoji, …).
@@ -456,22 +614,68 @@ func listRowMarker(highlighted, favorite bool) string {
 	}
 }
 
-// channelRowTag keeps availability and unknown-language evidence together.
-func (m Model) channelRowTag(ch catalog.Channel, avail catalog.Availability) string {
-	var tags []string
+// channelStatusTag returns the availability tag shown on the right of a row.
+func (m Model) channelStatusTag(ch catalog.Channel, avail catalog.Availability) string {
 	switch avail {
 	case catalog.AvailabilityOffline:
-		tags = append(tags, styleOffline(m.t("channels.offline_tag")))
+		return styleOffline(m.t("channels.offline_tag"))
 	case catalog.AvailabilityUnknown:
-		tags = append(tags, styleUnverified(m.t("channels.unverified_tag")))
+		return styleUnverified(m.t("channels.unverified_tag"))
 	}
-	if len(m.list.prefs.languages) > 0 && channelLanguageUnknown(ch) {
-		tags = append(tags, m.t("channels.lang_unknown_tag"))
-	}
-	return strings.Join(tags, " ")
+	return ""
 }
 
-func (m Model) formatChannelRow(marker string, ch catalog.Channel, avail catalog.Availability, maxWidth int, tagWidths ...int) string {
+// langUnknownTagFits diz se o nome inteiro ainda cabe na linha junto do marcador
+// [idioma?] e da tag de disponibilidade. maxWidth <= 0, frame sem tamanho,
+// mostra o marcador sempre. A decisão é por linha, pelo nome daquela linha.
+func langUnknownTagFits(maxWidth, statusTagWidth, nameWidth int, langTag string) bool {
+	if maxWidth <= 0 {
+		return true
+	}
+	langW := ansi.StringWidth(normalizeScreenText(langTag))
+	tagW := langW
+	if statusTagWidth > 0 {
+		tagW = statusTagWidth + 1 + langW
+	}
+	needed := listRowPrefixCells + nameWidth
+	if tagW > 0 {
+		needed += 1 + tagW
+	}
+	return needed <= maxWidth
+}
+
+// channelRowTag keeps availability and unknown-language evidence together.
+// O marcador de idioma some só na linha em que o nome inteiro não cabe junto
+// dele. Offline e não verificado continuam reservando coluna.
+func (m Model) channelRowTag(ch catalog.Channel, avail catalog.Availability, maxWidth int) string {
+	lang := ""
+	if len(m.list.prefs.languages) > 0 {
+		lang = m.t("channels.lang_unknown_tag")
+	}
+	return m.channelRowTagSized(ch, avail, maxWidth, lang)
+}
+
+// channelRowTagSized is channelRowTag with the language marker already resolved,
+// so listTagWidth can compute it once outside its loop.
+func (m Model) channelRowTagSized(ch catalog.Channel, avail catalog.Availability, maxWidth int, langTag string) string {
+	status := m.channelStatusTag(ch, avail)
+	if langTag == "" || !channelLanguageUnknown(ch) {
+		return status
+	}
+	nameW := ansi.StringWidth(m.channelIdentity(ch))
+	statusW := ansi.StringWidth(normalizeScreenText(status))
+	if !langUnknownTagFits(maxWidth, statusW, nameW, langTag) {
+		return status
+	}
+	if status == "" {
+		return langTag
+	}
+	return status + " " + langTag
+}
+
+// channelIdentity is the name side of a channel row: display name, optional
+// login and optional platform mark for a saved channel without a catalog.
+func (m Model) channelIdentity(ch catalog.Channel) string {
 	displayName := sanitizeScreenText(ch.DisplayName)
 	login := sanitizeScreenText(ch.Login)
 	identity := displayName
@@ -486,6 +690,11 @@ func (m Model) formatChannelRow(marker string, ch catalog.Channel, avail catalog
 		mark := TruncateVisual(sanitizeScreenText(platform.DisplayName(ch.CanonicalPlatform())), platformMarkWidth)
 		identity = "[" + mark + "] " + identity
 	}
+	return identity
+}
+
+func (m Model) formatChannelRow(marker string, ch catalog.Channel, avail catalog.Availability, maxWidth int, distinct bool, tagWidthAndBudget ...int) string {
+	identity := m.channelIdentity(ch)
 	title := ""
 	if ch.Title != nil {
 		title = sanitizeScreenText(strings.TrimSpace(*ch.Title))
@@ -498,12 +707,16 @@ func (m Model) formatChannelRow(marker string, ch catalog.Channel, avail catalog
 			viewers = styleLive(formatLiveViewersCell(m.formatViewers(ch.Viewers)))
 		}
 	}
-	tag := m.channelRowTag(ch, avail)
+	tag := m.channelRowTag(ch, avail, maxWidth)
 	tagWidth := ansi.StringWidth(tag)
-	if len(tagWidths) > 0 {
-		tagWidth = max(tagWidth, tagWidths[0])
+	nameBudget := 0
+	if len(tagWidthAndBudget) > 0 {
+		tagWidth = max(tagWidth, tagWidthAndBudget[0])
 	}
-	return fitChannelRow(marker, viewers, identity, tag, title, m.player.isPlaying(ch), maxWidth, tagWidth)
+	if len(tagWidthAndBudget) > 1 {
+		nameBudget = tagWidthAndBudget[1]
+	}
+	return fitChannelRow(marker, viewers, identity, tag, title, m.player.isPlaying(ch), maxWidth, tagWidth, distinct, nameBudget)
 }
 
 // formatLiveViewersCell reserves one space after the live dot at every magnitude.
@@ -513,9 +726,11 @@ func formatLiveViewersCell(viewers string) string {
 
 // fitChannelRow reserves a shared, left-aligned status column at the right edge.
 // The identity takes priority over the title when the panel is narrow. Uma
-// linha sem marca própria usa a largura inteira: a coluna das marcas fica vazia
-// nela e não corta o nome.
-func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, maxWidth, tagWidth int) string {
+// linha sem marca própria usa a largura inteira. A coluna das marcas fica vazia
+// nela e não corta o nome. Com distinct, a identidade que colidiria com outra
+// linha é cortada no meio para mostrar o fim do nome, e o título cede espaço
+// para esse sufixo permanecer.
+func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, maxWidth, tagWidth int, distinct bool, nameBudget int) string {
 	prefix := marker + " " + viewers + "  "
 	identity = normalizeScreenText(identity)
 	title = normalizeScreenText(title)
@@ -527,9 +742,27 @@ func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, m
 	if maxWidth > 0 && tagWidth > 0 {
 		bodyWidth = max(1, maxWidth-tagWidth-1)
 	}
+	if nameBudget <= 0 {
+		nameBudget = listLabelBudget(bodyWidth, listRowPrefixCells, identity)
+	}
+	if distinct {
+		identity = distinctListLabel(identity, nameBudget)
+	}
 	row := prefix + identity
 	if title != "" {
-		row += " — " + title
+		sep := " " + listRowEmDash + " "
+		if distinct {
+			// O título cede células. O sufixo da identidade distinto permanece.
+			title = fitChannelTitle(identity, title, sep, bodyWidth)
+			if title != "" {
+				if hasWideRune(identity+title) && !exactCellWidths {
+					sep = " - "
+				}
+				row += sep + title
+			}
+		} else {
+			row += sep + title
+		}
 	}
 	row = fitListRow(row, bodyWidth)
 	if playing {
@@ -549,11 +782,54 @@ func fitChannelRow(marker, viewers, identity, tag, title string, playing bool, m
 	return row
 }
 
-func (m Model) formatCategoryRow(marker string, cat catalog.Category, inSearch bool, maxWidth int) string {
+// fitChannelTitle corta o título para caber depois da identidade já distinta,
+// na mesma largura que fitListRow usaria no corpo da linha.
+func fitChannelTitle(identity, title, sep string, bodyWidth int) string {
+	if bodyWidth <= 0 {
+		return title
+	}
+	fitW := bodyWidth
+	wide := (hasWideRune(identity) || hasWideRune(title)) && !exactCellWidths
+	if wide && fitW > 1 {
+		fitW--
+		sep = strings.ReplaceAll(sep, listRowEmDash, "-")
+		title = strings.ReplaceAll(title, listRowEmDash, "-")
+	}
+	used := listRowPrefixCells + ansi.StringWidth(identity) + ansi.StringWidth(normalizeScreenText(sep))
+	remain := fitW - used
+	if remain < 1 {
+		return ""
+	}
+	if ansi.StringWidth(title) <= remain {
+		return title
+	}
+	ell := "…"
+	if wide {
+		ell = "..."
+	}
+	if remain <= ansi.StringWidth(ell) {
+		return ansi.Truncate(title, remain, "")
+	}
+	return ansi.Truncate(title, remain, ell)
+}
+
+func (m Model) formatCategoryRow(marker string, cat catalog.Category, inSearch bool, maxWidth int, distinct bool, nameBudget int) string {
 	name := sanitizeScreenText(cat.Name)
 	if inSearch && categoryNoBroadcast(cat) {
-		row := fmt.Sprintf("%s %7s  %s — %s", marker, m.t("categories.viewers_unknown"), name, m.t("categories.no_stream"))
-		return fitListRow(row, maxWidth)
+		viewers := fmt.Sprintf("%7s", m.t("categories.viewers_unknown"))
+		prefix := marker + " " + viewers + "  "
+		suffix := " " + listRowEmDash + " " + m.t("categories.no_stream")
+		if distinct {
+			budget := nameBudget
+			if budget <= 0 {
+				budget = listLabelBudget(maxWidth, listRowPrefixCells, name)
+				if maxWidth > 0 {
+					budget = max(budget-ansi.StringWidth(suffix), 1)
+				}
+			}
+			name = distinctListLabel(name, budget)
+		}
+		return fitListRow(prefix+name+suffix, maxWidth)
 	}
 	viewers := m.formatViewers(cat.Viewers)
 	if cat.Viewers != nil && *cat.Viewers > 0 {
@@ -561,8 +837,68 @@ func (m Model) formatCategoryRow(marker string, cat catalog.Category, inSearch b
 	} else {
 		viewers = fmt.Sprintf("%7s", viewers)
 	}
-	row := marker + " " + viewers + "  " + name
-	return fitListRow(row, maxWidth)
+	prefix := marker + " " + viewers + "  "
+	if distinct {
+		budget := nameBudget
+		if budget <= 0 {
+			budget = listLabelBudget(maxWidth, listRowPrefixCells, name)
+		}
+		name = distinctListLabel(name, budget)
+	}
+	return fitListRow(prefix+name, maxWidth)
+}
+
+// listLabelBudget is how many cells the name may use before the row is cut.
+// prefixWidth is the already measured lead, so callers avoid strings.Repeat.
+func listLabelBudget(maxWidth, prefixWidth int, label string) int {
+	if maxWidth <= 0 {
+		return ansi.StringWidth(normalizeScreenText(label))
+	}
+	budget := maxWidth - prefixWidth
+	if hasWideRune(label) && !exactCellWidths {
+		budget--
+	}
+	return max(budget, 1)
+}
+
+// distinctListLabel corta o nome no meio com a mesma reticência que fitListRow
+// usaria nessa linha, Unicode ou ASCII em runas largas.
+func distinctListLabel(label string, budget int) string {
+	label = normalizeScreenText(label)
+	if budget <= 0 || ansi.StringWidth(label) <= budget {
+		return label
+	}
+	ell := "…"
+	if hasWideRune(label) && !exactCellWidths {
+		ell = "..."
+		label = strings.ReplaceAll(label, listRowEmDash, "-")
+	}
+	return truncateMiddleVisual(label, budget, ell)
+}
+
+// endTruncatedListLabel é o nome como fitListRow o deixaria ao cortar só o fim.
+// A detecção de colisão compara esse resultado entre as linhas visíveis.
+func endTruncatedListLabel(label string, budget int) string {
+	label = normalizeScreenText(label)
+	if budget <= 0 || ansi.StringWidth(label) <= budget {
+		return label
+	}
+	if hasWideRune(label) && !exactCellWidths {
+		label = strings.ReplaceAll(label, listRowEmDash, "-")
+		ell := "..."
+		if budget <= ansi.StringWidth(ell) {
+			return truncateToBudgetNonEmpty(label, budget)
+		}
+		out := ansi.Truncate(label, budget, ell)
+		if out == "" {
+			return truncateToBudgetNonEmpty(label, budget)
+		}
+		return out
+	}
+	if budget <= ansi.StringWidth("…") {
+		return truncateToBudgetNonEmpty(label, budget)
+	}
+	return TruncateVisual(label, budget)
 }
 
 func categoryNoBroadcast(cat catalog.Category) bool {

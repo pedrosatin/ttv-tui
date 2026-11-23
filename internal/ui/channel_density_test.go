@@ -14,7 +14,7 @@ func TestChannelDensityIdentity(t *testing.T) {
 	m := newClassicModel(mustCatalog(t, i18n.LangPTBR))
 	title := "0123456789abcdefghijklmnopqrstuv"
 	ch := catalog.Channel{Login: "alanzoka", DisplayName: "Alanzoka", Title: &title, Viewers: catalog.IntPtr(999)}
-	row := ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 40))
+	row := ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 40, false))
 	if strings.Contains(row, "(alanzoka)") || !strings.Contains(row, "0123456789") {
 		t.Fatalf("80-column split must retain 10+ title cells: %q", row)
 	}
@@ -27,12 +27,12 @@ func TestChannelDensityIdentity(t *testing.T) {
 		t.Fatalf("80-column split lost title cells: %s", view)
 	}
 	ch.DisplayName = "Outro nome"
-	row = ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 80))
+	row = ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 80, false))
 	if !strings.Contains(row, "Outro nome (alanzoka)") {
 		t.Fatal(row)
 	}
 	ch.DisplayName = ""
-	row = ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 80))
+	row = ansi.Strip(m.formatChannelRow("  ", ch, catalog.AvailabilityLive, 80, false))
 	if strings.Contains(row, "(alanzoka)") || !strings.Contains(row, "alanzoka") {
 		t.Fatal(row)
 	}
@@ -55,7 +55,7 @@ func TestChannelDensityViewers(t *testing.T) {
 	}
 	var nameAt int
 	for i, v := range []*int{nil, catalog.IntPtr(999), catalog.IntPtr(1000), catalog.IntPtr(100000), catalog.IntPtr(999950)} {
-		row := ansi.Strip(m.formatChannelRow("  ", catalog.Channel{Login: "Canal", DisplayName: "Canal", Viewers: v}, catalog.AvailabilityLive, 40))
+		row := ansi.Strip(m.formatChannelRow("  ", catalog.Channel{Login: "Canal", DisplayName: "Canal", Viewers: v}, catalog.AvailabilityLive, 40, false))
 		at := ansi.StringWidth(row[:strings.Index(row, "Canal")])
 		if i == 0 {
 			nameAt = at

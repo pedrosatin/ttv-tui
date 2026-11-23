@@ -49,10 +49,11 @@ func (m Model) renderListBodyLines(header string, maxWidth int) []string {
 	if m.height > 0 {
 		start, end = m.list.rowWindow(rows, m.listRowBudget(len(lines)+len(unavailable), isSearch, maxWidth))
 	}
-	tagWidth := m.listTagWidth(items)
+	tagWidth := m.listTagWidth(items, maxWidth)
+	distinct := m.listDistinctNames(items, rows[start:end], maxWidth, tagWidth, isSearch)
 	for _, r := range rows[start:end] {
 		if !r.isHeader {
-			r.text = m.formatListItemRow(items[r.itemIndex], isSearch, maxWidth, tagWidth)
+			r.text = m.formatListItemRow(items[r.itemIndex], isSearch, maxWidth, tagWidth, distinct[r.itemIndex])
 		}
 		lines = append(lines, r.text)
 	}
@@ -163,14 +164,140 @@ func listHasSections(items []ListItem, isSearch bool) bool {
 }
 
 // listTagWidth is the widest status tag, so the tag column lines up.
-func (m Model) listTagWidth(items []ListItem) int {
+func (m Model) listTagWidth(items []ListItem, maxWidth int) int {
 	tagWidth := 0
+	langTag := ""
+	if len(m.list.prefs.languages) > 0 {
+		langTag = m.t("channels.lang_unknown_tag")
+	}
 	for _, it := range items {
 		if it.Channel != nil && it.Type != ItemTypeYouTubeOffer {
-			tagWidth = max(tagWidth, ansi.StringWidth(m.channelRowTag(*it.Channel, it.Availability)))
+			tag := m.channelRowTagSized(*it.Channel, it.Availability, maxWidth, langTag)
+			tagWidth = max(tagWidth, ansi.StringWidth(tag))
 		}
 	}
 	return tagWidth
+}
+
+// listItemCollisionLabel is the name compared for truncation collisions.
+func (m Model) listItemCollisionLabel(it ListItem) (string, bool) {
+	switch it.Type {
+	case ItemTypeCategory, ItemTypePinnedCategory:
+		if it.Category == nil || it.Category.Name == "" {
+			return "", false
+		}
+		return sanitizeScreenText(it.Category.Name), true
+	case ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent:
+		if it.Channel == nil {
+			return "", false
+		}
+		label := m.channelIdentity(*it.Channel)
+		if label == "" {
+			return "", false
+		}
+		return label, true
+	}
+	return "", false
+}
+
+// listLabelBodyWidth is the width available to prefix+name before the tag column.
+func listLabelBodyWidth(maxWidth, tagWidth int) int {
+	if maxWidth <= 0 {
+		return 0
+	}
+	if tagWidth > 0 {
+		return max(1, maxWidth-tagWidth-1)
+	}
+	return maxWidth
+}
+
+// listItemNameBudget devolve o orçamento de células do nome na mesma regra que
+// o desenho usa nesta linha. A detecção de colisão e o corte no meio leem daqui.
+func (m Model) listItemNameBudget(it ListItem, maxWidth, listTagWidth int, isSearch bool) (int, bool) {
+	label, ok := m.listItemCollisionLabel(it)
+	if !ok {
+		return 0, false
+	}
+	bodyWidth := maxWidth
+	suffixCells := 0
+	switch it.Type {
+	case ItemTypePinnedCategory:
+		if it.Category != nil && it.Category.Viewers == nil {
+			tagW := ansi.StringWidth(normalizeScreenText(m.t("channels.unverified_tag")))
+			bodyWidth = listLabelBodyWidth(maxWidth, tagW)
+		}
+	case ItemTypeCategory:
+		if isSearch && it.Category != nil && categoryNoBroadcast(*it.Category) {
+			suffix := " " + listRowEmDash + " " + m.t("categories.no_stream")
+			if hasWideRune(label) && !exactCellWidths {
+				suffix = strings.ReplaceAll(suffix, listRowEmDash, "-")
+			}
+			suffixCells = ansi.StringWidth(normalizeScreenText(suffix))
+		}
+	case ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent:
+		if it.Channel != nil {
+			tag := m.channelRowTag(*it.Channel, it.Availability, maxWidth)
+			if tag != "" {
+				tagW := max(ansi.StringWidth(tag), listTagWidth)
+				bodyWidth = listLabelBodyWidth(maxWidth, tagW)
+			}
+			// Sem marca nesta linha o desenho usa maxWidth inteiro.
+		}
+	}
+	budget := listLabelBudget(bodyWidth, listRowPrefixCells, label)
+	if suffixCells > 0 && maxWidth > 0 {
+		budget = max(budget-suffixCells, 1)
+	}
+	return budget, true
+}
+
+// listDistinctNames marca os índices cujos nomes, cortados só no fim, ficam
+// iguais a outro nome diferente na janela visível. Essas linhas usam corte no
+// meio. A chave é o índice do item porque categoria e canal podem repetir ID
+// na busca.
+func (m Model) listDistinctNames(items []ListItem, visible []listRow, maxWidth, tagWidth int, isSearch bool) map[int]bool {
+	type hit struct {
+		index int
+		label string
+	}
+	byTrunc := map[string][]hit{}
+	for _, r := range visible {
+		if r.isHeader || r.itemIndex < 0 || r.itemIndex >= len(items) {
+			continue
+		}
+		it := items[r.itemIndex]
+		label, ok := m.listItemCollisionLabel(it)
+		if !ok {
+			continue
+		}
+		budget, ok := m.listItemNameBudget(it, maxWidth, tagWidth, isSearch)
+		if !ok {
+			continue
+		}
+		trunc := endTruncatedListLabel(label, budget)
+		byTrunc[trunc] = append(byTrunc[trunc], hit{index: r.itemIndex, label: label})
+	}
+	out := map[int]bool{}
+	for _, group := range byTrunc {
+		if len(group) < 2 {
+			continue
+		}
+		first := group[0].label
+		same := true
+		for _, h := range group[1:] {
+			if h.label != first {
+				same = false
+				break
+			}
+		}
+		if same {
+			continue
+		}
+		for _, h := range group {
+			out[h.index] = true
+		}
+	}
+	return out
 }
 
 // listSectionTitle names the section an item type opens. An unknown type opens
@@ -210,9 +337,15 @@ func listSectionHeader(title string, maxWidth int) listRow {
 }
 
 // formatListItemRow draws one item, reversed when it is the highlighted one.
-func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth int) string {
+func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth int, distinct bool) string {
 	highlighted := it.ID() == m.list.highlightedID
 	marker := listRowMarker(highlighted, it.Type == ItemTypeFavorite || it.Favorite)
+	nameBudget := 0
+	if distinct {
+		if b, ok := m.listItemNameBudget(it, maxWidth, tagWidth, isSearch); ok {
+			nameBudget = b
+		}
+	}
 
 	var row string
 	switch it.Type {
@@ -226,12 +359,12 @@ func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth 
 	case ItemTypeCategory, ItemTypePinnedCategory:
 		if it.Type == ItemTypePinnedCategory && it.Category.Viewers == nil {
 			tag := m.t("channels.unverified_tag")
-			row = fitChannelRow(marker, fmt.Sprintf("%7s", m.t("categories.viewers_unknown")), sanitizeScreenText(it.Category.Name), tag, "", false, maxWidth, ansi.StringWidth(tag))
+			row = fitChannelRow(marker, fmt.Sprintf("%7s", m.t("categories.viewers_unknown")), sanitizeScreenText(it.Category.Name), tag, "", false, maxWidth, ansi.StringWidth(tag), distinct, nameBudget)
 		} else {
-			row = m.formatCategoryRow(marker, *it.Category, isSearch, maxWidth)
+			row = m.formatCategoryRow(marker, *it.Category, isSearch, maxWidth, distinct, nameBudget)
 		}
 	default: // ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent
-		row = m.formatChannelRow(marker, *it.Channel, it.Availability, maxWidth, tagWidth)
+		row = m.formatChannelRow(marker, *it.Channel, it.Availability, maxWidth, distinct, tagWidth, nameBudget)
 	}
 	if !highlighted {
 		return row

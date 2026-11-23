@@ -122,7 +122,7 @@ func TestCenarioFixaCategoriaSemAudienciaNaBusca(t *testing.T) {
 // Na lista estreita, a categoria salva mantém o nome antes da marca à direita.
 func TestCategoriaFixadaEstreita(t *testing.T) {
 	m, _ := newScenarioClassic(t, 80, 24, WithFavoriteCategories([]store.Category{{ID: "antiga", Name: "Grand Theft Auto V"}}))
-	row := m.formatListItemRow(m.VisibleItems()[0], false, 35, 0)
+	row := m.formatListItemRow(m.VisibleItems()[0], false, 35, 0, false)
 	if !strings.Contains(row, "Grand") || !strings.Contains(row, "[não verificado]") || strings.Index(row, "Grand") > strings.Index(row, "[não verificado]") {
 		t.Fatalf("linha estreita = %q", row)
 	}
