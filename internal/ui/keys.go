@@ -106,7 +106,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // hiddenListKey rejects list actions while preserving shared chat shortcuts
 // and text entry in a visible chat. Global controls are handled independently.
 func (m Model) hiddenListKey(msg tea.KeyMsg) bool {
-	if m.listVisible() || m.list.prefs.menuOpen || (m.chat.composing && m.chatColumnVisible()) {
+	if m.listVisible() || m.list.prefs.menuOpen || m.list.quickOpen.active || (m.chat.composing && m.chatColumnVisible()) {
 		return false
 	}
 	switch m.keys.actionFor(modeNormal, msg) {

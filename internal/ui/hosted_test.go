@@ -99,6 +99,15 @@ func TestHostedPanelGivesWayToTheFilterMenu(t *testing.T) {
 	}
 }
 
+func TestHostedPanelGivesWayToTheQuickOpen(t *testing.T) {
+	m := hostedModel(t, 212, 49, true)
+	m.player.state = PlayerStatePlaying
+	m.list.quickOpen.active = true
+	if got := m.hostedPanel(); got != (HostPanel{}) {
+		t.Fatalf("com o seletor rápido aberto e vídeo tocando: %+v", got)
+	}
+}
+
 func TestHostedPublishesOnlyChanges(t *testing.T) {
 	m := hostedModel(t, 212, 49, true)
 	host := m.hosted.host.(*recordingHost)

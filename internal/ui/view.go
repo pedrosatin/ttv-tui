@@ -504,6 +504,16 @@ func (m Model) overlayHelpLines(lines []string, helpLines []string, maxWidth int
 		}
 		return out
 	}
+	// O seletor rápido fica ancorado no topo da área; os outros overlays, no fim.
+	if m.list.quickOpen.active {
+		for i, hl := range helpLines {
+			lines[i] = fitScreenLines(padOrTruncateVisual(hl, maxWidth), maxWidth)
+		}
+		if end := len(helpLines); end < len(lines) {
+			lines[end] = padOrTruncateVisual("", maxWidth)
+		}
+		return lines
+	}
 	start := len(lines) - len(helpLines)
 	if start > 0 {
 		lines[start-1] = padOrTruncateVisual("", maxWidth)

@@ -151,7 +151,7 @@ help = []
 | `X` | Clear every recent on the list; `y` confirms, `Esc` or `n` keeps them |
 | `/` | Filter the current list; `Enter` opens the highlighted item and `Ctrl+F` searches with the text |
 | `Ctrl+F` | Search channels and categories on the platform the list shows, or paste a stream URL |
-| `Ctrl+K` | Quick open: jump to a favorite, recent, loaded category or action |
+| `Ctrl+K` | Jump to a favorite, recent, loaded category or action |
 | `p` | Switch the list between Twitch and Kick; the video and the chat keep going |
 | `L` | Filter channels by language and audience |
 | `r` | Retry loading the list or the video |

@@ -151,7 +151,7 @@ help = []
 | `X` | Limpa todos os recentes da lista; `y` confirma, `Esc` ou `n` os mantém |
 | `/` | Filtra a lista atual; `Enter` abre o item destacado e `Ctrl+F` busca com o texto |
 | `Ctrl+F` | Busca canais e categorias na plataforma que a lista mostra, ou cola a URL de uma live |
-| `Ctrl+K` | Seletor rápido: vai a um favorito, recente, categoria carregada ou ação |
+| `Ctrl+K` | Abre o seletor rápido para ir a um favorito, recente, categoria carregada ou ação |
 | `p` | Troca a lista entre Twitch e Kick; o vídeo e o chat continuam |
 | `L` | Filtra canais por idioma e público |
 | `r` | Tenta de novo carregar a lista ou o vídeo |

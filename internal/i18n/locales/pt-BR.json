@@ -249,6 +249,7 @@
   "help.use.quick_open_cancel": "Fecha o seletor rápido",
   "quick_open.title": "Seletor rápido",
   "quick_open.prompt": "Seletor: %s",
+  "quick_open.status_open": "Seletor rápido",
   "quick_open.empty": "Digite para filtrar favoritos, recentes, categorias e ações",
   "quick_open.empty_search": "Nada encontrado · {action.select} busca na plataforma",
   "quick_open.type.favorite": "Favorito",

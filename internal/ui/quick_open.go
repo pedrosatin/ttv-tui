@@ -8,11 +8,16 @@ import (
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
 )
 
-// quickOpenState é o seletor rápido (Ctrl+K): um campo sobre a tela atual com
+// quickOpenMaxResults é o teto de linhas de resultado na caixa do seletor,
+// antes de respeitar o espaço disponível do terminal.
+const quickOpenMaxResults = 12
+
+// quickOpenState é o seletor rápido Ctrl+K. Um campo sobre a tela atual com
 // busca aproximada em favoritos, recentes, categorias carregadas e ações.
 type quickOpenState struct {
 	active bool
@@ -30,20 +35,22 @@ const (
 	quickAction
 )
 
-// quickOpenItem é uma linha do seletor: tipo, texto de busca, pontuação e o
-// alvo (canal, categoria ou ação).
+// quickOpenItem é uma linha do seletor com tipo, texto de busca, pontuação e o
+// alvo canal, categoria ou ação.
 type quickOpenItem struct {
-	Kind     quickOpenKind
-	Label    string
-	Platform string
-	Score    int
-	Channel  *catalog.Channel
-	Category *catalog.Category
-	Action   actionID
-	KeyLabel string
+	Kind        quickOpenKind
+	Label       string
+	FoldedLabel string
+	Platform    string
+	Score       int
+	Channel     *catalog.Channel
+	Category    *catalog.Category
+	Action      actionID
+	KeyLabel    string
 }
 
-// foldForFuzzy normaliza para comparação: minúsculas e sem acentos (NFD + tira Mn).
+// foldForFuzzy normaliza para comparação em minúsculas e sem acentos comuns.
+// A implementação mapeia diacríticos latinos sem passar por NFD.
 func foldForFuzzy(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
@@ -72,17 +79,18 @@ func foldForFuzzy(s string) string {
 	return b.String()
 }
 
-// fuzzyScore mede o casamento de query em text como subsequência. Sem casamento
-// devolve -1. Prefixo e início de palavra valem mais; caracteres contíguos
-// também. Implementação sem dependência nova.
-func fuzzyScore(query, text string) int {
-	q := foldForFuzzy(query)
+// fuzzyScore mede o casamento de query em text como subsequência. O bool diz se
+// houve casamento. Prefixo e início de palavra valem mais, e caracteres
+// contíguos também. A penalidade por comprimento nunca anula um casamento
+// válido. queryFolded já deve estar normalizado com foldForFuzzy.
+func fuzzyScore(queryFolded, text string) (int, bool) {
+	q := queryFolded
 	t := foldForFuzzy(text)
 	if q == "" {
-		return 0
+		return 0, true
 	}
 	if t == "" {
-		return -1
+		return 0, false
 	}
 
 	qi := 0
@@ -110,11 +118,17 @@ func fuzzyScore(query, text string) int {
 		qi++
 	}
 	if qi < len(qRunes) {
-		return -1
+		return 0, false
 	}
-	// Empate: textos mais curtos, que cobriram a query com menos sobra, sobem.
-	score -= len(tRunes) - len(qRunes)
-	return score
+	// Empate: textos mais curtos sobem, sem deixar o score negativo.
+	penalty := len(tRunes) - len(qRunes)
+	if penalty > score {
+		penalty = score
+	}
+	if penalty > 0 {
+		score -= penalty
+	}
+	return score, true
 }
 
 func isWordStart(runes []rune, i int) bool {
@@ -172,7 +186,7 @@ func (m Model) confirmQuickOpen() (tea.Model, tea.Cmd) {
 		if q == "" {
 			return m, nil
 		}
-		return m.startSearch(q)
+		return m.revealListForQuickOpen().startSearchClosingPreview(q)
 	}
 	if m.list.quickOpen.cursor < 0 || m.list.quickOpen.cursor >= len(items) {
 		m.list.quickOpen.cursor = 0
@@ -185,20 +199,72 @@ func (m Model) confirmQuickOpen() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		ch := *item.Channel
+		m = m.revealListForQuickOpen()
+		var cmds []tea.Cmd
+		if m.previewOpen() {
+			if stop := m.closePreview(); stop != nil {
+				cmds = append(cmds, stop)
+			}
+		}
 		m.list.enters++
-		return m.applyChannelSelected(ChannelSelectedMsg{Channel: ch, Enter: m.list.enters})
+		next, cmd := m.applyChannelSelected(ChannelSelectedMsg{Channel: ch, Enter: m.list.enters})
+		m = next.(Model)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Sequence(cmds...)
 	case quickCategory:
 		if item.Category == nil {
 			return m, nil
 		}
-		return m.openQuickCategory(*item.Category, item.Platform)
+		return m.revealListForQuickOpen().openQuickCategoryClosingPreview(*item.Category, item.Platform)
 	case quickAction:
 		return m.fireQuickAction(item.Action)
 	}
 	return m, nil
 }
 
-// openQuickCategory abre a categoria; se for de outra plataforma, troca o
+// revealListForQuickOpen mostra a lista e leva o foco a ela fora do classic,
+// como keyCategories e keySaved.
+func (m Model) revealListForQuickOpen() Model {
+	if !m.classic {
+		m.layout.showList = true
+		m.setFocus(FocusList)
+	}
+	return m
+}
+
+func (m Model) startSearchClosingPreview(q string) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	if m.previewOpen() {
+		if stop := m.closePreview(); stop != nil {
+			cmds = append(cmds, stop)
+		}
+	}
+	next, cmd := m.startSearch(q)
+	m = next.(Model)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Sequence(cmds...)
+}
+
+func (m Model) openQuickCategoryClosingPreview(cat catalog.Category, plat string) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	if m.previewOpen() {
+		if stop := m.closePreview(); stop != nil {
+			cmds = append(cmds, stop)
+		}
+	}
+	next, cmd := m.openQuickCategory(cat, plat)
+	m = next.(Model)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Sequence(cmds...)
+}
+
+// openQuickCategory abre a categoria. Se for de outra plataforma, troca o
 // catálogo antes de carregar os canais.
 func (m Model) openQuickCategory(cat catalog.Category, plat string) (tea.Model, tea.Cmd) {
 	plat = platform.Normalize(plat)
@@ -237,6 +303,17 @@ func (m Model) openQuickCategory(cat catalog.Category, plat string) (tea.Model, 
 	selected := cat
 	if m.browser == nil {
 		m.list.selectedCategory = &selected
+		m.list.mode = ModeChannels
+		m.list.channels = nil
+		m.list.filter = ""
+		m.list.filtering = false
+		m.list.search.active = false
+		m.clearHighlight()
+		m.list.focusResults = true
+		m.list.nextCursor = ""
+		m.list.hasMore = false
+		m.clearStaleStatusErrors()
+		m.list.loading = false
 		return m, tea.Batch(append(cmds, func() tea.Msg {
 			return CategorySelectedMsg{Category: selected}
 		})...)
@@ -260,8 +337,9 @@ func (m Model) openQuickCategory(cat catalog.Category, plat string) (tea.Model, 
 	return m, tea.Batch(cmds...)
 }
 
-// fireQuickAction executa uma ação do registro escolhida no seletor, pelo mesmo
-// caminho das teclas (comando, layout, player, movimento e globais).
+// fireQuickAction executa uma ação do registro escolhida no seletor pelo mesmo
+// caminho das teclas de comando, layout, player e globais. As primitivas de
+// movimento e confirmação não entram no seletor.
 func (m Model) fireQuickAction(id actionID) (tea.Model, tea.Cmd) {
 	switch id {
 	case actCycleLayout, actToggleList, actToggleChat:
@@ -298,8 +376,6 @@ func (m Model) fireQuickAction(id actionID) (tea.Model, tea.Cmd) {
 		return m.keyChannelFilter()
 	case actSwitchPlatform:
 		return m.keySwitchPlatform()
-	case actBack:
-		return m.keyClear()
 	case actCompose:
 		return m.enterCompose()
 	case actCopyMessage:
@@ -318,78 +394,67 @@ func (m Model) fireQuickAction(id actionID) (tea.Model, tea.Cmd) {
 		return m.adjustVolume(-5)
 	case actMute:
 		return m.keyMute()
-	case actUp:
-		return m.keyUp()
-	case actDown:
-		return m.keyDown()
-	case actPageUp:
-		return m.keyPageUp()
-	case actPageDown:
-		return m.keyPageDown()
-	case actHome:
-		return m.keyHome()
-	case actEnd:
-		return m.keyGoLive()
-	case actSelect:
-		return m.keySelect()
 	case actSwitchFocus:
 		return m.switchPanelFocus(), nil
 	}
 	return m, nil
 }
 
-// quickOpenItems monta e ordena os resultados: pontuação decrescente; empate
-// por tipo (favorito, recente, categoria, ação) e ordem de origem.
+// quickOpenItems monta e ordena os resultados por pontuação decrescente. Empate
+// resolve por tipo favorito, recente, categoria, ação e, no fim, ordem alfabética
+// do rótulo normalizado.
 func (m Model) quickOpenItems() []quickOpenItem {
-	query := m.list.quickOpen.input
+	queryFolded := foldForFuzzy(m.list.quickOpen.input)
 	var items []quickOpenItem
 
 	favSeen := map[string]bool{}
 	for _, ch := range m.list.favorites {
 		label := channelQuickLabel(ch)
-		score := fuzzyScore(query, label)
-		if score < 0 {
+		score, ok := bestChannelFuzzy(queryFolded, label, ch.Login)
+		if !ok {
 			continue
 		}
 		c := ch
 		key := channelQuickKey(ch)
 		favSeen[key] = true
 		items = append(items, quickOpenItem{
-			Kind: quickFavorite, Label: label, Platform: ch.CanonicalPlatform(),
-			Score: score, Channel: &c,
+			Kind: quickFavorite, Label: label, FoldedLabel: foldForFuzzy(label),
+			Platform: ch.CanonicalPlatform(), Score: score, Channel: &c,
 		})
 	}
-	for _, ch := range m.list.recents {
+	for _, ch := range m.listRecents() {
 		key := channelQuickKey(ch)
 		if favSeen[key] {
 			continue
 		}
 		label := channelQuickLabel(ch)
-		score := fuzzyScore(query, label)
-		if score < 0 {
+		score, ok := bestChannelFuzzy(queryFolded, label, ch.Login)
+		if !ok {
 			continue
 		}
 		c := ch
 		items = append(items, quickOpenItem{
-			Kind: quickRecent, Label: label, Platform: ch.CanonicalPlatform(),
-			Score: score, Channel: &c,
+			Kind: quickRecent, Label: label, FoldedLabel: foldForFuzzy(label),
+			Platform: ch.CanonicalPlatform(), Score: score, Channel: &c,
 		})
 	}
 
 	catSeen := map[string]bool{}
 	listPlat := m.ListPlatform()
+	catsByID := make(map[string]catalog.Category, len(m.list.categories))
 	for _, cat := range m.list.categories {
+		catsByID[cat.ID] = cat
 		label := cat.Name
-		score := fuzzyScore(query, label)
-		if score < 0 {
+		score, ok := fuzzyScore(queryFolded, label)
+		if !ok {
 			continue
 		}
 		c := cat
 		key := categoryQuickKey(listPlat, cat.ID)
 		catSeen[key] = true
 		items = append(items, quickOpenItem{
-			Kind: quickCategory, Label: label, Platform: listPlat,
-			Score: score, Category: &c,
+			Kind: quickCategory, Label: label, FoldedLabel: foldForFuzzy(label),
+			Platform: listPlat, Score: score, Category: &c,
 		})
 	}
 	for _, saved := range m.list.favoriteCategories {
@@ -399,26 +464,25 @@ func (m Model) quickOpenItems() []quickOpenItem {
 			continue
 		}
 		label := saved.Name
-		score := fuzzyScore(query, label)
-		if score < 0 {
+		score, ok := fuzzyScore(queryFolded, label)
+		if !ok {
 			continue
 		}
 		c := catalog.Category{ID: saved.ID, Name: saved.Name}
-		for _, fresh := range m.list.categories {
-			if plat == listPlat && fresh.ID == saved.ID {
+		if plat == listPlat {
+			if fresh, found := catsByID[saved.ID]; found {
 				c = fresh
-				break
 			}
 		}
 		catSeen[key] = true
 		items = append(items, quickOpenItem{
-			Kind: quickCategory, Label: label, Platform: plat,
-			Score: score, Category: &c,
+			Kind: quickCategory, Label: label, FoldedLabel: foldForFuzzy(label),
+			Platform: plat, Score: score, Category: &c,
 		})
 	}
 
 	for _, a := range m.keys.actions {
-		if !quickOpenActionCandidate(a) {
+		if !m.quickOpenActionCandidate(a) {
 			continue
 		}
 		keys := m.keys.keys[a.ID]
@@ -426,17 +490,17 @@ func (m Model) quickOpenItems() []quickOpenItem {
 			continue
 		}
 		label := m.t(a.text())
-		score := fuzzyScore(query, label)
-		if score < 0 {
-			// Também casa o nome curto da ação (quick_open, mute…).
+		score, ok := fuzzyScore(queryFolded, label)
+		if !ok {
+			// Também casa o nome curto da ação, como quick_open ou mute.
 			short := strings.TrimPrefix(string(a.ID), "action.")
-			score = fuzzyScore(query, short)
-			if score < 0 {
+			score, ok = fuzzyScore(queryFolded, short)
+			if !ok {
 				continue
 			}
 		}
 		items = append(items, quickOpenItem{
-			Kind: quickAction, Label: label, Score: score,
+			Kind: quickAction, Label: label, FoldedLabel: foldForFuzzy(label), Score: score,
 			Action: a.ID, KeyLabel: keyLabel(keys[0], m.catalog),
 		})
 	}
@@ -448,13 +512,44 @@ func (m Model) quickOpenItems() []quickOpenItem {
 		if c := cmp.Compare(int(a.Kind), int(b.Kind)); c != 0 {
 			return c
 		}
-		return strings.Compare(foldForFuzzy(a.Label), foldForFuzzy(b.Label))
+		return strings.Compare(a.FoldedLabel, b.FoldedLabel)
 	})
 	return items
 }
 
-func quickOpenActionCandidate(a action) bool {
+func bestChannelFuzzy(queryFolded, label, login string) (int, bool) {
+	score, ok := fuzzyScore(queryFolded, label)
+	if login == "" || strings.EqualFold(strings.TrimSpace(login), strings.TrimSpace(label)) {
+		return score, ok
+	}
+	loginScore, loginOK := fuzzyScore(queryFolded, login)
+	if !ok && !loginOK {
+		return 0, false
+	}
+	if !ok {
+		return loginScore, true
+	}
+	if !loginOK {
+		return score, true
+	}
+	if loginScore > score {
+		return loginScore, true
+	}
+	return score, true
+}
+
+func (m Model) quickOpenActionCandidate(a action) bool {
 	if a.ID == actQuickOpen || a.Section == sectionHidden {
+		return false
+	}
+	if a.windowOnly() && m.hosted.host == nil {
+		return false
+	}
+	if a.ID == actSwitchPlatform && len(m.catalogs) < 2 {
+		return false
+	}
+	switch a.ID {
+	case actUp, actDown, actPageUp, actPageDown, actHome, actEnd, actSelect, actBack:
 		return false
 	}
 	for _, mode := range a.Modes {
@@ -483,78 +578,99 @@ func categoryQuickKey(plat, id string) string {
 	return plat + "\n" + id
 }
 
-// renderQuickOpenLines desenha o seletor como overlay, no estilo do menu de filtros.
+// renderQuickOpenLines desenha o seletor como caixa de altura fixa ancorada no
+// topo da área disponível. Reserva até quickOpenMaxResults linhas de resultado
+// para a caixa não mudar de posição ao digitar.
 func (m Model) renderQuickOpenLines(maxWidth int) []string {
 	if !m.list.quickOpen.active {
 		return nil
 	}
+	available := m.height - 1 - m.footerRows()
+	if m.height <= 0 {
+		available = quickOpenMaxResults + 3
+	}
+
 	items := m.quickOpenItems()
 	cursor := m.list.quickOpen.cursor
 	if cursor >= len(items) {
 		cursor = max(0, len(items)-1)
 	}
 
-	prompt := fmt.Sprintf(m.t("quick_open.prompt"), sanitizeScreenText(m.list.quickOpen.input))
-	head := []string{
-		TruncateVisual("=== "+m.t("quick_open.title")+" ===", maxWidth),
-		TruncateVisual(prompt, maxWidth),
-	}
+	title := TruncateVisual("=== "+m.t("quick_open.title")+" ===", maxWidth)
+	prompt := TruncateVisual(fmt.Sprintf(m.t("quick_open.prompt"), sanitizeScreenText(m.list.quickOpen.input)), maxWidth)
+
 	if len(items) == 0 {
 		hint := m.t("quick_open.empty")
 		if strings.TrimSpace(m.list.quickOpen.input) != "" {
 			hint = m.t("quick_open.empty_search")
 		}
-		head = append(head, TruncateVisual("  "+hint, maxWidth))
-		return head
+		out := []string{title, prompt, TruncateVisual("  "+hint, maxWidth)}
+		if available > 0 && len(out) > available {
+			return out[:available]
+		}
+		return out
 	}
 
-	rows := make([]string, 0, len(items))
-	for i, it := range items {
+	showPos := available > 2
+	chrome := 2
+	if showPos {
+		chrome++
+	}
+	resultSlots := min(quickOpenMaxResults, max(0, available-chrome))
+	if available <= 0 {
+		resultSlots = quickOpenMaxResults
+	}
+
+	window := max(resultSlots, 1)
+	start := max(min(cursor-window/2, len(items)-window), 0)
+	end := min(start+window, len(items))
+
+	rows := make([]string, 0, resultSlots)
+	for i := start; i < end; i++ {
 		marker := "  "
 		if i == cursor {
 			marker = "▸ "
 		}
-		rows = append(rows, TruncateVisual(marker+m.quickOpenRowText(it), maxWidth))
+		rows = append(rows, m.formatQuickOpenRow(items[i], marker, maxWidth))
+	}
+	for len(rows) < resultSlots {
+		rows = append(rows, "")
 	}
 
-	available := m.height - 1 - m.footerRows()
-	if m.height <= 0 || len(head)+len(rows) <= available {
-		return append(head, rows...)
-	}
-	budget := available
-	if m.height > 2 {
-		budget--
-	}
-	pinned := min(len(head), (budget-1)/2)
-	window := max(1, budget-pinned)
-	start := max(min(cursor-window/2, len(rows)-window), 0)
-	end := min(start+window, len(rows))
-	out := make([]string, 0, available)
-	out = append(out, head[:pinned]...)
-	out = append(out, rows[start:end]...)
-	if m.height > 2 {
+	out := make([]string, 0, chrome+resultSlots)
+	out = append(out, title, prompt)
+	out = append(out, rows...)
+	if showPos {
 		out = append(out, positionRow(cursor+1, len(items), maxWidth))
+	}
+	if available > 0 && len(out) > available {
+		out = out[:available]
 	}
 	return out
 }
 
-func (m Model) quickOpenRowText(it quickOpenItem) string {
+// formatQuickOpenRow corta o rótulo antes do sufixo da tecla ou da plataforma,
+// para o corte cair no texto e nunca na tecla efetiva.
+func (m Model) formatQuickOpenRow(it quickOpenItem, marker string, maxWidth int) string {
 	typeLabel := m.t(quickOpenTypeKey(it.Kind))
 	label := sanitizeScreenText(it.Label)
-	line := typeLabel + " · " + label
+	body := typeLabel + " · " + label
+	suffix := ""
 	switch it.Kind {
 	case quickAction:
 		if it.KeyLabel != "" {
-			return line + "  " + it.KeyLabel
+			suffix = "  " + it.KeyLabel
 		}
-		return line
 	default:
-		plat := platform.DisplayName(it.Platform)
-		if plat == "" {
-			return line
+		if plat := platform.DisplayName(it.Platform); plat != "" {
+			suffix = " [" + plat + "]"
 		}
-		return line + " [" + plat + "]"
 	}
+	room := maxWidth - ansi.StringWidth(marker) - ansi.StringWidth(suffix)
+	if room < 1 {
+		room = 1
+	}
+	return marker + TruncateVisual(body, room) + suffix
 }
 
 func quickOpenTypeKey(k quickOpenKind) string {

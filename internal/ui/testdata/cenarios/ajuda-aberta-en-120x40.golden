@@ -19,7 +19,7 @@
 ── Search and filters ──
   /                   Filter the list
   Ctrl+F/S            Search categories and channels
-  Ctrl+K              Open the quick selector
+  Ctrl+K              Open Quick open
   l                   Open the language and audience filters
   In the search prompt:
     Enter Ctrl+F/S    Search for what you typed
@@ -29,9 +29,9 @@
     Enter             Open the highlighted item or, when nothing matches, search for the text
     Esc               Clear and close the filter
     Ctrl+F/S          Search the platform for the filter text
-  In the quick selector:
+  In Quick open:
     Enter             Open the highlighted result or search with the text
-    Esc Ctrl+K        Close the quick selector
+    Esc Ctrl+K        Close Quick open
   In the filter menu:
     ↑/k ↓/j PgUp PgDn Home/g End/G
                       Move through the options

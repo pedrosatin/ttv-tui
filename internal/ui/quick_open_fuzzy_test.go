@@ -20,53 +20,80 @@ func TestFuzzyScoreOrdemECasamento(t *testing.T) {
 		{"acao", "Ação", true},
 	}
 	for _, tc := range cases {
-		got := fuzzyScore(tc.query, tc.text)
-		if tc.wantMatch && got < 0 {
-			t.Errorf("fuzzyScore(%q, %q) = %d, quer casamento", tc.query, tc.text, got)
+		got, ok := fuzzyScore(foldForFuzzy(tc.query), tc.text)
+		if tc.wantMatch && !ok {
+			t.Errorf("fuzzyScore(%q, %q) = %d/%v, quer casamento", tc.query, tc.text, got, ok)
 		}
-		if !tc.wantMatch && got >= 0 {
-			t.Errorf("fuzzyScore(%q, %q) = %d, quer sem casamento", tc.query, tc.text, got)
+		if !tc.wantMatch && ok {
+			t.Errorf("fuzzyScore(%q, %q) = %d/%v, quer sem casamento", tc.query, tc.text, got, ok)
 		}
 	}
 
 	// Prefixo vence subsequência espalhada; início de palavra vence meio.
-	prefix := fuzzyScore("chat", "Just Chatting")
-	mid := fuzzyScore("chat", "xchattery")
+	prefix, _ := fuzzyScore(foldForFuzzy("chat"), "Just Chatting")
+	mid, _ := fuzzyScore(foldForFuzzy("chat"), "xchattery")
 	if prefix <= mid {
 		t.Fatalf("prefixo/palavra %d deveria superar meio %d", prefix, mid)
 	}
-	start := fuzzyScore("val", "VALORANT")
-	buried := fuzzyScore("val", "xxvalyy")
+	start, _ := fuzzyScore(foldForFuzzy("val"), "VALORANT")
+	buried, _ := fuzzyScore(foldForFuzzy("val"), "xxvalyy")
 	if start <= buried {
 		t.Fatalf("início %d deveria superar enterrado %d", start, buried)
 	}
 }
 
 func TestFuzzyScoreOrdemEntreCandidatos(t *testing.T) {
-	query := "gau"
+	query := foldForFuzzy("gau")
 	type row struct {
 		label string
 		score int
+		ok    bool
 	}
 	rows := []row{
-		{"Gaules", fuzzyScore(query, "Gaules")},
-		{"GaulesTV", fuzzyScore(query, "GaulesTV")},
-		{"alanzoka", fuzzyScore(query, "alanzoka")},
+		{"Gaules", 0, false},
+		{"GaulesTV", 0, false},
+		{"alanzoka", 0, false},
+	}
+	for i := range rows {
+		rows[i].score, rows[i].ok = fuzzyScore(query, rows[i].label)
 	}
 	slices.SortFunc(rows, func(a, b row) int {
+		if a.ok != b.ok {
+			if a.ok {
+				return -1
+			}
+			return 1
+		}
 		if a.score != b.score {
 			return b.score - a.score
 		}
 		return 0
 	})
-	if rows[0].label != "Gaules" {
-		t.Fatalf("primeiro = %q (score %d), quer Gaules; lista=%v", rows[0].label, rows[0].score, rows)
+	if !rows[0].ok || rows[0].label != "Gaules" {
+		t.Fatalf("primeiro = %q ok=%v score=%d, quer Gaules; lista=%v", rows[0].label, rows[0].ok, rows[0].score, rows)
 	}
-	if rows[len(rows)-1].label != "alanzoka" || rows[len(rows)-1].score >= 0 {
-		// alanzoka não casa "gau"
-		if fuzzyScore(query, "alanzoka") >= 0 {
-			t.Fatalf("alanzoka não deveria casar gau")
-		}
+	if rows[len(rows)-1].ok {
+		t.Fatalf("alanzoka não deveria casar gau: %v", rows)
+	}
+}
+
+func TestFuzzyScoreCasaTextoLongo(t *testing.T) {
+	long := "The Legend of Zelda: Tears of the Kingdom"
+	score, ok := fuzzyScore(foldForFuzzy("z"), long)
+	if !ok {
+		t.Fatalf("z contra %q deveria casar; score=%d", long, score)
+	}
+	if score < 0 {
+		t.Fatalf("casamento válido não pode ser negativo: %d", score)
+	}
+	desc := "A very long category description that mentions Zelda somewhere in the middle of plenty of other words"
+	score, ok = fuzzyScore(foldForFuzzy("zelda"), desc)
+	if !ok || score < 0 {
+		t.Fatalf("zelda contra descrição longa: ok=%v score=%d", ok, score)
+	}
+	_, ok = fuzzyScore(foldForFuzzy("qqq"), long)
+	if ok {
+		t.Fatal("qqq não deveria casar o título longo")
 	}
 }
 

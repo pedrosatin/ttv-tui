@@ -168,3 +168,90 @@ func TestSeletorRapidoOmiteAcaoDesligada(t *testing.T) {
 		}
 	}
 }
+
+// Seletor aberto com consulta que traz canal, categoria e ação. Grava golden.
+func TestCenarioSeletorRapidoAbertoComConsulta(t *testing.T) {
+	eachSize(t, "seletor-rapido-aberto", func(t *testing.T, width, height int) Model {
+		fav := scenarioChannels()[0]
+		fav.Platform = platform.Twitch
+		m, _ := newScenario(t, width, height, WithFavorites([]catalog.Channel{fav}))
+		m = play(t, m, "ctrl+k a")
+		if !m.list.quickOpen.active {
+			t.Fatal("seletor não abriu")
+		}
+		var hasChannel, hasCategory, hasAction bool
+		for _, it := range m.quickOpenItems() {
+			switch it.Kind {
+			case quickFavorite, quickRecent:
+				hasChannel = true
+			case quickCategory:
+				hasCategory = true
+			case quickAction:
+				hasAction = true
+			}
+		}
+		if !hasChannel || !hasCategory || !hasAction {
+			t.Fatalf("consulta 'a' sem os três tipos: canal=%v cat=%v ação=%v itens=%+v", hasChannel, hasCategory, hasAction, m.quickOpenItems())
+		}
+		return m
+	})
+}
+
+// Abre e fecha o seletor a partir do chat, da busca e dos canais de uma categoria.
+func TestCenarioSeletorRapidoAbreEFechaDeVariasTelas(t *testing.T) {
+	eachSize(t, "seletor-rapido-do-chat", func(t *testing.T, width, height int) Model {
+		m, _ := newScenario(t, width, height)
+		m = openGaulesWithChat(t, m)
+		m = focusChat(t, m)
+		m = play(t, m, "ctrl+k")
+		if !m.list.quickOpen.active {
+			t.Fatal("Ctrl+K no chat não abriu o seletor")
+		}
+		m = play(t, m, "esc")
+		if m.list.quickOpen.active {
+			t.Fatal("Esc no seletor aberto do chat não fechou")
+		}
+		if m.Focus() != FocusChat {
+			t.Fatalf("foco = %v, quer chat depois do Esc", m.Focus())
+		}
+		return m
+	})
+	eachSize(t, "seletor-rapido-da-busca", func(t *testing.T, width, height int) Model {
+		m, _ := newScenario(t, width, height)
+		m = play(t, m, "ctrl+f gaules enter")
+		if m.Mode() != ModeSearch {
+			t.Fatalf("modo = %s, quer search", m.Mode())
+		}
+		m = play(t, m, "ctrl+k")
+		if !m.list.quickOpen.active {
+			t.Fatal("Ctrl+K na busca não abriu o seletor")
+		}
+		m = play(t, m, "esc")
+		if m.list.quickOpen.active {
+			t.Fatal("Esc não fechou o seletor na busca")
+		}
+		if m.Mode() != ModeSearch {
+			t.Fatalf("modo = %s, quer search depois do Esc", m.Mode())
+		}
+		return m
+	})
+	eachSize(t, "seletor-rapido-dos-canais", func(t *testing.T, width, height int) Model {
+		m, _ := newScenario(t, width, height)
+		m = play(t, m, "enter")
+		if m.Mode() != ModeChannels {
+			t.Fatalf("modo = %s, quer canais", m.Mode())
+		}
+		m = play(t, m, "ctrl+k")
+		if !m.list.quickOpen.active {
+			t.Fatal("Ctrl+K nos canais não abriu o seletor")
+		}
+		m = play(t, m, "esc")
+		if m.list.quickOpen.active {
+			t.Fatal("Esc não fechou o seletor nos canais")
+		}
+		if m.Mode() != ModeChannels {
+			t.Fatalf("modo = %s, quer canais depois do Esc", m.Mode())
+		}
+		return m
+	})
+}
