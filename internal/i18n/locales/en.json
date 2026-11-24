@@ -6,6 +6,7 @@
   "saves.timeout": "saves still running after %v",
   "list.empty_action": "Empty: {action.retry} retry · {action.back} back",
   "list.not_loaded": "The list did not load.",
+  "list.unnamed": "(unnamed)",
   "player.info": "Player info: %s",
   "app.title": "ttv-tui",
   "status.ready": "Ready",

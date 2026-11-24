@@ -277,7 +277,8 @@ func (p itemPass) isSeen(ch catalog.Channel) bool {
 }
 
 // matchesFilter reports whether one of the fields contains the text filter.
-// Both sides go through sanitizeChatText so a title like "an‏tes" matches "antes".
+// Both sides are compared as the screen shows them (filterText), so a title
+// like "an\u200ftes" matches "antes" and "❤️ live" matches "❤ live".
 func (p itemPass) matchesFilter(name, login, title string) bool {
 	if p.query == "" {
 		return true
@@ -1488,7 +1489,7 @@ func (m Model) fetchChannelsCmd(gen uint64, cat catalog.Category, cursor string,
 		catID = cat.Name
 	}
 	prefs := m.list.prefs
-	visibility := itemPass{prefs: prefs, query: strings.ToLower(strings.TrimSpace(m.list.filter))}
+	visibility := itemPass{prefs: prefs, query: filterQuery(m.list.filter)}
 	languages := m.FilterLanguages()
 	return func() tea.Msg {
 		ctx := context.Background()

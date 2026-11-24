@@ -15,6 +15,9 @@ func normalizeScreenText(s string) string {
 	b.Grow(len(s))
 	skipJoined := false
 	lastWasEmoji := false
+	// droppedBase marks that the last base character was dropped, so the tags
+	// of a subdivision flag joined after a ZWJ go with it.
+	droppedBase := false
 	for _, r := range s {
 		switch {
 		case r == '\u200d':
@@ -23,12 +26,19 @@ func normalizeScreenText(s string) string {
 			}
 		case r == '\ufe0e' || r == '\ufe0f' || (r >= 0x1f3fb && r <= 0x1f3ff):
 			continue
+		case r >= 0xe0000 && r <= 0xe007f:
+			// Tags belong to the flag before them and leave lastWasEmoji as is.
+			if !droppedBase {
+				b.WriteRune(r)
+			}
 		default:
 			if skipJoined {
 				skipJoined = false
+				droppedBase = true
 				lastWasEmoji = isEmoji(r)
 				continue
 			}
+			droppedBase = false
 			lastWasEmoji = isEmoji(r)
 			b.WriteRune(r)
 		}

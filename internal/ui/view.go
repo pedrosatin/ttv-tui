@@ -530,7 +530,7 @@ func (m Model) headerLine(maxWidth int) string {
 	switch m.Mode() {
 	case ModeChannels:
 		if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
-			title = fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.list.selectedCategory.Name))
+			title = fmt.Sprintf(m.t("channels.title_category"), m.categoryLabel(*m.list.selectedCategory))
 		} else {
 			title = m.t("channels.title")
 		}
@@ -690,13 +690,16 @@ func (m Model) channelRowTagSized(ch catalog.Channel, avail catalog.Availability
 // channelIdentity is the name side of a channel row: display name, optional
 // login and optional platform mark for a saved channel without a catalog.
 func (m Model) channelIdentity(ch catalog.Channel) string {
-	displayName := sanitizeScreenText(ch.DisplayName)
-	login := sanitizeScreenText(ch.Login)
+	displayName := visibleOrEmpty(sanitizeScreenText(ch.DisplayName))
+	login := visibleOrEmpty(sanitizeScreenText(ch.Login))
 	identity := displayName
 	if identity == "" {
 		identity = login
 	} else if login != "" && !strings.EqualFold(displayName, login) {
 		identity += " (" + login + ")"
+	}
+	if identity == "" {
+		identity = m.t("list.unnamed")
 	}
 	c := m.catalogOf(ch.CanonicalPlatform())
 	if c.browser == nil && c.searcher == nil && ch.CanonicalPlatform() != m.ListPlatform() {
@@ -711,7 +714,7 @@ func (m Model) formatChannelRow(marker string, ch catalog.Channel, avail catalog
 	identity := m.channelIdentity(ch)
 	title := ""
 	if ch.Title != nil {
-		title = sanitizeScreenText(strings.TrimSpace(*ch.Title))
+		title = visibleOrEmpty(sanitizeScreenText(strings.TrimSpace(*ch.Title)))
 	}
 	viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
 	if avail == catalog.AvailabilityLive {
@@ -827,8 +830,25 @@ func fitChannelTitle(identity, title, sep string, bodyWidth int) string {
 	return ansi.Truncate(title, remain, ell)
 }
 
+// categoryLabel is the category name as the list shows it. A name that shows
+// nothing, like one made only of U+3164, becomes "(unnamed)".
+func (m Model) categoryLabel(cat catalog.Category) string {
+	if name := visibleOrEmpty(sanitizeScreenText(cat.Name)); name != "" {
+		return name
+	}
+	return m.t("list.unnamed")
+}
+
+// visibleOrEmpty returns s, or "" when s is only spaces.
+func visibleOrEmpty(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return ""
+	}
+	return s
+}
+
 func (m Model) formatCategoryRow(marker string, cat catalog.Category, inSearch bool, maxWidth int, distinct bool, nameBudget int) string {
-	name := sanitizeScreenText(cat.Name)
+	name := m.categoryLabel(cat)
 	if inSearch && categoryNoBroadcast(cat) {
 		viewers := fmt.Sprintf("%7s", m.t("categories.viewers_unknown"))
 		prefix := marker + " " + viewers + "  "
