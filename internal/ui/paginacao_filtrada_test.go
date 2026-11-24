@@ -116,3 +116,29 @@ func TestRodadaFiltradaConsideraTexto(t *testing.T) {
 		t.Fatalf("consultas=%d, página=%+v", calls, msg.Page)
 	}
 }
+
+// A rodada filtrada normaliza o filtro como VisibleItems. Com o idioma ativo e o
+// filtro "❤️ live", o canal de título "❤️ live" encerra a rodada na segunda
+// página e aparece na lista.
+func TestRodadaFiltradaUsaOFiltroDaTela(t *testing.T) {
+	m, _ := newScenarioClassic(t, 80, 24, WithChannelFilters([]string{"pt"}, 0, nil))
+	m.list.filter = "❤️ live"
+	calls := 0
+	m.browser = &fakeSource{channelsFn: func(_ context.Context, _ string, p catalog.PageRequest) (catalog.Page[catalog.Channel], error) {
+		calls++
+		ch := catalog.Channel{ID: "outro", Login: "outro", Title: catalog.StringPtr("just chatting"), Language: catalog.LanguagePtr("pt"), Availability: catalog.AvailabilityLive}
+		if calls == 2 {
+			ch = catalog.Channel{ID: "alvo", Login: "alvo", Title: catalog.StringPtr("❤️ live"), Language: catalog.LanguagePtr("pt"), Availability: catalog.AvailabilityLive}
+		}
+		return catalog.Page[catalog.Channel]{Items: []catalog.Channel{ch}, Cursor: ch.ID, HasMore: true}, nil
+	}}
+	msg := runCmd(t, m.fetchChannelsCmd(m.list.generation, catalog.Category{ID: "cat"}, "", false)).(ChannelsLoadedMsg)
+	if calls != 2 || len(msg.Page.Items) != 2 {
+		t.Fatalf("consultas=%d, página=%+v", calls, msg.Page)
+	}
+	m.list.mode = ModeChannels
+	m.list.channels = msg.Page.Items
+	if vis := m.VisibleChannels(); len(vis) != 1 || vis[0].Login != "alvo" {
+		t.Fatalf("VisibleChannels = %v, want só alvo", loginsOf(vis))
+	}
+}

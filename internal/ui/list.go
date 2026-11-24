@@ -1489,7 +1489,7 @@ func (m Model) fetchChannelsCmd(gen uint64, cat catalog.Category, cursor string,
 		catID = cat.Name
 	}
 	prefs := m.list.prefs
-	visibility := itemPass{prefs: prefs, query: strings.ToLower(strings.TrimSpace(m.list.filter))}
+	visibility := itemPass{prefs: prefs, query: filterQuery(m.list.filter)}
 	languages := m.FilterLanguages()
 	return func() tea.Msg {
 		ctx := context.Background()

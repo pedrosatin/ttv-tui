@@ -665,14 +665,20 @@ func (m Model) userNoticeMessage(item ChatMessage) ChatMessage {
 	}
 }
 
+// noticeAuthor is the author of a user notice as the chat shows it: the
+// display name, or the login when the name shows nothing, or "?".
+func noticeAuthor(displayName, login string) string {
+	if name := visibleOrEmpty(strings.TrimSpace(sanitizeScreenText(displayName))); name != "" {
+		return name
+	}
+	if name := visibleOrEmpty(strings.TrimSpace(sanitizeScreenText(login))); name != "" {
+		return name
+	}
+	return "?"
+}
+
 func (m Model) userNoticeFallback(item ChatMessage) string {
-	name := strings.TrimSpace(item.DisplayName)
-	if name == "" {
-		name = strings.TrimSpace(item.User)
-	}
-	if name == "" {
-		name = "?"
-	}
+	name := noticeAuthor(item.DisplayName, item.User)
 	switch catalog.ClassifyUserNotice(item.MsgID) {
 	case catalog.UserNoticeSub:
 		return fmt.Sprintf(m.t("chat.usernotice.sub"), name)
@@ -814,13 +820,7 @@ func (m Model) ChatMessages() []ChatMessage {
 	msgs := m.chat.panel.buf.Messages()
 	for i := range msgs {
 		if msgs[i].CommunityGiftID != "" && catalog.ClassifyUserNotice(msgs[i].MsgID) == catalog.UserNoticeGift {
-			name := strings.TrimSpace(msgs[i].DisplayName)
-			if name == "" {
-				name = strings.TrimSpace(msgs[i].User)
-			}
-			if name == "" {
-				name = "?"
-			}
+			name := noticeAuthor(msgs[i].DisplayName, msgs[i].User)
 			if msgs[i].GiftCount == 1 && msgs[i].GiftRecipient != "" {
 				msgs[i].Body = fmt.Sprintf(m.t("chat.usernotice.gift_recipient"), name, msgs[i].GiftRecipient)
 			} else {

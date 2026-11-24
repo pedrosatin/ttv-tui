@@ -530,7 +530,7 @@ func (m Model) headerLine(maxWidth int) string {
 	switch m.Mode() {
 	case ModeChannels:
 		if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
-			title = fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.list.selectedCategory.Name))
+			title = fmt.Sprintf(m.t("channels.title_category"), m.categoryLabel(*m.list.selectedCategory))
 		} else {
 			title = m.t("channels.title")
 		}
@@ -714,7 +714,7 @@ func (m Model) formatChannelRow(marker string, ch catalog.Channel, avail catalog
 	identity := m.channelIdentity(ch)
 	title := ""
 	if ch.Title != nil {
-		title = sanitizeScreenText(strings.TrimSpace(*ch.Title))
+		title = visibleOrEmpty(sanitizeScreenText(strings.TrimSpace(*ch.Title)))
 	}
 	viewers := fmt.Sprintf("%7s", m.t("channels.viewers_unknown"))
 	if avail == catalog.AvailabilityLive {

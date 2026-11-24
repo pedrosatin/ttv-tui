@@ -183,7 +183,7 @@ func (m Model) listTagWidth(items []ListItem, maxWidth int) int {
 func (m Model) listItemCollisionLabel(it ListItem) (string, bool) {
 	switch it.Type {
 	case ItemTypeCategory, ItemTypePinnedCategory:
-		if it.Category == nil || it.Category.Name == "" {
+		if it.Category == nil {
 			return "", false
 		}
 		return m.categoryLabel(*it.Category), true
@@ -324,7 +324,7 @@ func (m Model) listSectionTitle(itemType ListItemType, isSearch bool) (string, b
 			return m.t("search.section_channels"), true
 		}
 		if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
-			return fmt.Sprintf(m.t("channels.title_category"), sanitizeScreenText(m.list.selectedCategory.Name)), true
+			return fmt.Sprintf(m.t("channels.title_category"), m.categoryLabel(*m.list.selectedCategory)), true
 		}
 		return m.t("channels.title"), true
 	}

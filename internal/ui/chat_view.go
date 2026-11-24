@@ -727,7 +727,7 @@ func (m Model) formatChatRow(msg ChatMessage, selected bool) (string, string) {
 
 	name := visibleOrEmpty(sanitizeScreenText(msg.DisplayName))
 	if name == "" {
-		name = sanitizeScreenText(msg.User)
+		name = visibleOrEmpty(sanitizeScreenText(msg.User))
 	}
 
 	// Nicks use only blue/white ANSI slots so they never collide with the

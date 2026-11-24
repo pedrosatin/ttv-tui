@@ -66,19 +66,23 @@ func isInvisibleFormat(r rune) bool {
 }
 
 // flagTagSequenceLen returns the byte length of the tag sequence that follows
-// U+1F3F4 in an emoji tag sequence: one or more tags for 0-9 and a-z, closed
-// by U+E007F. Anything else returns 0 and its tags are dropped as loose tags.
+// U+1F3F4 in an emoji tag sequence. The tags spell a CLDR subdivision id (UTS
+// #51): two region letters and one to four more of 0-9 and a-z, closed by
+// U+E007F. Anything else returns 0 and its tags are dropped as loose tags, so
+// a long run of tags cannot smuggle hidden text through a fake flag.
 func flagTagSequenceLen(s string) int {
 	n, specs := 0, 0
 	for n < len(s) {
 		r, size := utf8.DecodeRuneInString(s[n:])
+		letter := r >= 0xe0061 && r <= 0xe007a
+		digit := r >= 0xe0030 && r <= 0xe0039
 		switch {
 		case r == 0xe007f:
-			if specs == 0 {
+			if specs < 3 {
 				return 0
 			}
 			return n + size
-		case (r >= 0xe0030 && r <= 0xe0039) || (r >= 0xe0061 && r <= 0xe007a):
+		case specs < 2 && letter, specs >= 2 && specs < 6 && (letter || digit):
 			specs++
 			n += size
 		default:

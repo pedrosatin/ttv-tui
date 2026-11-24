@@ -8,8 +8,8 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/i18n"
 )
 
-// filterBenchModel monta uma listagem grande. unicodeEvery > 0 põe emoji no
-// título de um a cada unicodeEvery canais; o resto é ASCII.
+// filterBenchModel monta uma listagem grande. Com unicodeEvery > 0, um a cada
+// unicodeEvery canais tem emoji no título, e os outros ficam em ASCII.
 func filterBenchModel(b *testing.B, n, unicodeEvery int) Model {
 	b.Helper()
 	cat, err := i18n.New(i18n.LangEN)
@@ -36,7 +36,8 @@ func filterBenchModel(b *testing.B, n, unicodeEvery int) Model {
 	return m
 }
 
-// Custo de uma tecla no filtro: VisibleItems percorre a listagem inteira.
+// BenchmarkVisibleItemsFiltro mede o custo de uma tecla no filtro, em que
+// VisibleItems percorre a listagem inteira.
 func BenchmarkVisibleItemsFiltro(b *testing.B) {
 	for _, tc := range []struct {
 		name         string

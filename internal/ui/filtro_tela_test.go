@@ -10,10 +10,10 @@ import (
 	"github.com/pedrosatin/ttv-tui/internal/store"
 )
 
-// O filtro compara o texto como a tela o mostra (ticket 26). A tela tira o VS16
-// de "❤️ live" e mostra "❤ live"; quem copia da tela e cola no filtro precisa
-// achar o canal. O mesmo com a sequência ZWJ de "👩‍💻 dev", que a tela mostra
-// como "👩 dev".
+// O ticket 26 faz o filtro comparar o texto como a tela o mostra. A tela tira o
+// VS16 de "❤️ live" e mostra "❤ live", e quem copia da tela e cola no filtro
+// precisa achar o canal. O mesmo vale para a sequência ZWJ de "👩‍💻 dev", que a
+// tela mostra como "👩 dev".
 func TestFilterCasaComTextoCopiadoDaTela(t *testing.T) {
 	for _, tc := range []struct{ name, title, filter string }{
 		{"VS16 copiado da tela", "❤️ live", "❤ live"},
@@ -41,8 +41,9 @@ func TestFilterCasaComTextoCopiadoDaTela(t *testing.T) {
 	}
 }
 
-// O caminho de categorias de VisibleItems (appendCategories e as fixadas)
-// filtra pelo texto da tela, mantém a ordem e não repete a fixada no catálogo.
+// O caminho de categorias de VisibleItems, que junta appendCategories e as
+// fixadas, filtra pelo texto da tela, mantém a ordem e não repete a fixada no
+// catálogo.
 func TestVisibleItemsCaminhoDeCategorias(t *testing.T) {
 	cats := []catalog.Category{
 		{ID: "c-jc", Name: "Just Chatting"},
@@ -110,9 +111,8 @@ func TestVisibleItemsCaminhoDeCategorias(t *testing.T) {
 	})
 }
 
-// Com texto ASCII imprimível, o atalho de filterText dá o mesmo resultado que o
-// caminho completo (sanitizeScreenText). Bytes de controle e não ASCII saem do
-// atalho.
+// Com texto ASCII imprimível, o atalho de filterText dá o mesmo resultado que
+// sanitizeScreenText. Bytes de controle e não ASCII ficam fora do atalho.
 func TestFilterAtalhoASCIIEquivaleAoCaminhoCompleto(t *testing.T) {
 	check := func(s string) {
 		t.Helper()
