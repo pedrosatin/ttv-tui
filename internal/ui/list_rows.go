@@ -186,7 +186,7 @@ func (m Model) listItemCollisionLabel(it ListItem) (string, bool) {
 		if it.Category == nil || it.Category.Name == "" {
 			return "", false
 		}
-		return sanitizeScreenText(it.Category.Name), true
+		return m.categoryLabel(*it.Category), true
 	case ItemTypeChannel, ItemTypeExactChannel, ItemTypeFavorite, ItemTypeRecent:
 		if it.Channel == nil {
 			return "", false
@@ -359,7 +359,7 @@ func (m Model) formatListItemRow(it ListItem, isSearch bool, maxWidth, tagWidth 
 	case ItemTypeCategory, ItemTypePinnedCategory:
 		if it.Type == ItemTypePinnedCategory && it.Category.Viewers == nil {
 			tag := m.t("channels.unverified_tag")
-			row = fitChannelRow(marker, fmt.Sprintf("%7s", m.t("categories.viewers_unknown")), sanitizeScreenText(it.Category.Name), tag, "", false, maxWidth, ansi.StringWidth(tag), distinct, nameBudget)
+			row = fitChannelRow(marker, fmt.Sprintf("%7s", m.t("categories.viewers_unknown")), m.categoryLabel(*it.Category), tag, "", false, maxWidth, ansi.StringWidth(tag), distinct, nameBudget)
 		} else {
 			row = m.formatCategoryRow(marker, *it.Category, isSearch, maxWidth, distinct, nameBudget)
 		}

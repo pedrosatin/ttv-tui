@@ -6,6 +6,7 @@
   "saves.timeout": "gravações ainda em andamento depois de %v",
   "list.empty_action": "Vazio: {action.retry} tentar de novo · {action.back} voltar",
   "list.not_loaded": "A lista não carregou.",
+  "list.unnamed": "(sem nome)",
   "player.info": "Informação do player: %s",
   "app.title": "ttv-tui",
   "status.ready": "Pronto",
