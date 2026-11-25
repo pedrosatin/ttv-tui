@@ -687,8 +687,7 @@ func (m Model) channelRowTagSized(ch catalog.Channel, avail catalog.Availability
 	return status + " " + langTag
 }
 
-// channelShortLabel is the channel name for notices: display name, or login, or
-// "(unnamed)" when both show nothing on screen.
+// channelShortLabel returns the display name or login for notices and video prompts, or the localized unnamed label if neither has visible text.
 func (m Model) channelShortLabel(ch catalog.Channel) string {
 	if name := visibleOrEmpty(sanitizeScreenText(ch.DisplayName)); name != "" {
 		return name

@@ -124,8 +124,7 @@ func (m Model) activeContextSummary() string {
 	return strings.Join(parts, " · ")
 }
 
-// channelCategoryName returns the category label carried by ch, or empty when
-// unknown or only fillers so the status bar can omit it.
+// channelCategoryName returns the sanitized category name, or an empty string if it has no visible text.
 func channelCategoryName(ch *catalog.Channel) string {
 	if ch == nil || ch.CategoryName == nil {
 		return ""

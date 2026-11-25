@@ -473,6 +473,11 @@ func (m Model) quickOpenItems() []quickOpenItem {
 		}
 		label := m.categoryLabel(c)
 		score, ok := fuzzyScore(queryFolded, label)
+		if savedLabel := visibleOrEmpty(sanitizeScreenText(saved.Name)); savedLabel != "" {
+			if savedScore, savedOK := fuzzyScore(queryFolded, savedLabel); savedOK && (!ok || savedScore > score) {
+				score, ok = savedScore, true
+			}
+		}
 		if !ok {
 			continue
 		}
@@ -563,16 +568,13 @@ func (m Model) quickOpenActionCandidate(a action) bool {
 }
 
 func channelQuickLabel(ch catalog.Channel) string {
-	if name := visibleOrEmpty(sanitizeScreenText(ch.DisplayName)); name != "" {
+	if name := visibleOrEmpty(strings.TrimSpace(sanitizeScreenText(ch.DisplayName))); name != "" {
 		return name
 	}
-	if login := visibleOrEmpty(sanitizeScreenText(ch.Login)); login != "" {
+	if login := visibleOrEmpty(strings.TrimSpace(sanitizeScreenText(ch.Login))); login != "" {
 		return login
 	}
-	if id := strings.TrimSpace(ch.ID); id != "" {
-		return id
-	}
-	return ""
+	return strings.TrimSpace(ch.ID)
 }
 
 func channelQuickKey(ch catalog.Channel) string {

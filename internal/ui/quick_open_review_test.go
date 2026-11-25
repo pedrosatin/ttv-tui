@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pedrosatin/ttv-tui/internal/catalog"
 	"github.com/pedrosatin/ttv-tui/internal/platform"
+	"github.com/pedrosatin/ttv-tui/internal/store"
 )
 
 func TestQuickOpenOmitePrimitivasEAcoesSoDaJanela(t *testing.T) {
@@ -239,6 +240,66 @@ func TestQuickOpenStatusNaoRepetePrompt(t *testing.T) {
 	}
 	if strings.Contains(bar, "Seletor: gau") || strings.Contains(bar, "Quick open: gau") {
 		t.Fatalf("barra repetiu o prompt com o texto: %q", bar)
+	}
+}
+
+func TestQuickOpenBuscaCategoriaFixadaPeloNomeSalvo(t *testing.T) {
+	m, _ := newScenario(t, 80, 24, WithFavoriteCategories([]store.Category{
+		{Platform: "twitch", ID: "arena-id", Name: "Arena Antiga"},
+	}))
+	m.list.categories = []catalog.Category{{ID: "arena-id", Name: "Arena Nova"}}
+	m.list.favorites = nil
+	m.list.recents = nil
+
+	findArena := func(query string) []quickOpenItem {
+		m.list.quickOpen.input = query
+		var out []quickOpenItem
+		for _, it := range m.quickOpenItems() {
+			if it.Kind == quickCategory && it.Category != nil && it.Category.ID == "arena-id" {
+				out = append(out, it)
+			}
+		}
+		return out
+	}
+
+	antiga := findArena("antiga")
+	if len(antiga) != 1 {
+		t.Fatalf("busca antiga: %d entradas, want 1; items=%+v", len(antiga), antiga)
+	}
+	if antiga[0].Label != "Arena Nova" || antiga[0].Category.Name != "Arena Nova" {
+		t.Fatalf("rótulo/categoria = %q / %+v, want Arena Nova", antiga[0].Label, antiga[0].Category)
+	}
+
+	nova := findArena("nova")
+	if len(nova) != 1 {
+		t.Fatalf("busca nova: %d entradas, want 1; items=%+v", len(nova), nova)
+	}
+	if nova[0].Label != "Arena Nova" || nova[0].Category.Name != "Arena Nova" {
+		t.Fatalf("rótulo/categoria = %q / %+v, want Arena Nova", nova[0].Label, nova[0].Category)
+	}
+}
+
+func TestQuickOpenOrdemDeFavoritoComEspacosNasBordas(t *testing.T) {
+	m, _ := newScenario(t, 80, 24, WithFavorites([]catalog.Channel{
+		{ID: "1", Login: "gaules", DisplayName: " Gaules ", Platform: platform.Twitch},
+		{ID: "2", Login: "gaulesx", DisplayName: "GaulesX", Platform: platform.Twitch},
+	}))
+	m.list.recents = nil
+	m.list.quickOpen.input = "gaules"
+	var favs []quickOpenItem
+	for _, it := range m.quickOpenItems() {
+		if it.Kind == quickFavorite {
+			favs = append(favs, it)
+		}
+	}
+	if len(favs) < 2 {
+		t.Fatalf("favoritos = %+v", favs)
+	}
+	if favs[0].Channel == nil || strings.TrimSpace(favs[0].Channel.DisplayName) != "Gaules" {
+		t.Fatalf("primeiro = %+v, want Gaules com espaços nas bordas", favs[0])
+	}
+	if favs[1].Channel == nil || favs[1].Channel.DisplayName != "GaulesX" {
+		t.Fatalf("segundo = %+v, want GaulesX", favs[1])
 	}
 }
 

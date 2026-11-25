@@ -191,9 +191,7 @@ func TestCategoriaETituloSoDePreenchimentoNaLista(t *testing.T) {
 	}
 }
 
-// Categoria aberta com Name vazio literal também usa "(sem nome)" no cabeçalho e
-// no título da seção, em vez do título genérico de canais.
-func TestCategoriaComNameVazioNoCabecalho(t *testing.T) {
+func TestRotulosDaCategoriaComNomeVazio(t *testing.T) {
 	m := newClassicModel(testCatalog(t, i18n.LangPTBR))
 	m.list.mode = ModeChannels
 	m.list.selectedCategory = &catalog.Category{ID: "cat-vazia", Name: ""}
@@ -210,8 +208,6 @@ func TestCategoriaComNameVazioNoCabecalho(t *testing.T) {
 	}
 }
 
-// A barra de status monta "Selecionada: (sem nome)" para categoria só de
-// preenchimento, em vez de interpolar o Name cru.
 func TestStatusSelecionadaComNomeSoDePreenchimento(t *testing.T) {
 	m := newClassicModel(testCatalog(t, i18n.LangPTBR))
 	m.list.mode = ModeChannels
@@ -223,8 +219,6 @@ func TestStatusSelecionadaComNomeSoDePreenchimento(t *testing.T) {
 	}
 }
 
-// O resumo de contexto ativo mostra o mesmo rótulo da lista para categoria só
-// de preenchimento.
 func TestResumoDeContextoComCategoriaSoDePreenchimento(t *testing.T) {
 	m := newClassicModel(testCatalog(t, i18n.LangPTBR))
 	m.list.mode = ModeChannels
@@ -235,7 +229,6 @@ func TestResumoDeContextoComCategoriaSoDePreenchimento(t *testing.T) {
 	}
 }
 
-// O aviso de fixar categoria usa categoryLabel, igual à lista.
 func TestAvisoDeCategoriaFixadaComNomeSoDePreenchimento(t *testing.T) {
 	m := newClassicModel(testCatalog(t, i18n.LangPTBR))
 	cat := catalog.Category{ID: "cat-vazia", Name: "\u3164\u3164"}
@@ -247,8 +240,7 @@ func TestAvisoDeCategoriaFixadaComNomeSoDePreenchimento(t *testing.T) {
 	}
 }
 
-// O aviso de favorito usa o login quando o DisplayName é só preenchimento.
-func TestAvisoDeFavoritoComNomeSoDePreenchimento(t *testing.T) {
+func TestAvisoDeFavoritoUsaLoginQuandoNomeSoTemPreenchimento(t *testing.T) {
 	m := newClassicModel(testCatalog(t, i18n.LangPTBR), WithStore(&feedbackStore{}))
 	m.width, m.height = 80, 24
 	m.list.mode = ModeChannels
