@@ -124,7 +124,8 @@ func (m Model) activeContextSummary() string {
 	return strings.Join(parts, " · ")
 }
 
-// channelCategoryName returns the sanitized category name, or an empty string if it has no visible text.
+// channelCategoryName returns the channel's sanitized category name. It
+// returns an empty string if the name is missing or blank after sanitization.
 func channelCategoryName(ch *catalog.Channel) string {
 	if ch == nil || ch.CategoryName == nil {
 		return ""

@@ -279,7 +279,7 @@ func TestQuickOpenBuscaCategoriaFixadaPeloNomeSalvo(t *testing.T) {
 	}
 }
 
-func TestQuickOpenOrdemDeFavoritoComEspacosNasBordas(t *testing.T) {
+func TestQuickOpenOrdenaFavoritosComEspacosNasBordas(t *testing.T) {
 	m, _ := newScenario(t, 80, 24, WithFavorites([]catalog.Channel{
 		{ID: "1", Login: "gaules", DisplayName: " Gaules ", Platform: platform.Twitch},
 		{ID: "2", Login: "gaulesx", DisplayName: "GaulesX", Platform: platform.Twitch},
@@ -423,5 +423,30 @@ func TestQuickOpenRevelaListaNoClassic(t *testing.T) {
 	}
 	if len(w.searched) == 0 || w.searched[len(w.searched)-1] != "zelda" {
 		t.Fatalf("buscas = %q, quer zelda", w.searched)
+	}
+}
+
+func TestQuickOpenNomeSalvoMelhoraAPosicaoDaCategoria(t *testing.T) {
+	m, _ := newScenario(t, 80, 24, WithFavoriteCategories([]store.Category{
+		{Platform: "twitch", ID: "nova-id", Name: "Arena"},
+	}))
+	m.list.categories = []catalog.Category{
+		{ID: "a2-id", Name: "Arena 2"},
+		{ID: "nova-id", Name: "Nova Arena"},
+	}
+	m.list.favorites = nil
+	m.list.recents = nil
+	m.list.quickOpen.input = "arena"
+	var cats []quickOpenItem
+	for _, it := range m.quickOpenItems() {
+		if it.Kind == quickCategory && it.Category != nil {
+			cats = append(cats, it)
+		}
+	}
+	if len(cats) != 2 {
+		t.Fatalf("categorias = %+v, want 2", cats)
+	}
+	if cats[0].Category.ID != "nova-id" || cats[0].Label != "Nova Arena" {
+		t.Fatalf("primeira = %q (%s), want Nova Arena pelo nome salvo Arena", cats[0].Label, cats[0].Category.ID)
 	}
 }

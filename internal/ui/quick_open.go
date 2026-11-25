@@ -444,15 +444,19 @@ func (m Model) quickOpenItems() []quickOpenItem {
 	catSeen := map[string]bool{}
 	listPlat := m.ListPlatform()
 	catsByID := make(map[string]catalog.Category, len(m.list.categories))
+	savedNames := make(map[string]string, len(m.list.favoriteCategories))
+	for _, saved := range m.list.favoriteCategories {
+		savedNames[categoryQuickKey(platform.Normalize(saved.Platform), saved.ID)] = saved.Name
+	}
 	for _, cat := range m.list.categories {
 		catsByID[cat.ID] = cat
 		label := m.categoryLabel(cat)
-		score, ok := fuzzyScore(queryFolded, label)
+		key := categoryQuickKey(listPlat, cat.ID)
+		score, ok := categoryQuickScore(queryFolded, label, savedNames[key])
 		if !ok {
 			continue
 		}
 		c := cat
-		key := categoryQuickKey(listPlat, cat.ID)
 		catSeen[key] = true
 		items = append(items, quickOpenItem{
 			Kind: quickCategory, Label: label, FoldedLabel: foldForFuzzy(label),
@@ -472,12 +476,7 @@ func (m Model) quickOpenItems() []quickOpenItem {
 			}
 		}
 		label := m.categoryLabel(c)
-		score, ok := fuzzyScore(queryFolded, label)
-		if savedLabel := visibleOrEmpty(sanitizeScreenText(saved.Name)); savedLabel != "" {
-			if savedScore, savedOK := fuzzyScore(queryFolded, savedLabel); savedOK && (!ok || savedScore > score) {
-				score, ok = savedScore, true
-			}
-		}
+		score, ok := categoryQuickScore(queryFolded, label, saved.Name)
 		if !ok {
 			continue
 		}
@@ -565,6 +564,21 @@ func (m Model) quickOpenActionCandidate(a action) bool {
 		}
 	}
 	return false
+}
+
+// categoryQuickScore scores a category by its shown label and by the name it
+// was pinned with, keeping the better match, so a renamed pinned category is
+// still found and ranked by its old name.
+func categoryQuickScore(queryFolded, label, savedName string) (int, bool) {
+	score, ok := fuzzyScore(queryFolded, label)
+	savedLabel := visibleOrEmpty(sanitizeScreenText(savedName))
+	if savedLabel == "" {
+		return score, ok
+	}
+	if savedScore, savedOK := fuzzyScore(queryFolded, savedLabel); savedOK && (!ok || savedScore > score) {
+		return savedScore, true
+	}
+	return score, ok
 }
 
 func channelQuickLabel(ch catalog.Channel) string {
