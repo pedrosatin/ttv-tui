@@ -460,7 +460,7 @@ func (m Model) hostedIdleText() string {
 	case it.Type == ItemTypeCategory || it.Type == ItemTypePinnedCategory:
 		return m.t("video.hosted_idle_category")
 	case it.Channel != nil:
-		return fmt.Sprintf(m.t("video.hosted_idle_channel"), sanitizeScreenText(it.DisplayName()))
+		return fmt.Sprintf(m.t("video.hosted_idle_channel"), m.channelShortLabel(*it.Channel))
 	default:
 		return m.t("video.hosted_idle")
 	}

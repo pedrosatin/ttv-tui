@@ -323,7 +323,7 @@ func (m Model) listSectionTitle(itemType ListItemType, isSearch bool) (string, b
 		if isSearch {
 			return m.t("search.section_channels"), true
 		}
-		if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
+		if m.list.selectedCategory != nil {
 			return fmt.Sprintf(m.t("channels.title_category"), m.categoryLabel(*m.list.selectedCategory)), true
 		}
 		return m.t("channels.title"), true

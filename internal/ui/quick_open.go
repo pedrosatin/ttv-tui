@@ -446,7 +446,7 @@ func (m Model) quickOpenItems() []quickOpenItem {
 	catsByID := make(map[string]catalog.Category, len(m.list.categories))
 	for _, cat := range m.list.categories {
 		catsByID[cat.ID] = cat
-		label := cat.Name
+		label := m.categoryLabel(cat)
 		score, ok := fuzzyScore(queryFolded, label)
 		if !ok {
 			continue
@@ -465,16 +465,16 @@ func (m Model) quickOpenItems() []quickOpenItem {
 		if catSeen[key] {
 			continue
 		}
-		label := saved.Name
-		score, ok := fuzzyScore(queryFolded, label)
-		if !ok {
-			continue
-		}
 		c := catalog.Category{ID: saved.ID, Name: saved.Name}
 		if plat == listPlat {
 			if fresh, found := catsByID[saved.ID]; found {
 				c = fresh
 			}
+		}
+		label := m.categoryLabel(c)
+		score, ok := fuzzyScore(queryFolded, label)
+		if !ok {
+			continue
 		}
 		catSeen[key] = true
 		items = append(items, quickOpenItem{
@@ -563,13 +563,16 @@ func (m Model) quickOpenActionCandidate(a action) bool {
 }
 
 func channelQuickLabel(ch catalog.Channel) string {
-	if name := strings.TrimSpace(ch.DisplayName); name != "" {
+	if name := visibleOrEmpty(sanitizeScreenText(ch.DisplayName)); name != "" {
 		return name
 	}
-	if login := strings.TrimSpace(ch.Login); login != "" {
+	if login := visibleOrEmpty(sanitizeScreenText(ch.Login)); login != "" {
 		return login
 	}
-	return strings.TrimSpace(ch.ID)
+	if id := strings.TrimSpace(ch.ID); id != "" {
+		return id
+	}
+	return ""
 }
 
 func channelQuickKey(ch catalog.Channel) string {

@@ -275,8 +275,8 @@ func (m Model) applyStoreSaved(msg storeSavedMsg) (tea.Model, tea.Cmd) {
 		m.clearStatusNotice()
 		m.notices.favorite = msg.Notice == "favorites.added_named" || msg.Notice == "favorites.removed_named" || msg.Notice == "recents.removed_named" || msg.Notice == "recents.cleared" || msg.Notice == "categories.pinned" || msg.Notice == "categories.unpinned"
 		m.notices.status = m.t(msg.Notice)
-		if msg.Name != "" {
-			m.notices.status = fmt.Sprintf(m.notices.status, sanitizeScreenText(msg.Name))
+		if name := visibleOrEmpty(sanitizeScreenText(msg.Name)); name != "" {
+			m.notices.status = fmt.Sprintf(m.notices.status, name)
 		}
 	}
 	return m, nil

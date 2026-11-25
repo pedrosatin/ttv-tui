@@ -62,14 +62,15 @@ func (m Model) toggleCategory(cat catalog.Category) (tea.Model, tea.Cmd) {
 	} else {
 		m.reconcileHighlight()
 	}
+	label := m.categoryLabel(cat)
 	if m.store == nil {
 		m.notices.favorite = true
-		m.notices.status = fmt.Sprintf(m.t(key), sanitizeScreenText(cat.Name))
+		m.notices.status = fmt.Sprintf(m.t(key), label)
 		return m, nil
 	}
 	st, s := m.list.toStoreState(), m.store
 	cmd := m.storeSaves.cmd(func() tea.Msg {
-		return storeSavedMsg{Err: s.Save(st), Notice: key, Name: cat.Name}
+		return storeSavedMsg{Err: s.Save(st), Notice: key, Name: label}
 	})
 	return m, cmd
 }
