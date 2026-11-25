@@ -86,8 +86,8 @@ func (m Model) activeContextSummary() string {
 	var parts []string
 	if m.list.selectedChannel != nil {
 		playerHasLogin := m.player.login != "" && samePlayerLabel(m.list.selectedChannel.Platform, m.player.login, m.list.selectedChannel.PlayerLabel())
-		name := sanitizeScreenText(m.list.selectedChannel.DisplayName)
-		login := sanitizeScreenText(m.list.selectedChannel.Login)
+		name := visibleOrEmpty(sanitizeScreenText(m.list.selectedChannel.DisplayName))
+		login := visibleOrEmpty(sanitizeScreenText(m.list.selectedChannel.Login))
 		chText := ""
 		if !playerHasLogin {
 			chText = login
@@ -114,8 +114,8 @@ func (m Model) activeContextSummary() string {
 		}
 		return strings.Join(parts, " · ")
 	}
-	if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
-		catText := sanitizeScreenText(m.list.selectedCategory.Name)
+	if m.list.selectedCategory != nil {
+		catText := m.categoryLabel(*m.list.selectedCategory)
 		if m.list.selectedCategory.Viewers != nil {
 			catText += " (" + m.formatViewers(m.list.selectedCategory.Viewers) + ")"
 		}
@@ -124,13 +124,13 @@ func (m Model) activeContextSummary() string {
 	return strings.Join(parts, " · ")
 }
 
-// channelCategoryName returns the sanitized category label carried by ch, or
-// empty when unknown so the status bar can omit it.
+// channelCategoryName returns the channel's sanitized category name. It
+// returns an empty string if the name is missing or blank after sanitization.
 func channelCategoryName(ch *catalog.Channel) string {
 	if ch == nil || ch.CategoryName == nil {
 		return ""
 	}
-	return sanitizeScreenText(strings.TrimSpace(*ch.CategoryName))
+	return visibleOrEmpty(sanitizeScreenText(strings.TrimSpace(*ch.CategoryName)))
 }
 
 // statusContent is the state half of the bar, grouped by how long each piece

@@ -191,6 +191,74 @@ func TestCategoriaETituloSoDePreenchimentoNaLista(t *testing.T) {
 	}
 }
 
+func TestRotulosDaCategoriaComNomeVazio(t *testing.T) {
+	m := newClassicModel(testCatalog(t, i18n.LangPTBR))
+	m.list.mode = ModeChannels
+	m.list.selectedCategory = &catalog.Category{ID: "cat-vazia", Name: ""}
+	want := fmt.Sprintf(m.t("channels.title_category"), "(sem nome)")
+	if got := ansi.Strip(m.headerLine(80)); !strings.Contains(got, want) {
+		t.Errorf("cabeçalho = %q, want %q", got, want)
+	}
+	if got, ok := m.listSectionTitle(ItemTypeChannel, false); !ok || got != want {
+		t.Errorf("título da seção = %q, want %q", got, want)
+	}
+	m.list.selectedCategory = nil
+	if got := ansi.Strip(m.headerLine(80)); !strings.Contains(got, m.t("channels.title")) || strings.Contains(got, "(sem nome)") {
+		t.Errorf("sem categoria selecionada = %q, want o título genérico", got)
+	}
+}
+
+func TestStatusSelecionadaComNomeSoDePreenchimento(t *testing.T) {
+	m := newClassicModel(testCatalog(t, i18n.LangPTBR))
+	m.list.mode = ModeChannels
+	m.list.selectedCategory = &catalog.Category{ID: "cat-vazia", Name: "\u3164\u3164", Viewers: catalog.IntPtr(900)}
+	m.list.channels = []catalog.Channel{{ID: "1", Login: "fantasma", DisplayName: "Fantasma", Availability: catalog.AvailabilityLive}}
+	want := fmt.Sprintf(m.t("categories.selected"), "(sem nome)") + " " + m.formatViewers(catalog.IntPtr(900))
+	if got := m.selectionStatusLead().primary; got != want {
+		t.Errorf("status = %q, want %q", got, want)
+	}
+}
+
+func TestResumoDeContextoComCategoriaSoDePreenchimento(t *testing.T) {
+	m := newClassicModel(testCatalog(t, i18n.LangPTBR))
+	m.list.mode = ModeChannels
+	m.list.selectedCategory = &catalog.Category{ID: "cat-vazia", Name: "\u3164\u3164", Viewers: catalog.IntPtr(900)}
+	want := "(sem nome) (" + m.formatViewers(catalog.IntPtr(900)) + ")"
+	if got := m.activeContextSummary(); got != want {
+		t.Errorf("resumo = %q, want %q", got, want)
+	}
+}
+
+func TestAvisoDeCategoriaFixadaComNomeSoDePreenchimento(t *testing.T) {
+	m := newClassicModel(testCatalog(t, i18n.LangPTBR))
+	cat := catalog.Category{ID: "cat-vazia", Name: "\u3164\u3164"}
+	next, _ := m.toggleCategory(cat)
+	m = next.(Model)
+	want := fmt.Sprintf(m.t("categories.pinned"), "(sem nome)")
+	if m.notices.status != want {
+		t.Errorf("aviso = %q, want %q", m.notices.status, want)
+	}
+}
+
+func TestAvisoDeFavoritoUsaLoginQuandoNomeSoTemPreenchimento(t *testing.T) {
+	m := newClassicModel(testCatalog(t, i18n.LangPTBR), WithStore(&feedbackStore{}))
+	m.width, m.height = 80, 24
+	m.list.mode = ModeChannels
+	m.list.channels = []catalog.Channel{{ID: "1", Login: "fantasma", DisplayName: "\u3164\u3164"}}
+	m.reconcileHighlight()
+	next, cmd := m.toggleFavoriteHighlighted()
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("sem comando de gravação")
+	}
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	want := fmt.Sprintf(m.t("favorites.added_named"), "fantasma")
+	if m.notices.status != want {
+		t.Errorf("aviso = %q, want %q", m.notices.status, want)
+	}
+}
+
 // A colisão de nomes truncados compara a categoria pelo rótulo que a tela
 // mostra mesmo quando o nome vem vazio.
 func TestColisaoDeCategoriaSemNomeUsaORotulo(t *testing.T) {

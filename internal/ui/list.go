@@ -919,11 +919,7 @@ func (m Model) toggleFavoriteHighlighted() (tea.Model, tea.Cmd) {
 		notice = "favorites.added_named"
 	}
 	m.clearStatusNotice()
-	name := ch.DisplayName
-	if name == "" {
-		name = ch.Login
-	}
-	cmd := m.saveStoreCmd(notice, name)
+	cmd := m.saveStoreCmd(notice, m.channelShortLabel(ch))
 	m.reconcileHighlight()
 	return m, cmd
 }
@@ -956,11 +952,7 @@ func (m Model) forgetRecentHighlighted() (tea.Model, tea.Cmd) {
 	}
 	m.setHighlightToItem(items, idx)
 	m.clearStatusNotice()
-	name := ch.DisplayName
-	if name == "" {
-		name = ch.Login
-	}
-	return m, m.saveStoreCmd("recents.removed_named", name)
+	return m, m.saveStoreCmd("recents.removed_named", m.channelShortLabel(ch))
 }
 
 // settleRecentsExpanded desfaz a expansão quando os recentes que sobraram já

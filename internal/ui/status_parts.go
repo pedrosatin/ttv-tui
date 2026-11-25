@@ -199,7 +199,7 @@ func (m Model) selectionStatusLead() statusLead {
 	case m.Mode() == ModeSearch && m.list.search.query != "":
 		lead.primary = fmt.Sprintf(m.t("search.title_query"), m.list.search.query)
 	case m.list.selectedCategory != nil:
-		lead.primary = fmt.Sprintf(m.t("categories.selected"), m.list.selectedCategory.Name)
+		lead.primary = fmt.Sprintf(m.t("categories.selected"), m.categoryLabel(*m.list.selectedCategory))
 		if m.list.selectedCategory.Viewers != nil {
 			lead.primary += " " + m.formatViewers(m.list.selectedCategory.Viewers)
 		}

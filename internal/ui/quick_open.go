@@ -444,15 +444,19 @@ func (m Model) quickOpenItems() []quickOpenItem {
 	catSeen := map[string]bool{}
 	listPlat := m.ListPlatform()
 	catsByID := make(map[string]catalog.Category, len(m.list.categories))
+	savedNames := make(map[string]string, len(m.list.favoriteCategories))
+	for _, saved := range m.list.favoriteCategories {
+		savedNames[categoryQuickKey(platform.Normalize(saved.Platform), saved.ID)] = saved.Name
+	}
 	for _, cat := range m.list.categories {
 		catsByID[cat.ID] = cat
-		label := cat.Name
-		score, ok := fuzzyScore(queryFolded, label)
+		label := m.categoryLabel(cat)
+		key := categoryQuickKey(listPlat, cat.ID)
+		score, ok := categoryQuickScore(queryFolded, label, savedNames[key])
 		if !ok {
 			continue
 		}
 		c := cat
-		key := categoryQuickKey(listPlat, cat.ID)
 		catSeen[key] = true
 		items = append(items, quickOpenItem{
 			Kind: quickCategory, Label: label, FoldedLabel: foldForFuzzy(label),
@@ -465,16 +469,16 @@ func (m Model) quickOpenItems() []quickOpenItem {
 		if catSeen[key] {
 			continue
 		}
-		label := saved.Name
-		score, ok := fuzzyScore(queryFolded, label)
-		if !ok {
-			continue
-		}
 		c := catalog.Category{ID: saved.ID, Name: saved.Name}
 		if plat == listPlat {
 			if fresh, found := catsByID[saved.ID]; found {
 				c = fresh
 			}
+		}
+		label := m.categoryLabel(c)
+		score, ok := categoryQuickScore(queryFolded, label, saved.Name)
+		if !ok {
+			continue
 		}
 		catSeen[key] = true
 		items = append(items, quickOpenItem{
@@ -562,11 +566,26 @@ func (m Model) quickOpenActionCandidate(a action) bool {
 	return false
 }
 
+// categoryQuickScore scores a category by its shown label and by the name it
+// was pinned with, keeping the better match, so a renamed pinned category is
+// still found and ranked by its old name.
+func categoryQuickScore(queryFolded, label, savedName string) (int, bool) {
+	score, ok := fuzzyScore(queryFolded, label)
+	savedLabel := visibleOrEmpty(sanitizeScreenText(savedName))
+	if savedLabel == "" {
+		return score, ok
+	}
+	if savedScore, savedOK := fuzzyScore(queryFolded, savedLabel); savedOK && (!ok || savedScore > score) {
+		return savedScore, true
+	}
+	return score, ok
+}
+
 func channelQuickLabel(ch catalog.Channel) string {
-	if name := strings.TrimSpace(ch.DisplayName); name != "" {
+	if name := visibleOrEmpty(strings.TrimSpace(sanitizeScreenText(ch.DisplayName))); name != "" {
 		return name
 	}
-	if login := strings.TrimSpace(ch.Login); login != "" {
+	if login := visibleOrEmpty(strings.TrimSpace(sanitizeScreenText(ch.Login))); login != "" {
 		return login
 	}
 	return strings.TrimSpace(ch.ID)

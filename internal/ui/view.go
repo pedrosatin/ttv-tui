@@ -529,7 +529,7 @@ func (m Model) headerLine(maxWidth int) string {
 	var title string
 	switch m.Mode() {
 	case ModeChannels:
-		if m.list.selectedCategory != nil && m.list.selectedCategory.Name != "" {
+		if m.list.selectedCategory != nil {
 			title = fmt.Sprintf(m.t("channels.title_category"), m.categoryLabel(*m.list.selectedCategory))
 		} else {
 			title = m.t("channels.title")
@@ -685,6 +685,19 @@ func (m Model) channelRowTagSized(ch catalog.Channel, avail catalog.Availability
 		return langTag
 	}
 	return status + " " + langTag
+}
+
+// channelShortLabel supplies the label for notices and video prompts. It tries
+// the display name, then the login, and uses the localized unnamed label if
+// both are blank after sanitization.
+func (m Model) channelShortLabel(ch catalog.Channel) string {
+	if name := visibleOrEmpty(sanitizeScreenText(ch.DisplayName)); name != "" {
+		return name
+	}
+	if name := visibleOrEmpty(sanitizeScreenText(ch.Login)); name != "" {
+		return name
+	}
+	return m.t("list.unnamed")
 }
 
 // channelIdentity is the name side of a channel row: display name, optional
